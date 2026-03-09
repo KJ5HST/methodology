@@ -55,21 +55,37 @@ Each phase is gated. You cannot enter the next phase until the current one is co
 
 ## Quick Start
 
-### New project setup (10 minutes)
+### 1. Copy files to your project
 
-1. Copy the `starter-kit/` files to your project root
-2. Copy the framework files (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) to `docs/methodology/`
-3. Add the session protocol block to your agent instructions (see `starter-kit/BOOTSTRAP.md`)
-4. Create a `BACKLOG.md` with your project's tasks
+Copy `starter-kit/SESSION_RUNNER.md`, `starter-kit/SAFEGUARDS.md`, and `starter-kit/SESSION_NOTES.md` to your project root. Copy the framework files (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) to `docs/methodology/`.
 
-See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete step-by-step guide.
+### 2. Tell Claude to use it
+
+Add this to your project's `CLAUDE.md` (Claude Code reads this file at the start of every session):
+
+```markdown
+## SESSION PROTOCOL — FOLLOW BEFORE DOING ANYTHING
+
+Read and follow `SESSION_RUNNER.md` step by step. It is your operating procedure
+for every session. It tells you what to read, when to stop, and how to close out.
+```
+
+**That's it.** Claude will orient, wait for your task, execute one deliverable, and auto-close with handoff notes for the next session. Everything cascades from that one instruction — `SESSION_RUNNER.md` tells Claude to read `SAFEGUARDS.md` and `SESSION_NOTES.md`, which establish commit discipline and session continuity.
+
+### 3. Create a backlog
+
+Create a `BACKLOG.md` at your project root with your current tasks and priorities. The session runner reads this during orientation.
+
+### Full setup guide
+
+See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete step-by-step guide including customization, first session checklist, and troubleshooting.
 
 ### What's in the starter kit
 
 | File | Purpose |
 |------|---------|
-| `BOOTSTRAP.md` | Step-by-step setup, customization guide, troubleshooting |
-| `SESSION_RUNNER.md` | Clean cockpit checklist template (no project-specific history) |
+| `BOOTSTRAP.md` | Complete setup guide, customization, troubleshooting |
+| `SESSION_RUNNER.md` | Cockpit checklist template (no project-specific history) |
 | `SESSION_NOTES.md` | Empty template for session continuity |
 | `SAFEGUARDS.md` | Safety rails: commit discipline, blast radius limits, mode switching |
 
@@ -77,7 +93,6 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 
 ```
 ├── README.md                         ← You are here
-├── LICENSE                           ← CC BY-NC 4.0
 ├── ITERATIVE_METHODOLOGY.md          ← Master framework (9 principles, 6 phases, 10 gates)
 ├── HOW_TO_USE.md                     ← Practical guide with 3 worked examples
 │
