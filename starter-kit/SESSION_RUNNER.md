@@ -10,21 +10,25 @@ Every session has exactly ONE deliverable. When it's done, you close out. You do
 
 **Change nothing. Read only.**
 
-1. Read `SAFEGUARDS.md`
+1. Read `SAFEGUARDS.md` — **in full, not skimmed. Every section.**
 2. Read `SESSION_NOTES.md` — focus on the ACTIVE TASK section at the top
 3. Read `BACKLOG.md` — understand current milestone and priorities
 4. Run: `git status`, `git log --oneline -5`, `git diff --stat`
-5. **Report findings to the user:**
+5. **Check for ghost sessions:** Compare the session number in SESSION_NOTES.md against `git log`. If there are commits between the last documented session and now that don't correspond to any session notes, report: "Detected [N] undocumented session(s) between Session [X] and now. Commits: [list]. No session notes exist for this work."
+6. **Report findings to the user:**
    - Current branch and clean/dirty state
    - What the last session was doing
    - Current milestone and active task from BACKLOG.md
    - Any uncommitted changes
+   - Ghost session detection results (step 5)
    - Build status if known
-6. **STOP. Wait for the user to give you a task.**
+7. **STOP. Wait for the user to give you a task.**
 
 DO NOT skip the report. DO NOT start working. DO NOT assume you know what to do.
 
-**Even if the user's first message contains a task** (e.g., "Implement the following plan"), Phase 0 is still mandatory. The orientation report exists for the user's benefit — it establishes shared understanding of the current state. The user needs to see the report and confirm before work begins. A task in the prompt does not mean Phase 0 is complete. Complete all 6 steps, then the user will re-state or confirm the task in Phase 1.
+**Even if the user's first message contains a task** (e.g., "Implement the following plan"), Phase 0 is still mandatory. The orientation report exists for the user's benefit — it establishes shared understanding of the current state. The user needs to see the report and confirm before work begins. A task in the prompt does not mean Phase 0 is complete. Complete all 7 steps, then the user will re-state or confirm the task in Phase 1.
+
+**Steps 1-3 are READS, not skims.** Every step exists because a session failed without it.
 
 ---
 
@@ -49,6 +53,19 @@ Common task-to-workstream mappings:
 **If no workstream document exists for the task type, follow the master framework:** `docs/methodology/ITERATIVE_METHODOLOGY.md`, phases 1-6.
 
 State your understanding back to the user: *"I'm going to [deliverable] following [workstream doc]. I'll close out when that's done."*
+
+### 1B: Claim the Session (MANDATORY)
+
+**Immediately after receiving a task — before any technical work — write a stub to `SESSION_NOTES.md`:**
+
+```markdown
+### What Session [N] Did
+**Deliverable:** [task description] (IN PROGRESS)
+**Started:** [date/time]
+**Status:** Session claimed. Work beginning.
+```
+
+**Why this exists:** Ghost sessions — sessions that crash, hit context limits, or end without writing notes — leave zero trace. The next session has no idea what happened, what was attempted, or what state was left behind. By writing a stub FIRST, even a catastrophic failure leaves evidence. This stub is overwritten during Phase 3D with the full handoff.
 
 ---
 
@@ -113,15 +130,28 @@ Update the workstream document and/or the Learnings table below:
 
 Update `SESSION_NOTES.md`. **You will be judged on this.** The next session will score your handoff in their Phase 3A, just as you scored your predecessor's. Write notes that would earn a 9 or 10.
 
-- ACTIVE TASK section updated with current state
-- What was done (with commit hashes)
-- What's next (specific, actionable)
-- Any blockers or open questions
-- Key files the next session should read (with line numbers where relevant)
-- Gotchas or traps the next session should watch for
-- What you would do differently if you could redo this session
-
 **Write to files FIRST, then summarize verbally.** A verbal summary that isn't written down is worthless — the next session can't read the conversation.
+
+#### Minimum Handoff Requirements (ALL mandatory)
+
+A handoff that doesn't include ALL of the following is a protocol violation. "Pick next from backlog" is not a handoff — it's an abdication.
+
+| # | Requirement | Bad Example | Good Example |
+|---|-------------|-------------|--------------|
+| 1 | **ACTIVE TASK updated** with current state | "Done." | "Task: Auth refactor. Status: Phase 1 complete. Phase 2 not started." |
+| 2 | **What was done** with commit hashes | "Fixed stuff" | "Fixed 3 auth bugs (token refresh, session expiry, CORS). Commit `a1b2c3d`." |
+| 3 | **What's next** — specific and actionable | "Pick next from backlog" | "Implement Phase 2 of auth-plan.md. Start with `SessionManager.java:245`." |
+| 4 | **Key files** with full paths and line numbers | (none) | "SessionManager.java:245-320 (token logic), AuthFilter.java:88-95 (CORS)" |
+| 5 | **Gotchas** the next session should watch for | (none) | "Token refresh has a 5s race window — see SessionManager.java:267" |
+| 6 | **Self-assessment score** written to file | (verbal only) | Written to SESSION_NOTES.md with +/- breakdown |
+
+**A handoff missing items 1-5 will score ≤4/10 by the next session.** This directly causes the next session to waste time on discovery that should have been documented.
+
+#### Evidence requirement
+
+**Never claim credit for work you didn't do.** If a plan was provided as input, say "Plan was input, not output." If you didn't produce a deliverable, say "No deliverable produced." Fabricating accomplishments or attributing quotes the user didn't say is a trust-destroying failure.
+
+**Never write "need to verify" in a handoff gap.** If you don't know, read the file NOW. Deferred verification is deferred work — it belongs in your session, not the next one.
 
 ### 3E: Commit
 
@@ -159,6 +189,28 @@ These are documented tendencies. The agent must actively guard against them.
 | 11 | **Gaps from memory** | During close-out, write gap analysis from memory of files read earlier. Memory degrades. Claims turn out wrong. | Before writing ANY claim in close-out: "Have I read the file that confirms this in the last 5 minutes?" If no → read it now. |
 | 12 | **Workstream transfer amnesia** | Build good discipline on one workstream, then switch and repeat old mistakes | Discipline doesn't auto-transfer. When switching workstreams, consciously re-apply the close-out checklist. |
 | 13 | **Literal minimum** | When asked to do X, do exactly X and nothing logically implied by X | Before acting: "What is the user's UNDERLYING intent?" Do the complete job on the first pass. |
+| 14 | **Ghost session** | Session crashes, hits context limits, or ends without writing ANY session notes. Next session has zero context. | Phase 1B (Claim the Session) is mandatory — write a stub to SESSION_NOTES.md BEFORE starting technical work. Even catastrophic failures leave a trace. |
+| 15 | **Minimal handoff** | Session writes "Done. Pick next from backlog." — technically a handoff, functionally useless. Next session starts blind. | Phase 3D has 6 minimum requirements. A handoff missing key files, specific next steps, or gotchas is a protocol violation that will score ≤4/10. |
+| 16 | **False credit / fabrication** | Session claims credit for work it didn't do, or attributes quotes the user never said. Trust destruction. | Never claim deliverables you didn't produce. If a plan was input, say so. If you produced nothing, say so. |
+| 17 | **Protocol erosion** | Each session shaves off "just one" protocol step. Individually minor. Over 5-10 sessions, the whole protocol collapses. Scores drift from 9/10 to 1/10. | The protocol is not optional, advisory, or improvable-by-subtraction during a session. Every step exists because a previous session failed without it. If you think a step is unnecessary, that's the erosion happening. Do the step. |
+
+---
+
+## Degradation Detection
+
+**How to recognize the protocol is eroding — warning signs that predict ghost sessions and failed deliveries:**
+
+| Warning Sign | What It Means | Response |
+|--------------|---------------|----------|
+| Handoff is <5 lines | Failure mode #15 (minimal handoff) is active | Expand to meet all 6 minimum requirements |
+| No handoff evaluation of predecessor | Failure mode #10 (skip evaluation) is active | Stop. Write the evaluation before self-assessing |
+| "I'll just skip the stub" | Failure mode #14 (ghost session) is imminent | Write the stub. It takes 30 seconds. |
+| Self-assessment not written to file | Failure mode #6 (skip close-out) is active | Write to SESSION_NOTES.md before summarizing verbally |
+| Session number gap in SESSION_NOTES.md | Ghost session already happened | Note it. Document what you can infer from git log. |
+| Score dropping session-over-session | Multiple failure modes compounding | Re-read this entire document. Reset to full protocol. |
+| "This step doesn't apply to my session" | Failure mode #17 (protocol erosion) is active | The step applies. Do it. Every step exists because a session failed without it. |
+
+**If you detect 2+ warning signs: STOP.** Re-read this document from the top. Do not continue until you've re-internalized the protocol. The cost of pausing to re-read is 2 minutes. The cost of a ghost session or failed delivery is the user's trust.
 
 ---
 

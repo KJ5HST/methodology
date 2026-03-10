@@ -18,7 +18,7 @@ The checklist constrains. The manual teaches. The mission procedures specialize.
 
 ## Evidence
 
-Extracted from an 11-session UI/UX design series. Validated across 52+ sessions spanning implementation, CI integration, plugin architecture, code review, planning, and audit work.
+Extracted from an 11-session UI/UX design series. Validated across 60+ sessions spanning implementation, CI integration, plugin architecture, code review, planning, and audit work.
 
 | Metric | Session 1 | Session 10 | Session 40+ |
 |--------|-----------|------------|-------------|
@@ -94,7 +94,7 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 
 ```
 ├── README.md                         ← You are here
-├── ITERATIVE_METHODOLOGY.md          ← Master framework (9 principles, 6 phases, 10 gates)
+├── ITERATIVE_METHODOLOGY.md          ← Master framework (9 principles, 6 phases, 12 gates)
 ├── HOW_TO_USE.md                     ← Practical guide with 3 worked examples
 │
 ├── workstreams/                      ← Domain-specific adaptations
@@ -120,7 +120,8 @@ The methodology framework describes WHAT to do and WHY. In practice, it needs an
 - **Mandatory orientation** — prevents starting work without understanding current state
 - **"1 and done" rule** — prevents scope creep and quality degradation
 - **Automatic close-out** — prevents skipping the self-improvement loop
-- **13 known failure modes** — documents agent tendencies with specific countermeasures
+- **17 known failure modes** — documents agent tendencies with specific countermeasures
+- **Degradation detection** — 7 warning signs that predict protocol erosion
 - **Handoff accountability** — ensures each session sets up the next for success
 
 ### The Handoff Accountability Loop
@@ -160,6 +161,17 @@ Domain-specific adaptations of the master framework. Each workstream customizes 
 Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during development of a commercial software product. The methodology emerged organically from an 11-session design series, was codified into a reusable framework, and subsequently validated across 52+ sessions of varied work.
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
+
+### What's New in v1.1
+
+- **Protocol Erosion section** — documents how methodology discipline degrades over time and how to detect it early
+- **Phase 1.5: Claim the Session** — write a stub before starting work so even crashed sessions leave a trace
+- **Minimum Handoff Requirements** — 6 mandatory items with bad/good examples; "pick next from backlog" is explicitly called out as insufficient
+- **Ghost session detection** — Phase 0 now checks for undocumented sessions between the last notes and current state
+- **Fabrication warning** — honest accounting now explicitly addresses false credit and fabricated quotes
+- **4 new failure modes** (#14-17): ghost sessions, minimal handoffs, fabrication, protocol erosion
+- **Degradation Detection table** — 7 warning signs with responses
+- **Quality Gates expanded** from 10 to 12
 
 ## License
 
