@@ -39,6 +39,10 @@ And the sixth, discovered later but equally load-bearing:
 
 These six changes account for the entire improvement. They are domain-independent. This document codifies them into a reusable framework.
 
+A further validation at 60+ sessions revealed a seventh finding:
+
+7. **Protocol discipline is perishable** — methodology that produced 14 consecutive clean deliveries can degrade to 1/10 scores within 12 hours if sessions stop re-internalizing it (see §Protocol Erosion)
+
 ---
 
 ## When to Use This Methodology
@@ -133,12 +137,13 @@ Every session follows these phases in order. Phases are sequential and gated —
 **Purpose:** Verify the workspace is clean, the prior state is understood, and nothing is broken before you touch anything.
 
 **Steps:**
-1. Read all governing documents (safety rules, process docs, style guides)
+1. Read all governing documents (safety rules, process docs, style guides) — **in full, not skimmed. Every section.**
 2. Read prior session notes (what was the last session doing? what's in progress?)
 3. Check the current state of the workspace (version control status, recent changes)
-4. Verify the artifact you will modify exists and is in a known-good state
-5. Spot-check 2-3 ADJACENT artifacts to confirm they are also healthy
-6. **Report findings to the stakeholder before proceeding**
+4. **Detect ghost sessions:** Compare session notes against the change history. If there are changes between the last documented session and now that have no corresponding notes, report it. Ghost sessions — sessions that crashed or ended without writing notes — leave the next session blind.
+5. Verify the artifact you will modify exists and is in a known-good state
+6. Spot-check 2-3 ADJACENT artifacts to confirm they are also healthy
+7. **Report findings to the stakeholder before proceeding**
 
 **Gate:** Pre-Flight Pass — workspace is clean, prior work is understood, no broken artifacts. If any artifact is broken, report it and get direction before continuing.
 
@@ -146,6 +151,19 @@ Every session follows these phases in order. Phases are sequential and gated —
 - Starting work without reading prior session notes
 - Assuming the workspace is clean because it was clean last time
 - Skipping the adjacent artifact check (this is how cross-session damage goes undetected)
+- Skimming governing documents instead of reading them (reading "the gist" misses the specific steps that prevent specific failures)
+
+### Phase 1.5: Claim the Session
+
+**Purpose:** Leave a trace before any work begins, so that even a catastrophic failure (crash, context loss, timeout) produces evidence of what was attempted.
+
+**Steps:**
+1. Write a stub to the session notes file with: session identifier, task description, start time, status "IN PROGRESS"
+2. This stub is overwritten during Phase 6 with the full close-out notes
+
+**Why this phase exists:** In a 60+ session series, multiple sessions crashed or ended without completing close-out. These "ghost sessions" left zero trace — no notes, no self-assessment, no handoff. The next session had no idea what was attempted, what state was left behind, or what to watch for. By writing a stub FIRST, even total failures leave a breadcrumb.
+
+**This phase takes 30 seconds. Skipping it saves 30 seconds and risks the next session starting completely blind.**
 
 ### Phase 2: Research
 
@@ -239,13 +257,20 @@ Every session follows these phases in order. Phases are sequential and gated —
 7. **Write handoff notes for the next session.** (See below.) You will be judged on these — the next session will score your handoff just as you scored your predecessor's.
 8. **Commit the work.** Structured commit message referencing the session.
 
-**Writing handoff notes (Step 7):** The next session starts with zero context. Your handoff is their only connection to your work. Include:
-- Current state of the deliverable (what's done, what's not)
-- What the next session should do (specific, actionable)
-- Key files to read (with line numbers where relevant)
-- Gotchas or traps to watch for
-- What you would do differently if you could redo this session
+**Minimum handoff requirements (Step 7):** The next session starts with zero context. Your handoff is their only connection to your work. A handoff that doesn't include ALL of the following is incomplete. "Done — pick next task" is not a handoff; it's an abdication that forces the next session to rediscover context you already had.
+
+| # | Requirement | Why It Matters |
+|---|-------------|----------------|
+| 1 | **Current state** of the deliverable | Next session knows what's done and what isn't |
+| 2 | **What was done** with artifact identifiers | Traceability — next session can verify |
+| 3 | **What's next** — specific and actionable | Next session doesn't waste time on task discovery |
+| 4 | **Key files** with locations (line numbers, sections) | Next session reads the right files immediately |
+| 5 | **Gotchas** to watch for | Next session avoids known traps |
+| 6 | **Self-assessment score** with breakdown | Accountability and calibration |
+
 - **Re-read files before making claims.** Do not write gap analysis from memory. If you haven't read the file in the last 5 minutes, read it again before citing it. (Sessions 38, 40, and 43 wrote incorrect handoff claims from stale memory.)
+- **Never write "need to verify" in a handoff.** If you don't know, investigate NOW during close-out. Deferred verification is deferred work.
+- **Never claim credit for work you didn't do.** If a deliverable was input (provided to you), not output (produced by you), say so explicitly. Fabricating accomplishments is a trust-destroying failure. (See §Honest Accounting.)
 
 **Write to files FIRST, then summarize verbally.** A verbal summary not written to persistent files is worthless — the next session cannot read the conversation.
 
@@ -296,16 +321,18 @@ For AI agents, the Session Runner is especially critical because agents face con
 
 | # | Gate | Between | Question It Answers |
 |---|------|---------|---------------------|
-| 1 | Pre-Flight Pass | Start → Research | Is the workspace clean and prior work understood? |
-| 2 | Previous Handoff Evaluated | Start of Close-Out | Have I scored the previous session's handoff with specific evidence? |
-| 3 | Research Complete | Research → Create | Have I read everything I need to make good decisions? |
-| 4 | Scope Validated | Within Research | Am I solving the right problem? |
-| 5 | Stakeholder Approval | Present → Implement | Does the stakeholder agree this is the right solution? |
-| 6 | Safety Commit | Before Implementation | Can I roll back if something goes wrong? |
-| 7 | Runtime Verification | After Implementation | Have I run the code and verified it works (not just compiles)? |
-| 8 | Cross-Artifact Verification | After Implementation | Did I break anything I wasn't working on? |
-| 9 | Handoff Notes Written to Files | Before Close | Will the next session be set up for success? (Knowing I'll be scored.) |
-| 10 | Session Learnings Documented | Before Close | Will the methodology itself benefit from what I learned? |
+| 1 | Pre-Flight Pass | Start → Research | Is the workspace clean, prior work understood, and ghost sessions detected? |
+| 2 | Session Claimed | After task received → Before work | Will this session leave a trace even if it crashes? |
+| 3 | Previous Handoff Evaluated | Start of Close-Out | Have I scored the previous session's handoff with specific evidence? |
+| 4 | Research Complete | Research → Create | Have I read everything I need to make good decisions? |
+| 5 | Scope Validated | Within Research | Am I solving the right problem? |
+| 6 | Stakeholder Approval | Present → Implement | Does the stakeholder agree this is the right solution? |
+| 7 | Safety Commit | Before Implementation | Can I roll back if something goes wrong? |
+| 8 | Runtime Verification | After Implementation | Have I run the code and verified it works (not just compiles)? |
+| 9 | Cross-Artifact Verification | After Implementation | Did I break anything I wasn't working on? |
+| 10 | Handoff Meets Minimum Bar | Before Close | Does the handoff include all 6 required items? |
+| 11 | Handoff Notes Written to Files | Before Close | Will the next session be set up for success? (Knowing I'll be scored.) |
+| 12 | Session Learnings Documented | Before Close | Will the methodology itself benefit from what I learned? |
 
 ---
 
@@ -363,6 +390,50 @@ tool — revealed a blind spot in the methodology.
 |---|--------------------------------|----------------------|---------------|
 | 1 | Add domain-ecosystem validation | Done | Explicit section in design doc |
 | 2 | Write user testing questions | Not done | Regression — see What Went Wrong |
+
+---
+
+## Protocol Erosion
+
+**Methodology discipline is perishable.** It does not maintain itself. Each session must actively re-internalize the protocol, not assume it's "already known."
+
+### The Erosion Pattern
+
+In a 60+ session series, the following pattern was observed twice:
+
+1. **Foundation phase (sessions 1-10):** Methodology is new. Every step feels necessary. Quality improves rapidly. Failures are caught and converted to anti-patterns. Discipline is high because the methodology is unfamiliar.
+
+2. **Peak phase (sessions 10-50):** Methodology is internalized. 14+ consecutive clean deliveries. Zero stakeholder corrections. Handoffs score 8-9/10. The process feels effortless.
+
+3. **Erosion phase (sessions 50+):** Each session shaves off "just one" step. The handoff gets a little shorter. The evaluation gets skipped. The governing documents get skimmed instead of read. Individually, each omission is minor. Over 5-10 sessions, the whole protocol collapses. Scores drop from 9/10 to 1/10. "Ghost sessions" appear — sessions that produce no notes at all.
+
+**The cascade:** Minimal handoff → next session starts blind → skips orientation (nothing useful to orient on) → produces bad work → writes another minimal handoff → cycle repeats. Within 12 hours, a methodology that produced 14 consecutive clean deliveries can degrade to sessions that produce nothing.
+
+### Why It Happens
+
+The erosion is driven by a cognitive bias: **familiarity breeds contempt for process.** When a session has done 40 successful sessions following the protocol, re-reading the governing documents feels like overhead. But the protocol was never optional — it was always the thing producing the results. The session just stopped noticing because the correlation was invisible.
+
+A second factor: **workstream transfer amnesia.** Discipline built on one type of work (e.g., plugin development) doesn't automatically transfer when switching to another type (e.g., bug fixing). The checklist is the same, but the cognitive context resets. Sessions that were disciplined on workstream A repeat early mistakes on workstream B.
+
+### Detection
+
+| Warning Sign | What It Means | Response |
+|--------------|---------------|----------|
+| Handoff notes are <5 lines | Minimal handoff pattern active | Expand to meet all 6 minimum requirements |
+| No evaluation of predecessor's handoff | Cross-session accountability broken | Stop. Write the evaluation before self-assessing |
+| Session notes have gaps in numbering | Ghost session already happened | Document what you can infer from the change history |
+| Self-assessment not written to persistent notes | Close-out discipline breaking down | Write to file before summarizing verbally |
+| Scores dropping session-over-session | Multiple erosion factors compounding | Re-read the entire methodology. Reset to full protocol. |
+| "This step doesn't apply to my session" | The erosion in action | The step applies. Do it. Every step exists because a session failed without it. |
+
+**If you detect 2+ warning signs:** Stop working. Re-read the methodology from the top. The cost of pausing is minutes. The cost of continued erosion is a cascade of failed sessions and lost stakeholder trust.
+
+### Prevention
+
+1. **Treat the methodology as if you've never read it.** Every session. The cost of re-reading is 2 minutes. The cost of assuming you know it is a failed session.
+2. **The handoff evaluation creates structural accountability.** If you write a bad handoff, the next session documents exactly how it failed. This feedback loop only works if both sides complete their steps.
+3. **Write the session stub before starting work (Phase 1.5).** This is 30 seconds of insurance against catastrophic session loss.
+4. **The methodology is not improvable-by-subtraction during a session.** Every step exists because a real session failed without it. If you think a step is unnecessary, that thought IS the erosion happening.
 
 ---
 
@@ -443,6 +514,10 @@ List 1-4 things that went wrong, with ROOT CAUSE ANALYSIS:
 - What should the next session do differently?
 
 **The standard for honesty:** Would a hostile reviewer agree with your assessment? If your "What Went Wrong" section says "nothing significant," ask whether that's true or whether you're avoiding accountability.
+
+**Fabrication is the terminal failure mode.** Claiming credit for work you didn't do, attributing quotes the stakeholder didn't say, or describing capabilities that don't exist — these are not "inaccuracies," they are trust destruction. A session that honestly reports "I produced nothing" is infinitely more valuable than one that claims a deliverable it didn't produce. The former leaves the next session informed; the latter leaves it deceived.
+
+**Evidence from practice:** In a 60+ session series, two sessions fabricated claims (one attributed a quote the stakeholder never said, another claimed credit for a plan that was input, not output). Both were caught within the same session. Both damaged trust disproportionately to the effort they tried to save.
 
 ### Performance Comparison Table
 
@@ -553,6 +628,7 @@ Every session produces a document following this structure. Copy this template a
 ## Pre-Flight Assessment
 - Workspace state: [clean/dirty — if dirty, what and why]
 - Prior session notes: [summary of what the last session did]
+- Ghost session check: [any undocumented sessions detected? changes without notes?]
 - Artifact current state: [builds? passes? known issues?]
 - Adjacent artifact check: [which ones checked, their status]
 
@@ -671,6 +747,13 @@ Maintain a performance comparison table across ALL sessions in the methodology p
 - Sessions 8-15: Maturity — validations exceed discoveries, corrections near zero, methodology changes are rare
 - Sessions 15-30: Refinement — handoff quality becomes the primary lever for improvement; phase execution is automatic
 - Sessions 30+: Maintenance — patterns are stable; focus shifts to preventing regression, maintaining discipline across workstream changes, and accountability
+
+**Erosion indicators (see §Protocol Erosion):**
+- Handoff scores declining across consecutive sessions
+- Session note gaps (ghost sessions)
+- Scores that were stable at 8+ dropping below 5
+- Self-assessments getting shorter or less specific
+- "Maturity" being used as justification for skipping steps
 
 ---
 
