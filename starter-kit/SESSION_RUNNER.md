@@ -26,7 +26,7 @@ Every session has exactly ONE deliverable. When it's done, you close out. You do
 
 DO NOT skip the report. DO NOT start working. DO NOT assume you know what to do.
 
-**Even if the user's first message contains a task** (e.g., "Implement the following plan"), Phase 0 is still mandatory. The orientation report exists for the user's benefit — it establishes shared understanding of the current state. The user needs to see the report and confirm before work begins. A task in the prompt does not mean Phase 0 is complete. Complete all 7 steps, then the user will re-state or confirm the task in Phase 1.
+**Even if the user's first message contains a task** (e.g., "Implement the following plan"), Phase 0 is still mandatory. That phrase comes from Plan Mode's auto-generated preamble — it does NOT mean start coding. The orientation report exists for the user's benefit — it establishes shared understanding of the current state. The user needs to see the report and confirm before work begins. A task in the prompt does not mean Phase 0 is complete. Complete all 7 steps, then the user will re-state or confirm the task in Phase 1.
 
 **Steps 1-3 are READS, not skims.** Every step exists because a session failed without it.
 
@@ -49,7 +49,9 @@ Common task-to-workstream mappings:
 | "Plan [feature/migration]" | One architecture document | `docs/methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` |
 | "Fix [bug campaign]" | One fix campaign pass | `docs/methodology/workstreams/DEVELOPMENT_WORKSTREAM.md` |
 | "Review [code/PR]" | One review document | The review produces a plan; follow DEVELOPMENT_WORKSTREAM for structure |
-| "Implement the following plan: [plan-mode output]" | Plan document written to `docs/planning/` with evidence-based inventory | Planning workstream |
+| Multi-phase plan appears in prompt (from Plan Mode or user) | Plan document written to `docs/planning/` with evidence-based inventory | Planning workstream |
+
+**⚠ Plan Mode exit trap.** Plan Mode generates "Implement the following plan" as its preamble. **This does NOT mean "start coding."** When a multi-phase plan appears in the prompt — regardless of the preamble wording — the deliverable is writing the plan document with grep-based evidence and per-phase criteria. Orient first. The plan is a DRAFT until evidence-verified. See Planning Sessions below.
 
 **If no workstream document exists for the task type, follow the master framework:** `docs/methodology/ITERATIVE_METHODOLOGY.md`, phases 1-6.
 
@@ -79,6 +81,8 @@ State your understanding back to the user: *"I'm going to [deliverable] followin
 5. If you catch yourself thinking "while I'm at it..." — STOP. That's scope creep. Commit what you have and note it for a future session.
 
 ### Planning Sessions
+
+**⚠ The plan is the deliverable. Do not start implementing it.** Write the plan document to `docs/planning/`, commit it, close out. Implementation happens in a separate session.
 
 **A plan is a deliverable, not a preamble.** When the session's deliverable is a plan (architecture doc, migration plan, multi-phase implementation plan), additional discipline applies:
 
@@ -111,8 +115,6 @@ Before closing out a planning session, verify:
 - [ ] Each phase has explicit completion criteria and verification commands
 - [ ] Each phase marked as "separate session" with a STOP point
 - [ ] Close-out: evaluate predecessor, self-assess, commit, STOP
-
-**The plan is the deliverable. Do not start implementing it.**
 
 ---
 
