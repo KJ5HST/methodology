@@ -135,6 +135,8 @@ git config core.hooksPath .githooks
 
 ## First Session Checklist
 
+> **Start a new session after setup.** Claude Code reads `CLAUDE.md` at session start. If you set up the methodology and say "go" in the same session, Claude will work without the protocol — it hasn't re-read `CLAUDE.md` since the session protocol block was added. Always start a fresh session before your first real task.
+
 After setup, your first session should:
 
 1. Agent reads `SAFEGUARDS.md`, `SESSION_NOTES.md`, `BACKLOG.md`
@@ -150,6 +152,9 @@ There's no previous handoff to evaluate on Session 1. Starting from Session 2, t
 ---
 
 ## Troubleshooting
+
+**Agent skips orientation after initial setup.**
+You probably set up the methodology and said "go" in the same session. Start a new session — Claude reads `CLAUDE.md` at session start, so changes made mid-session don't take effect until the next one.
 
 **Agent skips orientation and starts working immediately.**
 Say: "Read SESSION_RUNNER.md. Phase 0 is mandatory."

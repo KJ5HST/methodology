@@ -56,6 +56,8 @@ Each phase is gated. You cannot enter the next phase until the current one is co
 ## Quick Start
 *NOTE: The absolute fastest way to use this is to tell Claude (or other service), "Use this methodology: https://github.com/KJ5HST/methodology". Claude will pull it down and put it in place for you.*
 
+> **Important:** After setup completes, start a **new session** before giving Claude real work. Claude Code reads `CLAUDE.md` at session start — changes made during setup don't take effect until the next session. If you say "go" in the same session, Claude will work without the protocol.
+
 ### 1. Copy files to your project
 
 Copy `starter-kit/SESSION_RUNNER.md`, `starter-kit/SAFEGUARDS.md`, and `starter-kit/SESSION_NOTES.md` to your project root. Copy the framework files (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) to `docs/methodology/`.
