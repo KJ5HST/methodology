@@ -24,6 +24,7 @@ The broader validation (Sessions 12-52+) confirmed these results hold across dom
 | Discipline doesn't transfer across workstreams automatically | 38, 43 | Same mistakes repeated on new workstreams despite mastery on the old one |
 | Code review is a distinct session type | 51-52 | Plans that audit code before implementation prevent entire classes of bugs |
 | Close-out accountability (knowing you'll be judged) changes behavior | 46-52 | Handoff quality improved measurably when sessions knew they'd be scored |
+| Build success is not runtime verification | 151-153 | Two consecutive sessions shipped code that compiled cleanly but broke at runtime (registration order, version collision). Both noted "no runtime verification" in self-assessment without treating it as a defect. |
 
 **What changed between session 1 and session 2 was not skill — it was methodology.** The same person, using the same tools, on the same type of problem, achieved radically different outcomes by changing HOW they worked. The initial five changes:
 
@@ -242,6 +243,7 @@ Every session follows these phases in order. Phases are sequential and gated —
 - Implementing beyond the approved design ("while I'm here, I'll also fix...")
 - Not enumerating the change set (leads to accidental modification of unrelated files)
 - **Treating speed as evidence of quality.** Finishing faster than expected is a signal to verify harder, not a signal to celebrate. Session 50 completed all 4 phases quickly and shipped broken code because fast completion felt like quality. If implementation goes faster than expected, spend the saved time on verification.
+- **Treating build success as verification.** A successful build proves compilation, dependency resolution, and static correctness. It does not prove that services register in the right order, that runtime dispatch reaches the right handler, or that components don't shadow each other at load time. If the deliverable involves runtime integration — not just source code changes — the verification must include running the application.
 
 ### Phase 6: Verify and Close
 
@@ -249,7 +251,9 @@ Every session follows these phases in order. Phases are sequential and gated —
 
 **Steps:**
 1. **Evaluate the previous session's handoff.** (See Principle 8: Handoff Accountability.) Score it 1-10. Document what helped, what was missing, what was wrong, and the ROI. Write this to the session notes — the previous session's author cannot improve without feedback.
-2. **Verify the artifact.** Does it match the design? Does it build? Does it function? For any change that affects runtime behavior, run the application and verify — compilation is not verification.
+2. **Verify the artifact.** Does it match the design? Does it build? Does it function?
+   - **Runtime smoke test.** For any change that affects runtime behavior — service registration, plugin loading, dependency injection, config resolution, handler dispatch — launch the application and verify in logs or at the running endpoint. Compilation and build success verify syntax and dependency resolution; they do not verify integration, load order, or runtime dispatch. A self-assessment that notes "no runtime verification" without treating it as a defect is a red flag — it means the session recognized the gap but chose to ship anyway.
+   - **If runtime verification is impossible** (requires hardware, external service, or CI), state this explicitly in the session notes. Do not silently skip it.
 3. **Verify adjacent artifacts.** Check 2-3 artifacts that were NOT modified. Are they still healthy? Cross-artifact regression is the most insidious failure mode because nobody is looking for it.
 4. **Self-assess.** Write What Went Right / What Went Wrong. (See Honest Accounting section.) Be specific and honest.
 5. **Update the performance comparison table.** Add this session's metrics.
