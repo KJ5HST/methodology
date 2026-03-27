@@ -24,7 +24,7 @@ A practical guide for applying the methodology to real work. Includes quick star
 
 **To use this methodology, you need three things:**
 
-1. **The master framework:** `ITERATIVE_METHODOLOGY.md` — defines the 6 phases, 10 gates, and self-improvement loop
+1. **The master framework:** `ITERATIVE_METHODOLOGY.md` — defines the 6 phases, 12 gates, and self-improvement loop
 2. **A workstream template:** Pick the one that matches your domain (design, architecture, development, audit) or create your own from `TEMPLATE_WORKSTREAM.md`
 3. **A place to store session outputs:** Create a directory for your session documents (e.g., `sessions/{workstream-name}/`)
 
@@ -614,7 +614,7 @@ Step-by-step instructions for your very first session with the methodology.
 
 2. **Create a sessions directory.** `sessions/{workstream-name}/` — this is where your session documents will live.
 
-3. **Read the master framework.** `ITERATIVE_METHODOLOGY.md` — understand the 6 phases, 10 gates, and self-improvement loop. You don't need to memorize it; you'll reference it during the session.
+3. **Read the master framework.** `ITERATIVE_METHODOLOGY.md` — understand the 6 phases, 12 gates, and self-improvement loop. You don't need to memorize it; you'll reference it during the session.
 
 4. **Read your workstream template.** Understand the domain-specific adaptations for research, creation, and verification.
 
@@ -690,7 +690,7 @@ This methodology was developed by and for AI agent sessions (Claude Code). It wo
 
 #### The Problem It Solves
 
-The methodology framework (`ITERATIVE_METHODOLOGY.md`) is 587 lines. It describes 9 principles, 6 phases, 10 quality gates, and a self-improvement loop. It is comprehensive, well-organized, and nearly useless as an operating procedure — because agents don't follow reference documents, they follow checklists.
+The methodology framework (`ITERATIVE_METHODOLOGY.md`) describes 9 principles, 6 phases, 12 quality gates, and a self-improvement loop. It is comprehensive, well-organized, and nearly useless as an operating procedure — because agents don't follow reference documents, they follow checklists.
 
 This distinction was discovered through a post-mortem analysis of repeated session failures. The methodology was created during an 11-session profile design series that achieved remarkable results: single-iteration approval, 0 stakeholder corrections, monotonically increasing defect detection. But every subsequent effort that tried to USE the methodology — rather than invent it in real time — failed to follow it.
 
@@ -746,7 +746,7 @@ The close-out is the most important innovation. Before the session runner, close
 
 The **handoff accountability loop** (steps 3A and 3D) is what makes sessions compound. Without it, handoff notes are perfunctory. With it — knowing the next session will score you, and having scored your predecessor — handoff notes include gotchas, file references with line numbers, and explicit warnings about traps. This single change (added around Session 34) correlated with 14 consecutive clean deliveries.
 
-**Known Failure Modes** — A table of 13 documented agent tendencies with specific countermeasures. This table exists because agents exhibit predictable failure patterns:
+**Known Failure Modes** — A table of 19 documented agent tendencies with specific countermeasures. This table exists because agents exhibit predictable failure patterns:
 
 | # | Tendency | Countermeasure |
 |---|----------|----------------|
@@ -763,6 +763,12 @@ The **handoff accountability loop** (steps 3A and 3D) is what makes sessions com
 | 11 | Gaps from memory | Re-read files before making claims in close-out |
 | 12 | Workstream transfer amnesia | Discipline doesn't auto-transfer; re-apply checklist |
 | 13 | Literal minimum | Understand underlying intent, not just literal words |
+| 14 | Ghost session (crash with no trace) | Phase 1B: write a stub to SESSION_NOTES.md before starting work |
+| 15 | Minimal handoff ("pick next from backlog") | Phase 3D has 6 minimum requirements; score ≤4/10 without them |
+| 16 | False credit / fabrication | Never claim deliverables you didn't produce |
+| 17 | Protocol erosion (skip "just one" step) | Every step exists because a session failed without it |
+| 18 | Planning-to-implementation bleed | The plan is the deliverable; close out after the plan |
+| 19 | Plan-mode bypass | Plan-mode output is a draft; write to docs/planning/ with evidence first |
 
 The failure modes table serves two purposes: it warns the agent about its own tendencies, and it gives the user language for course-correction ("You're doing Failure Mode #2 — stop and close out").
 
@@ -794,7 +800,7 @@ To use the session runner in your own project:
 
 3. **Update the task-to-workstream mapping table** (Phase 1) to match your project's workstream prompts.
 
-4. **Update the failure modes table** with any tendencies specific to your project. The 8 documented modes are common to most AI agent work, but your project may surface additional ones.
+4. **Update the failure modes table** with any tendencies specific to your project. The 19 documented modes are common to most AI agent work, but your project may surface additional ones.
 
 5. **Put the methodology framework in a known location** (e.g., `docs/methodology/`) so the session runner can reference it.
 
@@ -802,7 +808,7 @@ The session runner is project-independent. The 4 phases and the failure modes ta
 
 ### Agent-Specific Guidance
 
-Beyond the session runner, AI agents benefit from these adaptations. These findings come from 52+ real sessions, not speculation.
+Beyond the session runner, AI agents benefit from these adaptations. These findings come from 60+ real sessions, not speculation.
 
 1. **Agents lose context between sessions.** The session document IS the context transfer mechanism. Write session documents as if the next agent has never seen the codebase — because they haven't (they'll have compacted context at best). Context also degrades WITHIN a session due to compaction. Never write claims from memory — re-read the file.
 

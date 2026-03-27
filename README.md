@@ -142,7 +142,7 @@ The methodology framework describes WHAT to do and WHY. In practice, it needs an
 - **Mandatory orientation** — prevents starting work without understanding current state
 - **"1 and done" rule** — prevents scope creep and quality degradation
 - **Automatic close-out** — prevents skipping the self-improvement loop
-- **17 known failure modes** — documents agent tendencies with specific countermeasures
+- **19 known failure modes** — documents agent tendencies with specific countermeasures
 - **Degradation detection** — 7 warning signs that predict protocol erosion
 - **Handoff accountability** — ensures each session sets up the next for success
 
@@ -180,9 +180,20 @@ Domain-specific adaptations of the master framework. Each workstream customizes 
 
 ## Origin
 
-Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during development of a commercial software product. The methodology emerged organically from an 11-session design series, was codified into a reusable framework, and subsequently validated across 52+ sessions of varied work.
+Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during development of a commercial software product. The methodology emerged organically from an 11-session design series, was codified into a reusable framework, and subsequently validated across 60+ sessions of varied work.
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
+
+### What's New in v1.2
+
+- **Planning session discipline** — plans are deliverables, not preambles. A planning session closes out after the plan; implementation is a separate session.
+- **Evidence-based inventory** — plans that involve deletion, migration, or renaming must include grep-based inventories of all affected symbols. No more assumption-based file lists.
+- **Per-phase completion criteria** — every phase in a multi-phase plan must state what DONE looks like, verification commands, and an explicit session boundary.
+- **Plan-mode exit trap** — explicit warning that Plan Mode's "Implement the following plan" preamble does NOT mean start coding. The plan is a draft until evidence-verified.
+- **2 new failure modes** (#18-19): planning-to-implementation bleed, plan-mode bypass
+- **2 new degradation detection signs** for planning discipline violations
+- **Planning Session Checklist** — 5-item verification before closing a planning session
+- **Learnings table** added to Session Runner — institutional memory that grows with each session
 
 ### What's New in v1.1
 
