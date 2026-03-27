@@ -1157,7 +1157,7 @@ def render_project_card(p):
     </div>'''
 
 
-def render_html(portfolio, projects):
+def render_html(portfolio, projects, title="METHODOLOGY DASHBOARD"):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     h_color = health_color(portfolio["health_score"])
 
@@ -1171,7 +1171,7 @@ def render_html(portfolio, projects):
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Methodology Dashboard</title>
+<title>{esc(title)}</title>
 <style>
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 body {{
@@ -1281,8 +1281,8 @@ h4 {{ color: #8b949e; font-size: 13px; font-weight: 600; margin-bottom: 6px; tex
 .card-risk {{ font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: #21262d; }}
 .card-activity {{ font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: #21262d; }}
 .card-summary {{ font-size: 13px; color: #8b949e; }}
-.card-body {{ padding: 16px 24px; display: block; }}
-.card-body.collapsed {{ display: none; }}
+.card-body {{ padding: 16px 24px; display: none; }}
+.card-body.expanded {{ display: block; }}
 .card-section {{ margin-bottom: 16px; }}
 .card-columns {{ display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }}
 @media (max-width: 1000px) {{ .card-columns {{ grid-template-columns: 1fr; }} }}
@@ -1332,7 +1332,7 @@ h4 {{ color: #8b949e; font-size: 13px; font-weight: 600; margin-bottom: 6px; tex
 <body>
 
 <div class="header">
-    <h1>METHODOLOGY DASHBOARD</h1>
+    <h1>{esc(title)}</h1>
     <div class="header-time">Generated: {now}</div>
 </div>
 
@@ -1390,16 +1390,16 @@ h4 {{ color: #8b949e; font-size: 13px; font-weight: 600; margin-bottom: 6px; tex
 <script>
 function toggleCard(header) {{
     const body = header.nextElementSibling;
-    body.classList.toggle('collapsed');
+    body.classList.toggle('expanded');
 }}
 
-let allCollapsed = false;
+let allExpanded = false;
 function toggleAll() {{
     const bodies = document.querySelectorAll('.card-body');
-    allCollapsed = !allCollapsed;
+    allExpanded = !allExpanded;
     bodies.forEach(b => {{
-        if (allCollapsed) b.classList.add('collapsed');
-        else b.classList.remove('collapsed');
+        if (allExpanded) b.classList.add('expanded');
+        else b.classList.remove('expanded');
     }});
 }}
 
@@ -1494,11 +1494,23 @@ def main():
         setup_hook(root)
         return
 
+    # Auto-setup: if no hook exists, install it on first run
+    settings_path = root / ".claude" / "settings.local.json"
+    if not settings_path.exists():
+        setup_hook(root)
+
     project_paths = discover_projects(root)
 
     if not project_paths:
         print("Methodology Dashboard: No projects found.")
         return
+
+    # Determine title based on mode
+    single_project = (root / ".git").exists()
+    if single_project:
+        title = f"{root.name.upper()} — METHODOLOGY DASHBOARD"
+    else:
+        title = "METHODOLOGY DASHBOARD"
 
     projects = []
     for path in project_paths:
@@ -1512,7 +1524,7 @@ def main():
     projects.sort(key=lambda p: p["scores"]["health"]["total"])
 
     portfolio = aggregate_portfolio(projects)
-    html = render_html(portfolio, projects)
+    html = render_html(portfolio, projects, title=title)
 
     output_path = root / "dashboard.html"
     output_path.write_text(html)
@@ -1522,7 +1534,7 @@ def main():
 
     # Terminal summary
     print(f"\n{'='*60}")
-    print(f"  METHODOLOGY DASHBOARD -- {len(projects)} projects scanned")
+    print(f"  {title} -- {len(projects)} projects scanned")
     print(f"  Portfolio Health: {portfolio['health_score']}/100")
     print(f"{'='*60}")
     for p in projects:
