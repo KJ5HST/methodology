@@ -7,23 +7,30 @@ Set up the Iterative Session Methodology for a new project in 10 minutes.
 ## What You'll Have When Done
 
 ```
-your-project/
-├── CLAUDE.md (or equivalent)     ← Your existing agent instructions
-├── SESSION_RUNNER.md             ← Cockpit checklist (copied from starter kit)
-├── SAFEGUARDS.md                 ← Safety rails (copied from starter kit)
-├── SESSION_NOTES.md              ← Session continuity (copied from starter kit)
-├── BACKLOG.md                    ← Your project's task list (you create this)
+your-projects/                        <-- parent directory (portfolio level)
+├── methodology_dashboard.py          ← Portfolio health scanner (copied from tools/)
+├── .claude/settings.local.json       ← Auto-run hook (optional, recommended)
 │
-└── docs/methodology/             ← The framework (copied from parent dir)
-    ├── ITERATIVE_METHODOLOGY.md  ← Master framework (9 principles, 6 phases)
-    ├── HOW_TO_USE.md             ← Practical guide with examples
-    ├── README.md                 ← Overview and file map
-    └── workstreams/              ← Domain-specific adaptations
-        ├── DESIGN_WORKSTREAM.md
-        ├── ARCHITECTURE_WORKSTREAM.md
-        ├── DEVELOPMENT_WORKSTREAM.md
-        ├── AUDIT_WORKSTREAM.md
-        └── TEMPLATE_WORKSTREAM.md
+├── project-a/                        <-- each project gets methodology files:
+│   ├── CLAUDE.md (or equivalent)     ← Your existing agent instructions
+│   ├── SESSION_RUNNER.md             ← Cockpit checklist (copied from starter kit)
+│   ├── SAFEGUARDS.md                 ← Safety rails (copied from starter kit)
+│   ├── SESSION_NOTES.md              ← Session continuity (copied from starter kit)
+│   ├── BACKLOG.md                    ← Your project's task list (you create this)
+│   │
+│   └── docs/methodology/             ← The framework (copied from parent dir)
+│       ├── ITERATIVE_METHODOLOGY.md  ← Master framework (9 principles, 6 phases)
+│       ├── HOW_TO_USE.md             ← Practical guide with examples
+│       ├── README.md                 ← Overview and file map
+│       └── workstreams/              ← Domain-specific adaptations
+│           ├── DESIGN_WORKSTREAM.md
+│           ├── ARCHITECTURE_WORKSTREAM.md
+│           ├── DEVELOPMENT_WORKSTREAM.md
+│           ├── AUDIT_WORKSTREAM.md
+│           └── TEMPLATE_WORKSTREAM.md
+│
+├── project-b/                        <-- same structure
+└── project-c/                        <-- same structure
 ```
 
 ---
@@ -96,7 +103,40 @@ mkdir -p docs/methodology/sessions
 
 This is where session output documents go (if you use them). The methodology works without explicit session documents — `SESSION_NOTES.md` carries the essential continuity — but formal session documents are useful for design series and audits where you want a permanent record.
 
-## Step 7: Set Up Git Hooks (Optional)
+## Step 7: Set Up the Methodology Dashboard (Recommended)
+
+The methodology includes a portfolio health scanner that runs at the start of every Claude Code session. It scores each project on 5 dimensions (activity, testing, documentation, CI/CD, methodology compliance) and generates an HTML dashboard.
+
+Copy `tools/methodology_dashboard.py` to the **parent directory** above your project repos:
+
+```
+~/projects/                          <-- put methodology_dashboard.py here
+~/projects/project-a/                <-- git repo
+~/projects/project-b/                <-- git repo
+```
+
+Then set up the auto-run hook. Create or update `.claude/settings.local.json` in that same parent directory:
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "command": "python3 methodology_dashboard.py",
+        "once": true
+      }
+    ]
+  }
+}
+```
+
+This gives you a health scoreboard at the start of every session — methodology compliance becomes a visible, measurable signal rather than a document you have to remember to check.
+
+The dashboard requires only Python 3 (stdlib, no pip dependencies) and works on macOS, Linux, and Windows.
+
+**If you manage only one project**, the dashboard still works — it will scan and report on that single project. The value scales with portfolio size, but even a single-project view gives you a quick health check.
+
+## Step 8: Set Up Git Hooks (Optional)
 
 The methodology works without hooks, but a `core.hooksPath` configuration can enforce commit discipline:
 

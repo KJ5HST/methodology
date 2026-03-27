@@ -43,6 +43,12 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 | `starter-kit/SESSION_NOTES.md` | Empty template for session continuity between sessions |
 | `starter-kit/BOOTSTRAP.md` | Step-by-step setup guide for new projects |
 
+### Tools
+
+| File | Purpose |
+|------|---------|
+| `tools/methodology_dashboard.py` | Portfolio health scanner — scores projects on activity, testing, docs, CI/CD, methodology compliance; generates HTML dashboard. Place in parent directory above project repos. Python 3 stdlib only, cross-platform. |
+
 ### Workstreams (domain-specific adaptations)
 
 | File | Domain |

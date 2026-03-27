@@ -92,6 +92,21 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 | `SESSION_NOTES.md` | Empty template for session continuity |
 | `SAFEGUARDS.md` | Safety rails: commit discipline, blast radius limits, mode switching |
 
+### Methodology Dashboard
+
+`tools/methodology_dashboard.py` is a portfolio health scanner that turns methodology compliance into a visible, measurable signal. Place it in the parent directory above your project repos and it will:
+
+- **Discover** all sibling git repositories automatically
+- **Collect** metrics across 7 dimensions (git activity, file structure, tests, CI/CD, documentation, methodology compliance, dependencies)
+- **Score** each project's health (0-100) across 5 weighted dimensions
+- **Assess** risk with severity-tagged flags (critical/high/medium/low)
+- **Generate** a self-contained HTML dashboard and open it in your browser
+- **Print** a terminal summary for quick at-a-glance status
+
+Set up as a Claude Code `UserPromptSubmit` hook, it runs automatically at the start of every session — you see the scoreboard before you type your first command. See [`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md) Step 7 for setup instructions.
+
+Requires only Python 3 (stdlib, no dependencies). Works on macOS, Linux, and Windows.
+
 ## Repository Structure
 
 ```
@@ -106,11 +121,14 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 │   ├── AUDIT_WORKSTREAM.md           ← Code audits, security reviews, quality gates
 │   └── TEMPLATE_WORKSTREAM.md        ← Create your own workstream
 │
-└── starter-kit/                      ← Copy these to bootstrap a new project
-    ├── BOOTSTRAP.md                  ← Setup guide
-    ├── SESSION_RUNNER.md             ← Cockpit checklist template
-    ├── SESSION_NOTES.md              ← Session continuity template
-    └── SAFEGUARDS.md                 ← Safety rails template
+├── starter-kit/                      ← Copy these to bootstrap a new project
+│   ├── BOOTSTRAP.md                  ← Setup guide
+│   ├── SESSION_RUNNER.md             ← Cockpit checklist template
+│   ├── SESSION_NOTES.md              ← Session continuity template
+│   └── SAFEGUARDS.md                 ← Safety rails template
+│
+└── tools/                            ← Portfolio-level tooling
+    └── methodology_dashboard.py      ← Health scanner & compliance dashboard
 ```
 
 ## Key Concepts
