@@ -105,17 +105,21 @@ This is where session output documents go (if you use them). The methodology wor
 
 ## Step 7: Set Up the Methodology Dashboard (Recommended)
 
-The methodology includes a portfolio health scanner that runs at the start of every Claude Code session. It scores each project on 5 dimensions (activity, testing, documentation, CI/CD, methodology compliance) and generates an HTML dashboard.
+The methodology includes a health scanner that runs at the start of every Claude Code session. It scores projects on 5 dimensions (activity, testing, documentation, CI/CD, methodology compliance) and generates an HTML dashboard.
 
-Copy `tools/methodology_dashboard.py` to the **parent directory** above your project repos:
+The dashboard auto-detects its context:
+- **Inside a git repo** → single-project mode (also scans git submodules as separate entries)
+- **Above git repos** → portfolio mode (scans all sibling repos)
 
+### Per-Project Setup (single-project mode)
+
+Copy `tools/methodology_dashboard.py` to your **project root** and set up the auto-run hook:
+
+```bash
+cp <methodology-repo>/tools/methodology_dashboard.py .
 ```
-~/projects/                          <-- put methodology_dashboard.py here
-~/projects/project-a/                <-- git repo
-~/projects/project-b/                <-- git repo
-```
 
-Then set up the auto-run hook. Create or update `.claude/settings.local.json` in that same parent directory:
+Create or update `.claude/settings.local.json` in your project root:
 
 ```json
 {
@@ -130,11 +134,22 @@ Then set up the auto-run hook. Create or update `.claude/settings.local.json` in
 }
 ```
 
-This gives you a health scoreboard at the start of every session — methodology compliance becomes a visible, measurable signal rather than a document you have to remember to check.
+Add `dashboard.html` to your `.gitignore` (it's a generated artifact).
+
+### Portfolio Setup (multi-project mode)
+
+To get a portfolio-wide view across all your projects, copy the same file to the **parent directory** above your repos and set up the hook there:
+
+```
+~/projects/                          <-- put methodology_dashboard.py here
+~/projects/.claude/settings.local.json  <-- hook here
+~/projects/project-a/                <-- git repo (scanned)
+~/projects/project-b/                <-- git repo (scanned)
+```
+
+You can use both — the per-project dashboard runs when you're working inside a project, and the portfolio dashboard runs when you're at the parent level.
 
 The dashboard requires only Python 3 (stdlib, no pip dependencies) and works on macOS, Linux, and Windows.
-
-**If you manage only one project**, the dashboard still works — it will scan and report on that single project. The value scales with portfolio size, but even a single-project view gives you a quick health check.
 
 ## Step 8: Set Up Git Hooks (Optional)
 

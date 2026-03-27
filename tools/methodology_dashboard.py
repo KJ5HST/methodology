@@ -9,20 +9,32 @@ default browser.
 Part of the Iterative Session Methodology.
 https://github.com/KJ5HST/methodology
 
+MODES
+-----
+The dashboard auto-detects its context based on where it's placed:
+
+  Portfolio mode (parent directory is NOT a git repo):
+    Scans all sibling git repositories as separate projects.
+
+       ~/projects/                       <-- put methodology_dashboard.py here
+       ~/projects/project-a/             <-- scanned as project
+       ~/projects/project-b/             <-- scanned as project
+
+  Single-project mode (placed inside a git repo):
+    Scans the project itself, plus any git submodules as separate entries.
+
+       ~/projects/my-app/                <-- put methodology_dashboard.py here
+       ~/projects/my-app/lib/submodule/  <-- scanned as separate entry
+
 SETUP
 -----
-1. Place this file in a parent directory above your project repos:
-
-       ~/projects/                  <-- put methodology_dashboard.py here
-       ~/projects/project-a/        <-- git repo
-       ~/projects/project-b/        <-- git repo
-       ~/projects/project-c/        <-- git repo
+1. Copy this file to your desired location (see Modes above).
 
 2. Run manually:
 
        python3 methodology_dashboard.py
 
-3. (Optional) Auto-run on every Claude Code session via a UserPromptSubmit hook.
+3. (Recommended) Auto-run on every Claude Code session via a UserPromptSubmit hook.
    Add this to .claude/settings.local.json in the same directory:
 
        {
@@ -167,6 +179,28 @@ def open_in_browser(filepath):
 # === DISCOVERY ===
 
 def discover_projects(root):
+    """Discover projects to scan.
+
+    Two modes, auto-detected:
+    - Single-project mode: if root itself is a git repo, scan it plus any
+      git submodules (each submodule appears as its own entry).
+    - Portfolio mode: if root is NOT a git repo, scan sibling directories
+      that contain .git/ (the original behavior).
+    """
+    # Single-project mode: root is a git repo
+    if (root / ".git").exists():
+        projects = [root]
+        # Discover git submodules
+        submodule_output = git_cmd(root, "submodule", "status")
+        for line in submodule_output.splitlines():
+            parts = line.strip().lstrip("+-").split()
+            if len(parts) >= 2:
+                submodule_path = root / parts[1]
+                if submodule_path.is_dir() and (submodule_path / ".git").exists():
+                    projects.append(submodule_path)
+        return projects
+
+    # Portfolio mode: scan sibling directories
     projects = []
     try:
         for entry in sorted(root.iterdir()):
