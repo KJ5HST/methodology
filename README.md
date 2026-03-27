@@ -104,7 +104,7 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 - **Generate** a self-contained HTML dashboard and open it in your browser
 - **Print** a terminal summary for quick at-a-glance status
 
-Set up as a Claude Code `UserPromptSubmit` hook, it runs automatically at the start of every session — you see the scoreboard before you type your first command. See [`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md) Step 7 for setup instructions.
+The generated HTML auto-refreshes every 60 seconds, so you can leave it open in a browser and it stays current as you work. Run the script manually or on any schedule you prefer.
 
 Requires only Python 3 (stdlib, no dependencies). Works on macOS, Linux, and Windows.
 

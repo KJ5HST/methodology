@@ -30,26 +30,13 @@ SETUP
 -----
 1. Copy this file to your desired location (see Modes above).
 
-2. Run manually:
+2. Run:
 
        python3 methodology_dashboard.py
 
-3. (Recommended) Auto-run on every Claude Code session via a UserPromptSubmit hook.
-   Add this to .claude/settings.local.json in the same directory:
-
-       {
-         "hooks": {
-           "UserPromptSubmit": [
-             {
-               "command": "python3 methodology_dashboard.py",
-               "once": true
-             }
-           ]
-         }
-       }
-
-   The dashboard will run on the first prompt of each session and print a
-   terminal summary before opening the HTML report in your browser.
+   This generates dashboard.html, opens it in your browser, and prints a
+   terminal summary. The HTML auto-refreshes every 60 seconds — leave it
+   open and re-run the script whenever you want updated data.
 
 CUSTOMIZATION
 -------------
@@ -1435,70 +1422,10 @@ function sortCards(by) {{
 </html>'''
 
 
-# === SETUP ===
-
-HOOK_CONFIG = {
-    "hooks": {
-        "UserPromptSubmit": [
-            {
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": "python3 methodology_dashboard.py --no-open",
-                        "timeout": 15,
-                        "statusMessage": "Generating Methodology Dashboard...",
-                        "once": True
-                    }
-                ]
-            }
-        ]
-    }
-}
-
-
-def setup_hook(root):
-    """Create or update .claude/settings.local.json with the dashboard hook."""
-    claude_dir = root / ".claude"
-    settings_path = claude_dir / "settings.local.json"
-
-    if settings_path.exists():
-        try:
-            with open(settings_path) as f:
-                existing = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            existing = {}
-    else:
-        existing = {}
-
-    # Merge: preserve existing permissions, add/replace hooks
-    if "hooks" not in existing:
-        existing["hooks"] = {}
-
-    existing["hooks"]["UserPromptSubmit"] = HOOK_CONFIG["hooks"]["UserPromptSubmit"]
-
-    claude_dir.mkdir(parents=True, exist_ok=True)
-    with open(settings_path, "w") as f:
-        json.dump(existing, f, indent=2)
-        f.write("\n")
-
-    print(f"  Dashboard hook installed: {settings_path}")
-    print(f"  The dashboard will auto-run on the first prompt of each new session.")
-
-
 # === MAIN ===
 
 def main():
     root = ROOT
-
-    # --setup: install the Claude Code hook and exit
-    if "--setup" in sys.argv:
-        setup_hook(root)
-        return
-
-    # Auto-setup: if no hook exists, install it on first run
-    settings_path = root / ".claude" / "settings.local.json"
-    if not settings_path.exists():
-        setup_hook(root)
 
     project_paths = discover_projects(root)
 

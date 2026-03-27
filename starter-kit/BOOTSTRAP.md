@@ -9,7 +9,7 @@ Set up the Iterative Session Methodology for a new project in 10 minutes.
 ```
 your-projects/                        <-- parent directory (portfolio level)
 ├── methodology_dashboard.py          ← Portfolio health scanner (copied from tools/)
-├── .claude/settings.local.json       ← Auto-run hook (optional, recommended)
+├── dashboard.html                    ← Generated dashboard (auto-refreshes in browser)
 │
 ├── project-a/                        <-- each project gets methodology files:
 │   ├── CLAUDE.md (or equivalent)     ← Your existing agent instructions
@@ -54,13 +54,13 @@ Copy these files from `starter-kit/` to your **project root**:
 
 The markdown files are templates designed to be customized. The dashboard is a standalone Python 3 script (no dependencies) that works out of the box.
 
-After copying, install the auto-run hook:
+Run it once to generate your first dashboard:
 
 ```bash
-python3 methodology_dashboard.py --setup
+python3 methodology_dashboard.py
 ```
 
-This creates `.claude/settings.local.json` with a `UserPromptSubmit` hook that runs the dashboard on the first prompt of each session.
+This generates `dashboard.html` and opens it in your browser. The page auto-refreshes every 60 seconds — leave it open and it stays current as you work.
 
 Add `dashboard.html` to your `.gitignore` — it's a generated artifact.
 
@@ -116,7 +116,7 @@ This is where session output documents go (if you use them). The methodology wor
 
 ## Step 7: Set Up the Methodology Dashboard (Recommended)
 
-The methodology includes a health scanner that runs at the start of every Claude Code session. It scores projects on 5 dimensions (activity, testing, documentation, CI/CD, methodology compliance) and generates an HTML dashboard.
+The methodology includes a health scanner that scores projects on 5 dimensions (activity, testing, documentation, CI/CD, methodology compliance) and generates an HTML dashboard that auto-refreshes every 60 seconds.
 
 The dashboard auto-detects its context:
 - **Inside a git repo** → single-project mode (also scans git submodules as separate entries)
@@ -124,41 +124,28 @@ The dashboard auto-detects its context:
 
 ### Per-Project Setup (single-project mode)
 
-Copy `tools/methodology_dashboard.py` to your **project root** and set up the auto-run hook:
+Copy `tools/methodology_dashboard.py` to your **project root**:
 
 ```bash
 cp <methodology-repo>/tools/methodology_dashboard.py .
+python3 methodology_dashboard.py
 ```
 
-Create or update `.claude/settings.local.json` in your project root:
-
-```json
-{
-  "hooks": {
-    "UserPromptSubmit": [
-      {
-        "command": "python3 methodology_dashboard.py",
-        "once": true
-      }
-    ]
-  }
-}
-```
+This generates `dashboard.html` and opens it in your browser. The page auto-refreshes every 60 seconds — leave it open and re-run the script whenever you want updated data.
 
 Add `dashboard.html` to your `.gitignore` (it's a generated artifact).
 
 ### Portfolio Setup (multi-project mode)
 
-To get a portfolio-wide view across all your projects, copy the same file to the **parent directory** above your repos and set up the hook there:
+To get a portfolio-wide view across all your projects, copy the same file to the **parent directory** above your repos:
 
 ```
 ~/projects/                          <-- put methodology_dashboard.py here
-~/projects/.claude/settings.local.json  <-- hook here
 ~/projects/project-a/                <-- git repo (scanned)
 ~/projects/project-b/                <-- git repo (scanned)
 ```
 
-You can use both — the per-project dashboard runs when you're working inside a project, and the portfolio dashboard runs when you're at the parent level.
+You can use both — the per-project dashboard runs when you're inside a project, and the portfolio dashboard runs when you're at the parent level.
 
 The dashboard requires only Python 3 (stdlib, no pip dependencies) and works on macOS, Linux, and Windows.
 
