@@ -95,18 +95,35 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 
 ### Methodology Dashboard
 
-`tools/methodology_dashboard.py` is a portfolio health scanner that turns methodology compliance into a visible, measurable signal. Place it in the parent directory above your project repos and it will:
+`tools/methodology_dashboard.py` is a portfolio health scanner that turns methodology compliance into a visible, measurable signal.
 
-- **Discover** all sibling git repositories automatically
-- **Collect** metrics across 7 dimensions (git activity, file structure, tests, CI/CD, documentation, methodology compliance, dependencies)
-- **Score** each project's health (0-100) across 5 weighted dimensions
-- **Assess** risk with severity-tagged flags (critical/high/medium/low)
-- **Generate** a self-contained HTML dashboard and open it in your browser
-- **Print** a terminal summary for quick at-a-glance status
+**Two modes, auto-detected:**
+- **Portfolio mode** — place the script in the parent directory above your repos. It discovers all sibling git repositories and scores them as a portfolio.
+- **Single-project mode** — place the script inside a git repo. It scores that project and also discovers git submodules as separate entries.
 
-The generated HTML auto-refreshes every 60 seconds, so you can leave it open in a browser and it stays current as you work. Run the script manually or on any schedule you prefer.
+**What it does:**
+- **Discovers** git repositories automatically (sibling repos or submodules depending on mode)
+- **Collects** metrics across 7 dimensions: git activity, file structure, tests, CI/CD, documentation, methodology compliance, dependencies
+- **Scores** each project's health (0-100) across 5 weighted dimensions (activity, testing, documentation, CI/CD, methodology)
+- **Assesses** risk with severity-tagged flags (critical/high/medium/low) for issues like abandonment, missing tests, no CI, large files, low velocity
+- **Generates** a self-contained HTML dashboard with collapsible project cards, sortable by health/risk/name/activity
+- **Prints** a color-coded terminal summary for quick at-a-glance status
+
+**Live dashboard:** The generated HTML auto-refreshes every 60 seconds. Run the script once, open `dashboard.html` in your browser, and leave it open — it stays current as you work. Re-run the script whenever you want updated data.
 
 Requires only Python 3 (stdlib, no dependencies). Works on macOS, Linux, and Windows.
+
+#### Dashboard Overview
+
+Portfolio health score, risk matrix, methodology compliance table, commit activity chart, and sortable project cards — all in a single self-contained HTML file.
+
+![Dashboard overview showing health score, risk matrix, methodology compliance, and commit activity](docs/images/dashboard-overview.png)
+
+#### Project Detail View
+
+Expand any project card to see health breakdown by dimension, risk factors, git stats, code breakdown by language and category, test metrics, CI/CD status, documentation quality, dependency counts, methodology compliance checklist, and the 10 largest files.
+
+![Expanded project detail showing health breakdown, code metrics, and methodology compliance](docs/images/dashboard-detail.png)
 
 ## Repository Structure
 
@@ -183,6 +200,17 @@ Domain-specific adaptations of the master framework. Each workstream customizes 
 Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during development of a commercial software product. The methodology emerged organically from an 11-session design series, was codified into a reusable framework, and subsequently validated across 60+ sessions of varied work.
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
+
+### What's New in v2.0
+
+- **Methodology Dashboard** — new portfolio health scanner (`tools/methodology_dashboard.py`) that scores projects on 5 dimensions (activity, testing, documentation, CI/CD, methodology compliance) and generates a self-contained HTML dashboard
+- **Two scanning modes** — portfolio mode (scans sibling git repos) and single-project mode (scans the project + git submodules), auto-detected based on placement
+- **Health scoring (0-100)** with 5 weighted dimensions and rule-based risk assessment (critical/high/medium/low flags)
+- **Methodology compliance scoring (0-100)** — weighted checklist of 6 required items (SESSION_RUNNER, SAFEGUARDS, SESSION_NOTES, BACKLOG, docs/methodology/, workstreams/)
+- **Color-coded terminal output** — at-a-glance status without opening the browser
+- **Live HTML dashboard** — auto-refreshes every 60 seconds; collapsible project cards sortable by health, risk, name, or activity
+- **Starter kit includes dashboard** — `starter-kit/methodology_dashboard.py` for per-project use
+- **Zero dependencies** — Python 3 stdlib only, cross-platform (macOS, Linux, Windows)
 
 ### What's New in v1.2
 
