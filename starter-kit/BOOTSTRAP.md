@@ -43,15 +43,18 @@ These files are project-independent. You should not need to modify them.
 
 ## Step 2: Copy the Starter Kit Files to Project Root
 
-Copy these three files from `starter-kit/` to your **project root**:
+Copy these files from `starter-kit/` to your **project root**:
 
 | File | Purpose |
 |------|---------|
 | `SESSION_RUNNER.md` | The operating procedure — every session follows this |
 | `SAFEGUARDS.md` | Safety rails — commit discipline, blast radius limits, mode switching |
 | `SESSION_NOTES.md` | Session continuity — where handoff notes live between sessions |
+| `methodology_dashboard.py` | Health scanner — scores project health and methodology compliance |
 
-These are templates. They work out of the box but are designed to be customized.
+The markdown files are templates designed to be customized. The dashboard is a standalone Python 3 script (no dependencies) that works out of the box.
+
+Add `dashboard.html` to your `.gitignore` — it's a generated artifact.
 
 ## Step 3: Create Your BACKLOG.md
 

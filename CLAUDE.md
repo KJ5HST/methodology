@@ -42,6 +42,7 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 | `starter-kit/SAFEGUARDS.md` | Commit discipline, blast radius limits, mode-switching rules |
 | `starter-kit/SESSION_NOTES.md` | Empty template for session continuity between sessions |
 | `starter-kit/BOOTSTRAP.md` | Step-by-step setup guide for new projects |
+| `starter-kit/methodology_dashboard.py` | Health scanner — copy to project root for per-project dashboard |
 
 ### Tools
 

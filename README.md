@@ -91,6 +91,7 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 | `SESSION_RUNNER.md` | Cockpit checklist template (no project-specific history) |
 | `SESSION_NOTES.md` | Empty template for session continuity |
 | `SAFEGUARDS.md` | Safety rails: commit discipline, blast radius limits, mode switching |
+| `methodology_dashboard.py` | Health scanner: project scoring, risk assessment, compliance dashboard |
 
 ### Methodology Dashboard
 
@@ -125,7 +126,8 @@ Requires only Python 3 (stdlib, no dependencies). Works on macOS, Linux, and Win
 │   ├── BOOTSTRAP.md                  ← Setup guide
 │   ├── SESSION_RUNNER.md             ← Cockpit checklist template
 │   ├── SESSION_NOTES.md              ← Session continuity template
-│   └── SAFEGUARDS.md                 ← Safety rails template
+│   ├── SAFEGUARDS.md                 ← Safety rails template
+│   └── methodology_dashboard.py      ← Health scanner (also in tools/)
 │
 └── tools/                            ← Portfolio-level tooling
     └── methodology_dashboard.py      ← Health scanner & compliance dashboard
