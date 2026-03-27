@@ -54,10 +54,7 @@ Pre-Flight → Research → Create → Present → Implement → Verify & Close
 Each phase is gated. You cannot enter the next phase until the current one is complete. The most valuable gate is between Present and Implement: no implementation begins without stakeholder approval.
 
 ## Quick Start
-*NOTE: The absolute fastest way to use this is to tell Claude (or other service), "Use this methodology: https://github.com/KJ5HST/methodology". Claude will pull it down and put it in place for you.*[^update]
-
-[^update]: To update a project that is currently using an older version of `methodology`, use
-the following command: "Update methodology using https://github.com/KJ5HST/methodology".
+*NOTE: The absolute fastest way to use this is to tell Claude (or other service), "Use this methodology: https://github.com/KJ5HST/methodology". Claude will pull it down and put it in place for you. To update an existing project to the latest version, use the same approach: "Update methodology using https://github.com/KJ5HST/methodology".*
 
 ### 1. Copy files to your project
 
