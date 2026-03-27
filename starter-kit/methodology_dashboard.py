@@ -63,7 +63,7 @@ from collections import defaultdict
 # === CONSTANTS ===
 
 ROOT = Path(__file__).parent
-EXCLUDE_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv"}
+EXCLUDE_DIRS = {"methodology", ".git", "__pycache__", "node_modules", ".venv", "venv"}
 WALK_SKIP = {".git", "node_modules", "__pycache__", ".venv", "venv", "target",
              "build", "dist", ".build", "DerivedData", "Pods", ".gradle"}
 
@@ -1158,7 +1158,6 @@ def render_html(portfolio, projects, title="METHODOLOGY DASHBOARD"):
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="refresh" content="60">
 <title>{esc(title)}</title>
 <style>
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -1379,6 +1378,7 @@ h4 {{ color: #8b949e; font-size: 13px; font-weight: 600; margin-bottom: 6px; tex
 function toggleCard(header) {{
     const body = header.nextElementSibling;
     body.classList.toggle('expanded');
+    saveState();
 }}
 
 let allExpanded = false;
@@ -1389,6 +1389,7 @@ function toggleAll() {{
         if (allExpanded) b.classList.add('expanded');
         else b.classList.remove('expanded');
     }});
+    saveState();
 }}
 
 function sortCards(by) {{
@@ -1415,7 +1416,62 @@ function sortCards(by) {{
 
     document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
     event.target.classList.add('active');
+    saveState();
 }}
+
+// --- State-preserving auto-refresh ---
+
+function saveState() {{
+    const expanded = [];
+    document.querySelectorAll('.card-body.expanded').forEach(b => {{
+        const card = b.closest('.project-card');
+        if (card) expanded.push(card.id);
+    }});
+    const activeSort = document.querySelector('.sort-btn.active');
+    sessionStorage.setItem('dashboard-state', JSON.stringify({{
+        expanded: expanded,
+        scroll: window.scrollY,
+        sort: activeSort ? activeSort.textContent.trim() : null,
+        allExpanded: allExpanded
+    }}));
+}}
+
+function restoreState() {{
+    try {{
+        const state = JSON.parse(sessionStorage.getItem('dashboard-state'));
+        if (!state) return;
+        allExpanded = state.allExpanded || false;
+        (state.expanded || []).forEach(id => {{
+            const card = document.getElementById(id);
+            if (card) {{
+                const body = card.querySelector('.card-body');
+                if (body) body.classList.add('expanded');
+            }}
+        }});
+        if (state.sort) {{
+            document.querySelectorAll('.sort-btn').forEach(b => {{
+                if (b.textContent.trim() === state.sort) b.classList.add('active');
+                else b.classList.remove('active');
+            }});
+        }}
+        if (state.scroll) window.scrollTo(0, state.scroll);
+    }} catch(e) {{}}
+}}
+
+restoreState();
+
+setInterval(() => {{
+    saveState();
+    fetch(location.href).then(r => r.text()).then(html => {{
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newBody = doc.querySelector('body');
+        if (newBody) {{
+            document.body.innerHTML = newBody.innerHTML;
+            restoreState();
+        }}
+    }}).catch(() => {{}});
+}}, 60000);
 </script>
 
 </body>
