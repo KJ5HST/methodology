@@ -1532,18 +1532,51 @@ def main():
     # Open in browser
     open_in_browser(output_path)
 
-    # Terminal summary
-    print(f"\n{'='*60}")
-    print(f"  {title} -- {len(projects)} projects scanned")
-    print(f"  Portfolio Health: {portfolio['health_score']}/100")
-    print(f"{'='*60}")
+    # Terminal summary with ANSI colors
+    R = "\033[0m"       # reset
+    B = "\033[1m"       # bold
+    D = "\033[2m"       # dim
+    def c_health(score):
+        if score >= 80: return "\033[32m"    # green
+        if score >= 60: return "\033[92m"    # bright green
+        if score >= 40: return "\033[33m"    # yellow
+        if score >= 20: return "\033[91m"    # bright red
+        return "\033[31m"                     # red
+    def c_risk(sev):
+        return {"critical": "\033[31m", "high": "\033[91m", "medium": "\033[33m",
+                "low": "\033[36m", "healthy": "\033[32m"}.get(sev, "")
+    def c_activity(act):
+        return {"active": "\033[32m", "slowing": "\033[33m",
+                "stale": "\033[91m", "dead": "\033[31m"}.get(act, "")
+
+    W = 70
+    ph = portfolio["health_score"]
+    pc = c_health(ph)
+    rc = portfolio.get("risk_counts", {})
+    hi_risk = rc.get("critical", 0) + rc.get("high", 0)
+
+    print(f"\n{D}{'─'*W}{R}")
+    print(f"  {B}{title}{R}  {D}│{R}  {len(projects)} projects")
+    print(f"{D}{'─'*W}{R}")
+    print(f"  Health: {pc}{B}{ph}/100{R}    "
+          f"High+ Risk: {c_risk('high') if hi_risk else c_risk('healthy')}{B}{hi_risk}{R}    "
+          f"Commits: {B}{portfolio['total_commits']:,}{R}")
+    print(f"{D}{'─'*W}{R}")
+
+    # Column headers
+    print(f"  {D}{'Project':<25s} {'Health':>8s}  {'Risk':>8s}  {'Activity':>8s}{R}")
+
     for p in projects:
         wr = worst_risk(p["scores"]["risks"])
         h = p["scores"]["health"]["total"]
         a = p["scores"]["activity"]
-        print(f"  {p['name']:25s}  Health: {h:3d}/100  Risk: {wr:8s}  {a}")
-    print(f"{'='*60}")
-    print(f"  Dashboard: {output_path}")
+        hc = c_health(h)
+        wrc = c_risk(wr)
+        ac = c_activity(a)
+        print(f"  {p['name']:<25s} {hc}{h:>5d}/100{R}  {wrc}{wr:>8s}{R}  {ac}{a:>8s}{R}")
+
+    print(f"{D}{'─'*W}{R}")
+    print(f"  {D}Dashboard: {output_path}{R}")
     print()
 
 
