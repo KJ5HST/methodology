@@ -318,7 +318,7 @@ def collect_file_metrics(path):
 
             # LOC for text files
             loc = 0
-            if ext not in ASSET_EXTS and category != "assets":
+            if ext not in ASSET_EXTS and category not in ("assets", "other"):
                 loc = count_lines(fpath)
                 metrics["total_loc"] += loc
 
