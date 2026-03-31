@@ -42,6 +42,13 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 | `starter-kit/SAFEGUARDS.md` | Commit discipline, blast radius limits, mode-switching rules |
 | `starter-kit/SESSION_NOTES.md` | Empty template for session continuity between sessions |
 | `starter-kit/BOOTSTRAP.md` | Step-by-step setup guide for new projects |
+| `starter-kit/methodology_dashboard.py` | Health scanner — copy to project root for per-project dashboard |
+
+### Tools
+
+| File | Purpose |
+|------|---------|
+| `tools/methodology_dashboard.py` | Portfolio health scanner — scores projects on activity, testing, docs, CI/CD, methodology compliance; generates HTML dashboard. Place in parent directory above project repos. Python 3 stdlib only, cross-platform. |
 
 ### Workstreams (domain-specific adaptations)
 
@@ -55,7 +62,7 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 
 ## Key Concepts to Preserve When Editing
 
-- **SESSION_RUNNER.md documents 17+ failure modes** with specific countermeasures. These are empirically derived from 60+ sessions — do not remove or weaken them without strong justification.
+- **SESSION_RUNNER.md documents 19 failure modes** with specific countermeasures. These are empirically derived from 60+ sessions — do not remove or weaken them without strong justification.
 - **Phase 0 (Orient) must remain mandatory and blocking** — the most common failure mode is agents skipping orientation and starting work immediately.
 - **"1 and done" rule** — one deliverable per session, then close out. This is structural, not advisory.
 - **Ghost session detection** (Phase 0, step 5) exists because crashed sessions that leave no trace cause the next session to work from stale state.
@@ -65,8 +72,9 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 
 ## Versioning
 
-Changes are tracked via git commits and the README's "What's New" section. Current version: v1.2. Key additions by version:
+Changes are tracked via git commits and the README's "What's New" section. Current version: v2.0. Key additions by version:
 
 - **v1.0:** Initial 9 principles, 6 phases, 4 workstreams
 - **v1.1:** Protocol erosion detection, ghost session prevention, minimum handoff requirements, 4 new failure modes (#14-17)
 - **v1.2:** Planning session discipline, evidence-based inventory, phase boundaries
+- **v2.0:** Methodology Dashboard — portfolio health scanner with dual-mode detection, health/risk scoring, methodology compliance checking, live HTML dashboard with auto-refresh, color-coded terminal output, starter-kit inclusion

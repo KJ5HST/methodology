@@ -14,19 +14,21 @@ Every session has exactly ONE deliverable. When it's done, you close out. You do
 2. Read `SESSION_NOTES.md` — focus on the ACTIVE TASK section at the top
 3. Read `BACKLOG.md` — understand current milestone and priorities
 4. Run: `git status`, `git log --oneline -5`, `git diff --stat`
-5. **Check for ghost sessions:** Compare the session number in SESSION_NOTES.md against `git log`. If there are commits between the last documented session and now that don't correspond to any session notes, report: "Detected [N] undocumented session(s) between Session [X] and now. Commits: [list]. No session notes exist for this work."
-6. **Report findings to the user:**
+5. Run: `python3 methodology_dashboard.py` — refresh the project health dashboard. Leave `dashboard.html` open in a browser; it auto-refreshes every 60 seconds.
+6. **Check for ghost sessions:** Compare the session number in SESSION_NOTES.md against `git log`. If there are commits between the last documented session and now that don't correspond to any session notes, report: "Detected [N] undocumented session(s) between Session [X] and now. Commits: [list]. No session notes exist for this work."
+7. **Report findings to the user:**
    - Current branch and clean/dirty state
    - What the last session was doing
    - Current milestone and active task from BACKLOG.md
    - Any uncommitted changes
-   - Ghost session detection results (step 5)
+   - Ghost session detection results (step 6)
+   - Dashboard health score and any risk flags
    - Build status if known
-7. **STOP. Wait for the user to give you a task.**
+8. **STOP. Wait for the user to give you a task.**
 
 DO NOT skip the report. DO NOT start working. DO NOT assume you know what to do.
 
-**Even if the user's first message contains a task** (e.g., "Implement the following plan"), Phase 0 is still mandatory. That phrase comes from Plan Mode's auto-generated preamble — it does NOT mean start coding. The orientation report exists for the user's benefit — it establishes shared understanding of the current state. The user needs to see the report and confirm before work begins. A task in the prompt does not mean Phase 0 is complete. Complete all 7 steps, then the user will re-state or confirm the task in Phase 1.
+**Even if the user's first message contains a task** (e.g., "Implement the following plan"), Phase 0 is still mandatory. That phrase comes from Plan Mode's auto-generated preamble — it does NOT mean start coding. The orientation report exists for the user's benefit — it establishes shared understanding of the current state. The user needs to see the report and confirm before work begins. A task in the prompt does not mean Phase 0 is complete. Complete all 8 steps, then the user will re-state or confirm the task in Phase 1.
 
 **Steps 1-3 are READS, not skims.** Every step exists because a session failed without it.
 
@@ -223,7 +225,7 @@ These are documented tendencies. The agent must actively guard against them.
 | 6 | **Skip close-out** | Self-assessment and prompt updates feel like cleanup, not real work | Close-out is the most valuable phase. It's how the system improves. |
 | 7 | **Ask the user to solve process problems** | "What should I do?" instead of reading the docs | Read the docs. Follow the process. Only ask when genuinely blocked on content. |
 | 8 | **Redesign during implementation** | See something to improve and act on it mid-task | Commit first. Note it for a future session. Stay on the approved plan. |
-| 9 | **Task-in-prompt bypass** | User's first message contains a task, so Phase 0 feels implicitly complete | Phase 0 exists for the USER, not the agent. Complete all 6 steps even when the task is obvious. |
+| 9 | **Task-in-prompt bypass** | User's first message contains a task, so Phase 0 feels implicitly complete | Phase 0 exists for the USER, not the agent. Complete all 8 steps even when the task is obvious. |
 | 10 | **Skip handoff evaluation** | Self-assessment feels sufficient; evaluating the previous session feels like extra work | Phase 3A is a mandatory structural step. The evaluation IS the compounding mechanism. |
 | 11 | **Gaps from memory** | During close-out, write gap analysis from memory of files read earlier. Memory degrades. Claims turn out wrong. | Before writing ANY claim in close-out: "Have I read the file that confirms this in the last 5 minutes?" If no → read it now. |
 | 12 | **Workstream transfer amnesia** | Build good discipline on one workstream, then switch and repeat old mistakes | Discipline doesn't auto-transfer. When switching workstreams, consciously re-apply the close-out checklist. |

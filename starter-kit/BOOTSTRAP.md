@@ -7,23 +7,30 @@ Set up the Iterative Session Methodology for a new project in 10 minutes.
 ## What You'll Have When Done
 
 ```
-your-project/
-├── CLAUDE.md (or equivalent)     ← Your existing agent instructions
-├── SESSION_RUNNER.md             ← Cockpit checklist (copied from starter kit)
-├── SAFEGUARDS.md                 ← Safety rails (copied from starter kit)
-├── SESSION_NOTES.md              ← Session continuity (copied from starter kit)
-├── BACKLOG.md                    ← Your project's task list (you create this)
+your-projects/                        <-- parent directory (portfolio level)
+├── methodology_dashboard.py          ← Portfolio health scanner (copied from tools/)
+├── dashboard.html                    ← Generated dashboard (auto-refreshes in browser)
 │
-└── docs/methodology/             ← The framework (copied from parent dir)
-    ├── ITERATIVE_METHODOLOGY.md  ← Master framework (9 principles, 6 phases)
-    ├── HOW_TO_USE.md             ← Practical guide with examples
-    ├── README.md                 ← Overview and file map
-    └── workstreams/              ← Domain-specific adaptations
-        ├── DESIGN_WORKSTREAM.md
-        ├── ARCHITECTURE_WORKSTREAM.md
-        ├── DEVELOPMENT_WORKSTREAM.md
-        ├── AUDIT_WORKSTREAM.md
-        └── TEMPLATE_WORKSTREAM.md
+├── project-a/                        <-- each project gets methodology files:
+│   ├── CLAUDE.md (or equivalent)     ← Your existing agent instructions
+│   ├── SESSION_RUNNER.md             ← Cockpit checklist (copied from starter kit)
+│   ├── SAFEGUARDS.md                 ← Safety rails (copied from starter kit)
+│   ├── SESSION_NOTES.md              ← Session continuity (copied from starter kit)
+│   ├── BACKLOG.md                    ← Your project's task list (you create this)
+│   │
+│   └── docs/methodology/             ← The framework (copied from parent dir)
+│       ├── ITERATIVE_METHODOLOGY.md  ← Master framework (9 principles, 6 phases)
+│       ├── HOW_TO_USE.md             ← Practical guide with examples
+│       ├── README.md                 ← Overview and file map
+│       └── workstreams/              ← Domain-specific adaptations
+│           ├── DESIGN_WORKSTREAM.md
+│           ├── ARCHITECTURE_WORKSTREAM.md
+│           ├── DEVELOPMENT_WORKSTREAM.md
+│           ├── AUDIT_WORKSTREAM.md
+│           └── TEMPLATE_WORKSTREAM.md
+│
+├── project-b/                        <-- same structure
+└── project-c/                        <-- same structure
 ```
 
 ---
@@ -36,15 +43,26 @@ These files are project-independent. You should not need to modify them.
 
 ## Step 2: Copy the Starter Kit Files to Project Root
 
-Copy these three files from `starter-kit/` to your **project root**:
+Copy these files from `starter-kit/` to your **project root**:
 
 | File | Purpose |
 |------|---------|
 | `SESSION_RUNNER.md` | The operating procedure — every session follows this |
 | `SAFEGUARDS.md` | Safety rails — commit discipline, blast radius limits, mode switching |
 | `SESSION_NOTES.md` | Session continuity — where handoff notes live between sessions |
+| `methodology_dashboard.py` | Health scanner — scores project health and methodology compliance |
 
-These are templates. They work out of the box but are designed to be customized.
+The markdown files are templates designed to be customized. The dashboard is a standalone Python 3 script (no dependencies) that works out of the box.
+
+Run it once to generate your first dashboard:
+
+```bash
+python3 methodology_dashboard.py
+```
+
+This generates `dashboard.html` and opens it in your browser. The page auto-refreshes every 60 seconds — leave it open and it stays current as you work.
+
+Add `dashboard.html` to your `.gitignore` — it's a generated artifact.
 
 ## Step 3: Create Your BACKLOG.md
 
@@ -77,7 +95,7 @@ Add this block to the top of your `CLAUDE.md` (or equivalent agent instructions 
 **Read and follow `SESSION_RUNNER.md` step by step.** It is your operating procedure for every session. It tells you what to read, when to stop, and how to close out.
 
 **Three rules you will be tempted to violate:**
-1. **Orient first** — Read SAFEGUARDS.md → SESSION_NOTES.md → git status → report findings → WAIT FOR THE USER TO SPEAK
+1. **Orient first** — Read SAFEGUARDS.md → SESSION_NOTES.md → run `methodology_dashboard.py` → git status → report findings → WAIT FOR THE USER TO SPEAK
 2. **1 and done** — One deliverable per session. When it's complete, close out. Do not start the next thing.
 3. **Auto-close** — When done: evaluate previous handoff, self-assess, document learnings, write handoff notes, commit, report, STOP.
 
@@ -96,7 +114,42 @@ mkdir -p docs/methodology/sessions
 
 This is where session output documents go (if you use them). The methodology works without explicit session documents — `SESSION_NOTES.md` carries the essential continuity — but formal session documents are useful for design series and audits where you want a permanent record.
 
-## Step 7: Set Up Git Hooks (Optional)
+## Step 7: Set Up the Methodology Dashboard (Recommended)
+
+The methodology includes a health scanner that scores projects on 5 dimensions (activity, testing, documentation, CI/CD, methodology compliance) and generates an HTML dashboard that auto-refreshes every 60 seconds.
+
+The dashboard auto-detects its context:
+- **Inside a git repo** → single-project mode (also scans git submodules as separate entries)
+- **Above git repos** → portfolio mode (scans all sibling repos)
+
+### Per-Project Setup (single-project mode)
+
+Copy `tools/methodology_dashboard.py` to your **project root**:
+
+```bash
+cp <methodology-repo>/tools/methodology_dashboard.py .
+python3 methodology_dashboard.py
+```
+
+This generates `dashboard.html` and opens it in your browser. The page auto-refreshes every 60 seconds — leave it open and re-run the script whenever you want updated data.
+
+Add `dashboard.html` to your `.gitignore` (it's a generated artifact).
+
+### Portfolio Setup (multi-project mode)
+
+To get a portfolio-wide view across all your projects, copy the same file to the **parent directory** above your repos:
+
+```
+~/projects/                          <-- put methodology_dashboard.py here
+~/projects/project-a/                <-- git repo (scanned)
+~/projects/project-b/                <-- git repo (scanned)
+```
+
+You can use both — the per-project dashboard runs when you're inside a project, and the portfolio dashboard runs when you're at the parent level.
+
+The dashboard requires only Python 3 (stdlib, no pip dependencies) and works on macOS, Linux, and Windows.
+
+## Step 8: Set Up Git Hooks (Optional)
 
 The methodology works without hooks, but a `core.hooksPath` configuration can enforce commit discipline:
 

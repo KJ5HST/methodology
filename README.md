@@ -59,7 +59,7 @@ Pre-Flight → Research → Create → Present → Implement → Verify & Close
 Each phase is gated. You cannot enter the next phase until the current one is complete. The most valuable gate is between Present and Implement: no implementation begins without stakeholder approval.
 
 ## Quick Start
-*NOTE: The absolute fastest way to use this is to tell Claude (or other service), "Use this methodology: https://github.com/KJ5HST/methodology". Claude will pull it down and put it in place for you.*
+*NOTE: The absolute fastest way to use this is to tell Claude (or other service), "Use this methodology: https://github.com/KJ5HST/methodology". Claude will pull it down and put it in place for you. To update an existing project to the latest version, use the same approach: "Update methodology using https://github.com/KJ5HST/methodology".*
 
 > **Important:** After setup completes, start a **new session** before giving Claude real work. Claude Code reads `CLAUDE.md` at session start — changes made during setup don't take effect until the next session. If you say "go" in the same session, Claude will work without the protocol.
 
@@ -96,6 +96,39 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 | `SESSION_RUNNER.md` | Cockpit checklist template (no project-specific history) |
 | `SESSION_NOTES.md` | Empty template for session continuity |
 | `SAFEGUARDS.md` | Safety rails: commit discipline, blast radius limits, mode switching |
+| `methodology_dashboard.py` | Health scanner: project scoring, risk assessment, compliance dashboard |
+
+### Methodology Dashboard
+
+`tools/methodology_dashboard.py` is a portfolio health scanner that turns methodology compliance into a visible, measurable signal.
+
+**Two modes, auto-detected:**
+- **Portfolio mode** — place the script in the parent directory above your repos. It discovers all sibling git repositories and scores them as a portfolio.
+- **Single-project mode** — place the script inside a git repo. It scores that project and also discovers git submodules as separate entries.
+
+**What it does:**
+- **Discovers** git repositories automatically (sibling repos or submodules depending on mode)
+- **Collects** metrics across 7 dimensions: git activity, file structure, tests, CI/CD, documentation, methodology compliance, dependencies
+- **Scores** each project's health (0-100) across 5 weighted dimensions (activity, testing, documentation, CI/CD, methodology)
+- **Assesses** risk with severity-tagged flags (critical/high/medium/low) for issues like abandonment, missing tests, no CI, large files, low velocity
+- **Generates** a self-contained HTML dashboard with collapsible project cards, sortable by health/risk/name/activity
+- **Prints** a color-coded terminal summary for quick at-a-glance status
+
+**Live dashboard:** The generated HTML auto-refreshes every 60 seconds. Run the script once, open `dashboard.html` in your browser, and leave it open — it stays current as you work. Re-run the script whenever you want updated data.
+
+Requires only Python 3 (stdlib, no dependencies). Works on macOS, Linux, and Windows.
+
+#### Dashboard Overview
+
+Portfolio health score, risk matrix, methodology compliance table, commit activity chart, and sortable project cards — all in a single self-contained HTML file.
+
+![Dashboard overview showing health score, risk matrix, methodology compliance, and commit activity](docs/images/dashboard-overview.png)
+
+#### Project Detail View
+
+Expand any project card to see health breakdown by dimension, risk factors, git stats, code breakdown by language and category, test metrics, CI/CD status, documentation quality, dependency counts, methodology compliance checklist, and the 10 largest files.
+
+![Expanded project detail showing health breakdown, code metrics, and methodology compliance](docs/images/dashboard-detail.png)
 
 ## Repository Structure
 
@@ -111,11 +144,15 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 │   ├── AUDIT_WORKSTREAM.md           ← Code audits, security reviews, quality gates
 │   └── TEMPLATE_WORKSTREAM.md        ← Create your own workstream
 │
-└── starter-kit/                      ← Copy these to bootstrap a new project
-    ├── BOOTSTRAP.md                  ← Setup guide
-    ├── SESSION_RUNNER.md             ← Cockpit checklist template
-    ├── SESSION_NOTES.md              ← Session continuity template
-    └── SAFEGUARDS.md                 ← Safety rails template
+├── starter-kit/                      ← Copy these to bootstrap a new project
+│   ├── BOOTSTRAP.md                  ← Setup guide
+│   ├── SESSION_RUNNER.md             ← Cockpit checklist template
+│   ├── SESSION_NOTES.md              ← Session continuity template
+│   ├── SAFEGUARDS.md                 ← Safety rails template
+│   └── methodology_dashboard.py      ← Health scanner (also in tools/)
+│
+└── tools/                            ← Portfolio-level tooling
+    └── methodology_dashboard.py      ← Health scanner & compliance dashboard
 ```
 
 ## Key Concepts
@@ -127,7 +164,7 @@ The methodology framework describes WHAT to do and WHY. In practice, it needs an
 - **Mandatory orientation** — prevents starting work without understanding current state
 - **"1 and done" rule** — prevents scope creep and quality degradation
 - **Automatic close-out** — prevents skipping the self-improvement loop
-- **17 known failure modes** — documents agent tendencies with specific countermeasures
+- **19 known failure modes** — documents agent tendencies with specific countermeasures
 - **Degradation detection** — 7 warning signs that predict protocol erosion
 - **Handoff accountability** — ensures each session sets up the next for success
 
@@ -165,9 +202,31 @@ Domain-specific adaptations of the master framework. Each workstream customizes 
 
 ## Origin
 
-Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during development of a commercial software product. The methodology emerged organically from an 11-session design series, was codified into a reusable framework, and subsequently validated across 52+ sessions of varied work.
+Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during development of a commercial software product. The methodology emerged organically from an 11-session design series, was codified into a reusable framework, and subsequently validated across 60+ sessions of varied work.
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
+
+### What's New in v2.0
+
+- **Methodology Dashboard** — new portfolio health scanner (`tools/methodology_dashboard.py`) that scores projects on 5 dimensions (activity, testing, documentation, CI/CD, methodology compliance) and generates a self-contained HTML dashboard
+- **Two scanning modes** — portfolio mode (scans sibling git repos) and single-project mode (scans the project + git submodules), auto-detected based on placement
+- **Health scoring (0-100)** with 5 weighted dimensions and rule-based risk assessment (critical/high/medium/low flags)
+- **Methodology compliance scoring (0-100)** — weighted checklist of 6 required items (SESSION_RUNNER, SAFEGUARDS, SESSION_NOTES, BACKLOG, docs/methodology/, workstreams/)
+- **Color-coded terminal output** — at-a-glance status without opening the browser
+- **Live HTML dashboard** — auto-refreshes every 60 seconds; collapsible project cards sortable by health, risk, name, or activity
+- **Starter kit includes dashboard** — `starter-kit/methodology_dashboard.py` for per-project use
+- **Zero dependencies** — Python 3 stdlib only, cross-platform (macOS, Linux, Windows)
+
+### What's New in v1.2
+
+- **Planning session discipline** — plans are deliverables, not preambles. A planning session closes out after the plan; implementation is a separate session.
+- **Evidence-based inventory** — plans that involve deletion, migration, or renaming must include grep-based inventories of all affected symbols. No more assumption-based file lists.
+- **Per-phase completion criteria** — every phase in a multi-phase plan must state what DONE looks like, verification commands, and an explicit session boundary.
+- **Plan-mode exit trap** — explicit warning that Plan Mode's "Implement the following plan" preamble does NOT mean start coding. The plan is a draft until evidence-verified.
+- **2 new failure modes** (#18-19): planning-to-implementation bleed, plan-mode bypass
+- **2 new degradation detection signs** for planning discipline violations
+- **Planning Session Checklist** — 5-item verification before closing a planning session
+- **Learnings table** added to Session Runner — institutional memory that grows with each session
 
 ### What's New in v1.1
 
