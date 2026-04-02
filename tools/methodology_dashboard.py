@@ -64,7 +64,7 @@ from collections import defaultdict
 
 ROOT = Path(__file__).parent
 EXCLUDE_DIRS = {"methodology", ".git", "__pycache__", "node_modules", ".venv", "venv"}
-WALK_SKIP = {".git", "node_modules", "__pycache__", ".venv", "venv", "target",
+WALK_SKIP = {".git", ".claude", "node_modules", "__pycache__", ".venv", "venv", "target",
              "build", "dist", ".build", "DerivedData", "Pods", ".gradle"}
 
 SOURCE_EXTS = {
@@ -318,6 +318,7 @@ def collect_file_metrics(path):
 
             # LOC for text files
             loc = 0
+#            if ext not in ASSET_EXTS and category != "assets":
             if ext not in ASSET_EXTS and category not in ("assets", "other"):
                 loc = count_lines(fpath)
                 metrics["total_loc"] += loc
@@ -604,24 +605,59 @@ def collect_dependency_metrics(path):
 def collect_coverage_config(path):
     configs = []
     checks = [
-        ".coveragerc", "setup.cfg", "pyproject.toml",
+        ".coveragerc", "setup.cfg", "pyproject.toml", "pytest.ini",
         "jest.config.js", "jest.config.ts", "jest.config.json",
         ".nycrc", ".nycrc.json", "vitest.config.ts", "vitest.config.js",
+        "vite.config.ts", "vite.config.js",
         "jacoco.xml",
     ]
-    for name in checks:
-        if (path / name).exists():
-            configs.append(name)
-    # Check package.json for jest/coverage config
-    pkg = path / "package.json"
-    if pkg.exists():
-        try:
-            with open(pkg) as f:
-                data = json.load(f)
-            if "jest" in data or "nyc" in data:
-                configs.append("package.json (jest/nyc)")
-        except (OSError, json.JSONDecodeError):
-            pass
+    for root_dir, dirs, files in os.walk(path):
+        dirs[:] = [d for d in dirs if d not in WALK_SKIP]
+        rel = Path(root_dir).relative_to(path)
+        for name in checks:
+            if name in files:
+                # For vite.config files, only include if they contain coverage config
+                if name.startswith("vite.config."):
+                    try:
+                        with open(Path(root_dir) / name) as f:
+                            content = f.read()
+                        if "coverage" not in content:
+                            continue
+                    except OSError:
+                        continue
+                label = name if rel == Path(".") else f"{rel}/{name}"
+                configs.append(label)
+        # Check package.json for jest/nyc/vitest-coverage config
+        if "package.json" in files:
+            pkg = Path(root_dir) / "package.json"
+            try:
+                with open(pkg) as f:
+                    data = json.load(f)
+                markers = {"jest", "nyc"}
+                # Check devDependencies for coverage packages
+                dev_deps = data.get("devDependencies", {})
+                if any(k.startswith("@vitest/coverage") for k in dev_deps):
+                    markers.add("vitest-coverage")
+                if "pytest-cov" in dev_deps or "coverage" in dev_deps:
+                    markers.add("coverage")
+                found = markers & set(data.keys()) or (markers - {"jest", "nyc"})
+                if found:
+                    tag = ", ".join(sorted(found))
+                    label = f"package.json ({tag})" if rel == Path(".") else f"{rel}/package.json ({tag})"
+                    configs.append(label)
+            except (OSError, json.JSONDecodeError):
+                pass
+        # Check requirements.txt for pytest-cov
+        if "requirements.txt" in files:
+            req = Path(root_dir) / "requirements.txt"
+            try:
+                with open(req) as f:
+                    content = f.read()
+                if "pytest-cov" in content:
+                    label = "requirements.txt (pytest-cov)" if rel == Path(".") else f"{rel}/requirements.txt (pytest-cov)"
+                    configs.append(label)
+            except OSError:
+                pass
 
     return configs
 
