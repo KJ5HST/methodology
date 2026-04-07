@@ -16,7 +16,9 @@ your-projects/                        <-- parent directory (portfolio level)
 │   ├── SESSION_RUNNER.md             ← Cockpit checklist (copied from starter kit)
 │   ├── SAFEGUARDS.md                 ← Safety rails (copied from starter kit)
 │   ├── SESSION_NOTES.md              ← Session continuity (copied from starter kit)
-│   ├── BACKLOG.md                    ← Your project's task list (you create this)
+│   ├── BACKLOG.md                    ← Open work items only (you create this)
+│   ├── CHANGELOG.md                  ← Completed work history (copied from starter kit)
+│   ├── ROADMAP.md                    ← Feature inventory & future plans (copied from starter kit)
 │   │
 │   └── docs/methodology/             ← The framework (copied from parent dir)
 │       ├── ITERATIVE_METHODOLOGY.md  ← Master framework (9 principles, 6 phases)
@@ -50,6 +52,8 @@ Copy these files from `starter-kit/` to your **project root**:
 | `SESSION_RUNNER.md` | The operating procedure — every session follows this |
 | `SAFEGUARDS.md` | Safety rails — commit discipline, blast radius limits, mode switching |
 | `SESSION_NOTES.md` | Session continuity — where handoff notes live between sessions |
+| `CHANGELOG.md` | Completed work history — add entries as work is finished |
+| `ROADMAP.md` | Feature inventory and future plans — what's built, what's next |
 | `methodology_dashboard.py` | Health scanner — scores project health and methodology compliance |
 
 The markdown files are templates designed to be customized. The dashboard is a standalone Python 3 script (no dependencies) that works out of the box.
@@ -64,15 +68,27 @@ This generates `dashboard.html` and opens it in your browser. The page auto-refr
 
 Add `dashboard.html` to your `.gitignore` — it's a generated artifact.
 
-## Step 3: Create Your BACKLOG.md
+## Step 3: Create Your Task Tracking Files
 
-Create a `BACKLOG.md` at your project root. This is project-specific — there's no template because every project's task structure is different. At minimum, include:
+Create three files at your project root for tracking work:
+
+| File | Purpose | Source |
+|------|---------|--------|
+| `BACKLOG.md` | Open work items only (actionable tasks) | You create this — see example below |
+| `CHANGELOG.md` | Completed work history with dates | Copy from `starter-kit/CHANGELOG.md` |
+| `ROADMAP.md` | Feature inventory and future plans | Copy from `starter-kit/ROADMAP.md` |
+
+**Why three files?** A single backlog file that accumulates completed items becomes unreadable over time. Keeping open work, completed work, and plans in separate files means:
+- `BACKLOG.md` stays scannable (agents read this at session start)
+- `CHANGELOG.md` captures what was done and when (reference only, not read at session start)
+- `ROADMAP.md` tracks what's built and what's planned (reference only)
+
+When you complete work: remove it from `BACKLOG.md`, add an entry to `CHANGELOG.md`.
+
+**Minimal BACKLOG.md:**
 
 ```markdown
 # Backlog
-
-## Current Milestone
-[What you're working toward]
 
 ## Active
 - [ ] [Task 1]
@@ -80,9 +96,6 @@ Create a `BACKLOG.md` at your project root. This is project-specific — there's
 
 ## Up Next
 - [ ] [Task 3]
-
-## Done
-- [x] [Completed task]
 ```
 
 ## Step 4: Add the Session Protocol to Your Agent Instructions
@@ -187,7 +200,8 @@ git config core.hooksPath .githooks
 |------|---------------|
 | `SESSION_RUNNER.md` | Phase 1 task-to-workstream mapping table |
 | `SAFEGUARDS.md` | Add project-specific hard rules if needed |
-| `BACKLOG.md` | Your project's actual tasks |
+| `BACKLOG.md` | Your project's open work items |
+| `ROADMAP.md` | Your feature inventory and future plans |
 
 ### What to Customize Over Time
 
@@ -212,7 +226,7 @@ git config core.hooksPath .githooks
 
 After setup, your first session should:
 
-1. Agent reads `SAFEGUARDS.md`, `SESSION_NOTES.md`, `BACKLOG.md`
+1. Agent reads `SAFEGUARDS.md`, `SESSION_NOTES.md`, `BACKLOG.md` (CHANGELOG.md and ROADMAP.md are reference docs — not required at session start)
 2. Agent runs `git status`, `git log --oneline -5`
 3. Agent reports findings to you
 4. Agent waits for you to give a task

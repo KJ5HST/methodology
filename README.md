@@ -60,7 +60,7 @@ Each phase is gated. You cannot enter the next phase until the current one is co
 
 ### 1. Copy files to your project
 
-Copy `starter-kit/SESSION_RUNNER.md`, `starter-kit/SAFEGUARDS.md`, and `starter-kit/SESSION_NOTES.md` to your project root. Copy the framework files (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) to `docs/methodology/`.
+Copy `starter-kit/SESSION_RUNNER.md`, `starter-kit/SAFEGUARDS.md`, `starter-kit/SESSION_NOTES.md`, `starter-kit/CHANGELOG.md`, and `starter-kit/ROADMAP.md` to your project root. Copy the framework files (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) to `docs/methodology/`.
 
 ### 2. Tell Claude to use it
 
@@ -91,6 +91,8 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 | `SESSION_RUNNER.md` | Cockpit checklist template (no project-specific history) |
 | `SESSION_NOTES.md` | Empty template for session continuity |
 | `SAFEGUARDS.md` | Safety rails: commit discipline, blast radius limits, mode switching |
+| `CHANGELOG.md` | Completed work history template — keeps BACKLOG.md lean |
+| `ROADMAP.md` | Feature inventory and future plans template |
 | `methodology_dashboard.py` | Health scanner: project scoring, risk assessment, compliance dashboard |
 
 ### Methodology Dashboard
@@ -144,6 +146,8 @@ Expand any project card to see health breakdown by dimension, risk factors, git 
 │   ├── SESSION_RUNNER.md             ← Cockpit checklist template
 │   ├── SESSION_NOTES.md              ← Session continuity template
 │   ├── SAFEGUARDS.md                 ← Safety rails template
+│   ├── CHANGELOG.md                  ← Completed work history template
+│   ├── ROADMAP.md                    ← Feature inventory & future plans template
 │   └── methodology_dashboard.py      ← Health scanner (also in tools/)
 │
 └── tools/                            ← Portfolio-level tooling
