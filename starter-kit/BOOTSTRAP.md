@@ -85,6 +85,17 @@ Create three files at your project root for tracking work:
 
 When you complete work: remove it from `BACKLOG.md`, add an entry to `CHANGELOG.md`.
 
+### Migrating an existing BACKLOG.md
+
+If your project already has a `BACKLOG.md` that has accumulated completed items, split it:
+
+1. Create `CHANGELOG.md` — move all completed work entries (with dates and notes) out of BACKLOG.md into reverse-chronological sections
+2. Create `ROADMAP.md` — move the feature inventory ("what's built") and future plans/proposals out of BACKLOG.md
+3. Trim `BACKLOG.md` — remove all completed items, struck-through entries, and historical sections. Only open/actionable work remains.
+4. Update your `CLAUDE.md` (or equivalent) references to mention all three files
+
+After the split, `BACKLOG.md` should be scannable in under a minute.
+
 **Minimal BACKLOG.md:**
 
 ```markdown
