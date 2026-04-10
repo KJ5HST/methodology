@@ -80,9 +80,9 @@ for every session. It tells you what to read, when to stop, and how to close out
 
 **That's it.** Claude will orient, wait for your task, execute one deliverable, and auto-close with handoff notes for the next session. Everything cascades from that one instruction — `SESSION_RUNNER.md` tells Claude to read `SAFEGUARDS.md` and `SESSION_NOTES.md`, which establish commit discipline and session continuity.
 
-### 3. Create a backlog
+### 3. Set up task tracking
 
-Create a `BACKLOG.md` at your project root with your current tasks and priorities. The session runner reads this during orientation. You can also tell claude to make a plan for your effort that follows this methodology. Once the plan is created, start a new session and either tell claude to implement the next phase of your plan, and tell it what file the plan is in, or build the backlog from that plan.
+Create a `BACKLOG.md` at your project root with your current tasks and priorities — open work items only. Copy `starter-kit/CHANGELOG.md` and `starter-kit/ROADMAP.md` to your project root for completed work history and feature inventory. This three-file split keeps BACKLOG.md scannable (agents read it at session start) while preserving history in dedicated files. When you complete work, remove it from `BACKLOG.md` and add an entry to `CHANGELOG.md`. See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for migration steps if you have an existing monolithic BACKLOG.md.
 
 ### Full setup guide
 
@@ -210,12 +210,19 @@ Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during develop
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
 
+### What's New in v2.1
+
+- **CHANGELOG.md and ROADMAP.md templates** — new starter-kit files that split task tracking into three focused files: BACKLOG.md (open work only), CHANGELOG.md (completed work history), ROADMAP.md (feature inventory and future plans)
+- **Migration guide** — step-by-step instructions in BOOTSTRAP.md for projects with an existing monolithic BACKLOG.md
+- **Dashboard compliance updated** — methodology dashboard now checks for CHANGELOG.md and ROADMAP.md presence
+- **Consistent references** — SAFEGUARDS.md, SESSION_RUNNER.md, and README updated to reference the three-file approach
+
 ### What's New in v2.0
 
 - **Methodology Dashboard** — new portfolio health scanner (`tools/methodology_dashboard.py`) that scores projects on 5 dimensions (activity, testing, documentation, CI/CD, methodology compliance) and generates a self-contained HTML dashboard
 - **Two scanning modes** — portfolio mode (scans sibling git repos) and single-project mode (scans the project + git submodules), auto-detected based on placement
 - **Health scoring (0-100)** with 5 weighted dimensions and rule-based risk assessment (critical/high/medium/low flags)
-- **Methodology compliance scoring (0-100)** — weighted checklist of 6 required items (SESSION_RUNNER, SAFEGUARDS, SESSION_NOTES, BACKLOG, docs/methodology/, workstreams/)
+- **Methodology compliance scoring (0-100)** — weighted checklist of 8 required items (SESSION_RUNNER, SAFEGUARDS, SESSION_NOTES, BACKLOG, CHANGELOG, ROADMAP, docs/methodology/, workstreams/)
 - **Color-coded terminal output** — at-a-glance status without opening the browser
 - **Live HTML dashboard** — auto-refreshes every 60 seconds; collapsible project cards sortable by health, risk, name, or activity
 - **Starter kit includes dashboard** — `starter-kit/methodology_dashboard.py` for per-project use

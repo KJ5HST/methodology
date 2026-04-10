@@ -104,6 +104,8 @@ METHODOLOGY_ITEMS = [
     ("SAFEGUARDS.md", 20, "file"),
     ("SESSION_NOTES.md", 20, "file"),
     ("BACKLOG.md", 15, "file"),
+    ("CHANGELOG.md", 5, "file"),
+    ("ROADMAP.md", 5, "file"),
     ("docs/methodology", 10, "dir"),
     ("docs/methodology/workstreams", 10, "dir"),
 ]
