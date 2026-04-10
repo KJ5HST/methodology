@@ -74,9 +74,10 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 
 ## Versioning
 
-Changes are tracked via git commits and the README's "What's New" section. Current version: v2.0. Key additions by version:
+Changes are tracked via git commits and the README's "What's New" section. Current version: v2.1. Key additions by version:
 
 - **v1.0:** Initial 9 principles, 6 phases, 4 workstreams
 - **v1.1:** Protocol erosion detection, ghost session prevention, minimum handoff requirements, 4 new failure modes (#14-17)
 - **v1.2:** Planning session discipline, evidence-based inventory, phase boundaries
 - **v2.0:** Methodology Dashboard — portfolio health scanner with dual-mode detection, health/risk scoring, methodology compliance checking, live HTML dashboard with auto-refresh, color-coded terminal output, starter-kit inclusion
+- **v2.1:** CHANGELOG.md and ROADMAP.md templates, three-file task tracking split, migration guide for monolithic backlogs, dashboard compliance updates
