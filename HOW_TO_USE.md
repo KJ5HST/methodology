@@ -746,7 +746,7 @@ The close-out is the most important innovation. Before the session runner, close
 
 The **handoff accountability loop** (steps 3A and 3D) is what makes sessions compound. Without it, handoff notes are perfunctory. With it — knowing the next session will score you, and having scored your predecessor — handoff notes include gotchas, file references with line numbers, and explicit warnings about traps. This single change (added around Session 34) correlated with 14 consecutive clean deliveries.
 
-**Known Failure Modes** — A table of 19 documented agent tendencies with specific countermeasures. This table exists because agents exhibit predictable failure patterns:
+**Known Failure Modes** — A table of 23 documented agent tendencies with specific countermeasures. This table exists because agents exhibit predictable failure patterns:
 
 | # | Tendency | Countermeasure |
 |---|----------|----------------|
@@ -769,6 +769,10 @@ The **handoff accountability loop** (steps 3A and 3D) is what makes sessions com
 | 17 | Protocol erosion (skip "just one" step) | Every step exists because a session failed without it |
 | 18 | Planning-to-implementation bleed | The plan is the deliverable; close out after the plan |
 | 19 | Plan-mode bypass | Plan-mode output is a draft; write to docs/planning/ with evidence first |
+| 20 | Edit from memory | Re-read the file immediately before editing; don't rely on stale context |
+| 21 | Greenfield assumption | Assume existing capabilities; read baseline docs during Orient |
+| 22 | Overwrite user edits | Check git blame before modifying; never regenerate without confirming |
+| 23 | Question-as-instruction | Present options and wait; a question is not a go-ahead |
 
 The failure modes table serves two purposes: it warns the agent about its own tendencies, and it gives the user language for course-correction ("You're doing Failure Mode #2 — stop and close out").
 
@@ -800,7 +804,7 @@ To use the session runner in your own project:
 
 3. **Update the task-to-workstream mapping table** (Phase 1) to match your project's workstream prompts.
 
-4. **Update the failure modes table** with any tendencies specific to your project. The 19 documented modes are common to most AI agent work, but your project may surface additional ones.
+4. **Update the failure modes table** with any tendencies specific to your project. The 23 documented modes are common to most AI agent work, but your project may surface additional ones.
 
 5. **Put the methodology framework in a known location** (e.g., `docs/methodology/`) so the session runner can reference it.
 

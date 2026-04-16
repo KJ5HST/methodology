@@ -163,7 +163,7 @@ The methodology framework describes WHAT to do and WHY. In practice, it needs an
 - **Mandatory orientation** — prevents starting work without understanding current state
 - **"1 and done" rule** — prevents scope creep and quality degradation
 - **Automatic close-out** — prevents skipping the self-improvement loop
-- **19 known failure modes** — documents agent tendencies with specific countermeasures
+- **23 known failure modes** — documents agent tendencies with specific countermeasures
 - **Degradation detection** — 7 warning signs that predict protocol erosion
 - **Handoff accountability** — ensures each session sets up the next for success
 
@@ -209,7 +209,11 @@ The framework is agent-independent — it works with any AI coding agent that su
 
 - **CHANGELOG.md and ROADMAP.md templates** — new starter-kit files that split task tracking into three focused files: BACKLOG.md (open work only), CHANGELOG.md (completed work history), ROADMAP.md (feature inventory and future plans)
 - **Migration guide** — step-by-step instructions in BOOTSTRAP.md for projects with an existing monolithic BACKLOG.md
-- **Dashboard compliance updated** — methodology dashboard now checks for CHANGELOG.md and ROADMAP.md presence
+- **4 new failure modes** (#20-23): edit from memory, greenfield assumption, overwrite user edits, question-as-instruction
+- **Artifact Integrity section** in SAFEGUARDS.md — read before edit, preserve user edits, verify the build equivalent
+- **Build equivalent step** — new Step 6 in BOOTSTRAP.md for identifying and recording the project's verification command
+- **Documentation project adaptations** — adaptation table and anti-patterns in TEMPLATE_WORKSTREAM.md, expanded audit scope in AUDIT_WORKSTREAM.md
+- **Dashboard compliance updated** — methodology dashboard now checks for CHANGELOG.md and ROADMAP.md presence (6 → 8 required items)
 - **Consistent references** — SAFEGUARDS.md, SESSION_RUNNER.md, and README updated to reference the three-file approach
 
 ### What's New in v2.0
@@ -217,7 +221,7 @@ The framework is agent-independent — it works with any AI coding agent that su
 - **Methodology Dashboard** — new portfolio health scanner (`tools/methodology_dashboard.py`) that scores projects on 5 dimensions (activity, testing, documentation, CI/CD, methodology compliance) and generates a self-contained HTML dashboard
 - **Two scanning modes** — portfolio mode (scans sibling git repos) and single-project mode (scans the project + git submodules), auto-detected based on placement
 - **Health scoring (0-100)** with 5 weighted dimensions and rule-based risk assessment (critical/high/medium/low flags)
-- **Methodology compliance scoring (0-100)** — weighted checklist of 8 required items (SESSION_RUNNER, SAFEGUARDS, SESSION_NOTES, BACKLOG, CHANGELOG, ROADMAP, docs/methodology/, workstreams/)
+- **Methodology compliance scoring (0-100)** — weighted checklist of required methodology items (SESSION_RUNNER, SAFEGUARDS, SESSION_NOTES, BACKLOG, docs/methodology/, workstreams/)
 - **Color-coded terminal output** — at-a-glance status without opening the browser
 - **Live HTML dashboard** — auto-refreshes every 60 seconds; collapsible project cards sortable by health, risk, name, or activity
 - **Starter kit includes dashboard** — `starter-kit/methodology_dashboard.py` for per-project use
