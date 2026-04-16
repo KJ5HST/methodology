@@ -42,6 +42,8 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 | `starter-kit/SAFEGUARDS.md` | Commit discipline, blast radius limits, mode-switching rules |
 | `starter-kit/SESSION_NOTES.md` | Empty template for session continuity between sessions |
 | `starter-kit/BOOTSTRAP.md` | Step-by-step setup guide for new projects |
+| `starter-kit/CHANGELOG.md` | Completed work history template — keeps BACKLOG.md lean |
+| `starter-kit/ROADMAP.md` | Feature inventory and future plans template |
 | `starter-kit/methodology_dashboard.py` | Health scanner — copy to project root for per-project dashboard |
 
 ### Tools
@@ -72,9 +74,10 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 
 ## Versioning
 
-Changes are tracked via git commits and the README's "What's New" section. Current version: v2.0. Key additions by version:
+Changes are tracked via git commits and the README's "What's New" section. Current version: v2.1. Key additions by version:
 
 - **v1.0:** Initial 9 principles, 6 phases, 4 workstreams
 - **v1.1:** Protocol erosion detection, ghost session prevention, minimum handoff requirements, 4 new failure modes (#14-17)
 - **v1.2:** Planning session discipline, evidence-based inventory, phase boundaries
 - **v2.0:** Methodology Dashboard — portfolio health scanner with dual-mode detection, health/risk scoring, methodology compliance checking, live HTML dashboard with auto-refresh, color-coded terminal output, starter-kit inclusion
+- **v2.1:** CHANGELOG.md and ROADMAP.md templates, three-file task tracking split, migration guide for monolithic backlogs, dashboard compliance updates

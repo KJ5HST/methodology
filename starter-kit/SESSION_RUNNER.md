@@ -12,7 +12,7 @@ Every session has exactly ONE deliverable. When it's done, you close out. You do
 
 1. Read `SAFEGUARDS.md` — **in full, not skimmed. Every section.**
 2. Read `SESSION_NOTES.md` — focus on the ACTIVE TASK section at the top
-3. Check GitHub Issues (`gh issue list`) if the project has a repo — understand current priorities. Fall back to `BACKLOG.md` if no repo exists.
+3. Check GitHub Issues (`gh issue list`) if the project has a repo — understand current priorities. Fall back to `BACKLOG.md` if no repo exists. (BACKLOG.md should contain only open work items — for history see `CHANGELOG.md`, for feature inventory see `ROADMAP.md`.)
 4. Run: `git status`, `git log --oneline -5`, `git diff --stat`
 5. Run: `python3 methodology_dashboard.py` — refresh the project health dashboard. Leave `dashboard.html` open in a browser; it auto-refreshes every 60 seconds.
 6. **Check for ghost sessions:** Compare the session number in SESSION_NOTES.md against `git log`. If there are commits between the last documented session and now that don't correspond to any session notes, report: "Detected [N] undocumented session(s) between Session [X] and now. Commits: [list]. No session notes exist for this work."
