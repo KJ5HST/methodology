@@ -318,7 +318,7 @@ def collect_file_metrics(path):
 
             # LOC for text files
             loc = 0
-            if ext not in ASSET_EXTS and category != "assets":
+            if ext not in ASSET_EXTS and category not in ("assets", "other"):
                 loc = count_lines(fpath)
                 metrics["total_loc"] += loc
 
@@ -641,11 +641,13 @@ def collect_coverage_config(path):
                 if "nyc" in top_level_keys:
                     found.append("nyc")
                 # Coverage packages in devDependencies
-                if any(k.startswith("@vitest/coverage") for k in dev_deps):
-                    found.append("vitest-coverage")
                 for pkg_name in ("c8", "@vitest/coverage-v8", "@vitest/coverage-istanbul"):
-                    if pkg_name in dev_deps and pkg_name not in found:
+                    if pkg_name in dev_deps:
                         found.append(pkg_name)
+                # Fallback: detect unknown @vitest/coverage-* variants
+                if not any(f.startswith("@vitest/coverage") for f in found):
+                    if any(k.startswith("@vitest/coverage") for k in dev_deps):
+                        found.append("vitest-coverage")
                 if found:
                     tag = ", ".join(sorted(found))
                     label = f"package.json ({tag})" if rel == Path(".") else f"{rel}/package.json ({tag})"
