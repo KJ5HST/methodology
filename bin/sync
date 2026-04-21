@@ -5,9 +5,8 @@ Contract: methodology v2.2 plan §4D.
 """
 import argparse
 import base64
+import hashlib
 import json
-import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -38,8 +37,38 @@ def detect_source(methodology_root: Path) -> str:
     return "github"
 
 
+def blob_sha(content: bytes) -> str:
+    header = f"blob {len(content)}\0".encode()
+    return hashlib.sha1(header + content).hexdigest()
+
+
 def read_local(methodology_root: Path, name: str) -> bytes:
     return (methodology_root / "starter-kit" / name).read_bytes()
+
+
+def local_history_blobs(methodology_root: Path, name: str) -> set:
+    """Set of blob SHAs this file has had across methodology git history."""
+    path = f"starter-kit/{name}"
+    try:
+        log = subprocess.run(
+            ["git", "-C", str(methodology_root), "log", "--format=%H", "--", path],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip().splitlines()
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return set()
+    blobs = set()
+    for commit in log:
+        try:
+            tree = subprocess.run(
+                ["git", "-C", str(methodology_root), "ls-tree", commit, "--", path],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+        except subprocess.CalledProcessError:
+            continue
+        parts = tree.split()
+        if len(parts) >= 3 and parts[1] == "blob":
+            blobs.add(parts[2])
+    return blobs
 
 
 def read_github(name: str) -> bytes:
@@ -107,6 +136,18 @@ def currently_tracked(project: Path) -> list:
     return [line for line in out.stdout.splitlines() if line]
 
 
+def classify_target(target: Path, canonical_content: bytes, history_blobs: set) -> str:
+    """Return 'missing', 'current', 'upgradable', or 'modified'."""
+    if not target.exists():
+        return "missing"
+    current = target.read_bytes()
+    if current == canonical_content:
+        return "current"
+    if blob_sha(current) in history_blobs:
+        return "upgradable"
+    return "modified"
+
+
 def sync_file(project: Path, name: str, content: bytes, dry_run: bool) -> str:
     target = project / name
     if target.exists() and target.read_bytes() == content:
@@ -126,6 +167,8 @@ def main() -> int:
     p.add_argument("--mode", choices=("commit", "ignore"), help="commit (default) or ignore")
     p.add_argument("--source", choices=("local", "github"), help="local (default if sibling methodology/ exists) or github")
     p.add_argument("--dry-run", action="store_true", help="Print intent without writing")
+    p.add_argument("--force", action="store_true",
+                   help="Overwrite files that show local modifications (not matching canonical or any historical version)")
     args = p.parse_args()
 
     project = Path(args.project_path).resolve()
@@ -147,13 +190,40 @@ def main() -> int:
     if args.dry_run:
         print("  (dry-run: no changes will be written)")
 
-    file_results = []
+    contents = {}
+    classifications = {}
     for name in SYNC_FILES:
         if source == "local":
             content = read_local(methodology_root, name)
+            history = local_history_blobs(methodology_root, name)
         else:
             content = read_github(name)
-        result = sync_file(project, name, content, args.dry_run)
+            history = set()  # history walk not implemented for github source
+        contents[name] = content
+        classifications[name] = classify_target(project / name, content, history)
+
+    blocked = [name for name, cls in classifications.items() if cls == "modified"]
+    if blocked and not args.force:
+        print("")
+        print("  ERROR: the following files have local modifications that don't match")
+        print("  any canonical or historical version and would be overwritten:")
+        for name in blocked:
+            print(f"    {name}")
+        print("")
+        print("  The recommended pattern (see plan §3.2) is to move per-project")
+        print("  customizations into CLAUDE.md's 'Project-Specific Methodology")
+        print("  Adaptations' section, keeping synced files byte-identical to canonical.")
+        print("")
+        print("  To proceed anyway and overwrite local changes, pass --force.")
+        print("  To inspect the drift first:")
+        for name in blocked:
+            if source == "local":
+                print(f"    diff {project / name} {methodology_root / 'starter-kit' / name}")
+        return 2
+
+    file_results = []
+    for name in SYNC_FILES:
+        result = sync_file(project, name, contents[name], args.dry_run)
         file_results.append((name, result))
 
     print("  files:")

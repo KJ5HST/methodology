@@ -87,7 +87,34 @@ OUT="$("$BIN/status" "$P")"
 echo "$OUT" | grep -q "missing" && pass "status: missing" || fail "status: missing not detected"
 rm -rf "$P"
 
-echo "== Test 7: github source (requires gh auth; skipped if unauthenticated) =="
+echo "== Test 7: sync refuses to overwrite locally-modified files without --force =="
+P="$(mktemp_project)"
+"$BIN/sync" "$P" --mode=commit >/dev/null
+echo "# LOCAL CUSTOMIZATION" >> "$P/SESSION_RUNNER.md"
+BEFORE="$(cat "$P/SESSION_RUNNER.md")"
+OUTPUT="$("$BIN/sync" "$P" 2>&1)"; RC=$?
+[ "$RC" != "0" ] && pass "sync exits non-zero when local drift present" || fail "sync exited 0 despite local drift"
+echo "$OUTPUT" | grep -q "ERROR" && pass "sync prints ERROR on local drift" || fail "no ERROR printed"
+echo "$OUTPUT" | grep -q -- "--force" && pass "ERROR mentions --force" || fail "ERROR missing --force hint"
+[ "$(cat "$P/SESSION_RUNNER.md")" = "$BEFORE" ] && pass "file unchanged when blocked" || fail "file modified despite block"
+
+# --force proceeds
+"$BIN/sync" "$P" --force >/dev/null && pass "--force overrides block" || fail "--force did not override"
+diff -q "$P/SESSION_RUNNER.md" "$STARTER/SESSION_RUNNER.md" >/dev/null && pass "--force restores canonical" || fail "--force did not restore canonical"
+rm -rf "$P"
+
+echo "== Test 8: sync upgrades N-versions-behind without --force =="
+P="$(mktemp_project)"
+"$BIN/sync" "$P" --mode=commit >/dev/null
+OLDER_COMMIT="$(git -C "$METHODOLOGY" log --format=%H -- starter-kit/SESSION_RUNNER.md | sed -n '2p')"
+if [ -n "$OLDER_COMMIT" ]; then
+    git -C "$METHODOLOGY" show "$OLDER_COMMIT:starter-kit/SESSION_RUNNER.md" > "$P/SESSION_RUNNER.md"
+    "$BIN/sync" "$P" >/dev/null && pass "upgrade from older version proceeds without --force" || fail "upgrade blocked incorrectly"
+    diff -q "$P/SESSION_RUNNER.md" "$STARTER/SESSION_RUNNER.md" >/dev/null && pass "upgraded to canonical" || fail "not upgraded"
+fi
+rm -rf "$P"
+
+echo "== Test 9: github source (requires gh auth; skipped if unauthenticated) =="
 if gh auth status >/dev/null 2>&1; then
     P="$(mktemp_project)"
     "$BIN/sync" "$P" --source=github --dry-run >/dev/null && pass "github source dry-run works" || fail "github source dry-run failed"
