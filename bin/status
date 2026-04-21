@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""Report drift of synced methodology files across one or more projects.
+
+Contract: methodology v2.2 plan §4E.
+"""
+import argparse
+import base64
+import hashlib
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+REPO = "KJ5HST/methodology"
+SYNC_FILES = ("SESSION_RUNNER.md", "SAFEGUARDS.md", "methodology_dashboard.py")
+IGNORE_ENTRIES = tuple(f"/{name}" for name in SYNC_FILES)
+COLUMNS = ("SESSION_RUNNER", "SAFEGUARDS", "DASHBOARD")
+
+
+def script_methodology_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+def blob_sha(content: bytes) -> str:
+    header = f"blob {len(content)}\0".encode()
+    return hashlib.sha1(header + content).hexdigest()
+
+
+def detect_mode(project: Path) -> str:
+    gitignore = project / ".gitignore"
+    if not gitignore.exists():
+        return "committed"
+    existing = set(line.strip() for line in gitignore.read_text().splitlines())
+    if any(entry in existing for entry in IGNORE_ENTRIES):
+        return "ignored"
+    return "committed"
+
+
+def detect_source(methodology_root: Path) -> str:
+    return "local" if (methodology_root / "starter-kit").is_dir() else "github"
+
+
+def local_canonical_sha(methodology_root: Path, name: str) -> str:
+    content = (methodology_root / "starter-kit" / name).read_bytes()
+    return blob_sha(content)
+
+
+def local_history(methodology_root: Path, name: str) -> list:
+    """List of (commit_sha, blob_sha) for the file, newest first."""
+    path = f"starter-kit/{name}"
+    try:
+        log = subprocess.run(
+            ["git", "-C", str(methodology_root), "log", "--format=%H", "--", path],
+            capture_output=True, text=True, check=True,
+        ).stdout.strip().splitlines()
+    except subprocess.CalledProcessError:
+        return []
+    history = []
+    for commit in log:
+        try:
+            tree = subprocess.run(
+                ["git", "-C", str(methodology_root), "ls-tree", commit, "--", path],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+        except subprocess.CalledProcessError:
+            continue
+        # format: <mode> blob <sha>\t<path>
+        parts = tree.split()
+        if len(parts) >= 3 and parts[1] == "blob":
+            history.append((commit, parts[2]))
+    return history
+
+
+def github_canonical(name: str):
+    try:
+        result = subprocess.run(
+            ["gh", "api", f"repos/{REPO}/contents/starter-kit/{name}"],
+            capture_output=True, text=True, check=True,
+        )
+    except FileNotFoundError:
+        sys.exit("error: gh CLI not found; install GitHub CLI or use --source=local")
+    except subprocess.CalledProcessError as e:
+        sys.exit(f"error: gh api failed for {name}: {e.stderr.strip() or e.stdout.strip()}")
+    payload = json.loads(result.stdout)
+    return payload["sha"], base64.b64decode(payload["content"])
+
+
+def file_status(project: Path, name: str, canonical_sha: str, history: list) -> str:
+    target = project / name
+    if not target.exists():
+        return "missing"
+    project_sha = blob_sha(target.read_bytes())
+    if project_sha == canonical_sha:
+        return "current"
+    for idx, (_, blob) in enumerate(history):
+        if blob == project_sha:
+            # idx=0 is HEAD; canonical matches history[0] so project_sha matching idx=N means N versions behind.
+            return f"{idx} versions behind" if idx != 1 else "1 version behind"
+    return "locally modified"
+
+
+def render_table(rows: list) -> str:
+    headers = ("Project", "Mode") + COLUMNS
+    widths = [len(h) for h in headers]
+    for row in rows:
+        for i, cell in enumerate(row):
+            widths[i] = max(widths[i], len(cell))
+    def fmt(row):
+        return "  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row))
+    out = [fmt(headers)]
+    for row in rows:
+        out.append(fmt(row))
+    return "\n".join(out)
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description="Report drift of methodology files across projects.")
+    p.add_argument("paths", nargs="*", default=["."], help="Project directory (shell-expand globs)")
+    p.add_argument("--source", choices=("local", "github"), help="local (default if sibling methodology/ exists) or github")
+    args = p.parse_args()
+
+    methodology_root = script_methodology_root()
+    source = args.source or detect_source(methodology_root)
+
+    canonical = {}
+    history = {name: [] for name in SYNC_FILES}
+    if source == "local":
+        if not (methodology_root / "starter-kit").is_dir():
+            sys.exit(f"error: --source=local but no starter-kit/ at {methodology_root}")
+        for name in SYNC_FILES:
+            canonical[name] = local_canonical_sha(methodology_root, name)
+            history[name] = local_history(methodology_root, name)
+    else:
+        for name in SYNC_FILES:
+            sha, _ = github_canonical(name)
+            canonical[name] = sha
+            # history-walk not implemented for github source
+
+    rows = []
+    for raw in args.paths:
+        project = Path(raw).resolve()
+        if not project.is_dir():
+            rows.append((raw, "missing-dir", "-", "-", "-"))
+            continue
+        mode = detect_mode(project)
+        cells = [project.name, mode]
+        for name in SYNC_FILES:
+            cells.append(file_status(project, name, canonical[name], history[name]))
+        rows.append(tuple(cells))
+
+    print(f"source: {source}" + (f" ({methodology_root})" if source == "local" else ""))
+    print(render_table(rows))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
