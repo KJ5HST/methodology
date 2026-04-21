@@ -1,7 +1,7 @@
 # Methodology v2.2: Sync Tools + Multi-Project Migration Plan
 
-**Status:** APPROVED — decisions captured; ready for phase 1 execution in a separate session
-**Date:** 2026-04-20
+**Status:** RELEASED (Part A) on 2026-04-21 (Session 366) — Phases 1–3 shipped as v2.2. Part B (§5 Phases 4–7 operator migration) remains pending.
+**Date:** 2026-04-20 (plan); 2026-04-21 (Part A released)
 **Owner:** methodology repo
 **Release tag:** v2.2 (ships `bin/sync`, `bin/status`, updated BOOTSTRAP; universal improvements)
 **Secondary scope:** user's internal 12-project migration to gitignored-mode (private operator adoption)
