@@ -60,6 +60,18 @@ Each phase is gated. You cannot enter the next phase until the current one is co
 
 ### 1. Copy files to your project
 
+**Option A — scripted (recommended if you have a local methodology checkout):**
+
+```bash
+../methodology/bin/sync your-project/             # committed mode (default)
+../methodology/bin/sync your-project/ --mode=ignore  # or: multi-project operator mode
+../methodology/bin/sync your-project/ --source=github  # or: pull from GitHub (needs gh CLI)
+```
+
+This copies `SESSION_RUNNER.md`, `SAFEGUARDS.md`, and `methodology_dashboard.py` into the target. See [`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md) for the difference between committed and ignored modes.
+
+**Option B — manual:**
+
 Copy `starter-kit/SESSION_RUNNER.md`, `starter-kit/SAFEGUARDS.md`, `starter-kit/SESSION_NOTES.md`, `starter-kit/CHANGELOG.md`, and `starter-kit/ROADMAP.md` to your project root. Copy the framework files (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) to `docs/methodology/`.
 
 ### 2. Tell Claude to use it
@@ -91,6 +103,7 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 | `SESSION_RUNNER.md` | Cockpit checklist template (no project-specific history) |
 | `SESSION_NOTES.md` | Empty template for session continuity |
 | `SAFEGUARDS.md` | Safety rails: commit discipline, blast radius limits, mode switching |
+| `CLAUDE_TEMPLATE.md` | Template for project `CLAUDE.md` with SESSION PROTOCOL block and Adaptations section |
 | `CHANGELOG.md` | Completed work history template — keeps BACKLOG.md lean |
 | `ROADMAP.md` | Feature inventory and future plans template |
 | `methodology_dashboard.py` | Health scanner: project scoring, risk assessment, compliance dashboard |
@@ -143,12 +156,17 @@ Expand any project card to see health breakdown by dimension, risk factors, git 
 │
 ├── starter-kit/                      ← Copy these to bootstrap a new project
 │   ├── BOOTSTRAP.md                  ← Setup guide
+│   ├── CLAUDE_TEMPLATE.md            ← Project CLAUDE.md template (protocol + Adaptations section)
 │   ├── SESSION_RUNNER.md             ← Cockpit checklist template
 │   ├── SESSION_NOTES.md              ← Session continuity template
 │   ├── SAFEGUARDS.md                 ← Safety rails template
 │   ├── CHANGELOG.md                  ← Completed work history template
 │   ├── ROADMAP.md                    ← Feature inventory & future plans template
 │   └── methodology_dashboard.py      ← Health scanner (also in tools/)
+│
+├── bin/                              ← Sync tools (v2.2+)
+│   ├── sync                          ← Copy starter-kit files into a project (dual-mode, dual-source)
+│   └── status                        ← Report drift of synced files across projects
 │
 └── tools/                            ← Portfolio-level tooling
     └── methodology_dashboard.py      ← Health scanner & compliance dashboard
@@ -204,6 +222,15 @@ Domain-specific adaptations of the master framework. Each workstream customizes 
 Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during development of a commercial software product. The methodology emerged organically from an 11-session design series, was codified into a reusable framework, and subsequently validated across 60+ sessions of varied work.
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
+
+### What's New in v2.2
+
+- **`bin/sync` tool** — dual-mode (`--mode=commit` / `--mode=ignore`) and dual-source (`--source=local` / `--source=github`) sync for starter-kit files. Committed mode is the existing pattern; ignored mode is new, for multi-project operators who want methodology updates to propagate via one command from a sibling `methodology/` checkout.
+- **`bin/status` tool** — drift reporter across one or many projects. Shows `current`, `N versions behind`, `locally modified`, or `missing` per synced file.
+- **Drift safety** — `bin/sync` refuses to overwrite files with local modifications (not matching canonical or any historical version). Pass `--force` to override, or move customizations to CLAUDE.md's Adaptations section first.
+- **`starter-kit/CLAUDE_TEMPLATE.md`** — new template for project `CLAUDE.md` files, including the **Project-Specific Methodology Adaptations** section. This is the canonical seam for per-project customizations (task mappings, Phase 0 steps, project Learnings, project failure modes) — keeping synced files byte-identical to canonical.
+- **BOOTSTRAP.md rewrite** — documents committed vs ignored modes, the customization seam pattern, and the updating workflow (`bin/status` → `bin/sync`).
+- **Backward compatible** — existing adopters on v2.1 who copy files manually continue to work unchanged. The scripted workflow is additive.
 
 ### What's New in v2.1
 
