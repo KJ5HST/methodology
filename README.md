@@ -12,9 +12,10 @@ This framework solves the problem with three layers:
 |-------|----------|---------|
 | **Cockpit checklist** | `SESSION_RUNNER.md` | Step-by-step procedure. Follow this. |
 | **Flight manual** | `ITERATIVE_METHODOLOGY.md` | Theory and principles. Reference this. |
-| **Mission procedures** | `workstreams/*.md` | Domain-specific adaptations. Execute these. |
+| **Mission procedures** | `workstreams/*_WORKSTREAM.md` | Domain-specific adaptations. Execute these. |
+| **Campaign templates** | `workstreams/*_PROTOCOL.md` | Multi-session campaign sequences extending a workstream. |
 
-The checklist constrains. The manual teaches. The mission procedures specialize. All three are needed.
+The checklist constrains. The manual teaches. The mission procedures specialize. Protocols sequence sessions across a campaign. All four are needed.
 
 ## Evidence
 
@@ -147,13 +148,15 @@ Expand any project card to see health breakdown by dimension, risk factors, git 
 ├── ITERATIVE_METHODOLOGY.md          ← Master framework (9 principles, 6 phases, 12 gates)
 ├── HOW_TO_USE.md                     ← Practical guide with 3 worked examples
 │
-├── workstreams/                      ← Domain-specific adaptations
+├── workstreams/                      ← Domain-specific adaptations and campaign templates
 │   ├── DESIGN_WORKSTREAM.md          ← UI/UX design, visual design, layout
 │   ├── ARCHITECTURE_WORKSTREAM.md    ← System architecture, API design
 │   ├── DEVELOPMENT_WORKSTREAM.md     ← Feature implementation, bug fix campaigns
 │   ├── AUDIT_WORKSTREAM.md           ← Code audits, security reviews, quality gates
 │   ├── RESEARCH_DOCUMENTATION_WORKSTREAM.md ← Research papers, technical reports, regulatory analyses
-│   └── TEMPLATE_WORKSTREAM.md        ← Create your own workstream
+│   ├── TEMPLATE_WORKSTREAM.md        ← Create your own workstream
+│   ├── RESEARCH_EXHAUSTIVE_VERIFICATION_PROTOCOL.md ← Multi-session campaign for exhaustive claim-source verification
+│   └── TEMPLATE_PROTOCOL.md          ← Create your own multi-session campaign template
 │
 ├── starter-kit/                      ← Copy these to bootstrap a new project
 │   ├── BOOTSTRAP.md                  ← Setup guide
@@ -207,6 +210,8 @@ Domain-specific adaptations of the master framework. Each workstream customizes 
 | **Audit** | Code reviews, security assessments, quality gates |
 | **Research Documentation** | Research papers, technical reports, dissertations, regulatory analyses |
 
+**Protocols** (multi-session campaign templates) extend a workstream when a deliverable cannot be produced in one session even after correct decomposition. Protocols live in `workstreams/` under the `*_PROTOCOL.md` naming convention. See [`ITERATIVE_METHODOLOGY.md` §Protocols and Multi-Session Campaigns](ITERATIVE_METHODOLOGY.md#protocols-and-multi-session-campaigns) and the realized example [`workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_PROTOCOL.md`](workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_PROTOCOL.md).
+
 ### When to Use / When Not to Use
 
 **Use when:**
@@ -224,6 +229,12 @@ Domain-specific adaptations of the master framework. Each workstream customizes 
 Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during development of a commercial software product. The methodology emerged organically from an 11-session design series, was codified into a reusable framework, and subsequently validated across 60+ sessions of varied work.
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
+
+### What's New in v2.4
+
+- **Protocols promoted to first-class layer** — multi-session campaign templates are now an explicit layer in the document hierarchy alongside workstreams. New section in `ITERATIVE_METHODOLOGY.md` (`§Protocols and Multi-Session Campaigns`); new orientation step in `SESSION_RUNNER.md` (Phase 1 multi-session campaign check); new `workstreams/TEMPLATE_PROTOCOL.md` skeleton.
+- **Realized example:** `workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_PROTOCOL.md` — the first concrete protocol, decomposing exhaustive primary-source verification into a planning → execution → consolidation campaign. Supports creation and audit modes.
+- **No new principles, phases, gates, or workstreams.** The change is structural-vocabulary only: it names the campaign layer that already exists in practice and gives it a documented home.
 
 ### What's New in v2.3
 

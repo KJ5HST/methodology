@@ -56,6 +56,8 @@ Common task-to-workstream mappings:
 
 **⚠ Plan Mode exit trap.** Plan Mode generates "Implement the following plan" as its preamble. **This does NOT mean "start coding."** When a multi-phase plan appears in the prompt — regardless of the preamble wording — the deliverable is writing the plan document with grep-based evidence and per-phase criteria. Orient first. The plan is a DRAFT until evidence-verified. See Planning Sessions below.
 
+**⚠ Multi-session campaign check.** If your work cannot be produced cleanly in one session even after correct decomposition — paper-wide verification, repository-wide hardening, multi-module familiarization — look for a matching `*_PROTOCOL.md` in `workstreams/`. If one exists, your session is one unit within its campaign: read the protocol and follow its planning → execution → consolidation sequence. If none exists but the work has that shape, raise it before starting work — a planning session may be needed to either adopt an existing protocol or draft one. See [`ITERATIVE_METHODOLOGY.md` §Protocols and Multi-Session Campaigns](../docs/methodology/ITERATIVE_METHODOLOGY.md#protocols-and-multi-session-campaigns).
+
 **If no workstream document exists for the task type, follow the master framework:** `docs/methodology/ITERATIVE_METHODOLOGY.md`, phases 1-6.
 
 State your understanding back to the user: *"I'm going to [deliverable] following [workstream doc]. I'll close out when that's done."*
