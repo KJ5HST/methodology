@@ -69,6 +69,7 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 | File | Purpose |
 |------|---------|
 | `workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_PROTOCOL.md` | Multi-session campaign template for exhaustive primary-source verification. Extends the Research Documentation workstream when per-session Phase 6 audit cannot complete the work. Supports both creation mode (writing) and audit mode (reviewing). |
+| `workstreams/INHERITED_CODEBASE_FAMILIARIZATION_PROTOCOL.md` | Multi-session campaign template for taking over an unfamiliar codebase. Extends the Audit workstream; feeds the Development workstream via a prioritized backlog. Supports interview mode (departing owner available) and archaeology mode (owner gone). |
 | `workstreams/TEMPLATE_PROTOCOL.md` | Blank template for creating new protocols (parallel to `TEMPLATE_WORKSTREAM.md`). |
 
 ## Key Concepts to Preserve When Editing
