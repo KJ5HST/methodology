@@ -50,7 +50,7 @@ Follow the **review-session pattern** from [`AUDIT_WORKSTREAM.md`](AUDIT_WORKSTR
 | Phase 3 Claim-Source Map | Sample 20–40 high-stakes claims (numeric, dated, attributed). If the unsupported rate exceeds the ~22% baseline, expand the sample. |
 | Phase 6 Cleanup procedures | Identify search artifacts, bogus retrievals, and pre-existing duplicates to remove |
 | Verification Checklist | Per-paper pass/fail grid |
-| The 13 anti-patterns | Finding categories — every finding cites a numbered anti-pattern |
+| The 19 anti-patterns | Finding categories — every finding cites a numbered anti-pattern |
 
 ### Audit report structure
 
