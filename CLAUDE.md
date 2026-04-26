@@ -63,6 +63,12 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 | `workstreams/RESEARCH_DOCUMENTATION_WORKSTREAM.md` | Research papers, technical reports, dissertations, regulatory analyses |
 | `workstreams/TEMPLATE_WORKSTREAM.md` | Blank template for creating new workstreams |
 
+### Protocols (campaign-scale procedures within a workstream)
+
+| File | Purpose |
+|------|---------|
+| `workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_PROTOCOL.md` | Multi-session campaign template for exhaustive primary-source verification. Extends the Research Documentation workstream when per-session Phase 6 audit cannot complete the work. Supports both creation mode (writing) and audit mode (reviewing). |
+
 ## Key Concepts to Preserve When Editing
 
 - **SESSION_RUNNER.md documents 24 failure modes** with specific countermeasures. These are empirically derived from 60+ sessions — do not remove or weaken them without strong justification. FMs 1–23 must not be renumbered; new FMs append at the end (e.g., FM #24 was appended in v2.3, not inserted).

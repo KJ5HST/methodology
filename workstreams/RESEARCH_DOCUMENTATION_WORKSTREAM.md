@@ -42,6 +42,8 @@ The procedures below are forward-looking — they assume you are writing or exte
 
 Follow the **review-session pattern** from [`AUDIT_WORKSTREAM.md`](AUDIT_WORKSTREAM.md): Phases 1–4 (Pre-Flight, Research, Create the analysis, Present), skipping Phase 5 (Implement). The deliverable is the audit report; remediation is a follow-on session that re-enters this workstream's standard mode.
 
+Audit Mode is **sampling-based**: 20–40 high-stakes claims per scope, with expansion if the unsupported rate exceeds the ~22% baseline (see the table below). When sampling is insufficient — high-stakes filings, inherited repositories where prior verification cannot be trusted, or pre-publication final passes — escalate to the [Research Exhaustive Verification Protocol](RESEARCH_EXHAUSTIVE_VERIFICATION_PROTOCOL.md), which decomposes exhaustive verification into a multi-session campaign that applies in both creation and audit modes.
+
 ### Map this workstream's machinery into audit deliverables
 
 | This workstream's section | Audit role |
@@ -220,6 +222,8 @@ For each new or modified body section, run the audit:
 **Calibrate to your domain.** These numbers are from one project's corpus; treat them as a starting point, not a universal norm. After the first audit session, treat your project's own running baseline as the reference — significant deviation from *that* is the signal worth acting on.
 
 **Audit-failed claims may still be true.** A claim flagged as unsupported in the local corpus may still be correct — the cited file may be wrong, missing, or a stub while the claim is verifiable against a different primary source. Always do one round of primary-source retrieval before removing a flagged claim.
+
+**When per-session audit cannot complete the work** — paper-wide claim count exceeds session capacity, the deliverable's reader-trust requirements demand exhaustive verification, or claims must be tracked across multiple drafting or auditing sessions — escalate to the [Research Exhaustive Verification Protocol](RESEARCH_EXHAUSTIVE_VERIFICATION_PROTOCOL.md). The protocol decomposes exhaustive claim-source verification into a multi-session campaign with planning, per-unit execution, and consolidation phases, and applies during both writing (creation mode) and reviewing (audit mode).
 
 ### Cleanup
 
