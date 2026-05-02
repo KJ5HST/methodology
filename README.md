@@ -223,6 +223,22 @@ Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during develop
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
 
+### What's New in v2.3
+
+Content release distilled from a 90-session field audit of `rad-con/SESSION_RUNNER.md` (issue #6 → audit doc → issue #7). Six universal additions, no canonical renumbering of existing FMs (FMs 1–23 unchanged).
+
+- **New Phase 3E: Runtime Smoke Test** — if a deliverable changes runtime behavior (startup config, service registration, plugin loading, dispatch, integration wiring), launch the application and verify before committing. "Build clean" is necessary but not sufficient. Phase numbering shifts: old 3E (Commit) → 3F, old 3F (Report and STOP) → 3G.
+- **New Failure Mode #24: Build-passes-ship-it** — appended (not inserted), so existing FM numbers 1–23 are unchanged. Catches sessions that treat `mvn clean package` / `npm run build` success as runtime correctness when the deliverable is integration behavior.
+- **Phase 1B framing** — added "structural control, not a suggestion" line. Mandatory close-out steps are how clean-delivery streaks don't collapse.
+- **Planning Sessions anecdote** — concrete cost of skipping evidence-based inventory: a planning session missed 10+ scattered references because it never ran grep; two greps would have found them all.
+- **5 new Learnings rows:**
+  - #2 — Protocol discipline is perishable (14 clean sessions can collapse to 1/10 in 12 hours)
+  - #3 — Plans should flag "here be dragons" areas
+  - #4 — Verify plan output against completion criteria, not session duration (refined from community feedback to remove "collapse multi-session work into a single session" framing — that phrasing read as license to bend "1 and done")
+  - #5 — Code review is a distinct deliverable; produce actionable plans, not vague critique
+  - #6 — A plan written from memory of a file read is an assumption-level claim
+- **Backward compatible.** No FM renumbering. Phase rename only affects sessions or memories that cite "Phase 3E Commit" by number — adopters should grep their memory + project notes for that string and update to "Phase 3F Commit."
+
 ### What's New in v2.2
 
 - **`bin/sync` tool** — dual-mode (`--mode=commit` / `--mode=ignore`) and dual-source (`--source=local` / `--source=github`) sync for starter-kit files. Committed mode is the existing pattern; ignored mode is new, for multi-project operators who want methodology updates to propagate via one command from a sibling `methodology/` checkout.

@@ -64,7 +64,7 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 
 ## Key Concepts to Preserve When Editing
 
-- **SESSION_RUNNER.md documents 23 failure modes** with specific countermeasures. These are empirically derived from 60+ sessions — do not remove or weaken them without strong justification.
+- **SESSION_RUNNER.md documents 24 failure modes** with specific countermeasures. These are empirically derived from 60+ sessions — do not remove or weaken them without strong justification. FMs 1–23 must not be renumbered; new FMs append at the end (e.g., FM #24 was appended in v2.3, not inserted).
 - **Phase 0 (Orient) must remain mandatory and blocking** — the most common failure mode is agents skipping orientation and starting work immediately.
 - **"1 and done" rule** — one deliverable per session, then close out. This is structural, not advisory.
 - **Ghost session detection** (Phase 0, step 5) exists because crashed sessions that leave no trace cause the next session to work from stale state.
@@ -74,7 +74,7 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 
 ## Versioning
 
-Changes are tracked via git commits and the README's "What's New" section. Current version: v2.2. Key additions by version:
+Changes are tracked via git commits and the README's "What's New" section. Current version: v2.3. Key additions by version:
 
 - **v1.0:** Initial 9 principles, 6 phases, 4 workstreams
 - **v1.1:** Protocol erosion detection, ghost session prevention, minimum handoff requirements, 4 new failure modes (#14-17)
@@ -82,3 +82,4 @@ Changes are tracked via git commits and the README's "What's New" section. Curre
 - **v2.0:** Methodology Dashboard — portfolio health scanner with dual-mode detection, health/risk scoring, methodology compliance checking, live HTML dashboard with auto-refresh, color-coded terminal output, starter-kit inclusion
 - **v2.1:** CHANGELOG.md and ROADMAP.md templates, three-file task tracking split, migration guide for monolithic backlogs, dashboard compliance updates, 4 new failure modes (#20-23), Artifact Integrity safeguards, build equivalent step in BOOTSTRAP, documentation project adaptations
 - **v2.2:** `bin/sync` + `bin/status` distribution tooling (dual-mode commit/ignore, dual-source local/github), CLAUDE_TEMPLATE.md customization seam, BOOTSTRAP.md rewrite, drift-safety guard on sync
+- **v2.3:** Content release from rad-con SESSION_RUNNER audit (issue #6, #7). New Phase 3E Runtime Smoke Test (renumber 3E→3F, 3F→3G), new FM #24 (build-passes-ship-it, appended — FMs 1–23 unchanged), Phase 1B "structural control" framing, Planning Sessions grep anecdote, 5 new Learnings rows. Row #4 wording refined from rmsharp feedback to remove "collapse multi-session work into a single session" framing — that read as license to bend "1 and done."

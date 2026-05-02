@@ -72,6 +72,8 @@ State your understanding back to the user: *"I'm going to [deliverable] followin
 
 **Why this exists:** Ghost sessions — sessions that crash, hit context limits, or end without writing notes — leave zero trace. The next session has no idea what happened, what was attempted, or what state was left behind. By writing a stub FIRST, even a catastrophic failure leaves evidence. This stub is overwritten during Phase 3D with the full handoff.
 
+**This is a structural control, not a suggestion.** Mandatory close-out steps are how clean-delivery streaks don't collapse: each protocol step that gets shaved off makes the next step easier to shave off.
+
 ---
 
 ## Phase 2: Execute
@@ -98,6 +100,8 @@ For any plan that involves deleting, renaming, migrating, or moving code:
 4. The inventory IS the plan's verification step — equivalent to "grep for dangling references" in execution sessions.
 
 **A plan that lists files to change without having searched for them is an assumption, not an inventory.** The executor will trust the plan. If it's wrong, they'll miss files — exactly the failure this requirement prevents.
+
+**In practice:** a planning session wrote a deletion plan listing the "obviously named" files but missed 10+ scattered references — because it never ran `grep` across the codebase. The executor session had to discover all of them independently. Two grep commands during the planning session would have found them all.
 
 #### Per-Phase Completion Criteria
 
@@ -194,11 +198,19 @@ A handoff that doesn't include ALL of the following is a protocol violation. "Pi
 
 **Never write "need to verify" in a handoff gap.** If you don't know, read the file NOW. Deferred verification is deferred work — it belongs in your session, not the next one.
 
-### 3E: Commit
+### 3E: Runtime Smoke Test
+
+**If your deliverable changes runtime behavior** — startup configuration, service registration, integration wiring, dispatch, plugin loading, config resolution — launch the application before committing and verify the behavior. Check startup logs for errors, warnings, or unexpected fallback paths. Confirm your deliverable is active, not silently overridden or skipped. Verify at the running endpoint if applicable.
+
+If you cannot runtime-verify (requires hardware, external service, CI), state this explicitly in session notes. Do not silently skip. **"Build clean" is necessary but not sufficient for runtime changes.**
+
+This step exists because sessions have shipped code that compiled and built cleanly but broke at runtime due to plugin version collisions, registration order, or silent fallback paths. Build tools verify compilation, not integration. A self-assessment that notes "no runtime verification" without treating it as a defect is failure mode #24 in action.
+
+### 3F: Commit
 
 Commit all changes with a descriptive message.
 
-### 3F: Report and STOP
+### 3G: Report and STOP
 
 Tell the user:
 
@@ -240,6 +252,7 @@ These are documented tendencies. The agent must actively guard against them.
 | 21 | **Greenfield assumption** | Write as if the project has no existing capabilities, infrastructure, or history. Destroys credibility with stakeholders who know what they already have. | Assume existing capabilities unless told otherwise. Read the project's baseline/current-state documentation during Orient. Frame work as extending, standardizing, or automating what exists — not building from scratch. |
 | 22 | **Overwrite user edits** | Regenerate or modify content the user edited outside the agent's control (between sessions, in another editor, or manually). Destroys the user's work. | Check git blame or system-reminders before modifying any artifact that might have been user-edited. When in doubt, ask. Never regenerate generated artifacts (figures, tables, templates) without confirming the user hasn't customized them. |
 | 23 | **Question-as-instruction** | User asks a question or makes an observation; agent treats it as an instruction to modify files. | Present options and wait for direction. A question is not a go-ahead. "How could we improve X?" means discuss, not implement. |
+| 24 | **Build-passes-ship-it** | Session confirms `mvn clean package` / `npm run build` / equivalent succeeds and treats that as verification of correctness. But the deliverable involves runtime behavior (startup, service registration, config resolution, handler dispatch) that only executes when the application starts. Build tools verify compilation, not integration. | If your deliverable changes runtime behavior, launch the application before close-out and verify (Phase 3E). "Build clean" is necessary but not sufficient. A self-assessment that notes "no runtime verification" without treating it as a defect is this failure mode in action. |
 
 ---
 
@@ -262,6 +275,7 @@ These are documented tendencies. The agent must actively guard against them.
 | Document describes a blank-slate starting point when existing infrastructure exists | Failure mode #21 (greenfield assumption) is active | Re-read the project's baseline documentation. Rewrite to acknowledge what exists. |
 | User says "I edited X" and the agent regenerates X | Failure mode #22 (overwrite user edits) is active | Check git blame. Preserve user modifications. |
 | User asks a question and the agent starts modifying files | Failure mode #23 (question-as-instruction) is active | Stop modifying. Present options. Wait for explicit direction. |
+| Self-assessment notes "no runtime verification" but treats it as incidental | Failure mode #24 (build-passes-ship-it) is active | Phase 3E was skipped. Launch the application before committing. If verification is impossible in this environment, state that explicitly — do not silently treat build-clean as runtime-clean. |
 
 **If you detect 2+ warning signs: STOP.** Re-read this document from the top. Do not continue until you've re-internalized the protocol. The cost of pausing to re-read is 2 minutes. The cost of a ghost session or failed delivery is the user's trust.
 
@@ -274,6 +288,11 @@ These are documented tendencies. The agent must actively guard against them.
 | # | Learning | Source | When to Apply |
 |---|----------|--------|---------------|
 | 1 | Plan-mode output is a draft, not a verified plan. When a prompt contains a multi-phase plan with "implement," the deliverable is a plan document with evidence-based inventory, not Phase 1 code. The gap: Phase 1's task mapping had no entry for plan-mode handoffs, so the session defaulted to "implement." Structural fix: new mapping row + FM #19. | FM #19 discovery | When a prompt contains a multi-phase plan with "implement" — recognize this as a planning workstream. |
+| 2 | **Protocol discipline is perishable.** 14 consecutive clean sessions can collapse to 1/10 deliveries within 12 hours of relaxed discipline. The protocol is perishable — it doesn't maintain itself. Each session must actively re-internalize it, not assume it's "already known." The compounding loop works only when every link in the chain is complete. | Field observation | Whenever you catch yourself thinking "I know the protocol, I don't need to re-read it" — re-read it. The fast-collapse case (FM #17 slow-drip's sibling) is real. |
+| 3 | Plans should flag "here be dragons" areas where implementation is non-obvious — not all phases are equally risky. Call out which phases need extra caution, what assumptions are load-bearing, and where the executor should stop and re-orient. | Field observation | When writing any multi-phase plan. A plan that presents all phases as equally tractable lies to the executor about where the cost actually lives. |
+| 4 | **Verify a plan's output against its completion criteria — not against session duration or count.** Execution speed is not evidence of plan quality, and "fits in one session" is not a planning goal. A plan whose phases each fit cleanly in one session and produce work that matches the completion criteria is high-quality; a plan that tempts the executor to bundle phases or skip close-out to "finish faster" is not. The "1 and done" rule does not bend for high-quality plans. | Field observation (refined from rmsharp feedback on issue #7) | When evaluating a plan or judging plan quality. Resist the temptation to read execution speed as plan quality — they are uncorrelated when the protocol holds. |
+| 5 | Code review is a distinct deliverable, not overhead. Reviews that produce actionable plans (exact code snippets, line numbers, implementation order) have higher ROI than vague "this needs improvement" feedback. A review that doesn't identify specific changes a future session can execute is incomplete. | Field observation | When the session deliverable is a code review. Output an actionable plan, not a critique. |
+| 6 | A plan written from memory of a file read is an assumption-level claim. Reading implementations before estimating complexity catches wrong assumptions early — estimating from a backlog description alone is unreliable. This is a special case of FM #11 (gaps from memory) and FM #20 (edit from memory) applied to planning. | Field observation | Before estimating effort or scope for any phase, read the actual implementation file. The backlog description is a hint, not a spec. |
 
 ---
 
