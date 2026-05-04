@@ -51,6 +51,7 @@ Common task-to-workstream mappings:
 | "Plan [feature/migration]" | One architecture document | `docs/methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` |
 | "Fix [bug campaign]" | One fix campaign pass | `docs/methodology/workstreams/DEVELOPMENT_WORKSTREAM.md` |
 | "Review [code/PR]" | One review document | The review produces a plan; follow DEVELOPMENT_WORKSTREAM for structure |
+| "Write/draft/audit [paper/section/dimension]" | One paper section, one audit pass, or one corpus retrieval pass | `docs/methodology/workstreams/RESEARCH_DOCUMENTATION_WORKSTREAM.md` |
 | Multi-phase plan appears in prompt (from Plan Mode or user) | Plan document written to `docs/planning/` with evidence-based inventory | Planning workstream |
 
 **⚠ Plan Mode exit trap.** Plan Mode generates "Implement the following plan" as its preamble. **This does NOT mean "start coding."** When a multi-phase plan appears in the prompt — regardless of the preamble wording — the deliverable is writing the plan document with grep-based evidence and per-phase criteria. Orient first. The plan is a DRAFT until evidence-verified. See Planning Sessions below.

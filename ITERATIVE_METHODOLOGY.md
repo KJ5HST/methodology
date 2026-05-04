@@ -776,6 +776,7 @@ See the `workstreams/` directory for domain-specific adaptations:
 - `ARCHITECTURE_WORKSTREAM.md` — System architecture, API design, data modeling
 - `DEVELOPMENT_WORKSTREAM.md` — Feature implementation, bug fix campaigns
 - `AUDIT_WORKSTREAM.md` — Code audits, system reviews, security assessments
+- `RESEARCH_DOCUMENTATION_WORKSTREAM.md` — Research papers, technical reports, dissertations, regulatory analyses
 - `TEMPLATE_WORKSTREAM.md` — Blank template for creating new workstreams
 
 See `HOW_TO_USE.md` for practical examples and lifecycle guidance.
