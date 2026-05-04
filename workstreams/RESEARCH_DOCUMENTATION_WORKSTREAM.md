@@ -20,6 +20,12 @@ Use this workstream when:
 
 ---
 
+## Phases Covered
+
+This workstream adapts Phases 2 (Research), 3 (Create), 4 (Present), and 6 (Verify and Close). Phase 1 (Pre-Flight) follows the generic `SESSION_RUNNER.md` orientation procedure unchanged. Phase 5 (Implement) is subsumed into Phase 3 for documents — for an argumentative artifact, writing IS implementing — so this workstream documents only the four phases that require domain-specific adaptation.
+
+---
+
 ## Recommended Operating Mode
 
 Sloppy research is worse than valueless — credible-looking citations that fail under scrutiny damage reader trust more than missing citations would. Documentation errors surface as plausible text that passes casual review and only breaks under hostile scrutiny; by then the reputational damage is done.
@@ -211,6 +217,8 @@ For each new or modified body section, run the audit:
 - Per-claim verdict: **verified** / **re-attribute to X** / **remove**
 - Track the audit's accuracy as a session metric. (Empirical baseline from a real-world session: ~22% of claims unsupported by their cited source, ~12% needing re-attribution. Deviation from this range is a signal — either the corpus or the audit is unusually clean or unusually compromised.)
 
+**Calibrate to your domain.** These numbers are from one project's corpus; treat them as a starting point, not a universal norm. After the first audit session, treat your project's own running baseline as the reference — significant deviation from *that* is the signal worth acting on.
+
 **Audit-failed claims may still be true.** A claim flagged as unsupported in the local corpus may still be correct — the cited file may be wrong, missing, or a stub while the claim is verifiable against a different primary source. Always do one round of primary-source retrieval before removing a flagged claim.
 
 ### Cleanup
@@ -286,6 +294,8 @@ Before presenting:
 ---
 
 ## Common Anti-Patterns (Research Documentation)
+
+> **Cross-reference.** Anti-patterns #9, #10, and #11 below are domain specializations of canonical Failure Modes #20, #21, and #22 respectively (see `starter-kit/SESSION_RUNNER.md`). The remaining 10 are research-documentation-specific.
 
 1. **Citation drift** — Referencing citation keys that do not exist in the bibliography, or whose entries no longer match the source file. Render after every edit batch to catch immediately.
 2. **Filename trust** — Treating an agent-assigned filename as evidence of file content. Always verify with `pdfinfo`, `pdftotext`, or `file`.
