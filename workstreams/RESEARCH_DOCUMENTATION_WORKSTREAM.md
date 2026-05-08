@@ -58,7 +58,7 @@ Follow the **review-session pattern** from [`AUDIT_WORKSTREAM.md`](AUDIT_WORKSTR
 ## Coverage
 - Papers audited: X of Y (with reason for any exclusions)
 - Claim sample size: N (per-paper breakdown)
-- Anti-pattern dimensions evaluated: [list, or "all 13"]
+- Anti-pattern dimensions evaluated: [list, or "all 19"]
 
 ## Findings
 For each finding:
