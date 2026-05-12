@@ -25,7 +25,7 @@ A practical guide for applying the methodology to real work. Includes quick star
 **To use this methodology, you need three things:**
 
 1. **The master framework:** `ITERATIVE_METHODOLOGY.md` — defines the 6 phases, 12 gates, and self-improvement loop
-2. **A workstream template:** Pick the one that matches your domain (design, architecture, development, audit) or create your own from `TEMPLATE_WORKSTREAM.md`
+2. **A workstream template:** Pick the one that matches your domain (design, architecture, development, audit, research documentation) or create your own from `TEMPLATE_WORKSTREAM.md`
 3. **A place to store session outputs:** Create a directory for your session documents (e.g., `sessions/{workstream-name}/`)
 
 **Every session follows the same loop:**
@@ -62,6 +62,19 @@ Examples of workstreams:
 - "Profile UI Design" — 11 sessions, each designing one operator profile
 
 The workstream is where knowledge compounds. Session 1 invents patterns. Session 5 applies them automatically. Session 10 validates them.
+
+### Protocols
+
+A **protocol** is a multi-session campaign template — a reusable shape for work too large to fit in one session even after correct decomposition. Protocols extend a workstream (which adapts the 6 phases to a domain) by sequencing N sessions toward a single campaign deliverable: planning → per-unit execution → consolidation.
+
+Examples of work that benefits from a protocol:
+- Verifying every numeric, dated, or attributed claim in a 5-paper research repository against its primary sources (~500 verification events) — see `workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_PROTOCOL.md`
+- Familiarizing a new owner with a 40-module codebase inherited from a departing engineer (one session per module + planning + consolidation)
+- Conducting a security-hardening pass across a system with 80+ endpoints (one session per endpoint cluster)
+
+When you face a deliverable that exceeds one session and the campaign shape will recur, write a protocol. Protocols live in `workstreams/` under the `*_PROTOCOL.md` naming convention. The blank starting point is `workstreams/TEMPLATE_PROTOCOL.md`.
+
+A protocol is not a workstream (workstreams adapt the 6 phases to a domain) and not a planning-session output (which is a one-off plan). It is a campaign template — written once, invoked for every campaign of its type. See [`ITERATIVE_METHODOLOGY.md` §Protocols and Multi-Session Campaigns](ITERATIVE_METHODOLOGY.md#protocols-and-multi-session-campaigns) for the formal definition.
 
 ### The Self-Improvement Loop
 
