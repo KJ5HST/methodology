@@ -18,7 +18,7 @@ Three layers, each serving a distinct purpose:
 |-------|------|------|
 | Cockpit checklist | `starter-kit/SESSION_RUNNER.md` | Step-by-step operating procedure for every session |
 | Flight manual | `ITERATIVE_METHODOLOGY.md` | Theory: 9 principles, 6 phases, 12 quality gates |
-| Mission procedures | `workstreams/*.md` | Domain-specific adaptations (design, architecture, development, audit) |
+| Mission procedures | `workstreams/*.md` | Domain-specific adaptations (design, architecture, development, audit, research documentation) |
 
 `SESSION_RUNNER.md` is the entry point — it tells agents what to read, when to stop, and how to close out. Everything cascades from that single file.
 
@@ -60,6 +60,7 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 | `workstreams/ARCHITECTURE_WORKSTREAM.md` | Systems, APIs, data models |
 | `workstreams/DEVELOPMENT_WORKSTREAM.md` | Feature implementation, bug fixes |
 | `workstreams/AUDIT_WORKSTREAM.md` | Code audits, security reviews |
+| `workstreams/RESEARCH_DOCUMENTATION_WORKSTREAM.md` | Research papers, technical reports, dissertations, regulatory analyses |
 | `workstreams/TEMPLATE_WORKSTREAM.md` | Blank template for creating new workstreams |
 
 ## Key Concepts to Preserve When Editing
@@ -82,4 +83,4 @@ Changes are tracked via git commits and the README's "What's New" section. Curre
 - **v2.0:** Methodology Dashboard — portfolio health scanner with dual-mode detection, health/risk scoring, methodology compliance checking, live HTML dashboard with auto-refresh, color-coded terminal output, starter-kit inclusion
 - **v2.1:** CHANGELOG.md and ROADMAP.md templates, three-file task tracking split, migration guide for monolithic backlogs, dashboard compliance updates, 4 new failure modes (#20-23), Artifact Integrity safeguards, build equivalent step in BOOTSTRAP, documentation project adaptations
 - **v2.2:** `bin/sync` + `bin/status` distribution tooling (dual-mode commit/ignore, dual-source local/github), CLAUDE_TEMPLATE.md customization seam, BOOTSTRAP.md rewrite, drift-safety guard on sync
-- **v2.3:** Content release from rad-con SESSION_RUNNER audit (issue #6, #7). New Phase 3E Runtime Smoke Test (renumber 3E→3F, 3F→3G), new FM #24 (build-passes-ship-it, appended — FMs 1–23 unchanged), Phase 1B "structural control" framing, Planning Sessions grep anecdote, 5 new Learnings rows. Row #4 wording refined from rmsharp feedback to remove "collapse multi-session work into a single session" framing — that read as license to bend "1 and done."
+- **v2.3:** Combined release covering two contributions. (1) **Research Documentation workstream** — adapts the methodology for research papers, technical reports, dissertations, and regulatory analyses; source-corpus management, claim-source audit pattern, 13 documented anti-patterns, toolchain adaptation table (Quarto/LaTeX/Sphinx/Pandoc/AsciiDoc/Markdown), Audit Mode for fresh-eyes review of existing repositories. (2) **SESSION_RUNNER content release** from rad-con audit (issue #6, #7) — new Phase 3E Runtime Smoke Test (renumber 3E→3F, 3F→3G), new FM #24 (build-passes-ship-it, appended — FMs 1–23 unchanged), Phase 1B "structural control" framing, Planning Sessions grep anecdote, 5 new Learnings rows.

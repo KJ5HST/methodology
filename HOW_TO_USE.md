@@ -25,7 +25,7 @@ A practical guide for applying the methodology to real work. Includes quick star
 **To use this methodology, you need three things:**
 
 1. **The master framework:** `ITERATIVE_METHODOLOGY.md` — defines the 6 phases, 12 gates, and self-improvement loop
-2. **A workstream template:** Pick the one that matches your domain (design, architecture, development, audit) or create your own from `TEMPLATE_WORKSTREAM.md`
+2. **A workstream template:** Pick the one that matches your domain (design, architecture, development, audit, research documentation) or create your own from `TEMPLATE_WORKSTREAM.md`
 3. **A place to store session outputs:** Create a directory for your session documents (e.g., `sessions/{workstream-name}/`)
 
 **Every session follows the same loop:**

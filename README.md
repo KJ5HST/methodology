@@ -152,6 +152,7 @@ Expand any project card to see health breakdown by dimension, risk factors, git 
 │   ├── ARCHITECTURE_WORKSTREAM.md    ← System architecture, API design
 │   ├── DEVELOPMENT_WORKSTREAM.md     ← Feature implementation, bug fix campaigns
 │   ├── AUDIT_WORKSTREAM.md           ← Code audits, security reviews, quality gates
+│   ├── RESEARCH_DOCUMENTATION_WORKSTREAM.md ← Research papers, technical reports, regulatory analyses
 │   └── TEMPLATE_WORKSTREAM.md        ← Create your own workstream
 │
 ├── starter-kit/                      ← Copy these to bootstrap a new project
@@ -204,6 +205,7 @@ Domain-specific adaptations of the master framework. Each workstream customizes 
 | **Architecture** | Systems, APIs, data models, integration patterns |
 | **Development** | Feature implementation, bug fix campaigns |
 | **Audit** | Code reviews, security assessments, quality gates |
+| **Research Documentation** | Research papers, technical reports, dissertations, regulatory analyses |
 
 ### When to Use / When Not to Use
 
@@ -225,7 +227,18 @@ The framework is agent-independent — it works with any AI coding agent that su
 
 ### What's New in v2.3
 
-Content release distilled from a 90-session field audit of `rad-con/SESSION_RUNNER.md` (issue #6 → audit doc → issue #7). Six universal additions, no canonical renumbering of existing FMs (FMs 1–23 unchanged).
+Combined release covering two contributions: a new Research Documentation workstream and a SESSION_RUNNER content release distilled from a 90-session field audit of `rad-con/SESSION_RUNNER.md` (issue #6 → audit doc → issue #7). FMs 1–23 are unchanged — no canonical renumbering.
+
+**Research Documentation workstream**
+
+- **New `workstreams/RESEARCH_DOCUMENTATION_WORKSTREAM.md`** — adapts the methodology for research papers, technical reports, dissertations, and regulatory analyses
+- **Source-corpus management procedures** — pre-flag completeness audit, WAF retrieval hierarchy, filename verification, post-hoc dedup
+- **Claim-source audit pattern** — every numeric, dated, or attributed claim requires a ≤40-word quoted passage from a primary source; baseline ~22% unsupported / ~12% re-attribution rate from real-world use
+- **13 documented anti-patterns** specific to research documentation, including citation drift, filename trust, premature delete on audit-flagged claims, and goal-language for constraints
+- **Toolchain adaptation table** — Quarto, LaTeX, Sphinx, Pandoc, AsciiDoc, and Markdown equivalents for citation checking, render commands, cross-reference verification, and figure scripts
+- **Audit Mode** — adapts the workstream's machinery for fresh-eyes review of existing research repositories; uses the `AUDIT_WORKSTREAM.md` review-session pattern with this workstream's verification checklist as audit criteria, the 13 anti-patterns as finding categories, and the claim-source map as an audit sampling instrument
+
+**SESSION_RUNNER content release**
 
 - **New Phase 3E: Runtime Smoke Test** — if a deliverable changes runtime behavior (startup config, service registration, plugin loading, dispatch, integration wiring), launch the application and verify before committing. "Build clean" is necessary but not sufficient. Phase numbering shifts: old 3E (Commit) → 3F, old 3F (Report and STOP) → 3G.
 - **New Failure Mode #24: Build-passes-ship-it** — appended (not inserted), so existing FM numbers 1–23 are unchanged. Catches sessions that treat `mvn clean package` / `npm run build` success as runtime correctness when the deliverable is integration behavior.
