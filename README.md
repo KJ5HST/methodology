@@ -18,7 +18,7 @@ The checklist constrains. The manual teaches. The mission procedures specialize.
 
 ## Evidence
 
-Extracted from an 11-session UI/UX design series. Validated across 60+ sessions spanning implementation, CI integration, plugin architecture, code review, planning, and audit work.
+Extracted from an initial 11-session UI/UX design series. Validated across 1100+ sessions spanning implementation, CI integration, plugin architecture, code review, planning, and audit work.
 
 | Metric | Session 1 | Session 10 | Session 40+ |
 |--------|-----------|------------|-------------|
