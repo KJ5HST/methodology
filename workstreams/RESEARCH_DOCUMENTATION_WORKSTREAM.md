@@ -248,6 +248,9 @@ Before committing:
 - Resolve every citation key — *no missing or undefined references*
 - Resolve every cross-reference — `?@fig-x` rendered output means the cross-ref is broken
 - Spot-check 2-3 sections that were NOT modified — citation re-numbering and bibliography reordering can break adjacent sections silently
+- Verify the rendered output uses the assets it was configured to use — render success is not asset-use success. For each configured render dependency (font, CSL, template, figure-lib), confirm the output reflects it. The canonical case is fonts: `pdffonts <output.pdf>` shows which faces actually embedded. A family that resolves to its Regular face but silently falls back to a default for Italic / Bold faces will render cleanly, embed the family name, and present italicized text as upright glyphs — and no standard render check catches it. See **toolchain matrix** below for the per-toolchain verification command, **anti-pattern #20** for the failure shape, and `SAFEGUARDS.md` "Verify Render-Dependency Completeness" for the universal rule.
+
+When render-dep configuration changes (font family, CSL file, template, figure-lib version), also run the static / pre-render check from the toolchain matrix to confirm the asset itself provides the faces / version / features the document needs — *before* rendering. The static check catches mis-configuration without burning a render; the post-render check catches silent fallback the static check missed. Both are cheap; neither is a substitute for the other.
 
 ---
 
@@ -272,6 +275,7 @@ Before presenting:
 - [ ] Filename verification has been run for every cited source
 - [ ] No search artifacts (`*_search.html`, `ss_*.json`, etc.) remain in the corpus folder
 - [ ] The paper renders cleanly to every target format
+- [ ] Configured render dependencies (fonts, CSL, templates, figure libraries) are fully resolved in the rendered output — not silently falling back (e.g., `pdffonts` shows all expected font faces embedded; CSL version matches the cited style)
 - [ ] Adjacent papers in the series still render and still cite consistently
 - [ ] Framing language (verbs, prepositions) matches the semantic role of the nouns being introduced
 
@@ -299,7 +303,7 @@ Before presenting:
 
 ## Common Anti-Patterns (Research Documentation)
 
-> **Cross-reference.** Anti-patterns #9, #10, and #11 below are domain specializations of canonical Failure Modes #20, #21, and #22 respectively (see `starter-kit/SESSION_RUNNER.md`). The remaining 10 are research-documentation-specific.
+> **Cross-reference.** Anti-patterns #9, #10, and #11 below are domain specializations of canonical Failure Modes #20, #21, and #22 respectively (see `starter-kit/SESSION_RUNNER.md`). The remaining 17 are research-documentation-specific.
 
 1. **Citation drift** — Referencing citation keys that do not exist in the bibliography, or whose entries no longer match the source file. Render after every edit batch to catch immediately.
 2. **Filename trust** — Treating an agent-assigned filename as evidence of file content. Always verify with `pdfinfo`, `pdftotext`, or `file`.
@@ -320,6 +324,7 @@ Before presenting:
 17. **Multiple-bibliography drift** — Per-cluster, per-paper, or "expanded" `.bib` files coexist with the project bibliography. Citations may resolve in one but not the other; orphaned entries accumulate; the YAML header's bibliography order produces silent rendering divergence as files are edited independently. The Phase 3 rule ("Use a single bibliography file for the project") names the discipline; this anti-pattern names the failure. **Mitigation:** lint for non-canonical `.bib` files at the project level (every `.bib` file outside the canonical path is a finding); YAML headers should reference exactly one bibliography. If a cluster genuinely needs additional entries, add them to the canonical file.
 18. **Verification-flag / body-text divergence** — A claim is correctly flagged in a Verification Flags section as unverified, secondary-sourced, or pending primary-source confirmation — but the body text presents the claim without caveat. A reader who reads the body but skips the flags section treats the claim as fact; the flag exists but does not propagate. Distinct from #6 (descriptive-page substitution) — the source-quality issue *is* correctly identified; the failure is that the identification doesn't reach the body. **Mitigation:** when a claim is flagged in the verification section, the body sentence carrying it must be rewritten to match the caveat (e.g., "Vendor commentary suggests..." rather than the bare assertion). Treat the verification section and the body as a single audit unit, not two independent texts.
 19. **Scope-overlap silence between sibling papers** — Two papers in a series cover overlapping evidence with consciously separated framing (e.g., tools-centric vs. risk-centric). Neither paper acknowledges the overlap. A reader of both perceives repetition; a reader of one wonders why the other exists; the project accumulates maintenance debt because the same evidence must be updated in two places. Distinct from #12 (redundant restatement, within-paper) — this is across-paper, between artifacts that consciously chose to be separate. **Mitigation:** when two papers in a series cover overlapping evidence, each must either (a) cross-reference the other for the shared evidence ("see [other paper] §X for the productivity-evidence detail"), or (b) be merged. Silence is not a third option — it is a debt the next session inherits.
+20. **Silent render-dependency fallback** — A render dependency (font face, CSL style version, template option, figure-library version) is configured but only *partially* resolves: the engine finds *something* by the configured name (a Regular face, a default CSL, a base template) and silently substitutes a fallback for what's missing. The render exits cleanly; citations resolve; cross-references resolve; figures generate. The output looks structurally correct. The defect is only visible by inspecting the output's actual asset use (e.g., `pdffonts` showing which font faces embedded) or by spot-reading the rendered output for the visual symptom (italic text appearing upright; bibliography style not matching the cited style; figures using different default colors). The canonical case is fonts: SBL BibLit ships Regular only; configuring it as `mainfont` produces a clean render in which italic-marked text renders as upright Latin glyphs, and the defect can persist for dozens of sessions before being noticed visually. Distinct from #1 (citation drift) — citations resolve correctly; distinct from #2 (filename trust) — the configured name is correct, the asset is incomplete. **Mitigation:** at the post-render step, verify the output uses the assets it was configured to use (per the **Render-Dep Check** column in the toolchain matrix and `SAFEGUARDS.md` "Verify Render-Dependency Completeness"); when render-dep configuration changes, also run the static / pre-render check from the same column.
 
 ---
 
@@ -327,16 +332,18 @@ Before presenting:
 
 Find your toolchain row and substitute the toolchain-specific equivalent for each generic concept used in this workstream:
 
-| Toolchain | Source File | Bibliography | Render Command | Citation Key Check | Cross-Reference Check | Figure Script |
-|-----------|-------------|--------------|----------------|--------------------|-----------------------|---------------|
-| **Quarto** | `.qmd` | `references.bib` (BibTeX/CSL) | `quarto render` | `quarto render` warnings | `?@fig-x` in output | R / Python chunk in document or external |
-| **LaTeX** | `.tex` | `references.bib` (BibLaTeX) | `latexmk` / `pdflatex` | `biber` / `bibtex` warnings | `??` in output | TikZ or external |
-| **Sphinx** | `.rst` / `.md` | `references.bib` via `bibtex` directives | `sphinx-build` | `sphinxcontrib-bibtex` warnings | `:ref:` failures in build log | matplotlib or external |
-| **Pandoc** | `.md` (Pandoc flavor) | `.bib` via `--citeproc` | `pandoc input.md -o output.pdf --citeproc` | `--citeproc` warnings | `pandoc-crossref` warnings | External script + `![...](...)` |
-| **AsciiDoc** | `.adoc` | `.bib` via `asciidoctor-bibtex` | `asciidoctor` / `asciidoctor-pdf` | `asciidoctor-bibtex` warnings | Anchor-resolution warnings in build log | External script + `image::` directive |
-| **Markdown (vanilla)** | `.md` (CommonMark) | None native — pipe through Pandoc for citations | `cmark` (limited) or external renderer | Manual or via Pandoc | Manual reference-style links | External script + `![...](...)` |
+| Toolchain | Source File | Bibliography | Render Command | Citation Key Check | Cross-Reference Check | Figure Script | Render-Dep Check (static / post-render) |
+|-----------|-------------|--------------|----------------|--------------------|-----------------------|---------------|-----------------------------------------|
+| **Quarto** | `.qmd` | `references.bib` (BibTeX/CSL) | `quarto render` | `quarto render` warnings | `?@fig-x` in output | R / Python chunk in document or external | `fc-list "<family>"` per configured font / `pdffonts <output.pdf>` |
+| **LaTeX** | `.tex` | `references.bib` (BibLaTeX) | `latexmk` / `pdflatex` | `biber` / `bibtex` warnings | `??` in output | TikZ or external | `kpsewhich <face-file>` per face (path-based fontspec) / `pdffonts <output.pdf>` |
+| **Sphinx** | `.rst` / `.md` | `references.bib` via `bibtex` directives | `sphinx-build` | `sphinxcontrib-bibtex` warnings | `:ref:` failures in build log | matplotlib or external | HTML build: grep `<link rel="stylesheet">` + web-font `@font-face` URLs resolve / Inspect rendered page; PDF build: same as LaTeX |
+| **Pandoc** | `.md` (Pandoc flavor) | `.bib` via `--citeproc` | `pandoc input.md -o output.pdf --citeproc` | `--citeproc` warnings | `pandoc-crossref` warnings | External script + `![...](...)` | `fc-list "<family>"` (XeLaTeX backend) / `pdffonts <output.pdf>` |
+| **AsciiDoc** | `.adoc` | `.bib` via `asciidoctor-bibtex` | `asciidoctor` / `asciidoctor-pdf` | `asciidoctor-bibtex` warnings | Anchor-resolution warnings in build log | External script + `image::` directive | `fc-list "<family>"` (asciidoctor-pdf font config) / `pdffonts <output.pdf>` |
+| **Markdown (vanilla)** | `.md` (CommonMark) | None native — pipe through Pandoc for citations | `cmark` (limited) or external renderer | Manual or via Pandoc | Manual reference-style links | External script + `![...](...)` | n/a (no native render-deps; if piped through another renderer, use that row's check) |
 
 **Note on vanilla Markdown.** CommonMark and GitHub-Flavored Markdown have no native citation system. For any research-documentation use case, either render through Pandoc (which adds CSL/BibTeX support) or pick one of the other toolchains. The Markdown row is included so readers know what they're missing — not as a recommended path.
+
+**Note on the Render-Dep Check column.** The static check (left of `/`) confirms the configured asset provides what the document needs *without* rendering; the post-render check (right of `/`) confirms the rendered output actually embedded / used the configured asset. Run static when render-dep config changes; run post-render as part of every build-equivalent step. See `SAFEGUARDS.md` "Verify Render-Dependency Completeness" for the universal rule and the Render Verification section above for the discipline applied to research-doc work. For asset classes beyond fonts (CSL, templates, figure-library versions), the principle is the same — the listed commands are the canonical font case; substitute the equivalent inspection for the asset class in question.
 
 ---
 

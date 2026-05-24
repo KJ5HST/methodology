@@ -219,6 +219,7 @@ A review/audit session whose deliverable is the campaign-wide report.
 - No missing citations across the series
 - No broken cross-references across the series
 - Adjacent (out-of-scope) papers still render
+- Render-dependency completeness verified per paper per format: configured fonts, CSL styles, templates, and figure libraries are fully resolved in the rendered output, not silently falling back (see `RESEARCH_DOCUMENTATION_WORKSTREAM.md` "Render Verification" and `SAFEGUARDS.md` "Verify Render-Dependency Completeness"; surface any findings as anti-pattern #20 in the per-unit deliverable)
 
 ## Open Items
 Prioritized list for follow-on writing sessions:
