@@ -1,15 +1,15 @@
-# Inherited-Codebase Familiarization Protocol
+# Inherited-Codebase Familiarization Campaign
 
-A multi-session campaign template for taking over an unfamiliar codebase — typically from a departing owner, an acquired team, an open-source project under new maintenance, or a subsystem the current team has neglected. This protocol extends [`AUDIT_WORKSTREAM.md`](AUDIT_WORKSTREAM.md) — its define-criteria → inventory-scope → examine-systematically → report-with-evidence pattern is the per-module primitive this protocol scales into a repository-wide discipline.
+A multi-session campaign template for taking over an unfamiliar codebase — typically from a departing owner, an acquired team, an open-source project under new maintenance, or a subsystem the current team has neglected. This campaign extends [`AUDIT_WORKSTREAM.md`](AUDIT_WORKSTREAM.md) — its define-criteria → inventory-scope → examine-systematically → report-with-evidence pattern is the per-module primitive this campaign scales into a repository-wide discipline.
 
-The protocol is explicitly **bidirectional in evidence sources**:
+The campaign is explicitly **bidirectional in evidence sources**:
 
 - **Interview mode** — the prior owner is still available for questions. Question rounds are scheduled at planning time; per-unit deliverables include a clearly-labeled "interview-derived" evidence column; owner-bias is the dominant failure mode.
 - **Archaeology mode** — the prior owner is gone. Evidence comes from git log/blame, commit messages, merged PRs, the issue tracker, runtime tracing, and the code itself; documentation and comments are explicitly downgraded as evidence (often stale). Documentation-trust is the dominant failure mode.
 
 Both modes share the same campaign shape (planning → per-module work → consolidation). They share the same per-unit schema, the same exit criteria, and the same consolidation deliverable. They differ only in which evidence sources count, what the planning session must arrange, and which anti-patterns dominate.
 
-This is a **protocol**, not a workstream. It does not replace the Audit workstream; it prescribes a campaign structure for a specific deliverable: a complete, evidence-backed familiarization record sufficient to assume named operational responsibility for the codebase.
+This is a **campaign**, not a workstream. It does not replace the Audit workstream; it prescribes a campaign structure for a specific deliverable: a complete, evidence-backed familiarization record sufficient to assume named operational responsibility for the codebase.
 
 ---
 
@@ -17,7 +17,7 @@ This is a **protocol**, not a workstream. It does not replace the Audit workstre
 
 | Document | Role |
 |----------|------|
-| [`ITERATIVE_METHODOLOGY.md`](../ITERATIVE_METHODOLOGY.md) | Master framework — 9 principles, 6 phases, 12 quality gates. This protocol obeys all of them. See §Protocols and Multi-Session Campaigns. |
+| [`ITERATIVE_METHODOLOGY.md`](../ITERATIVE_METHODOLOGY.md) | Master framework — 9 principles, 6 phases, 12 quality gates. This campaign obeys all of them. See §Multi-Session Campaigns. |
 | [`AUDIT_WORKSTREAM.md`](AUDIT_WORKSTREAM.md) | Parent workstream. Defines audit-criteria definition, scope inventory, evidence-bearing findings, and the review-session pattern (Phases 1-4 + 6, skip 5). |
 | [`DEVELOPMENT_WORKSTREAM.md`](DEVELOPMENT_WORKSTREAM.md) | Sibling workstream. The consolidation session's prioritized backlog feeds into Development sessions; the per-unit dependency analysis informs blast-radius estimates for those sessions. |
 | [`../starter-kit/SESSION_RUNNER.md`](../starter-kit/SESSION_RUNNER.md) | Operational checklist — every session in the campaign runs against it. |
@@ -28,7 +28,7 @@ This is a **protocol**, not a workstream. It does not replace the Audit workstre
 
 ### Triggers (both modes)
 
-Use this protocol when ownership of a codebase is transferring, AND any of:
+Use this campaign when ownership of a codebase is transferring, AND any of:
 
 - The codebase is large enough that one session cannot produce a complete familiarization record without quality degradation in the second half (typically >6 modules, >10K LOC, or non-trivial cross-module coupling)
 - The new owner will be on the hook for production behavior — oncall rotation, security response, regulatory sign-off — and "I don't know that subsystem yet" is not an acceptable answer
@@ -47,9 +47,9 @@ The trigger conditions above apply, AND no prior owner is available. The codebas
 ### When NOT to use
 
 - **One-off contribution to an unfamiliar codebase.** A bug fix or feature in someone else's code does not require campaign-scale familiarization — read the affected module, fix, ship. The Development workstream's Phase 2 (Read the Code) is sufficient.
-- **Codebases the team already owns and operates.** If the team is already on call for it, the familiarization debt this protocol amortizes is already paid; running this protocol produces a documentation artifact, not a familiarity gain.
+- **Codebases the team already owns and operates.** If the team is already on call for it, the familiarization debt this campaign amortizes is already paid; running this campaign produces a documentation artifact, not a familiarity gain.
 - **Prototypes or short-lived code.** Familiarization is an investment; it pays off over months of ownership. For code with a known sunset date inside the campaign window, sample-based audit fits.
-- **Time pressure overrides completeness.** When a production incident is in progress, a focused investigation per the Audit workstream is right; campaign-scale familiarization is wrong. Run the protocol after the incident, not during it.
+- **Time pressure overrides completeness.** When a production incident is in progress, a focused investigation per the Audit workstream is right; campaign-scale familiarization is wrong. Run the campaign after the incident, not during it.
 
 ### Mode selection and mode mixing
 
@@ -67,7 +67,7 @@ A single session that attempts to familiarize with a non-trivial inherited codeb
 2. **"1 and done" violation.** [Principle 9](../ITERATIVE_METHODOLOGY.md#9-session-scope-bounding) bounds every session to one deliverable. A 12-module familiarization is not one deliverable; it is dozens of micro-deliverables (one per module, plus their cross-cuts) fused into a single artifact, and the second half receives less rigor than the first. Worse, the cross-module patterns the campaign exists to surface require uniform per-module depth — and uniform depth across many modules in one session is exactly what context exhaustion prevents.
 3. **No resumability.** A session that crashes mid-run leaves the next session unable to determine which modules were studied, at what depth, against what criteria. Without checkpoint files and a locked deliverable schema, the entire run must restart — and the next session, lacking a record of the first session's interpretive judgments, often produces inconsistent depth across modules even if it does resume.
 
-This protocol decomposes the work into a planning session, N execution sessions (one per scoped unit), and a consolidation session — each obeying the methodology's session-scope rules and producing a checkpoint deliverable.
+This campaign decomposes the work into a planning session, N execution sessions (one per scoped unit), and a consolidation session — each obeying the methodology's session-scope rules and producing a checkpoint deliverable.
 
 ---
 
@@ -132,7 +132,7 @@ A planning session per [Iterative Methodology §Session Types](../ITERATIVE_METH
 
 - **Schedule question rounds.** Default: three rounds — one before execution starts (orientation, system overview, "what are you most worried we'll miss"), one mid-campaign after ~half of execution sessions complete (targeted gap-fill against accumulated unknowns), one near campaign end (cross-module pattern reconciliation, gotcha confirmation, succession-plan questions). Each round has a budget (typical: 60-90 minutes); over-running breaks the schedule and risks the prior owner becoming unavailable mid-campaign.
 - **Pre-stage round-1 questions.** Don't ask the departing owner to "tell me about the system." Ask questions whose answers will steer the module ordering and the gotcha-priors for the first execution session. The planning session writes round-1's question list as part of `CAMPAIGN.md`.
-- **Lock an answer-recording protocol.** Every interview answer goes into `interviews/round-N-*.md` with a date, the question verbatim, the answer summarized, and a follow-up flag for items that require code-level corroboration.
+- **Lock the answer-recording format.** Every interview answer goes into `interviews/round-N-*.md` with a date, the question verbatim, the answer summarized, and a follow-up flag for items that require code-level corroboration.
 
 ### Archaeology-mode specifics
 
@@ -142,7 +142,7 @@ A planning session per [Iterative Methodology §Session Types](../ITERATIVE_METH
 
 ### Gate (Phase 4 in this session)
 
-Stakeholder approval of `CAMPAIGN.md` is the **second-highest-leverage gate in the protocol** (after the per-execution-session implement gate). A bad scoping decision multiplies cost across N sessions; a vague exit criterion lets every unit be marked "done" at a different bar.
+Stakeholder approval of `CAMPAIGN.md` is the **second-highest-leverage gate in the campaign** (after the per-execution-session implement gate). A bad scoping decision multiplies cost across N sessions; a vague exit criterion lets every unit be marked "done" at a different bar.
 
 ---
 
@@ -199,7 +199,7 @@ A review/audit session whose deliverable is the campaign-wide familiarization re
 2. **Research — aggregate across units.** Identify cross-module patterns: shared idioms, repeated gotchas, conventions present in some modules and absent in others, modules whose API surfaces overlap or conflict, services whose ownership of a data structure is disputed by multiple units' "owned state" sections.
 3. **Build the cross-module architecture.** A single page or diagram showing the modules, their primary call directions, and the data structures that cross module boundaries. This is a *result* of the per-unit work, not an *input* to it; building it during execution risks the mythical-architecture anti-pattern.
 4. **Build the risk map.** For each known fragility, cross-module coupling, residual unknown, or unowned-state finding from the units, record severity and the specific work that would close it.
-5. **Build the prioritized backlog.** Using the risk map, generate a session backlog ordered by priority. Items become input to follow-on Development workstream sessions; the backlog is one of the protocol's primary deliverables back into normal session flow.
+5. **Build the prioritized backlog.** Using the risk map, generate a session backlog ordered by priority. Items become input to follow-on Development workstream sessions; the backlog is one of the campaign's primary deliverables back into normal session flow.
 6. **Present.** Stakeholder approves the report. The named operational responsibility from `CAMPAIGN.md` is the gate: if the stakeholder cannot in good faith confirm "I would now take the named responsibility on this codebase," the consolidation session has surfaced familiarization gaps that justify a follow-on campaign or deeper execution sessions on specific modules.
 7. **Phase 6 close-out.** Standard. Recommendation typically opens a follow-on Development session series against the prioritized backlog.
 
@@ -364,7 +364,7 @@ The campaign closes when:
 
 ### Baseline calibration (early data)
 
-This protocol is new; the baselines below are starting estimates. The consolidation session records actual ratios; subsequent campaigns refine the bands.
+This campaign is new; the baselines below are starting estimates. The consolidation session records actual ratios; subsequent campaigns refine the bands.
 
 | Observed | Interpretation | Action |
 |----------|----------------|--------|
@@ -427,7 +427,7 @@ In interview mode, `interviews/round-N-*.md` is a separate checkpoint stream. A 
 ### Archaeology-mode-specific
 
 14. **Documentation-as-evidence.** Same shape as anti-pattern #5 but more dangerous in archaeology mode, because there is no owner to correct stale docs. A doc claim with no code-level corroboration is not evidence; it is a hypothesis. In archaeology mode the spot-check rate of doc-vs-code agreement is itself a finding.
-15. **Git-archaeology rabbit-holing.** Reading the entire history of a hot file because each commit is interesting. The protocol's "most recent N=20 commits + skim blame" rule exists because diminishing returns on history reading are sharp. Honor the bound.
+15. **Git-archaeology rabbit-holing.** Reading the entire history of a hot file because each commit is interesting. The campaign's "most recent N=20 commits + skim blame" rule exists because diminishing returns on history reading are sharp. Honor the bound.
 16. **Residual-unknown denial.** Refusing to mark items as residual unknowns because "I should be able to figure this out from the code." Some load-bearing facts about an inherited system are not in the code, the history, or any accessible runtime trace — they are in the heads of people who are gone. Marking them as residual unknowns, with the type of evidence that would resolve them, is the honest accounting; pretending to know is not.
 
 ---

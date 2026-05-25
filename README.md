@@ -13,9 +13,9 @@ This framework solves the problem with three layers:
 | **Cockpit checklist** | `SESSION_RUNNER.md` | Step-by-step procedure. Follow this. |
 | **Flight manual** | `ITERATIVE_METHODOLOGY.md` | Theory and principles. Reference this. |
 | **Mission procedures** | `workstreams/*_WORKSTREAM.md` | Domain-specific adaptations. Execute these. |
-| **Campaign templates** | `workstreams/*_PROTOCOL.md` | Multi-session campaign sequences extending a workstream. |
+| **Campaign templates** | `workstreams/*_CAMPAIGN.md` | Multi-session campaign sequences extending a workstream. |
 
-The checklist constrains. The manual teaches. The mission procedures specialize. Protocols sequence sessions across a campaign. All four are needed.
+The checklist constrains. The manual teaches. The mission procedures specialize. Campaign templates sequence sessions across a multi-session deliverable. All four are needed.
 
 ## Evidence
 
@@ -155,9 +155,9 @@ Expand any project card to see health breakdown by dimension, risk factors, git 
 │   ├── AUDIT_WORKSTREAM.md           ← Code audits, security reviews, quality gates
 │   ├── RESEARCH_DOCUMENTATION_WORKSTREAM.md ← Research papers, technical reports, regulatory analyses
 │   ├── TEMPLATE_WORKSTREAM.md        ← Create your own workstream
-│   ├── RESEARCH_EXHAUSTIVE_VERIFICATION_PROTOCOL.md ← Multi-session campaign for exhaustive claim-source verification
-│   ├── INHERITED_CODEBASE_FAMILIARIZATION_PROTOCOL.md ← Multi-session campaign for taking over an unfamiliar codebase
-│   └── TEMPLATE_PROTOCOL.md          ← Create your own multi-session campaign template
+│   ├── RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md ← Multi-session campaign for exhaustive claim-source verification
+│   ├── INHERITED_CODEBASE_FAMILIARIZATION_CAMPAIGN.md ← Multi-session campaign for taking over an unfamiliar codebase
+│   └── TEMPLATE_CAMPAIGN.md          ← Create your own multi-session campaign template
 │
 ├── starter-kit/                      ← Copy these to bootstrap a new project
 │   ├── BOOTSTRAP.md                  ← Setup guide
@@ -211,7 +211,7 @@ Domain-specific adaptations of the master framework. Each workstream customizes 
 | **Audit** | Code reviews, security assessments, quality gates |
 | **Research Documentation** | Research papers, technical reports, dissertations, regulatory analyses |
 
-**Protocols** (multi-session campaign templates) extend a workstream when a deliverable cannot be produced in one session even after correct decomposition. Protocols live in `workstreams/` under the `*_PROTOCOL.md` naming convention. See [`ITERATIVE_METHODOLOGY.md` §Protocols and Multi-Session Campaigns](ITERATIVE_METHODOLOGY.md#protocols-and-multi-session-campaigns) and the realized example [`workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_PROTOCOL.md`](workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_PROTOCOL.md).
+**Campaigns** (multi-session work patterns with reusable templates) extend a workstream when a deliverable cannot be produced in one session even after correct decomposition. Campaign templates live in `workstreams/` under the `*_CAMPAIGN.md` naming convention. See [`ITERATIVE_METHODOLOGY.md` §Multi-Session Campaigns](ITERATIVE_METHODOLOGY.md#multi-session-campaigns) and the realized example [`workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md`](workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md).
 
 ### When to Use / When Not to Use
 
@@ -233,10 +233,10 @@ The framework is agent-independent — it works with any AI coding agent that su
 
 ### What's New in v2.4
 
-- **Protocols promoted to first-class layer** — multi-session campaign templates are now an explicit layer in the document hierarchy alongside workstreams. New section in `ITERATIVE_METHODOLOGY.md` (`§Protocols and Multi-Session Campaigns`); new orientation step in `SESSION_RUNNER.md` (Phase 1 multi-session campaign check); new `workstreams/TEMPLATE_PROTOCOL.md` skeleton.
+- **Multi-session campaigns promoted to first-class layer** — campaign templates are now an explicit layer in the document hierarchy alongside workstreams. New section in `ITERATIVE_METHODOLOGY.md` (`§Multi-Session Campaigns`); new orientation step in `SESSION_RUNNER.md` (Phase 1 multi-session campaign check); new `workstreams/TEMPLATE_CAMPAIGN.md` skeleton.
 - **Realized examples:**
-  - `workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_PROTOCOL.md` — extends the Research Documentation workstream for exhaustive primary-source verification; decomposes the work into a planning → execution → consolidation campaign. Supports creation and audit modes.
-  - `workstreams/INHERITED_CODEBASE_FAMILIARIZATION_PROTOCOL.md` — extends the Audit workstream for taking over an unfamiliar codebase; feeds the Development workstream via a prioritized backlog. Supports interview mode (departing owner available) and archaeology mode (owner gone).
+  - `workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md` — extends the Research Documentation workstream for exhaustive primary-source verification; decomposes the work into a planning → execution → consolidation campaign. Supports creation and audit modes.
+  - `workstreams/INHERITED_CODEBASE_FAMILIARIZATION_CAMPAIGN.md` — extends the Audit workstream for taking over an unfamiliar codebase; feeds the Development workstream via a prioritized backlog. Supports interview mode (departing owner available) and archaeology mode (owner gone).
 - **No new principles, phases, gates, or workstreams.** The change is structural-vocabulary only: it names the campaign layer that already exists in practice and gives it a documented home.
 
 ### What's New in v2.3

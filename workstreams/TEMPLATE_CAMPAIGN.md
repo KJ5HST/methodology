@@ -1,10 +1,10 @@
-# [Domain/Scope] [Campaign Name] Protocol
+# [Domain Name] Campaign
 
-A multi-session campaign template for [describe the campaign-scale deliverable]. This protocol extends [`PARENT_WORKSTREAM.md`](PARENT_WORKSTREAM.md) — its [parent-workstream phase or primitive] is the per-session primitive this protocol scales into a [paper-wide / repository-wide / system-wide] discipline.
+A multi-session campaign template for [describe the campaign-scale deliverable]. This campaign extends [`PARENT_WORKSTREAM.md`](PARENT_WORKSTREAM.md) — its [parent-workstream phase or primitive] is the per-session primitive this campaign scales into a [paper-wide / repository-wide / system-wide] discipline.
 
-[Optional: any modes the protocol supports — e.g., creation/audit/maintenance — and a one-line description of each. Delete this paragraph if the protocol has only one mode.]
+[Optional: any modes the campaign supports — e.g., creation/audit/maintenance — and a one-line description of each. Delete this paragraph if the campaign has only one mode.]
 
-This is a **protocol**, not a workstream. It does not replace [parent workstream]; it prescribes a campaign structure for a specific deliverable: [name the campaign deliverable].
+This is a **campaign**, not a workstream. It does not replace [parent workstream]; it prescribes a campaign structure for a specific deliverable: [name the campaign deliverable].
 
 ---
 
@@ -12,21 +12,21 @@ This is a **protocol**, not a workstream. It does not replace [parent workstream
 
 | Document | Role |
 |----------|------|
-| [`ITERATIVE_METHODOLOGY.md`](../ITERATIVE_METHODOLOGY.md) | Master framework — 9 principles, 6 phases, 12 quality gates. This protocol obeys all of them. See §Protocols and Multi-Session Campaigns. |
-| [`PARENT_WORKSTREAM.md`](PARENT_WORKSTREAM.md) | Parent workstream. Defines the per-session primitives this protocol scales. |
+| [`ITERATIVE_METHODOLOGY.md`](../ITERATIVE_METHODOLOGY.md) | Master framework — 9 principles, 6 phases, 12 quality gates. This campaign obeys all of them. See §Multi-Session Campaigns. |
+| [`PARENT_WORKSTREAM.md`](PARENT_WORKSTREAM.md) | Parent workstream. Defines the per-session primitives this campaign scales. |
 | [`../starter-kit/SESSION_RUNNER.md`](../starter-kit/SESSION_RUNNER.md) | Operational checklist — every session in the campaign runs against it. |
 
-[Add additional rows for sibling workstreams the protocol borrows session patterns from — e.g., `AUDIT_WORKSTREAM.md` for review-mode sessions.]
+[Add additional rows for sibling workstreams the campaign borrows session patterns from — e.g., `AUDIT_WORKSTREAM.md` for review-mode sessions.]
 
 ---
 
 ## When to Use
 
-[State trigger conditions. Be specific — this is the "should I use this protocol?" gate. If multiple modes exist (creation/audit), provide trigger conditions per mode.]
+[State trigger conditions. Be specific — this is the "should I use this campaign?" gate. If multiple modes exist (creation/audit), provide trigger conditions per mode.]
 
 ### Triggers
 
-[State the umbrella condition that makes this protocol applicable, AND any of:]
+[State the umbrella condition that makes this campaign applicable, AND any of:]
 - [Specific trigger 1]
 - [Specific trigger 2]
 - [Specific trigger 3]
@@ -35,7 +35,7 @@ This is a **protocol**, not a workstream. It does not replace [parent workstream
 
 - [Case where the cost outweighs the value]
 - [Case where a simpler tool fits — single session, sample-based audit, etc.]
-- [Case where the deliverable is out of scope for this protocol]
+- [Case where the deliverable is out of scope for this campaign]
 
 ---
 
@@ -47,7 +47,7 @@ A single session attempting this campaign's full scope will fail in one of three
 2. **"1 and done" violation.** [Why this deliverable is hundreds of micro-deliverables fused into one artifact, and the second half receives less rigor than the first.]
 3. **No resumability.** [Why a crashed mid-session leaves the next session unable to recover without checkpoint files.]
 
-This protocol decomposes the work into a planning session, N execution sessions, and a consolidation session — each obeying the methodology's session-scope rules and producing a checkpoint deliverable.
+This campaign decomposes the work into a planning session, N execution sessions, and a consolidation session — each obeying the methodology's session-scope rules and producing a checkpoint deliverable.
 
 ---
 
@@ -95,7 +95,7 @@ A planning session per [`ITERATIVE_METHODOLOGY.md` §Session Types](../ITERATIVE
 
 ### Gate (Phase 4 in this session)
 
-Stakeholder approval of `CAMPAIGN.md` is the second-highest-leverage gate in the protocol (after the per-execution-session implement gate). A bad plan multiplies cost across N sessions.
+Stakeholder approval of `CAMPAIGN.md` is the second-highest-leverage gate in the campaign (after the per-execution-session implement gate). A bad plan multiplies cost across N sessions.
 
 ---
 
@@ -109,16 +109,16 @@ Stakeholder approval of `CAMPAIGN.md` is the second-highest-leverage gate in the
 2. **Phase 1.5 (Claim the Session).** Stub names the unit in progress. A ghost session here is detectable because the stub names exactly which unit was being worked on.
 3. **Research.** [What to extract for this unit, with no exceptions.]
 4. **[Mode-specific work]** (see below).
-5. **Present.** Surface the unit deliverable to the stakeholder. Highlight: [protocol-specific items — e.g., blocked rows, calibration adjustments, patterns visible at unit scope].
-6. **Phase 6 close-out.** Standard. Handoff records: [protocol-specific items].
+5. **Present.** Surface the unit deliverable to the stakeholder. Highlight: [campaign-specific items — e.g., blocked rows, calibration adjustments, patterns visible at unit scope].
+6. **Phase 6 close-out.** Standard. Handoff records: [campaign-specific items].
 
 ### Mode-specific steps
 
-[If the protocol supports multiple modes, describe each separately under sub-headings.]
+[If the campaign supports multiple modes, describe each separately under sub-headings.]
 
 ### Critical disciplines
 
-- **Evidence is non-negotiable.** [Define what "evidence" means in this protocol's deliverables — a quoted passage, a verified measurement, a reproducible test result.]
+- **Evidence is non-negotiable.** [Define what "evidence" means in this campaign's deliverables — a quoted passage, a verified measurement, a reproducible test result.]
 - **Append-only within a session.** Rows are not deleted. A row whose status changes during the session gets a `superseded` mark and a new row.
 - [Other domain-specific disciplines.]
 
@@ -130,7 +130,7 @@ A review/audit session whose deliverable is the campaign-wide report.
 
 ### Steps
 
-1. **Pre-Flight.** Read `CAMPAIGN.md` and every unit deliverable. Verify completeness — no unit has unresolved [protocol-specific status] rows. If any do, this session halts and flags them as a follow-on execution session.
+1. **Pre-Flight.** Read `CAMPAIGN.md` and every unit deliverable. Verify completeness — no unit has unresolved [campaign-specific status] rows. If any do, this session halts and flags them as a follow-on execution session.
 2. **Research.** Aggregate across units. Identify cross-unit patterns: [examples].
 3. **Create the report.** [Use the structure below.] The consolidation session does **not** re-do per-unit work — its job is merging, pattern-finding, and remediation/integration planning.
 4. **Present.** Stakeholder approves the report. Open items become input to follow-on sessions.
@@ -155,7 +155,7 @@ A review/audit session whose deliverable is the campaign-wide report.
 
 ## Sub-Agent Dispatch Pattern
 
-[If applicable. Many protocols benefit from sub-agent fan-out at per-unit scale. Describe the pattern, when to fan out, and calibration rules. See `RESEARCH_EXHAUSTIVE_VERIFICATION_PROTOCOL.md` for a worked example.]
+[If applicable. Many campaigns benefit from sub-agent fan-out at per-unit scale. Describe the pattern, when to fan out, and calibration rules. See `RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md` for a worked example.]
 
 ---
 
@@ -182,7 +182,7 @@ The vocabulary is **locked at planning time**. Schema drift across units forces 
 
 ### Baseline expectations
 
-[If the protocol has empirical baselines from prior runs, document them with bands and recommended actions.]
+[If the campaign has empirical baselines from prior runs, document them with bands and recommended actions.]
 
 | Observed [metric] | Interpretation | Action |
 |--|--|--|
@@ -222,8 +222,8 @@ A crashed mid-unit session is recovered by the next session reading the unit fil
 2. **Skipping the planning session.** Jumping to per-unit execution without a `CAMPAIGN.md`. Schema drift across units forces consolidation rework that exceeds the planning-session cost.
 3. **Evidence-free rows.** Marking a row complete without the required evidence. The unit deliverable becomes an assertion list, not a [verified / drafted / audited] record.
 4. **Cross-unit consolidation creep.** Doing per-unit work in the consolidation session because "I notice a problem in this unit while merging." Stop, log it as a follow-on, return to merging.
-5. **Sub-agent calibration drift.** Dispatching sub-agents without explicit vocabulary calibration. Different sub-agents will produce different rates of [protocol-specific verdicts] for identical evidence.
-6. [Domain-specific anti-pattern from real sessions in this protocol.]
+5. **Sub-agent calibration drift.** Dispatching sub-agents without explicit vocabulary calibration. Different sub-agents will produce different rates of [campaign-specific verdicts] for identical evidence.
+6. [Domain-specific anti-pattern from real sessions in this campaign.]
 
 ---
 

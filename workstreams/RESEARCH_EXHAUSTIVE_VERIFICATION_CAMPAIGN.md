@@ -1,15 +1,15 @@
-# Research Exhaustive Verification Protocol
+# Research Exhaustive Verification Campaign
 
-A multi-session campaign template for guaranteeing that *every* numeric, dated, and attributed claim in a research-documentation deliverable is supported by a quoted passage from a verified primary source. This protocol extends [`RESEARCH_DOCUMENTATION_WORKSTREAM.md`](RESEARCH_DOCUMENTATION_WORKSTREAM.md) — its Phase 3 Claim-Source Map and Phase 6 Claim-Source Audit are the per-section primitives this protocol scales into a paper-wide or repository-wide discipline.
+A multi-session campaign template for guaranteeing that *every* numeric, dated, and attributed claim in a research-documentation deliverable is supported by a quoted passage from a verified primary source. This campaign extends [`RESEARCH_DOCUMENTATION_WORKSTREAM.md`](RESEARCH_DOCUMENTATION_WORKSTREAM.md) — its Phase 3 Claim-Source Map and Phase 6 Claim-Source Audit are the per-section primitives this campaign scales into a paper-wide or repository-wide discipline.
 
-The protocol is explicitly **bidirectional**:
+The campaign is explicitly **bidirectional**:
 
 - **Creation mode** — used while writing or extending papers. The claim-source map *gates* drafting: a section is not written until every claim it will contain has a verified quoted passage on file.
 - **Audit mode** — used to verify an existing repository whose prior work was done without this discipline. Per-claim verdict grids replace the workstream's Audit-Mode sampling.
 
 Both modes share the same campaign shape (planning → per-unit work → consolidation) because both run into the same wall: a non-trivial paper or repository contains hundreds of claims, and verifying them in a single session degrades reasoning quality long before it exhausts raw context.
 
-This is a **protocol**, not a workstream. It does not replace the Research Documentation workstream; it prescribes a campaign structure for a specific deliverable: a complete, primary-source-anchored claim record.
+This is a **campaign**, not a workstream. It does not replace the Research Documentation workstream; it prescribes a campaign structure for a specific deliverable: a complete, primary-source-anchored claim record.
 
 ---
 
@@ -17,9 +17,9 @@ This is a **protocol**, not a workstream. It does not replace the Research Docum
 
 | Document | Role |
 |----------|------|
-| [`ITERATIVE_METHODOLOGY.md`](../ITERATIVE_METHODOLOGY.md) | Master framework — 9 principles, 6 phases, 12 quality gates. This protocol obeys all of them. |
+| [`ITERATIVE_METHODOLOGY.md`](../ITERATIVE_METHODOLOGY.md) | Master framework — 9 principles, 6 phases, 12 quality gates. This campaign obeys all of them. |
 | [`RESEARCH_DOCUMENTATION_WORKSTREAM.md`](RESEARCH_DOCUMENTATION_WORKSTREAM.md) | Parent workstream. Defines the Claim-Source Map (Phase 3), Claim-Source Audit (Phase 6), and standard sampling-based Audit Mode. |
-| [`AUDIT_WORKSTREAM.md`](AUDIT_WORKSTREAM.md) | Sibling workstream. Audit-mode sessions in this protocol follow its review-session pattern (Phases 1-4 + 6, skip 5). |
+| [`AUDIT_WORKSTREAM.md`](AUDIT_WORKSTREAM.md) | Sibling workstream. Audit-mode sessions in this campaign follow its review-session pattern (Phases 1-4 + 6, skip 5). |
 | [`../starter-kit/SESSION_RUNNER.md`](../starter-kit/SESSION_RUNNER.md) | Operational checklist — every session in the campaign runs against it. |
 
 ---
@@ -63,7 +63,7 @@ A single session that attempts exhaustive verification across a non-trivial pape
 2. **"1 and done" violation.** [Principle 9](../ITERATIVE_METHODOLOGY.md#9-session-scope-bounding) bounds every session to one deliverable. A 500-claim verification is not one deliverable; it is hundreds of micro-deliverables fused into a single artifact, and the second half receives less rigor than the first.
 3. **No resumability.** A session that crashes mid-run (context loss, timeout, ghost session) leaves the next session unable to determine which claims were verified. Without checkpoint files, the entire run must restart.
 
-This protocol decomposes the work into a planning session, N execution sessions, and a consolidation session — each obeying the methodology's session-scope rules and producing a checkpoint deliverable.
+This campaign decomposes the work into a planning session, N execution sessions, and a consolidation session — each obeying the methodology's session-scope rules and producing a checkpoint deliverable.
 
 ---
 
@@ -131,7 +131,7 @@ A planning session per [Iterative Methodology §Session Types](../ITERATIVE_METH
 
 ### Gate (Phase 4 in this session)
 
-Stakeholder approval of `CAMPAIGN.md` is the **second-highest-leverage gate in the protocol** (after the per-execution-session implement gate). A bad plan multiplies cost across N sessions.
+Stakeholder approval of `CAMPAIGN.md` is the **second-highest-leverage gate in the campaign** (after the per-execution-session implement gate). A bad plan multiplies cost across N sessions.
 
 ---
 
@@ -175,7 +175,7 @@ Each execution session is bounded to one scoped unit. The session type differs b
 ### Critical disciplines (both modes)
 
 - **Evidence is non-negotiable.** A row without a quoted passage (or, for audit `re-attribute`/`source-missing` rows, an explicit `(source contains X, not Y)` annotation) is not a verified or audited row. It is an assertion. The consolidation session will reject it.
-- **Verdict and status independence.** A claim being *true* does not make it `verified`; a verified `re-attribute` recommendation does not make it `verified`. The vocabularies grade source-claim correspondence, not factual reality. Most papers have a few claims that are true but unsupported by their cited source — those are exactly what this protocol exists to catch.
+- **Verdict and status independence.** A claim being *true* does not make it `verified`; a verified `re-attribute` recommendation does not make it `verified`. The vocabularies grade source-claim correspondence, not factual reality. Most papers have a few claims that are true but unsupported by their cited source — those are exactly what this campaign exists to catch.
 - **Append-only within a session.** Rows are not deleted. A row whose verdict or status changes during the session gets a `superseded` mark and a new row. The history is itself an audit signal.
 
 ---
