@@ -256,6 +256,16 @@ By the sixth session, the workstream would have accumulated:
 
 #### Research
 ```
+Read CONTEXT.md (project domain glossary):
+  - Project's accessibility baseline: WCAG 2.1 AA (load-bearing constraint).
+  - "ToggleSwitch" is a project-coined component (not a standard
+    <input type="checkbox">) — its API is documented under "Domain
+    Vocabulary" with a pointer to ToggleSwitch.vue.
+  - Pitfall noted: previous a11y fixes have hardcoded English labels;
+    project policy requires i18n keys (constraint discovered the hard way).
+  → Without CONTEXT.md, these three facts would have surfaced
+    mid-implementation via failing CI or operator correction.
+
 Study the 7 bugs:
   - Bug #101: Login form — email input has no label
   - Bug #102: Login form — password input has no label

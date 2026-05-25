@@ -173,17 +173,18 @@ Every session follows these phases in order. Phases are sequential and gated —
 **This is the most critical phase.** The quality of research directly determines the quality of the output. Incomplete research produces rework; complete research produces first-pass approval.
 
 **Steps:**
-1. **Study the domain.** Read requirements, use case documents, specifications. Extract: who is the user? What is their workflow? What do they need most? What do they NOT need?
-2. **Inventory available tools/components.** Build a reference table of everything you could use. Include capabilities, constraints, sizes, dependencies.
-3. **Read implementations, not just descriptions.** A component's name or description tells you what it IS. Its implementation tells you how it BEHAVES. Read the actual code/config/spec for every component you might use.
-4. **Review ALL prior work in this series.** Read every previous session's output. Extract reusable patterns and avoidable mistakes. Note which patterns apply to your current work and which don't.
-5. **Challenge the scope.** (See Scope Validation section.) Is this the right problem to solve? Does this work item encompass things that should be separate?
-6. **Validate domain fit.** (See Domain-Ecosystem Validation section.) Are you using the right tools for this domain, or substituting generic equivalents for domain-specific tools?
-7. **Verify capability claims.** For any critical capability ("this component supports X"), verify by reading the implementation. Do not trust names, descriptions, or third-party summaries.
+1. **Read project `CONTEXT.md` if it exists.** A project-level domain glossary at the repo root captures load-bearing vocabulary, constraints, and architecture-decision pointers that a fresh reader needs before exploring code. If present, read it first — it is the cheapest grounding pass available. If absent, skip this step. If during this session you discover a project-specific term that would have helped to know up front, propose adding it to `CONTEXT.md` during close-out (Phase 6 hygiene). See [`starter-kit/CONTEXT_TEMPLATE.md`](starter-kit/CONTEXT_TEMPLATE.md) for the template; maintenance can use Pocock's `/grill-with-docs` (cited in [`starter-kit/RECOMMENDED_SKILLS.md`](starter-kit/RECOMMENDED_SKILLS.md)).
+2. **Study the domain.** Read requirements, use case documents, specifications. Extract: who is the user? What is their workflow? What do they need most? What do they NOT need?
+3. **Inventory available tools/components.** Build a reference table of everything you could use. Include capabilities, constraints, sizes, dependencies.
+4. **Read implementations, not just descriptions.** A component's name or description tells you what it IS. Its implementation tells you how it BEHAVES. Read the actual code/config/spec for every component you might use.
+5. **Review ALL prior work in this series.** Read every previous session's output. Extract reusable patterns and avoidable mistakes. Note which patterns apply to your current work and which don't.
+6. **Challenge the scope.** (See Scope Validation section.) Is this the right problem to solve? Does this work item encompass things that should be separate?
+7. **Validate domain fit.** (See Domain-Ecosystem Validation section.) Are you using the right tools for this domain, or substituting generic equivalents for domain-specific tools?
+8. **Verify capability claims.** For any critical capability ("this component supports X"), verify by reading the implementation. Do not trust names, descriptions, or third-party summaries.
 
-**Gate:** Research Complete — all components inventoried AND their implementations read, all prior work reviewed, scope validated, domain fit confirmed.
+**Gate:** Research Complete — `CONTEXT.md` read (if present), all components inventoried AND their implementations read, all prior work reviewed, scope validated, domain fit confirmed.
 
-**The Complete-Then-Create Rule:** Do NOT begin Phase 3 until all 7 steps are done. The temptation to start creating after steps 1-3 is strong. Resist it. Steps 4-7 routinely surface insights that change the entire approach.
+**The Complete-Then-Create Rule:** Do NOT begin Phase 3 until all 8 steps are done. The temptation to start creating after steps 1–4 is strong. Resist it. Steps 5–8 routinely surface insights that change the entire approach.
 
 ### Phase 3: Create
 
