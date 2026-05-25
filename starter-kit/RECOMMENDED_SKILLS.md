@@ -50,7 +50,6 @@ Repo HEAD at verification: `b8be62ffacb0` (2026-05-20).
 | `/code-review` | [`workstreams/AUDIT_WORKSTREAM.md`](../workstreams/AUDIT_WORKSTREAM.md) — correctness review |
 | `/review` | [`workstreams/AUDIT_WORKSTREAM.md`](../workstreams/AUDIT_WORKSTREAM.md) — PR review |
 | `/security-review` | [`workstreams/AUDIT_WORKSTREAM.md`](../workstreams/AUDIT_WORKSTREAM.md) — security review |
-| `/fewer-permission-prompts` | [`BOOTSTRAP.md`](BOOTSTRAP.md) — permission setup |
 
 ---
 

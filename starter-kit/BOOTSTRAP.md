@@ -174,6 +174,8 @@ for every session. It tells you what to read, when to stop, and how to close out
 3. **Auto-close** — When done: evaluate previous handoff, self-assess, document learnings, write handoff notes, commit, report, STOP.
 ```
 
+**Claude Code helper.** If you don't yet have a `CLAUDE.md`, running `/init` (Claude Code built-in) scaffolds one from the project's existing structure; then paste the SESSION PROTOCOL block above into the result. If you already have a `CLAUDE.md`, skip `/init` and paste the block directly. See [`RECOMMENDED_SKILLS.md`](RECOMMENDED_SKILLS.md).
+
 ---
 
 ## Step 5: Customizations Go in CLAUDE.md, Not in Synced Files
