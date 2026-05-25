@@ -92,6 +92,19 @@ Every project has a "build equivalent" — the command that confirms the deliver
 
 For documentation projects, rendering also verifies cross-references, citations, and figure generation — failures in any of these indicate broken content that must be fixed before committing.
 
+### Verify Render-Dependency Completeness
+
+**Build success is not asset-use success.** A render can succeed while silently using different assets than configured: a font family resolves to its Regular face but missing Italic / Bold faces fall back to a default; a CSL file resolves but is the wrong style version; a LaTeX template resolves but a missing class option is silently ignored; a figure-generation script imports a library version different from the one specified. The output looks valid and the build exits cleanly. The defect is invisible unless something checks for it.
+
+If your build produces rendered output that depends on external assets (fonts, citation styles, templates, figure libraries), the build-equivalent check above is necessary but not sufficient. Two additional checks apply:
+
+| When | Check | Rule | Why |
+|---|---|---|---|
+| **Post-render** (every build) | Confirm the rendered output uses the assets it was configured to use (e.g., `pdffonts` shows all expected font faces embedded, not just the family name) | **Hard rule** — part of the build-equivalent step. Failure blocks the commit. | Catches silent fallback that survives correct-looking static config. |
+| **Pre-render / setup** (when render-dep config changes) | Confirm each configured asset actually provides the faces / version / features the document uses (e.g., `fc-list "<family>"` returns each expected face; `kpsewhich <Italic-file>` resolves; the CSL version matches the cited style) | **Soft prompt** — surfaces at Phase 0 when render-dep config changes; project decides response based on its toolchain. | Catches mis-configuration without requiring a render. |
+
+A deliverable that compiles, renders, and embeds the right assets is correct. A deliverable that compiles and renders but embeds fallback assets is broken in a way the build will not tell you about — find it before the reader does. See domain workstreams (e.g., `docs/methodology/workstreams/RESEARCH_DOCUMENTATION_WORKSTREAM.md` for research papers) for toolchain-specific verification commands.
+
 ---
 
 ## Session Recovery Protocol

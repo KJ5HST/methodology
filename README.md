@@ -231,6 +231,17 @@ Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during develop
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
 
+### What's New in v2.5
+
+- **Render-dependency completeness discipline** — closes the gap where rendering succeeds while the output silently uses fallback assets instead of the ones configured. Universal principle lands in `SAFEGUARDS.md` (new "Verify Render-Dependency Completeness" sub-section under "Verify the Build Equivalent"); concrete toolchain commands land in `RESEARCH_DOCUMENTATION_WORKSTREAM.md`. Resolves upstream issue [#12](https://github.com/KJ5HST/methodology/issues/12).
+- **Two-tier check, by trigger:**
+  - **Post-render** (e.g., `pdffonts` confirming all configured font faces actually embedded) — hard rule, part of the build-equivalent step, blocks commit on failure.
+  - **Pre-render / setup** (e.g., `fc-list "<family>"` returning the expected face count; `kpsewhich` resolving per-face files) — soft prompt at Phase 0 when render-dep configuration changes.
+- **Toolchain matrix gains a "Render-Dep Check" column** — per-toolchain canonical commands for Quarto, LaTeX, Sphinx, Pandoc, AsciiDoc, and (n/a) vanilla Markdown, listing static and post-render commands side-by-side.
+- **New research-doc anti-pattern #20: Silent render-dependency fallback** — derived from the joy/ project's SBL BibLit case (Regular-only font, italic markup rendered as upright Latin glyphs for 47 sessions before being noticed visually). Mitigation cross-references the new toolchain column and SAFEGUARDS sub-section.
+- **`RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md` updated** — Render Verification section in the creation-mode REPORT.md template gains a render-dep completeness line so the campaign inherits the discipline.
+- **Backward compatible** — no principle, phase, gate, or workstream changes; no FM renumbering; existing adopters absorb the new SAFEGUARDS sub-section via `bin/sync`. Domain-specific commands live in the research-doc workstream and only affect projects that use it.
+
 ### What's New in v2.4
 
 - **Multi-session campaigns promoted to first-class layer** — campaign templates are now an explicit layer in the document hierarchy alongside workstreams. New section in `ITERATIVE_METHODOLOGY.md` (`§Multi-Session Campaigns`); new orientation step in `SESSION_RUNNER.md` (Phase 1 multi-session campaign check); new `workstreams/TEMPLATE_CAMPAIGN.md` skeleton.
