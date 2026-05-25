@@ -301,6 +301,36 @@ The deliverable is a plan or handoff document that sets up a future implementati
 
 ---
 
+## Multi-Session Campaigns
+
+Some deliverables cannot be produced in one session even when the work is decomposed correctly: paper-wide claim verification across hundreds of citations; security hardening across dozens of endpoints; familiarization with an inherited 40-module codebase. The 6 phases bound a single session and **Principle 9: Session Scope Bounding** bounds what one session may produce. Cross-session coordination toward a single deliverable operates at a different scale.
+
+A **campaign** is a multi-session work pattern with a reusable template. The template prescribes a session sequence, a deliverable contract at each session boundary, and exit criteria for the campaign as a whole. Each session within a campaign still runs the 6 phases; the campaign coordinates *across* sessions toward a deliverable that no single session could produce.
+
+A campaign is **not** a workstream. Workstreams adapt the 6 phases to a domain (what does Phase 2 research look like for UI design vs. for research papers vs. for system audits). Campaigns sequence sessions toward one specific deliverable type within a workstream. One workstream may host many campaigns.
+
+A campaign template is **not** a planning-session output. A planning session produces a bespoke plan for one campaign instance; a campaign template is reusable across every campaign of its type. The planning session for an individual campaign uses the template as its starting point, not its alternative.
+
+### When to write or invoke a campaign
+
+Use a campaign when **all three** apply:
+
+1. The deliverable cannot be produced in one session even under correct decomposition.
+2. The campaign shape is, or will be, repeatable.
+3. Cross-session coordination — shared schemas, checkpoint deliverables, calibration rules — is load-bearing for quality.
+
+Do **not** use a campaign when: the work fits in one session; the deliverable is genuinely one-off (no expectation of repetition); or the right artifact is a domain adaptation, in which case the answer is a new workstream.
+
+If a deliverable has the multi-session shape but no campaign template exists yet, the first run produces both a planning-session plan AND a draft template; the second run tightens the template from experience. This is the same compounding mechanism the methodology applies at the session and workstream layers, applied at the campaign layer.
+
+### Where campaign templates live
+
+Campaign templates live in `workstreams/` alongside their parent workstream, under the naming convention `*_CAMPAIGN.md`. A blank starting point is `workstreams/TEMPLATE_CAMPAIGN.md`. A campaign template always extends a parent workstream — its `Relationship to Other Documents` table names that parent — and references the master framework for principles, phases, and gates.
+
+The first realized example is [`workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md`](workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md): a campaign template that decomposes exhaustive primary-source verification into a planning → execution → consolidation sequence, supporting both creation (writing) and audit (reviewing) modes.
+
+---
+
 ## The Session Runner
 
 The 6 phases and 9 principles define WHAT to do and WHY. In practice, they need an **operational wrapper** — a cockpit checklist — that ensures they're actually followed. This is the Session Runner (`SESSION_RUNNER.md` in the project root).

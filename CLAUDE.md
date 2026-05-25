@@ -18,7 +18,8 @@ Three layers, each serving a distinct purpose:
 |-------|------|------|
 | Cockpit checklist | `starter-kit/SESSION_RUNNER.md` | Step-by-step operating procedure for every session |
 | Flight manual | `ITERATIVE_METHODOLOGY.md` | Theory: 9 principles, 6 phases, 12 quality gates |
-| Mission procedures | `workstreams/*.md` | Domain-specific adaptations (design, architecture, development, audit, research documentation) |
+| Mission procedures | `workstreams/*_WORKSTREAM.md` | Domain-specific adaptations (design, architecture, development, audit, research documentation) |
+| Campaign templates | `workstreams/*_CAMPAIGN.md` | Multi-session campaigns extending a workstream |
 
 `SESSION_RUNNER.md` is the entry point — it tells agents what to read, when to stop, and how to close out. Everything cascades from that single file.
 
@@ -63,6 +64,14 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 | `workstreams/RESEARCH_DOCUMENTATION_WORKSTREAM.md` | Research papers, technical reports, dissertations, regulatory analyses |
 | `workstreams/TEMPLATE_WORKSTREAM.md` | Blank template for creating new workstreams |
 
+### Campaigns (multi-session work patterns within a workstream)
+
+| File | Purpose |
+|------|---------|
+| `workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md` | Multi-session campaign template for exhaustive primary-source verification. Extends the Research Documentation workstream when per-session Phase 6 audit cannot complete the work. Supports both creation mode (writing) and audit mode (reviewing). |
+| `workstreams/INHERITED_CODEBASE_FAMILIARIZATION_CAMPAIGN.md` | Multi-session campaign template for taking over an unfamiliar codebase. Extends the Audit workstream; feeds the Development workstream via a prioritized backlog. Supports interview mode (departing owner available) and archaeology mode (owner gone). |
+| `workstreams/TEMPLATE_CAMPAIGN.md` | Blank template for creating new campaigns (parallel to `TEMPLATE_WORKSTREAM.md`). |
+
 ## Key Concepts to Preserve When Editing
 
 - **SESSION_RUNNER.md documents 24 failure modes** with specific countermeasures. These are empirically derived from 60+ sessions — do not remove or weaken them without strong justification. FMs 1–23 must not be renumbered; new FMs append at the end (e.g., FM #24 was appended in v2.3, not inserted).
@@ -75,7 +84,7 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 
 ## Versioning
 
-Changes are tracked via git commits and the README's "What's New" section. Current version: v2.3. Key additions by version:
+Changes are tracked via git commits and the README's "What's New" section. Current version: v2.4. Key additions by version:
 
 - **v1.0:** Initial 9 principles, 6 phases, 4 workstreams
 - **v1.1:** Protocol erosion detection, ghost session prevention, minimum handoff requirements, 4 new failure modes (#14-17)
@@ -84,3 +93,4 @@ Changes are tracked via git commits and the README's "What's New" section. Curre
 - **v2.1:** CHANGELOG.md and ROADMAP.md templates, three-file task tracking split, migration guide for monolithic backlogs, dashboard compliance updates, 4 new failure modes (#20-23), Artifact Integrity safeguards, build equivalent step in BOOTSTRAP, documentation project adaptations
 - **v2.2:** `bin/sync` + `bin/status` distribution tooling (dual-mode commit/ignore, dual-source local/github), CLAUDE_TEMPLATE.md customization seam, BOOTSTRAP.md rewrite, drift-safety guard on sync
 - **v2.3:** Combined release covering two contributions. (1) **Research Documentation workstream** — adapts the methodology for research papers, technical reports, dissertations, and regulatory analyses; source-corpus management, claim-source audit pattern, 19 documented anti-patterns, toolchain adaptation table (Quarto/LaTeX/Sphinx/Pandoc/AsciiDoc/Markdown), Audit Mode for fresh-eyes review of existing repositories. (2) **SESSION_RUNNER content release** from rad-con audit (issue #6, #7) — new Phase 3E Runtime Smoke Test (renumber 3E→3F, 3F→3G), new FM #24 (build-passes-ship-it, appended — FMs 1–23 unchanged), Phase 1B "structural control" framing, Planning Sessions grep anecdote, 5 new Learnings rows.
+- **v2.4:** Multi-session campaigns promoted to first-class layer — new vocabulary and document home for campaign templates that extend a workstream. New section in `ITERATIVE_METHODOLOGY.md` (§Multi-Session Campaigns); new orientation step in `SESSION_RUNNER.md` (Phase 1 multi-session campaign check); new `workstreams/TEMPLATE_CAMPAIGN.md`. No principle, phase, gate, or workstream changes. Realized examples: `workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md` (extends Research Documentation) and `workstreams/INHERITED_CODEBASE_FAMILIARIZATION_CAMPAIGN.md` (extends Audit).
