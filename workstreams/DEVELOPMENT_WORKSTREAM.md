@@ -16,6 +16,51 @@ Use this workstream when:
 
 ---
 
+## Issue Lifecycle
+
+Learning #30 (in `ITERATIVE_METHODOLOGY.md` §Knowledge Accumulation) covers how to *create* issues. This section covers how to *track* an issue through its life so a future session can tell at a glance whether it is pickup-able.
+
+### Five Canonical States
+
+Each open issue carries exactly **one** state at a time, applied as a GitHub label:
+
+| State | Meaning | Who Acts Next |
+|-------|---------|---------------|
+| `needs-triage` | Just filed. Not yet read by a human or by an agent in a triage session. | Triager. |
+| `needs-info` | Triaged, but blocked on a question (clarification, repro steps, design decision). | Reporter or operator. |
+| `ready-for-agent` | Self-contained for an agent session to execute without operator hand-holding (acceptance criteria explicit, dependencies known). | Implementer (agent). |
+| `ready-for-human` | Requires operator judgment, hardware, an external account, or a decision the agent cannot make alone. | Operator. |
+| `wontfix` | Closed without action — duplicate, won't-do, out-of-scope, or obsolete. (Terminal.) | (closed) |
+
+Apply alongside two orthogonal category labels: `bug` (something that worked is now broken) or `enhancement` (new or improved behavior).
+
+### Transition Rules
+
+1. **Default state on file is `needs-triage`.** No issue should sit unlabeled for more than one session.
+2. **An issue cannot be `ready-for-agent` without explicit acceptance criteria.** "Make it better" is not actionable; "Emit fields A, B, C in this order with N-byte alignment" is.
+3. **`needs-info` is not a parking lot.** An issue stuck in `needs-info` for >30 days should be re-triaged (close as `wontfix`, escalate to `ready-for-human`, or ping the reporter).
+4. **Make `ready-for-human` → `ready-for-agent` transitions explicit.** Example: "operator captures vec4 fixture (live-test), then flips to `ready-for-agent` so the next session writes the playback test." The handoff comment should name what unblocked the transition.
+
+### Agent-Authored Triage Comments
+
+When an agent writes non-trivial triage decisions on an issue (state changes, scope cuts, acceptance-criteria proposals), append a one-line disclaimer:
+
+> _Triage decision authored by an AI agent during session N — review before relying on this for human-facing work._
+
+This is **recommended**, not mandated — apply it when the triage is non-trivial. It lets a future reader distinguish operator decisions from agent inferences.
+
+### When to Bulk-Triage
+
+A repository with >20 `needs-triage` issues warrants a dedicated triage session run with Learning #30 batch discipline (table-first, decisions-first, parallel application). A repository with <5 is fine to triage opportunistically.
+
+The methodology dashboard currently counts issues but does not score triage health; that is future work, not a current gate. Treat the issue count as a signal of pressure, not a measurement of quality.
+
+### Performing triage with a skill
+
+For the actual workflow of moving an issue through these states — labelling, comment composition, scope decisions — the methodology recommends Pocock's `/triage` skill (cited in [`starter-kit/RECOMMENDED_SKILLS.md`](../starter-kit/RECOMMENDED_SKILLS.md)). The methodology owns *what the states mean and how they transition*; the skill owns *how to apply the labels and write the triage comment*. When the skill is unavailable, the state definitions and transition rules above are the operative discipline.
+
+---
+
 ## Phase 2: Research (Development-Specific)
 
 ### Step 1: Study the Requirements
