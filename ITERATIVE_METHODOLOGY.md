@@ -370,6 +370,8 @@ The canonical index is [`starter-kit/RECOMMENDED_SKILLS.md`](starter-kit/RECOMME
 
 Inline pointers in this document and in the workstream files reference skills by their slash-command name (`/verify`, `/grill-me`, `/code-review`) without re-describing them. To learn what a skill does, run it or read its `SKILL.md` at the source URL listed in the index. **When a recommended skill is unavailable in your environment, the methodology's own rules** (the phase body, the failure mode, the anti-pattern) **remain the operative guidance.** The citation is a recommendation, not a hard dependency.
 
+**A skill is not a phase.** A recommended skill that pulls a session across a hard gate — e.g., `/to-issues` followed immediately by `/tdd`, or any skill that produces an artifact and then continues to the next artifact in the same session — is failure mode #2 (keep-going) wearing a tool costume. **Close out first.** The methodology recommends skills as sharper instruments for specific phases; it does not authorize them to compress two sessions into one. This applies whether the skill appears in [`starter-kit/RECOMMENDED_SKILLS.md`](starter-kit/RECOMMENDED_SKILLS.md) or the adopter installed it independently — the methodology's gates bind every session, regardless of which tools are loaded.
+
 ---
 
 ## The Session Runner
