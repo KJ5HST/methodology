@@ -19,6 +19,20 @@ Use this workstream when:
 
 ---
 
+## Recommended Skills
+
+The methodology owns *the audit framework* (criteria definition, scope inventory, finding structure, the 7-Dimension audit grid, recurring-issue tracking, multi-session campaign shape). Several review workflows are covered better by Claude Code built-in skills — for those, the methodology cites the skill rather than re-implementing it. See [`../starter-kit/RECOMMENDED_SKILLS.md`](../starter-kit/RECOMMENDED_SKILLS.md) for the canonical index.
+
+| Audit purpose | Recommended skill |
+|---|---|
+| Correctness review of a code change | `/code-review` |
+| Reviewing a pull request | `/review` |
+| Security review of pending changes on the current branch | `/security-review` |
+
+When a recommended skill is unavailable, the audit framework in this document is the operative discipline — the skill is a sharper instrument, not a hard dependency.
+
+---
+
 ## Phase 2: Research (Audit-Specific)
 
 ### Step 1: Define the Audit Criteria
