@@ -22,7 +22,7 @@ The release that lands with this audit doc adopts a **drop / keep / refactor** f
 
 | F | What the branch shipped | Why dropped | What ships instead |
 |---|---|---|---|
-| F1 | `starter-kit/hooks/block-dangerous-git.sh` + BOOTSTRAP install step (`4d1f35e`) | Direct re-implementation of Pocock's `/git-guardrails-claude-code` | `SAFEGUARDS.md` cites the Pocock skill via `RECOMMENDED_SKILLS.md`; no script ships |
+| F1 | `starter-kit/hooks/block-dangerous-git.sh` + BOOTSTRAP install step (`4d1f35e`) | Direct re-implementation of Pocock's `/git-guardrails-claude-code` | `RECOMMENDED_SKILLS.md` maps the Pocock skill to SAFEGUARDS' Blast Radius Limits as the recommended mechanical countermeasure; the forward pointer ships in `BOOTSTRAP.md` Step 10. `SAFEGUARDS.md` itself is unmodified; no script ships |
 | F5 (body) | Full 6-phase debug-loop section + "Build the Loop Discipline" + tag convention in `DEVELOPMENT_WORKSTREAM.md` (`3398779`) | Direct re-implementation of `/diagnose` | F5 *naming only* — debugging recognized as a session type; body cites `/diagnose` |
 | F10 design | A 574-line design doc for shipping methodology-authored skills (`4785bb5`) | Premised on methodology shipping its own SKILLs | Superseded by `RECOMMENDED_SKILLS.md` + the citation convention |
 | F10.A | `runtime-smoke-test` SKILL.md (`2dc6f73`) | Claude Code built-in `/verify` covers this | Phase 3E body cites `/verify` and `/run` |
