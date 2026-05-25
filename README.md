@@ -231,6 +231,32 @@ Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during develop
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
 
+### What's New in v2.6
+
+> **Methodology recommends; methodology does not reimplement.**
+
+- **Skill-recommendation convention** — new content layer alongside phases, principles, workstreams, and campaigns. If a discipline can be expressed as a Claude Code skill (built-in like `/verify`, `/code-review`; community like Pocock's `/grill-me`, `/diagnose`), methodology cites the skill at the relevant phase or workstream instead of re-documenting the discipline in its own voice. Methodology owns *what to do and when*; skills own *how to do it*.
+- **New `starter-kit/RECOMMENDED_SKILLS.md`** — canonical index of recommended skills with two tables (Pocock community skills + Claude Code built-ins). External entries include per-skill known-good commit SHAs for adopters who want to pin a verified version; Pocock entries carry a "fork for production reliance" note.
+- **New `ITERATIVE_METHODOLOGY.md` §Recommended Skills** — short principle paragraph + pointer to the index. Inline citations in workstreams and `SESSION_RUNNER.md` reference skills by slash-command name without re-describing them.
+- **Conceptual content distilled from a 16-skill audit** (`docs/audits/2026-05-02-mattpocock-skills-evaluation.md`):
+  - **FM #25 — Horizontal slicing** appended to `SESSION_RUNNER.md` (FMs 1–24 unchanged).
+  - **Phase 3F / Phase 6 step 8** gain an explicit "remove debug instrumentation before commit" gate, citing `/diagnose` for the tagged-debug-log convention.
+  - **New `starter-kit/CONTEXT_TEMPLATE.md`** — project-level domain-glossary template; **Phase 2 Research gains a new step 1** ("read CONTEXT.md if present"), citing `/grill-with-docs` for maintenance.
+  - **New Issue Lifecycle section in `DEVELOPMENT_WORKSTREAM.md`** — 5-state machine (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) with transition rules, citing `/triage` for the workflow.
+  - **New `Debugging Sessions` session type in `ITERATIVE_METHODOLOGY.md`** — naming + recognition only; cites `/diagnose` for the workflow.
+  - **New Refactor Heuristics section in `ARCHITECTURE_WORKSTREAM.md`** — deepening + deletion-test heuristics from Ousterhout's *A Philosophy of Software Design*, citing `/improve-codebase-architecture` for the worked-session shape.
+  - **New optional Phase 2.5 (Pre-Create Grill) in `ITERATIVE_METHODOLOGY.md`** + matching `SESSION_RUNNER.md` task-mapping row; cites `/grill-me` for the grill workflow.
+  - **`starter-kit/BOOTSTRAP.md` Step 10** gains a tool-agnostic pre-commit hooks paragraph (cites `/setup-pre-commit` as one option) plus a mechanical-SAFEGUARDS-enforcement pointer to `/git-guardrails-claude-code`.
+- **Refactor of existing content under the principle:**
+  - `SESSION_RUNNER.md` §Phase 3E Runtime Smoke Test body shortened to a rule + citation of `/verify` and `/run`; intent preserved (the runtime-verify gate stays).
+  - `AUDIT_WORKSTREAM.md` Light citation pass — new "Recommended Skills" callout cites `/code-review`, `/review`, `/security-review`. The 7-Dimension Audit Framework and per-phase audit framing stay as methodology-owned content.
+- **Future-audit candidates flagged in release** (out of scope this release):
+  - `AUDIT_WORKSTREAM.md` Medium/Heavy pass — per-phase citation audit beyond Light.
+  - `RESEARCH_DOCUMENTATION_WORKSTREAM.md` — render-verification could cite `/verify`.
+  - `SESSION_RUNNER.md` FM mechanical-enforcement column — depends on hook-conversion design.
+  - `DEVELOPMENT_WORKSTREAM.md` citation audit beyond Issue Lifecycle.
+- **Backward compatible.** No principle, phase, or quality-gate change. FM #25 appended (FMs 1–24 unchanged). Phase 2 step renumbered 1→2..7→8 with a single Phase 2 cross-reference in `HOW_TO_USE.md` that cites the step by name (so the renumber is safe). Adopters who never use the recommended skills continue to operate the methodology as written; the citations are recommendations, not hard dependencies.
+
 ### What's New in v2.5
 
 - **Render-dependency completeness discipline** — closes the gap where rendering succeeds while the output silently uses fallback assets instead of the ones configured. Universal principle lands in `SAFEGUARDS.md` (new "Verify Render-Dependency Completeness" sub-section under "Verify the Build Equivalent"); concrete toolchain commands land in `RESEARCH_DOCUMENTATION_WORKSTREAM.md`. Resolves upstream issue [#12](https://github.com/KJ5HST/methodology/issues/12).
