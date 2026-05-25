@@ -331,6 +331,18 @@ The first realized example is [`workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_CAM
 
 ---
 
+## Recommended Skills
+
+> **Methodology recommends; methodology does not reimplement.**
+>
+> If a discipline can be expressed as a Claude Code skill — whether a built-in like `/verify` or `/code-review`, or a community skill from a repo such as [`github.com/mattpocock/skills`](https://github.com/mattpocock/skills) — methodology **cites the skill** at the relevant phase or workstream rather than re-documenting the discipline in its own voice. Methodology owns *what to do and when* (phases, gates, anti-patterns, failure modes, session-type definitions). Skills own *how to do it* (the actual workflow invoked by the slash command).
+
+The canonical index is [`starter-kit/RECOMMENDED_SKILLS.md`](starter-kit/RECOMMENDED_SKILLS.md). Each entry names the skill, its source (Claude Code built-in or external repo URL), the phase or workstream where methodology recommends it, and (for external skills) a known-good commit SHA so adopters can pin a version that has been verified to behave as documented.
+
+Inline pointers in this document and in the workstream files reference skills by their slash-command name (`/verify`, `/grill-me`, `/code-review`) without re-describing them. To learn what a skill does, run it or read its `SKILL.md` at the source URL listed in the index. **When a recommended skill is unavailable in your environment, the methodology's own rules** (the phase body, the failure mode, the anti-pattern) **remain the operative guidance.** The citation is a recommendation, not a hard dependency.
+
+---
+
 ## The Session Runner
 
 The 6 phases and 9 principles define WHAT to do and WHY. In practice, they need an **operational wrapper** — a cockpit checklist — that ensures they're actually followed. This is the Session Runner (`SESSION_RUNNER.md` in the project root).
