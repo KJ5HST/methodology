@@ -11,7 +11,7 @@ Every session has exactly ONE deliverable. When it's done, you close out. You do
 **Change nothing. Read only.**
 
 1. Read `SAFEGUARDS.md` — **in full, not skimmed. Every section.**
-2. Read `SESSION_NOTES.md` — focus on the ACTIVE TASK section at the top
+2. **Confirm `pwd` and which `SESSION_NOTES.md` you are about to read/write** (see the session-notes boundary rule below), then read it — focus on the ACTIVE TASK section at the top
 3. Check GitHub Issues (`gh issue list`) if the project has a repo — understand current priorities. Fall back to `BACKLOG.md` if no repo exists. (BACKLOG.md should contain only open work items — for history see `CHANGELOG.md`, for feature inventory see `ROADMAP.md`.)
 4. Run: `git status`, `git log --oneline -5`, `git diff --stat`
 5. Run: `python3 methodology_dashboard.py` — refresh the project health dashboard. Leave `dashboard.html` open in a browser; it auto-refreshes every 60 seconds.
@@ -31,6 +31,8 @@ DO NOT skip the report. DO NOT start working. DO NOT assume you know what to do.
 **Even if the user's first message contains a task** (e.g., "Implement the following plan"), Phase 0 is still mandatory. That phrase comes from Plan Mode's auto-generated preamble — it does NOT mean start coding. The orientation report exists for the user's benefit — it establishes shared understanding of the current state. The user needs to see the report and confirm before work begins. A task in the prompt does not mean Phase 0 is complete. Complete all 8 steps, then the user will re-state or confirm the task in Phase 1.
 
 **Steps 1-3 are READS, not skims.** Every step exists because a session failed without it.
+
+**⚠ Session-notes boundary — which `SESSION_NOTES.md` do you write?** A session writes notes to the `SESSION_NOTES.md` of the directory it runs in. **This project's `SESSION_NOTES.md` records work done in THIS project.** A portfolio-oversight / methodology session (run from the oversight directory above the project repos) records its work in the **portfolio-oversight** dir's own `SESSION_NOTES.md`, never in a project's — and vice versa: project engineering run from a project directory writes that project's notes, full stop. Before step 2, confirm `pwd` and which `SESSION_NOTES.md` you are reading/writing. This boundary exists because same-named methodology artifacts (`SESSION_NOTES.md`, `methodology_dashboard.py`) are copied per-project with no canonical owner; logging project work at the portfolio level (or vice versa) is misfiling, and the next session inherits a stale, cross-contaminated log.
 
 ---
 
