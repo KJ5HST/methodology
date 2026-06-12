@@ -46,7 +46,7 @@ If there are uncommitted changes from a previous session, **do not touch them**.
 | Rule | Why |
 |------|-----|
 | **Commit before any multi-file change** | Every disaster becomes a `git checkout` instead of a multi-hour recovery |
-| **Never touch more than 5 files without committing first** | Forces incremental, recoverable progress |
+| **Never touch more than 5 files without committing first** — the cap is *per-commit*, not per-session | Forces incremental, recoverable progress. A pre-declared vertical slice (`SESSION_RUNNER.md` §Vertical Slice Sessions) may touch more than 5 files across a session, but never more than 5 between checkpoint commits. |
 | **Never refactor across module boundaries without plan mode** | Cross-module refactoring is Architect Mode work, period |
 | **Never delete a file without verifying it's committed** | `git log --oneline -- <file>` before `rm`. No shortcuts. |
 | **Never rename/move files as part of a "quick fix"** | Renames cascade. They are never quick. |

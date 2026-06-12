@@ -2,7 +2,7 @@
 
 **This is your operating procedure. Follow it step by step. Do not improvise.**
 
-Every session has exactly ONE deliverable. When it's done, you close out. You do not start the next thing.
+Every session has exactly ONE deliverable. When it's done, you close out. You do not start the next thing. The deliverable MAY be a **verified vertical slice** — one capability end to end — but only under the gates in §Vertical Slice Sessions below. One capability never means a second capability.
 
 ---
 
@@ -127,6 +127,37 @@ Before closing out a planning session, verify:
 - [ ] Each phase has explicit completion criteria and verification commands
 - [ ] Each phase marked as "separate session" with a STOP point
 - [ ] Close-out: evaluate predecessor, self-assess, commit, STOP
+
+### Vertical Slice Sessions
+
+The unit of "1 and done" is one **intent**, not one layer. When ALL four gates below are satisfied, the session's ONE deliverable may be a **verified vertical slice** — one capability end to end (e.g., data + service + client + tests) — instead of one horizontal layer. The allowance ADDS a gate; it removes no step: Phase 0 orientation, the Phase 1B stub, and all Phase 3 close-out steps are unchanged and non-negotiable (see FM #17's anti-erosion clause).
+
+**Gates — all four, no substitutions:**
+
+- **(a) Pre-declared contract.** The full layer set is enumerated in a plan-mode contract approved BEFORE any code — normally in a prior planning session, which satisfies the gate. The implementing session re-verifies the contract at Orient (state unchanged since approval); drift voids the contract and the slice reverts to a new plan-mode round.
+- **(b) Checkpoint commit at every layer boundary.** The 5-file cap (`SAFEGUARDS.md` §Blast Radius Limits) is *per-commit* and unchanged — a slice may touch more than 5 files across the session, never more than 5 between checkpoint commits.
+- **(c) Full verification at every layer boundary.** The complete build/test matrix plus the exhaustive grep inventory runs at EACH boundary, not once at the end.
+- **(d) Faithful verification, per surface.** "All tests ran" is not automatically faithful: a suite that runs with privileges the production path doesn't have (e.g., bypassing row-level security), or a layer that hand-maintains a duplicate enum/DTO, passes green while broken. Each surface in the slice must establish that its verification actually exercises the behavior being claimed. Faithfulness is established, never assumed.
+
+**The allowance is evidence-gated, not self-certified.** It holds only while the gate (c) artifacts actually land in-session. If a layer boundary's evidence is missing, the session reverts to horizontal scope at the last clean checkpoint commit and closes out there. Declaring that high-parallelism verification is available is not the gate; the per-boundary artifacts are.
+
+**Recoverability — not verifiability — is the ceiling on slice size.** Parallel verification does nothing for crash/reversal recovery, and larger slices make it worse: a crash mid-slice strands N layers, not 1. The slice must map to ONE reversible intent with per-layer commits.
+
+**Boundaries that stay separate sessions (never collapsible into a slice):**
+
+- Irreversible prod/DB migration gates
+- Operator-approval gates (designs, data models, plans)
+- Live verification requiring real accounts or physical devices
+- Cross-toolchain cutover atomicity (two build toolchains flipping at once)
+- The recoverability/reversal-rollback ceiling above
+- Faithful-verification gates that cannot be established in-session (gate d)
+- The plan ↔ implementation boundary (FM #18) — bundling *layers of one slice* is fine; bundling a *plan with its code* is not
+
+**The slice test (FM #26):** does a single plan-mode contract from a prior session enumerate exactly this layer set, all of the same capability? If the layers span two capabilities, two platform cutovers, or a plan + code — it is not a slice. Split it.
+
+High-parallelism verification introduces its own regression vector: sub-agents emit confident-but-wrong claims. Apply adversarial refutation to your own agents' output, not only to the primary work.
+
+*(Adopted via issues [#20](https://github.com/KJ5HST/methodology/issues/20) and [#21](https://github.com/KJ5HST/methodology/issues/21).)*
 
 ---
 
