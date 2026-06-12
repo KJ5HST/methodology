@@ -231,6 +231,19 @@ Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during develop
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
 
+### What's New in v2.6.1
+
+Docs-only dot release bundling four external contributions (all from [@rmsharp](https://github.com/rmsharp) — PRs [#18](https://github.com/KJ5HST/methodology/pull/18), [#23](https://github.com/KJ5HST/methodology/pull/23), [#25](https://github.com/KJ5HST/methodology/pull/25), [#27](https://github.com/KJ5HST/methodology/pull/27)).
+
+- **Skill-citation discipline completed** (PR #18) — closes the gaps left by v2.6:
+  - The two aspirational citations in `RECOMMENDED_SKILLS.md` are now real: `/init` gets an actual Claude Code helper paragraph in `BOOTSTRAP.md` Step 4 (greenfield scaffolder, with an explicit skip path for projects that already have a `CLAUDE.md`); `/fewer-permission-prompts` is dropped from the index (no natural citation site — the skill remains usable, the methodology just doesn't cite it).
+  - **New principle: "A skill is not a phase"** in `ITERATIVE_METHODOLOGY.md` §Recommended Skills — a skill that pulls a session across a hard gate is failure mode #2 (keep-going) wearing a tool costume. Applies to every skill, indexed or independently installed; the methodology's gates bind every session regardless of which tools are loaded.
+  - **New "Skills not recommended (and why)" subsection** in `RECOMMENDED_SKILLS.md` — 10-row table surfacing the v2.6 audit's deliberate omissions (`/to-issues`, `/to-prd`, `/tdd`-as-workflow, `/caveman`, `/zoom-out`, `/write-a-skill`, `/setup-matt-pocock-skills`, `/loop`, `/schedule`) plus two hedged post-audit entries (`/handoff`, `/prototype`), each with a one-line rationale. Closes the door on re-litigation and makes the audit decisions discoverable from the index itself.
+- **Learnings-routing contradiction fixed** (PR #25, closes #24) — `SESSION_RUNNER.md` Phase 3C no longer tells adopters to edit the synced Learnings table. Dual-audience recomposition: adopter projects record learnings in their `CLAUDE.md` Adaptations section; the canonical repo appends to the seed table. The false "table starts empty" caption is corrected; `HOW_TO_USE.md` retargeted to match.
+- **CLAUDE.md size budget** (PR #27, closes #26) — `BOOTSTRAP.md` Step 5 gains a size-budget rule (~200-line target) with an extract-to-`PROJECT_LEARNINGS.md` overflow valve, plus a warning to use a plain Markdown link (not an `@`-import) for the pointer so it stays read-on-demand.
+- **Housekeeping** (PR #23) — `tools/__pycache__/` gitignored.
+- **Backward compatible.** No principle, phase, gate, workstream, or session-type changes; no FM renumbering (count stays 25). Adopters absorb the starter-kit changes via `bin/sync`.
+
 ### What's New in v2.6
 
 > **Methodology recommends; methodology does not reimplement.**
