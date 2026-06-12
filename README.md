@@ -231,6 +231,14 @@ Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during develop
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
 
+### What's New in v2.6.2
+
+Docs-only dot release resolving issue [#22](https://github.com/KJ5HST/methodology/issues/22) (Pocock skill enablement gap — investigation by [@rmsharp](https://github.com/rmsharp)). Strategy decided: **C (Reactive)** — enablement support happens per-request via the adopter's own `CLAUDE.md` adaptations (or `/grill-with-docs` lazy-creation), never via methodology-shipped templates, preserving *"methodology recommends; methodology does not reimplement."*
+
+- **New "Phases spanned (compression risk)" column** on the external-skills table in `starter-kit/RECOMMENDED_SKILLS.md` — the bounding half of strategy C. Records, per skill and verbatim-verified at the pinned SHAs, which phases one invocation can cross: `/grill-with-docs` and `/improve-codebase-architecture` are flagged **high** (Phase 2 → 3 → 5 in a single invocation); `/diagnose` is medium by design (a debugging session *is* its span); the rest are low/zero. A reading-guidance paragraph tells adopters to plan the stop point before invoking a high-compression skill, cross-referencing the "A skill is not a phase" principle. The column carries an explicit forward-compatibility note: if the vertical-slice model proposed in [#20](https://github.com/KJ5HST/methodology/issues/20)/[#21](https://github.com/KJ5HST/methodology/issues/21) is adopted, it gets restated in that vocabulary.
+- **`/triage` prerequisite contradiction resolved by footnote** — the skill's body recommends `/setup-matt-pocock-skills`, which this index declines. The citation stands; a prerequisite note instructs adopters to establish the issue-tracker label mapping themselves per `DEVELOPMENT_WORKSTREAM.md` §Issue Lifecycle (or accept the canonical state names as-is).
+- **Backward compatible.** No principle, phase, gate, workstream, or FM changes. Issues #20/#21 (vertical-slice model + guardrails) remain open and are not prejudged by this release.
+
 ### What's New in v2.6.1
 
 Docs-only dot release bundling four external contributions (all from [@rmsharp](https://github.com/rmsharp) — PRs [#18](https://github.com/KJ5HST/methodology/pull/18), [#23](https://github.com/KJ5HST/methodology/pull/23), [#25](https://github.com/KJ5HST/methodology/pull/25), [#27](https://github.com/KJ5HST/methodology/pull/27)).
