@@ -231,6 +231,16 @@ Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during develop
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
 
+### What's New in v2.7.1
+
+Docs-only naming-consistency dot release resolving issue [#15](https://github.com/KJ5HST/methodology/issues/15). The methodology's two decimal-suffixed phase labels are renamed to the letter-suffix convention `SESSION_RUNNER.md` already uses, so the spec carries one consistent style for inserted sub-phases.
+
+- **`Phase 1.5: Claim the Session` → `Phase 1B`** and **`Phase 2.5: Pre-Create Grill` → `Phase 2B`** in `ITERATIVE_METHODOLOGY.md`, each with a one-line clarifier: a letter suffix marks an *inserted bridge step* between two numbered phases — it does not subdivide a phase (there is no "Phase 1A"/"Phase 2A") and does not change the **"6 phases"** count.
+- **Issue #15 scoped only Phase 2.5; the grep inventory found Phase 1.5 too** — the same "Claim the Session" step that `SESSION_RUNNER.md` and `CLAUDE.md` already call `1B`, rendered as a decimal here. Renaming only 2.5 would have left a fresh `1.5`-vs-`2B` split inside one file, so both decimals were standardized and the latent `1B`/`1.5` cross-doc inconsistency is closed in the same pass.
+- **Live sites updated:** `ITERATIVE_METHODOLOGY.md` (both headers + 2 body refs), the `SESSION_RUNNER.md` task-mapping row, `RECOMMENDED_SKILLS.md` (2 sites), and 3 campaign/workstream templates (`INHERITED_CODEBASE_FAMILIARIZATION_CAMPAIGN.md`, `TEMPLATE_CAMPAIGN.md`, `RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md`).
+- **Changelog left verbatim by design.** Dated "What's New" entries below (v1.1 names `Phase 1.5`; v2.6 names `Phase 2.5`) and the frozen `docs/planning`/`docs/audits` records keep their original tokens — a changelog records what shipped under the name used at the time; this entry is the bridge.
+- **Backward compatible.** No principle, phase, gate, workstream, or FM changes; the phase count is unchanged. Adopters absorb the starter-kit changes via `bin/sync`.
+
 ### What's New in v2.7
 
 The first change to the unit of **"1 and done"** since the rule was written: one deliverable MAY now be a **verified vertical slice** — one capability end to end — under hard gates. Adopted from issues [#20](https://github.com/KJ5HST/methodology/issues/20) (model) and [#21](https://github.com/KJ5HST/methodology/issues/21) (guardrails).
