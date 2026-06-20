@@ -20,7 +20,7 @@ This is a **campaign**, not a workstream. It does not replace the Research Docum
 | [`ITERATIVE_METHODOLOGY.md`](../ITERATIVE_METHODOLOGY.md) | Master framework — 9 principles, 6 phases, 12 quality gates. This campaign obeys all of them. |
 | [`RESEARCH_DOCUMENTATION_WORKSTREAM.md`](RESEARCH_DOCUMENTATION_WORKSTREAM.md) | Parent workstream. Defines the Claim-Source Map (Phase 3), Claim-Source Audit (Phase 6), and standard sampling-based Audit Mode. |
 | [`AUDIT_WORKSTREAM.md`](AUDIT_WORKSTREAM.md) | Sibling workstream. Audit-mode sessions in this campaign follow its review-session pattern (Phases 1-4 + 6, skip 5). |
-| [`../starter-kit/SESSION_RUNNER.md`](../starter-kit/SESSION_RUNNER.md) | Operational checklist — every session in the campaign runs against it. |
+| [`SESSION_RUNNER.md`](../../../SESSION_RUNNER.md) | Operational checklist — every session in the campaign runs against it. |
 
 ---
 

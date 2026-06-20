@@ -20,7 +20,7 @@ This is a **campaign**, not a workstream. It does not replace the Audit workstre
 | [`ITERATIVE_METHODOLOGY.md`](../ITERATIVE_METHODOLOGY.md) | Master framework — 9 principles, 6 phases, 12 quality gates. This campaign obeys all of them. See §Multi-Session Campaigns. |
 | [`AUDIT_WORKSTREAM.md`](AUDIT_WORKSTREAM.md) | Parent workstream. Defines audit-criteria definition, scope inventory, evidence-bearing findings, and the review-session pattern (Phases 1-4 + 6, skip 5). |
 | [`DEVELOPMENT_WORKSTREAM.md`](DEVELOPMENT_WORKSTREAM.md) | Sibling workstream. The consolidation session's prioritized backlog feeds into Development sessions; the per-unit dependency analysis informs blast-radius estimates for those sessions. |
-| [`../starter-kit/SESSION_RUNNER.md`](../starter-kit/SESSION_RUNNER.md) | Operational checklist — every session in the campaign runs against it. |
+| [`SESSION_RUNNER.md`](../../../SESSION_RUNNER.md) | Operational checklist — every session in the campaign runs against it. |
 
 ---
 

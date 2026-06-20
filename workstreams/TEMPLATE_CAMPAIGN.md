@@ -14,7 +14,7 @@ This is a **campaign**, not a workstream. It does not replace [parent workstream
 |----------|------|
 | [`ITERATIVE_METHODOLOGY.md`](../ITERATIVE_METHODOLOGY.md) | Master framework — 9 principles, 6 phases, 12 quality gates. This campaign obeys all of them. See §Multi-Session Campaigns. |
 | [`PARENT_WORKSTREAM.md`](PARENT_WORKSTREAM.md) | Parent workstream. Defines the per-session primitives this campaign scales. |
-| [`../starter-kit/SESSION_RUNNER.md`](../starter-kit/SESSION_RUNNER.md) | Operational checklist — every session in the campaign runs against it. |
+| [`SESSION_RUNNER.md`](../../../SESSION_RUNNER.md) | Operational checklist — every session in the campaign runs against it. |
 
 [Add additional rows for sibling workstreams the campaign borrows session patterns from — e.g., `AUDIT_WORKSTREAM.md` for review-mode sessions.]
 
