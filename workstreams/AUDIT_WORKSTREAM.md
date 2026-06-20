@@ -21,7 +21,7 @@ Use this workstream when:
 
 ## Recommended Skills
 
-The methodology owns *the audit framework* (criteria definition, scope inventory, finding structure, the 7-Dimension audit grid, recurring-issue tracking, multi-session campaign shape). Several review workflows are covered better by Claude Code built-in skills — for those, the methodology cites the skill rather than re-implementing it. See [`../starter-kit/RECOMMENDED_SKILLS.md`](../starter-kit/RECOMMENDED_SKILLS.md) for the canonical index.
+The methodology owns *the audit framework* (criteria definition, scope inventory, finding structure, the 7-Dimension audit grid, recurring-issue tracking, multi-session campaign shape). Several review workflows are covered better by Claude Code built-in skills — for those, the methodology cites the skill rather than re-implementing it. See [`RECOMMENDED_SKILLS.md`](../../../RECOMMENDED_SKILLS.md) for the canonical index.
 
 | Audit purpose | Recommended skill |
 |---|---|

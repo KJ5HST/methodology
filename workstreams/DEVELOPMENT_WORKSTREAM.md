@@ -57,7 +57,7 @@ The methodology dashboard currently counts issues but does not score triage heal
 
 ### Performing triage with a skill
 
-For the actual workflow of moving an issue through these states — labelling, comment composition, scope decisions — the methodology recommends Pocock's `/triage` skill (cited in [`starter-kit/RECOMMENDED_SKILLS.md`](../starter-kit/RECOMMENDED_SKILLS.md)). The methodology owns *what the states mean and how they transition*; the skill owns *how to apply the labels and write the triage comment*. When the skill is unavailable, the state definitions and transition rules above are the operative discipline.
+For the actual workflow of moving an issue through these states — labelling, comment composition, scope decisions — the methodology recommends Pocock's `/triage` skill (cited in [`RECOMMENDED_SKILLS.md`](../../../RECOMMENDED_SKILLS.md)). The methodology owns *what the states mean and how they transition*; the skill owns *how to apply the labels and write the triage comment*. When the skill is unavailable, the state definitions and transition rules above are the operative discipline.
 
 ---
 

@@ -15,7 +15,7 @@ Use this workstream when:
 
 ## Recommended Skills *(optional — keep only if ≥2 skills apply)*
 
-Follows the citation-shape convention ([`../starter-kit/RECOMMENDED_SKILLS.md`](../starter-kit/RECOMMENDED_SKILLS.md) §How this index is used). If this workstream recommends **one** skill, cite it inline at the point of recommendation and **delete this section**. If **two or more** skills apply, keep it: a short intro naming what the methodology owns vs. what each skill owns, then a table.
+Follows the citation-shape convention ([`RECOMMENDED_SKILLS.md`](../../../RECOMMENDED_SKILLS.md) §How this index is used). If this workstream recommends **one** skill, cite it inline at the point of recommendation and **delete this section**. If **two or more** skills apply, keep it: a short intro naming what the methodology owns vs. what each skill owns, then a table.
 
 | [Purpose] | Recommended skill |
 |---|---|
