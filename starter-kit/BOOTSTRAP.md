@@ -2,6 +2,8 @@
 
 Set up the Iterative Session Methodology for a new project in 10 minutes.
 
+> **Prefer to learn by doing first?** Walk the [tutorials](https://github.com/KJ5HST/methodology/tree/main/docs/tutorials) — a hands-on track that installs the framework and runs a real session step by step (against your own repo or a bundled sample project). This guide is the reference you'll come back to when setting up your own project.
+
 ---
 
 ## What You'll Have When Done

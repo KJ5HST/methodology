@@ -141,6 +141,10 @@ Expand any project card to see health breakdown by dimension, risk factors, git 
 
 ![Expanded project detail showing health breakdown, code metrics, and methodology compliance](docs/images/dashboard-detail.png)
 
+## Tutorials
+
+New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, progressive learning track — install the framework, run a real session end to end, and learn where the guardrails catch you. Each lesson has you *do* one thing against a real project (your own repo, or the bundled [sample project](docs/tutorials/sample-project/)), with a checkpoint at every step. The core trio (Setup → First Session → Cautionary Use) is in progress; see the **[series index](docs/tutorials/)** for the full curriculum.
+
 ## Repository Structure
 
 ```
@@ -168,6 +172,9 @@ Expand any project card to see health breakdown by dimension, risk factors, git 
 │   ├── CHANGELOG.md                  ← Completed work history template
 │   ├── ROADMAP.md                    ← Feature inventory & future plans template
 │   └── methodology_dashboard.py      ← Health scanner (also in tools/)
+│
+├── docs/                             ← Tutorials and supporting docs
+│   └── tutorials/                    ← Hands-on learning track + sample todo-CLI project
 │
 ├── bin/                              ← Sync tools (v2.2+)
 │   ├── sync                          ← Copy starter-kit files into a project (dual-mode, dual-source)
