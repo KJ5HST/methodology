@@ -52,18 +52,18 @@ Project-specific traps that have bitten previous sessions. Mirrors the methodolo
 
 ---
 
-## CONTEXT.md vs auto-memory: when to use which
+## CONTEXT.md vs agent-level memory: when to use which
 
-Methodology supports two complementary persistence layers. They are **additive**, not exclusive.
+Methodology supports two complementary persistence layers. They are **additive**, not exclusive. The second layer — *agent-level memory* — is persistence scoped to the agent across all projects rather than to one repository; agents implement it under different names (Claude Code's auto-memory, Cursor's memories, Cody's preferences), so this template names the capability generically.
 
-| Use **CONTEXT.md** for… | Use **auto-memory** for… |
+| Use **CONTEXT.md** for… | Use **agent-level memory** for… |
 |------------------------|--------------------------|
 | Domain vocabulary a fresh reader needs on a clean clone | Operator preferences and feedback that apply across all projects |
 | Decisions that should travel with the code under version control | Cross-project policy ("no AI coauthorship", "verify CI before close-out") |
 | Constraints that constrain *the project's* design (licensing, hardware, regulation) | The operator's role, expertise, and collaboration style |
 | Things a contributor should learn before opening a PR | Things the agent should remember across many sessions in many repos |
 
-**Practical rule:** if the artifact would be useful to a contributor who only opened *this* repo without operator context, it belongs in CONTEXT.md. If it is about how the operator works, or it applies across repos, it belongs in auto-memory.
+**Practical rule:** if the artifact would be useful to a contributor who only opened *this* repo without operator context, it belongs in CONTEXT.md. If it is about how the operator works, or it applies across repos, it belongs in agent-level memory.
 
 Some content (e.g., a project's licensing policy) reasonably lives in both layers — repeating it across the layers is a feature, not a duplication bug, because the two audiences are different.
 
