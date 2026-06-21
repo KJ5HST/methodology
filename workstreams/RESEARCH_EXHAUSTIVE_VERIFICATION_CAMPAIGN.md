@@ -9,6 +9,8 @@ The campaign is explicitly **bidirectional**:
 
 Both modes share the same campaign shape (planning → per-unit work → consolidation) because both run into the same wall: a non-trivial paper or repository contains hundreds of claims, and verifying them in a single session degrades reasoning quality long before it exhausts raw context.
 
+That degradation is a *within-session* problem the campaign solves by decomposition; the work's *stakes* are a separate axis with a separate lever. Paper-wide claim verification is irreversible once published and compounds across every reader, so this campaign sits at the top of the reasoning tier inherited from its parent workstream (`ITERATIVE_METHODOLOGY.md` §Matching Reasoning Effort to Stakes): set your agent's deepest-reasoning mode at the start of *each* session — decomposing the work does not lower its stakes.
+
 This is a **campaign**, not a workstream. It does not replace the Research Documentation workstream; it prescribes a campaign structure for a specific deliverable: a complete, primary-source-anchored claim record.
 
 ---

@@ -69,6 +69,8 @@ A single session that attempts to familiarize with a non-trivial inherited codeb
 
 This campaign decomposes the work into a planning session, N execution sessions (one per scoped unit), and a consolidation session — each obeying the methodology's session-scope rules and producing a checkpoint deliverable.
 
+Decomposition answers the within-session degradation above; the work's *stakes* are a separate lever. A confidently wrong mental model of an inherited codebase propagates into every later session that trusts the familiarization record, so this campaign inherits the deepest-reasoning-tier default from its parent Audit workstream (`ITERATIVE_METHODOLOGY.md` §Matching Reasoning Effort to Stakes): set your agent's deepest-reasoning mode at the start of *each* session.
+
 ---
 
 ## Campaign Structure
