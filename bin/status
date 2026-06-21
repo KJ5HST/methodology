@@ -1,7 +1,17 @@
 #!/usr/bin/env python3
 """Report drift of synced methodology files across one or more projects.
 
-Contract: methodology v2.2 plan §4E.
+Emits one row per distributed file (Project · File · Disposition · Status) so the
+full Option-B corpus is visible, not just a fixed three. The distribution set and
+each file's disposition come from the shared bin/_manifest.py (B1 plan Decision 5);
+status previously carried its own three-file copy of the list.
+
+SEED files are adopter-owned: status reports only present/absent for them and never
+flags an absent seed as drift (B1 plan Phase 4 DONE criterion). TRACKED files are
+compared against canonical and may report current / locally modified / N versions
+behind / missing.
+
+Contract: methodology v2.2 plan §4E; B1 plan Phase 4.
 """
 import argparse
 import base64
@@ -11,10 +21,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _manifest import DISTRIBUTION, TRACKED  # noqa: E402  (bin/ on sys.path)
+
 REPO = "KJ5HST/methodology"
-SYNC_FILES = ("SESSION_RUNNER.md", "SAFEGUARDS.md", "methodology_dashboard.py")
-IGNORE_ENTRIES = tuple(f"/{name}" for name in SYNC_FILES)
-COLUMNS = ("SESSION_RUNNER", "SAFEGUARDS", "DASHBOARD")
+HEADERS = ("Project", "File", "Disposition", "Status")
 
 
 def script_methodology_root() -> Path:
@@ -26,40 +37,29 @@ def blob_sha(content: bytes) -> str:
     return hashlib.sha1(header + content).hexdigest()
 
 
-def detect_mode(project: Path) -> str:
-    gitignore = project / ".gitignore"
-    if not gitignore.exists():
-        return "committed"
-    existing = set(line.strip() for line in gitignore.read_text().splitlines())
-    if any(entry in existing for entry in IGNORE_ENTRIES):
-        return "ignored"
-    return "committed"
-
-
 def detect_source(methodology_root: Path) -> str:
     return "local" if (methodology_root / "starter-kit").is_dir() else "github"
 
 
-def local_canonical_sha(methodology_root: Path, name: str) -> str:
-    content = (methodology_root / "starter-kit" / name).read_bytes()
+def local_canonical_sha(methodology_root: Path, src: str) -> str:
+    content = (methodology_root / src).read_bytes()
     return blob_sha(content)
 
 
-def local_history(methodology_root: Path, name: str) -> list:
+def local_history(methodology_root: Path, src: str) -> list:
     """List of (commit_sha, blob_sha) for the file, newest first."""
-    path = f"starter-kit/{name}"
     try:
         log = subprocess.run(
-            ["git", "-C", str(methodology_root), "log", "--format=%H", "--", path],
+            ["git", "-C", str(methodology_root), "log", "--format=%H", "--", src],
             capture_output=True, text=True, check=True,
         ).stdout.strip().splitlines()
-    except subprocess.CalledProcessError:
+    except (FileNotFoundError, subprocess.CalledProcessError):
         return []
     history = []
     for commit in log:
         try:
             tree = subprocess.run(
-                ["git", "-C", str(methodology_root), "ls-tree", commit, "--", path],
+                ["git", "-C", str(methodology_root), "ls-tree", commit, "--", src],
                 capture_output=True, text=True, check=True,
             ).stdout.strip()
         except subprocess.CalledProcessError:
@@ -71,22 +71,23 @@ def local_history(methodology_root: Path, name: str) -> list:
     return history
 
 
-def github_canonical(name: str):
+def github_canonical(src: str):
     try:
         result = subprocess.run(
-            ["gh", "api", f"repos/{REPO}/contents/starter-kit/{name}"],
+            ["gh", "api", f"repos/{REPO}/contents/{src}"],
             capture_output=True, text=True, check=True,
         )
     except FileNotFoundError:
         sys.exit("error: gh CLI not found; install GitHub CLI or use --source=local")
     except subprocess.CalledProcessError as e:
-        sys.exit(f"error: gh api failed for {name}: {e.stderr.strip() or e.stdout.strip()}")
+        sys.exit(f"error: gh api failed for {src}: {e.stderr.strip() or e.stdout.strip()}")
     payload = json.loads(result.stdout)
     return payload["sha"], base64.b64decode(payload["content"])
 
 
-def file_status(project: Path, name: str, canonical_sha: str, history: list) -> str:
-    target = project / name
+def file_status(project: Path, dest: str, canonical_sha: str, history: list) -> str:
+    """Drift state of a TRACKED dest against canonical (and methodology history)."""
+    target = project / dest
     if not target.exists():
         return "missing"
     project_sha = blob_sha(target.read_bytes())
@@ -99,18 +100,20 @@ def file_status(project: Path, name: str, canonical_sha: str, history: list) -> 
     return "locally modified"
 
 
-def render_table(rows: list) -> str:
-    headers = ("Project", "Mode") + COLUMNS
+def seed_status(project: Path, dest: str) -> str:
+    """SEED files are adopter-owned; only existence matters and an absent seed is
+    NOT drift (B1 plan Phase 4 DONE criterion)."""
+    return "present" if (project / dest).exists() else "absent"
+
+
+def render_table(headers: tuple, rows: list) -> str:
     widths = [len(h) for h in headers]
     for row in rows:
         for i, cell in enumerate(row):
             widths[i] = max(widths[i], len(cell))
     def fmt(row):
-        return "  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row))
-    out = [fmt(headers)]
-    for row in rows:
-        out.append(fmt(row))
-    return "\n".join(out)
+        return "  ".join(str(cell).ljust(widths[i]) for i, cell in enumerate(row))
+    return "\n".join([fmt(headers)] + [fmt(row) for row in rows])
 
 
 def main() -> int:
@@ -121,35 +124,39 @@ def main() -> int:
 
     methodology_root = script_methodology_root()
     source = args.source or detect_source(methodology_root)
+    if source == "local" and not (methodology_root / "starter-kit").is_dir():
+        sys.exit(f"error: --source=local but no starter-kit/ at {methodology_root}")
 
+    # Canonical SHA + history are only meaningful for TRACKED files; SEED files are
+    # adopter-owned and never compared against canonical.
     canonical = {}
-    history = {name: [] for name in SYNC_FILES}
-    if source == "local":
-        if not (methodology_root / "starter-kit").is_dir():
-            sys.exit(f"error: --source=local but no starter-kit/ at {methodology_root}")
-        for name in SYNC_FILES:
-            canonical[name] = local_canonical_sha(methodology_root, name)
-            history[name] = local_history(methodology_root, name)
-    else:
-        for name in SYNC_FILES:
-            sha, _ = github_canonical(name)
-            canonical[name] = sha
-            # history-walk not implemented for github source
+    history = {}
+    for src, _dest, disp in DISTRIBUTION:
+        if disp != TRACKED:
+            continue
+        if source == "local":
+            canonical[src] = local_canonical_sha(methodology_root, src)
+            history[src] = local_history(methodology_root, src)
+        else:
+            sha, _ = github_canonical(src)
+            canonical[src] = sha
+            history[src] = []  # history-walk not implemented for github source
 
     rows = []
     for raw in args.paths:
         project = Path(raw).resolve()
         if not project.is_dir():
-            rows.append((raw, "missing-dir", "-", "-", "-"))
+            rows.append((raw, "-", "-", "missing-dir"))
             continue
-        mode = detect_mode(project)
-        cells = [project.name, mode]
-        for name in SYNC_FILES:
-            cells.append(file_status(project, name, canonical[name], history[name]))
-        rows.append(tuple(cells))
+        for src, dest, disp in DISTRIBUTION:
+            if disp == TRACKED:
+                state = file_status(project, dest, canonical[src], history[src])
+            else:  # SEED
+                state = seed_status(project, dest)
+            rows.append((project.name, dest, disp, state))
 
     print(f"source: {source}" + (f" ({methodology_root})" if source == "local" else ""))
-    print(render_table(rows))
+    print(render_table(HEADERS, rows))
     return 0
 
 

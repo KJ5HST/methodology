@@ -180,6 +180,42 @@ else
 fi
 rm -rf "$P"
 
+echo "== Test 15: status emits per-file rows with a disposition column (Phase 4) =="
+P="$(mktemp_project)"
+"$BIN/sync" "$P" --mode=commit >/dev/null
+OUT="$("$BIN/status" "$P")"
+echo "$OUT" | grep -q "Disposition" && pass "status: Disposition column present" || fail "status: no Disposition column"
+echo "$OUT" | grep -q "tracked" && pass "status: tracked disposition shown" || fail "status: no tracked rows"
+echo "$OUT" | grep -q "seed" && pass "status: seed disposition shown" || fail "status: no seed rows"
+# One data row per manifest entry (full Option-B corpus, not a fixed three)
+EXPECTED="$(python3 -c "import sys; sys.path.insert(0, '$BIN'); import _manifest; print(len(_manifest.DISTRIBUTION))")"
+GOT="$(echo "$OUT" | grep -c "$(basename "$P")")"
+[ "$GOT" = "$EXPECTED" ] && pass "status: one row per manifest file ($GOT == $EXPECTED)" || fail "status: row count $GOT != manifest $EXPECTED"
+# Freshly-synced tree: every tracked file current, nothing flagged as drift
+echo "$OUT" | grep -q "current" && pass "status: fresh tree shows current" || fail "status: fresh tree missing current"
+if echo "$OUT" | grep -Eq "locally modified|versions? behind"; then fail "status: fresh tree shows spurious drift"; else pass "status: fresh tree shows no drift"; fi
+rm -rf "$P"
+
+echo "== Test 16: an absent seed file is reported, never flagged as drift (Phase 4 DONE) =="
+P="$(mktemp_project)"
+"$BIN/sync" "$P" >/dev/null
+rm -f "$P/CHANGELOG.md"   # CHANGELOG.md is a SEED file (adopter-owned)
+SEEDLINE="$("$BIN/status" "$P" | grep "CHANGELOG.md")"
+echo "$SEEDLINE" | grep -q "seed" && pass "status: CHANGELOG shown with seed disposition" || fail "status: CHANGELOG not marked seed"
+echo "$SEEDLINE" | grep -q "absent" && pass "status: absent seed shown as 'absent'" || fail "status: absent seed not 'absent'"
+if echo "$SEEDLINE" | grep -q "missing"; then fail "status: absent seed mislabeled as drift (missing)"; else pass "status: absent seed NOT flagged as drift"; fi
+rm -rf "$P"
+
+echo "== Test 17: a partially-stale tree flags only the stale file (Phase 4) =="
+P="$(mktemp_project)"
+"$BIN/sync" "$P" >/dev/null
+echo "# local edit" >> "$P/SESSION_RUNNER.md"
+OUT="$("$BIN/status" "$P")"
+NMOD="$(echo "$OUT" | grep -c "locally modified")"
+[ "$NMOD" = "1" ] && pass "status: exactly one file locally modified" || fail "status: expected 1 modified, got $NMOD"
+echo "$OUT" | grep "SESSION_RUNNER.md" | grep -q "locally modified" && pass "status: the stale file is SESSION_RUNNER" || fail "status: wrong file flagged stale"
+rm -rf "$P"
+
 echo ""
 echo "== Summary: $PASS passed, $FAIL failed =="
 [ "$FAIL" = "0" ]

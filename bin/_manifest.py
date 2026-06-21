@@ -1,9 +1,9 @@
 """Distribution manifest — the single source of truth for what the methodology
 ships into an adopter project, where each file lands, and how sync treats it.
 
-Imported by bin/sync, bin/check-links (and bin/status from Phase 4 on) so the
-mapping is defined exactly once (B1 plan Decision 5; Ousterhout deepening — the
-three scripts previously each carried their own copy of the file list).
+Imported by bin/sync, bin/status, and bin/check-links so the mapping is defined
+exactly once (B1 plan Decision 5; Ousterhout deepening — the three scripts
+previously each carried their own copy of the file list).
 
 Each entry is ``(src, dest, disposition)``:
   * ``src``         path relative to the canonical methodology repo root.
