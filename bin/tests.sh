@@ -169,14 +169,25 @@ P="$(mktemp_project)"
 [ -f "$P/CONTEXT_TEMPLATE.md" ] && pass "template CONTEXT_TEMPLATE.md is present" || fail "template CONTEXT_TEMPLATE.md missing"
 rm -rf "$P"
 
-echo "== Test 14: check-links passes against the sync-produced tree =="
+echo "== Test 14: check-links validates the sync-produced tree without mutating it (issue #36) =="
 P="$(mktemp_project)"
 "$BIN/sync" "$P" >/dev/null
+BEFORE="$(cd "$P" && find . -type f | sort)"
 if "$BIN/check-links" --tree "$P" >/dev/null 2>&1; then
     pass "check-links --tree: links resolve in the sync-produced tree"
 else
     "$BIN/check-links" --tree "$P" 2>&1 | sed 's/^/    /'
     fail "check-links --tree: dangling link(s) in sync-produced tree"
+fi
+# A checker must not write to the tree it validates (issue #36): it must not
+# fabricate the adopter-owned placeholder files (CONTEXT.md, CLAUDE.md, …) that a
+# sync-produced tree legitimately lacks.
+AFTER="$(cd "$P" && find . -type f | sort)"
+if [ "$BEFORE" = "$AFTER" ]; then
+    pass "check-links --tree: left the validated tree unmodified (issue #36)"
+else
+    fail "check-links --tree: mutated the tree it validated (issue #36)"
+    diff <(printf '%s\n' "$BEFORE") <(printf '%s\n' "$AFTER") | sed 's/^/    /'
 fi
 rm -rf "$P"
 

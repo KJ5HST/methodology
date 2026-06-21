@@ -9,8 +9,10 @@ markdown link can therefore be correct in one layout and dangling in the other
 that *distributed files author their cross-references for the adopter layout* and
 are validated there, not in-repo. This script enforces that convention: it
 materializes a simulated adopter tree (each distributable copied to its adopter
-destination, plus the files an adopter creates locally) and asserts every
-relative link in every distributed markdown file resolves to an existing file.
+destination) and asserts every relative link in every distributed markdown file
+resolves — treating the handful of adopter-owned files (instances, overflow
+valves, template placeholders) as allowed-absent rather than fabricating them
+(issue #36: a checker must not write to the tree it validates).
 
 Part of B1 / issue #32 (Phase 2 added this checker; Phase 3 moved the
 DISTRIBUTION map to bin/_manifest.py — the single source of truth now shared with
@@ -33,9 +35,11 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Legitimate link targets that are NOT part of the distribution: files an adopter
 # creates locally (instances / overflow valves) and intentional template
-# placeholders. Created as empty files in the simulated tree so links to them
-# resolve. Keep this list tight — every entry is a real adopter-layout file, so
-# an unexpected dangling link still fails rather than being masked.
+# placeholders. Treated as allowed-absent — a link resolving to one of these is
+# accepted without an existence check (they may legitimately not exist yet),
+# rather than fabricated in the tree. Keep this list tight — every entry is a
+# real adopter-layout file, so an unexpected dangling link still fails rather
+# than being masked.
 ADOPTER_LOCAL_FILES = [
     "CONTEXT.md",            # instance of CONTEXT_TEMPLATE.md (adopter-owned)
     "CLAUDE.md",             # instance of CLAUDE_TEMPLATE.md (adopter-owned)
@@ -68,20 +72,14 @@ def materialize_distribution(tree):
         shutil.copyfile(os.path.join(REPO, src), dpath)
 
 
-def materialize_adopter_local(tree):
-    """Create the placeholder files an adopter owns (instances, overflow valves,
-    template placeholders) so links to them resolve. Left untouched if present —
-    safe to call on a real (e.g. sync-produced) tree."""
-    for rel in ADOPTER_LOCAL_FILES:
-        ppath = os.path.join(tree, rel)
-        os.makedirs(os.path.dirname(ppath) or tree, exist_ok=True)
-        if not os.path.exists(ppath):
-            open(ppath, "w").close()
-
-
 def check(tree):
     failures = []
     checked = 0
+    # Adopter-owned files (instances, overflow valves, template placeholders) are
+    # allowed to be absent: accept links to them without an existence check rather
+    # than fabricating them, so validating a real tree never writes to it (#36).
+    allowed_absent = {os.path.normpath(os.path.join(tree, rel))
+                      for rel in ADOPTER_LOCAL_FILES}
     md_files = [(s, d) for s, d, _disp in DISTRIBUTION if d.endswith(".md")]
     for _src, dest in md_files:
         dpath = os.path.join(tree, dest)
@@ -109,6 +107,8 @@ def check(tree):
                         continue
                     checked += 1
                     resolved = os.path.normpath(os.path.join(ddir, path))
+                    if resolved in allowed_absent:
+                        continue  # adopter-owned, allowed-absent (issue #36)
                     if not os.path.exists(resolved):
                         failures.append((dest, lineno, target))
     return checked, failures, len(md_files)
@@ -131,21 +131,20 @@ def main():
             return 2
 
     if tree_arg:
-        # Validate a real, caller-owned tree (e.g. bin/sync output). The
-        # distribution is already present; only add the adopter-created
-        # placeholders, and never delete the caller's tree.
+        # Validate a real, caller-owned tree (e.g. bin/sync output) in place. The
+        # distribution is already present; adopter-owned placeholders are treated
+        # as allowed-absent by check(), so we never write to — or delete from —
+        # the caller's tree (issue #36).
         tree = os.path.abspath(tree_arg)
         if not os.path.isdir(tree):
             print("check-links: --tree path is not a directory: %s" % tree, file=sys.stderr)
             return 2
-        materialize_adopter_local(tree)
         checked, failures, n_files = check(tree)
         where = "the tree at %s" % tree
     else:
         tree = tempfile.mkdtemp(prefix="methodology-adopter-tree-")
         try:
             materialize_distribution(tree)
-            materialize_adopter_local(tree)
             checked, failures, n_files = check(tree)
         finally:
             shutil.rmtree(tree, ignore_errors=True)
