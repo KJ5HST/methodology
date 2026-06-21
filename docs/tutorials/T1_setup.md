@@ -130,4 +130,4 @@ A bootstrapped project: the operating procedure (`SESSION_RUNNER.md`), the safet
 
 ## Next
 
-→ **Tutorial 2: Your First Session, End-to-End** *(coming in the next session)* — run one full 6-phase pass to one deliverable, with Phase 0 Orient and the Present gate front and center. This pointer becomes a live link to `T2_first_session.md` when that tutorial lands.
+→ **[Tutorial 2: Your First Session, End-to-End](T2_first_session.md)** — run one full 6-phase pass to one deliverable, with Phase 0 Orient and the Present gate front and center.
