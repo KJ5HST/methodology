@@ -143,7 +143,7 @@ Expand any project card to see health breakdown by dimension, risk factors, git 
 
 ## Tutorials
 
-New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, progressive learning track — install the framework, run a real session end to end, and learn where the guardrails catch you. Each lesson has you *do* one thing against a real project (your own repo, or the bundled [sample project](docs/tutorials/sample-project/)), with a checkpoint at every step. The core trio (Setup → First Session → Cautionary Use) is in progress; see the **[series index](docs/tutorials/)** for the full curriculum.
+New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, progressive learning track — install the framework, run a real session end to end, and learn where the guardrails catch you. Each lesson has you *do* one thing against a real project (your own repo, or the bundled [sample project](docs/tutorials/sample-project/)), with a checkpoint at every step. The core trio (Setup → First Session → Cautionary Use) is published; see the **[series index](docs/tutorials/)** for the full curriculum.
 
 ## Repository Structure
 

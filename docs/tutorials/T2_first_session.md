@@ -113,4 +113,4 @@ One real deliverable taken end-to-end: a tested, runtime-verified `todo done <id
 
 ## Next
 
-→ **Tutorial 5: Cautionary Use** *(coming in a later session)* — the gates, the 26 failure modes, "1 and done," the vertical-slice gates, and the Plan-Mode exit trap, built on the near-misses from *this* session — and when the methodology is too heavy to bother. This pointer becomes a live link to `T5_cautionary.md` when that tutorial lands.
+→ **[Tutorial 5: Cautionary Use](T5_cautionary.md)** — the gates, the 26 failure modes, "1 and done," the vertical-slice gates, and the Plan-Mode exit trap, built on the near-misses from *this* session — and when the methodology is too heavy to bother.

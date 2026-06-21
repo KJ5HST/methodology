@@ -4,11 +4,11 @@ A hands-on, progressive learning track for the Iterative Session Methodology. Th
 docs *define* the framework — this one makes you *do* it, one thing at a time, against a real
 project, with a checkpoint after each step.
 
-> **Status:** [Tutorial 1: Setup & First Bootstrap](T1_setup.md) and
-> [Tutorial 2: Your First Session, End-to-End](T2_first_session.md) are published — T2 ships with a
-> [worked transcript](T2_worked_transcript.md) of a real session against the sample project. The
-> [tutorial template](TUTORIAL_TEMPLATE.md) and [sample project](sample-project/) are in place;
-> T5 lands in a later session. The curriculum below shows what's done and what's coming.
+> **Status:** The **core trio is published** — [T1: Setup & First Bootstrap](T1_setup.md),
+> [T2: Your First Session, End-to-End](T2_first_session.md) (with a
+> [worked transcript](T2_worked_transcript.md) of a real session against the sample project), and
+> [T5: Cautionary Use](T5_cautionary.md). The [tutorial template](TUTORIAL_TEMPLATE.md) and
+> [sample project](sample-project/) are in place. The curriculum below shows what's done and what's coming.
 
 ## Why bother?
 
@@ -56,7 +56,7 @@ The **core trio (T1 · T2 · T5)** is the first cut; the rest is a roadmap.
 |---|----------|--------------------|:-------------:|
 | [T1](T1_setup.md) | Setup & First Bootstrap | Install the framework into a project: root files, `CLAUDE.md` protocol block, task tracking, dashboard | ✅ **published** |
 | [T2](T2_first_session.md) | Your First Session, End-to-End | Run one full 6-phase pass to one deliverable — with Phase 0 Orient and the Present gate front and center | ✅ **published** |
-| T5 | Cautionary Use | Read the gates, the 26 failure modes, "1 and done", the vertical-slice gates, and the Plan-Mode exit trap — and know when the methodology is too heavy | ✅ planned |
+| [T5](T5_cautionary.md) | Cautionary Use | Read the gates, the 26 failure modes, "1 and done", the vertical-slice gates, and the Plan-Mode exit trap — and know when the methodology is too heavy | ✅ **published** |
 | T3 | The Compounding Loop | Run the handoff + scoring loop and watch session N+1 improve | roadmap |
 | T4 | Choosing & Adapting a Workstream | Pick the right workstream; spin up a custom one | roadmap |
 | T6 | Multi-Session Campaigns | Carry one deliverable across many sessions | roadmap |
