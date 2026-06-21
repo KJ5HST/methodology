@@ -131,6 +131,55 @@ else
     fail "check-links: dangling link(s) in adopter layout (see above)"
 fi
 
+echo "== Test 11: sync produces the full manifest tree (faithful, per-file) =="
+P="$(mktemp_project)"
+"$BIN/sync" "$P" --mode=commit >/dev/null
+MANIFEST_OK=1
+COUNT=0
+while IFS='|' read -r src dest disp; do
+    [ -z "$dest" ] && continue
+    COUNT=$((COUNT+1))
+    if [ ! -f "$P/$dest" ]; then MANIFEST_OK=0; echo "    MISSING: $dest"; continue; fi
+    if [ "$disp" = "tracked" ]; then
+        diff -q "$P/$dest" "$METHODOLOGY/$src" >/dev/null || { MANIFEST_OK=0; echo "    DRIFT: $dest"; }
+    fi
+done < <(python3 -c "import sys; sys.path.insert(0, '$BIN'); import _manifest; [print('%s|%s|%s' % (s, d, x)) for s, d, x in _manifest.DISTRIBUTION]")
+[ "$MANIFEST_OK" = "1" ] && pass "all $COUNT manifest files present; tracked files match canonical" || fail "manifest tree incomplete/drifted"
+# subdir dest spot-check (the multi-dir tree, not just root files)
+[ -f "$P/docs/methodology/ITERATIVE_METHODOLOGY.md" ] && pass "framework doc landed under docs/methodology/" || fail "docs/methodology/ doc missing"
+[ -f "$P/docs/methodology/workstreams/AUDIT_WORKSTREAM.md" ] && pass "workstream landed under docs/methodology/workstreams/" || fail "workstreams/ doc missing"
+rm -rf "$P"
+
+echo "== Test 12: seed files created once, never clobbered (even --force) =="
+P="$(mktemp_project)"
+"$BIN/sync" "$P" >/dev/null
+[ -f "$P/SESSION_NOTES.md" ] && pass "seed SESSION_NOTES created when absent" || fail "seed not created"
+echo "ADOPTER LOG ENTRY" > "$P/SESSION_NOTES.md"
+"$BIN/sync" "$P" >/dev/null
+grep -q "ADOPTER LOG ENTRY" "$P/SESSION_NOTES.md" && pass "seed not overwritten on normal sync" || fail "seed overwritten on sync"
+"$BIN/sync" "$P" --force >/dev/null
+grep -q "ADOPTER LOG ENTRY" "$P/SESSION_NOTES.md" && pass "seed not overwritten even with --force" || fail "seed overwritten by --force"
+rm -rf "$P"
+
+echo "== Test 13: adopter-owned instances are never sync targets =="
+P="$(mktemp_project)"
+"$BIN/sync" "$P" >/dev/null
+[ ! -f "$P/CONTEXT.md" ] && pass "sync did not create instance CONTEXT.md" || fail "sync created instance CONTEXT.md"
+[ ! -f "$P/CLAUDE.md" ] && pass "sync did not create instance CLAUDE.md" || fail "sync created instance CLAUDE.md"
+[ -f "$P/CONTEXT_TEMPLATE.md" ] && pass "template CONTEXT_TEMPLATE.md is present" || fail "template CONTEXT_TEMPLATE.md missing"
+rm -rf "$P"
+
+echo "== Test 14: check-links passes against the sync-produced tree =="
+P="$(mktemp_project)"
+"$BIN/sync" "$P" >/dev/null
+if "$BIN/check-links" --tree "$P" >/dev/null 2>&1; then
+    pass "check-links --tree: links resolve in the sync-produced tree"
+else
+    "$BIN/check-links" --tree "$P" 2>&1 | sed 's/^/    /'
+    fail "check-links --tree: dangling link(s) in sync-produced tree"
+fi
+rm -rf "$P"
+
 echo ""
 echo "== Summary: $PASS passed, $FAIL failed =="
 [ "$FAIL" = "0" ]

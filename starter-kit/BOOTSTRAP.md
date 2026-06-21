@@ -35,7 +35,7 @@ your-projects/                        <-- parent directory (portfolio level)
 
 ## Two adoption modes
 
-The methodology supports two ways to keep synced files (`SESSION_RUNNER.md`, `SAFEGUARDS.md`, `methodology_dashboard.py`) in your project:
+The methodology supports two ways to keep the synced files current in your project (`bin/sync` distributes the full corpus — the operating files at your project root and the framework under `docs/methodology/`; see the next section for the complete list):
 
 | Mode | What it means | Best for |
 |------|---------------|----------|
@@ -64,7 +64,7 @@ If you have a local `methodology/` checkout (sibling to your projects), use the 
 ../methodology/bin/sync your-project/ --source=github
 ```
 
-`bin/sync` copies `SESSION_RUNNER.md`, `SAFEGUARDS.md`, and `methodology_dashboard.py` into the target. In `--mode=ignore` it also adds `.gitignore` entries and warns (non-destructively) if any of those files are currently tracked by git.
+`bin/sync` copies the full methodology corpus into the target: the operating files (`SESSION_RUNNER.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`) at the project root and the framework (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) under `docs/methodology/`, creating subdirectories as needed. `SESSION_NOTES.md`, `CHANGELOG.md`, and `ROADMAP.md` are *seeded* at the root only when absent and are never overwritten afterward — once created they are yours to edit. The complete mapping is defined once in `bin/_manifest.py`. In `--mode=ignore` it also adds `.gitignore` entries for the tracked files (not the seeded ones, which you commit) and warns (non-destructively) if any tracked file is currently tracked by git.
 
 **Drift safety:** `bin/sync` refuses to overwrite a file that has local modifications not matching canonical or any historical version. The recommended pattern is to move per-project customizations into your CLAUDE.md's "Project-Specific Methodology Adaptations" section (see Step 5), then run sync. If you really need to discard local edits, pass `--force`.
 
@@ -99,6 +99,8 @@ From the methodology `starter-kit/` directory:
 | `CHANGELOG.md` | Completed work history — add entries as work is finished |
 | `ROADMAP.md` | Feature inventory and future plans — what's built, what's next |
 | `methodology_dashboard.py` | Health scanner — scores project health and methodology compliance |
+
+This table is the minimum manual set. The **authoritative, complete distribution list** — which also includes `RECOMMENDED_SKILLS.md` and the `CONTEXT_TEMPLATE.md`/`CLAUDE_TEMPLATE.md` templates at the project root, plus the framework under `docs/methodology/` — is defined once in `bin/_manifest.py` and applied by `bin/sync`. Copy those too for the full set; the templates are renamed to `CONTEXT.md`/`CLAUDE.md` (see Step 5).
 
 Run the dashboard once to generate your first report:
 

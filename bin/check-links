@@ -12,12 +12,9 @@ materializes a simulated adopter tree (each distributable copied to its adopter
 destination, plus the files an adopter creates locally) and asserts every
 relative link in every distributed markdown file resolves to an existing file.
 
-Part of B1 / issue #32, Phase 2 (link reconciliation).
-
-NOTE (Phase 2 -> Phase 3 hand-off): the DISTRIBUTION mapping below is inlined
-here for Phase 2. Phase 3 extracts it to bin/_manifest.py as the single source of
-truth shared with bin/sync and bin/status (plan Decision 5). Until then, keep the
-two in sync.
+Part of B1 / issue #32 (Phase 2 added this checker; Phase 3 moved the
+DISTRIBUTION map to bin/_manifest.py — the single source of truth now shared with
+bin/sync, plan Decision 5).
 
 Usage:  ./bin/check-links            # run from anywhere
 Exit:   0 = all relative links resolve; 1 = one or more dangling links.
@@ -29,43 +26,10 @@ import shutil
 import sys
 import tempfile
 
-REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _manifest import DISTRIBUTION  # noqa: E402  (bin/ is on sys.path above)
 
-# (source path relative to canonical repo root, destination relative to adopter
-# project root). Mirrors README Option B plus the two files B1 gives a home
-# (RECOMMENDED_SKILLS.md, CONTEXT_TEMPLATE.md -> adopter root, plan Decision 1).
-DISTRIBUTION = [
-    ("starter-kit/SESSION_RUNNER.md", "SESSION_RUNNER.md"),
-    ("starter-kit/SAFEGUARDS.md", "SAFEGUARDS.md"),
-    ("starter-kit/RECOMMENDED_SKILLS.md", "RECOMMENDED_SKILLS.md"),
-    ("starter-kit/CONTEXT_TEMPLATE.md", "CONTEXT_TEMPLATE.md"),
-    ("starter-kit/CLAUDE_TEMPLATE.md", "CLAUDE_TEMPLATE.md"),
-    ("starter-kit/SESSION_NOTES.md", "SESSION_NOTES.md"),
-    ("starter-kit/CHANGELOG.md", "CHANGELOG.md"),
-    ("starter-kit/ROADMAP.md", "ROADMAP.md"),
-    ("starter-kit/BOOTSTRAP.md", "BOOTSTRAP.md"),
-    ("starter-kit/methodology_dashboard.py", "methodology_dashboard.py"),
-    ("ITERATIVE_METHODOLOGY.md", "docs/methodology/ITERATIVE_METHODOLOGY.md"),
-    ("HOW_TO_USE.md", "docs/methodology/HOW_TO_USE.md"),
-    ("workstreams/DESIGN_WORKSTREAM.md",
-     "docs/methodology/workstreams/DESIGN_WORKSTREAM.md"),
-    ("workstreams/ARCHITECTURE_WORKSTREAM.md",
-     "docs/methodology/workstreams/ARCHITECTURE_WORKSTREAM.md"),
-    ("workstreams/DEVELOPMENT_WORKSTREAM.md",
-     "docs/methodology/workstreams/DEVELOPMENT_WORKSTREAM.md"),
-    ("workstreams/AUDIT_WORKSTREAM.md",
-     "docs/methodology/workstreams/AUDIT_WORKSTREAM.md"),
-    ("workstreams/RESEARCH_DOCUMENTATION_WORKSTREAM.md",
-     "docs/methodology/workstreams/RESEARCH_DOCUMENTATION_WORKSTREAM.md"),
-    ("workstreams/TEMPLATE_WORKSTREAM.md",
-     "docs/methodology/workstreams/TEMPLATE_WORKSTREAM.md"),
-    ("workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md",
-     "docs/methodology/workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md"),
-    ("workstreams/INHERITED_CODEBASE_FAMILIARIZATION_CAMPAIGN.md",
-     "docs/methodology/workstreams/INHERITED_CODEBASE_FAMILIARIZATION_CAMPAIGN.md"),
-    ("workstreams/TEMPLATE_CAMPAIGN.md",
-     "docs/methodology/workstreams/TEMPLATE_CAMPAIGN.md"),
-]
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Legitimate link targets that are NOT part of the distribution: files an adopter
 # creates locally (instances / overflow valves) and intentional template
@@ -96,11 +60,18 @@ def is_external(target):
     return target.startswith(("http://", "https://", "mailto:", "#"))
 
 
-def materialize(tree):
-    for src, dest in DISTRIBUTION:
+def materialize_distribution(tree):
+    """Copy every distributed file to its adopter destination (simulated tree)."""
+    for src, dest, _disp in DISTRIBUTION:
         dpath = os.path.join(tree, dest)
         os.makedirs(os.path.dirname(dpath) or tree, exist_ok=True)
         shutil.copyfile(os.path.join(REPO, src), dpath)
+
+
+def materialize_adopter_local(tree):
+    """Create the placeholder files an adopter owns (instances, overflow valves,
+    template placeholders) so links to them resolve. Left untouched if present —
+    safe to call on a real (e.g. sync-produced) tree."""
     for rel in ADOPTER_LOCAL_FILES:
         ppath = os.path.join(tree, rel)
         os.makedirs(os.path.dirname(ppath) or tree, exist_ok=True)
@@ -111,9 +82,14 @@ def materialize(tree):
 def check(tree):
     failures = []
     checked = 0
-    md_files = [(s, d) for s, d in DISTRIBUTION if d.endswith(".md")]
+    md_files = [(s, d) for s, d, _disp in DISTRIBUTION if d.endswith(".md")]
     for _src, dest in md_files:
         dpath = os.path.join(tree, dest)
+        if not os.path.exists(dpath):
+            # In --tree mode a distributed file may be absent if sync failed to
+            # write it; report rather than crash.
+            failures.append((dest, 0, "<distributed file missing from tree>"))
+            continue
         ddir = os.path.dirname(dpath)
         with open(dpath, encoding="utf-8") as fh:
             for lineno, line in enumerate(fh, 1):
@@ -139,16 +115,44 @@ def check(tree):
 
 
 def main():
-    tree = tempfile.mkdtemp(prefix="methodology-adopter-tree-")
-    try:
-        materialize(tree)
+    argv = sys.argv[1:]
+    if argv and argv[0] in ("-h", "--help"):
+        print("usage: check-links [--tree <adopter-project-dir>]\n"
+              "  (no args)      validate a freshly simulated adopter tree\n"
+              "  --tree <dir>   validate an existing tree, e.g. one bin/sync produced")
+        return 0
+
+    tree_arg = None
+    if argv:
+        if argv[0] == "--tree" and len(argv) == 2:
+            tree_arg = argv[1]
+        else:
+            print("usage: check-links [--tree <adopter-project-dir>]", file=sys.stderr)
+            return 2
+
+    if tree_arg:
+        # Validate a real, caller-owned tree (e.g. bin/sync output). The
+        # distribution is already present; only add the adopter-created
+        # placeholders, and never delete the caller's tree.
+        tree = os.path.abspath(tree_arg)
+        if not os.path.isdir(tree):
+            print("check-links: --tree path is not a directory: %s" % tree, file=sys.stderr)
+            return 2
+        materialize_adopter_local(tree)
         checked, failures, n_files = check(tree)
-    finally:
-        shutil.rmtree(tree, ignore_errors=True)
+        where = "the tree at %s" % tree
+    else:
+        tree = tempfile.mkdtemp(prefix="methodology-adopter-tree-")
+        try:
+            materialize_distribution(tree)
+            materialize_adopter_local(tree)
+            checked, failures, n_files = check(tree)
+        finally:
+            shutil.rmtree(tree, ignore_errors=True)
+        where = "the simulated adopter tree"
 
     if failures:
-        print("check-links: FAIL — %d dangling link(s) in the simulated "
-              "adopter tree:" % len(failures))
+        print("check-links: FAIL — %d dangling link(s) in %s:" % (len(failures), where))
         for dest, lineno, target in failures:
             print("  %s:%d  ->  %s" % (dest, lineno, target))
         print("\nDistributed files author cross-references for the ADOPTER "
@@ -156,7 +160,7 @@ def main():
         return 1
 
     print("check-links: OK — %d relative link(s) across %d distributed markdown "
-          "files resolve in the simulated adopter tree." % (checked, n_files))
+          "files resolve in %s." % (checked, n_files, where))
     return 0
 
 

@@ -69,11 +69,11 @@ Each phase is gated. You cannot enter the next phase until the current one is co
 ../methodology/bin/sync your-project/ --source=github  # or: pull from GitHub (needs gh CLI)
 ```
 
-This copies `SESSION_RUNNER.md`, `SAFEGUARDS.md`, and `methodology_dashboard.py` into the target. See [`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md) for the difference between committed and ignored modes.
+This copies the full methodology corpus into the target: the operating files (`SESSION_RUNNER.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`) to the project root, and the framework (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) to `docs/methodology/`. These are kept current on every run. `SESSION_NOTES.md`, `CHANGELOG.md`, and `ROADMAP.md` are *seeded* at the root only when absent — once they exist they are yours and `bin/sync` never overwrites them. See [`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md) for the difference between committed and ignored modes.
 
 **Option B — manual:**
 
-Copy `starter-kit/SESSION_RUNNER.md`, `starter-kit/SAFEGUARDS.md`, `starter-kit/SESSION_NOTES.md`, `starter-kit/CHANGELOG.md`, and `starter-kit/ROADMAP.md` to your project root. Copy the framework files (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) to `docs/methodology/`.
+Copy the starter-kit root-files to your project root — `SESSION_RUNNER.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`, plus `SESSION_NOTES.md`, `CHANGELOG.md`, and `ROADMAP.md` as starting points you then own. Copy the framework files (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`) and `workstreams/` to `docs/methodology/`. (Option A's `bin/sync` does all of this in one command.)
 
 ### 2. Tell Claude to use it
 
