@@ -30,8 +30,10 @@ python3 --version    # Python 3.8+
   cd your-project
   git switch -c methodology-practice
   ```
-- **Track B — the bundled sample.** Copy the sample *out* of the methodology repo into a throwaway location, so your practice edits never touch the methodology checkout, and make it a standalone repo:
+- **Track B — the bundled sample.** Copy the sample *out* of the methodology repo into a throwaway location, so your practice edits never touch the methodology checkout, and make it a standalone repo. Run the copy from inside your methodology checkout and capture where that checkout is — you'll point `bin/sync` at it in Step 1:
   ```sh
+  # from inside your methodology checkout (wherever you cloned it):
+  METH=$PWD
   cp -r docs/tutorials/sample-project ~/todo-practice
   cd ~/todo-practice
   git init -q && git add -A && git commit -qm "start: sample todo CLI"
@@ -45,20 +47,21 @@ Each step is one action and its expected result. Don't skip ahead — the final 
 
 ### 1. Copy the methodology files into your project
 
-You have two ways to do this; both are first-class. The scripted path is fastest if you have a local `methodology/` checkout (Track B learners already do — it's where the sample came from).
+You have two ways to do this; both are first-class. The scripted path is fastest if you have a local `methodology/` checkout (Track B learners already do — it's where the sample came from). Point the command at that checkout: Track B uses the `$METH` it set in "Before you start"; Track A learners who keep the portfolio layout (projects as siblings of the checkout) can use the relative `../methodology/` form. `bin/sync` runs from the local checkout regardless of `--source` (the script must exist on disk; `--source` only changes where the *contents* are read from).
 
 ```sh
 # Scripted (committed mode is the default):
-../methodology/bin/sync .
+"$METH"/bin/sync .            # Track B — $METH is your methodology checkout
+../methodology/bin/sync .     # Track A — a sibling checkout, per the portfolio layout
 
-# …or, with no sibling checkout, pull from GitHub (needs the gh CLI):
-../methodology/bin/sync . --source=github
+# …or pull canonical contents from GitHub instead of the local checkout (needs the gh CLI):
+"$METH"/bin/sync . --source=github
 ```
 
 For the manual path, or the difference between committed and ignored modes, see [`BOOTSTRAP.md` §Setup with `bin/sync`](../../starter-kit/BOOTSTRAP.md#setup-with-binsync-recommended) and [§Setup by manual copy](../../starter-kit/BOOTSTRAP.md#setup-by-manual-copy-always-valid).
 
-**Expected result:** `bin/sync` copies `SESSION_RUNNER.md`, `SAFEGUARDS.md`, and `methodology_dashboard.py` into the project.
-**Checkpoint:** `ls SESSION_RUNNER.md SAFEGUARDS.md methodology_dashboard.py` lists all three.
+**Expected result:** `bin/sync` copies the **full methodology corpus** into the project — the operating files at the root (`SESSION_RUNNER.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, the `CONTEXT_TEMPLATE.md`/`CLAUDE_TEMPLATE.md` templates, `BOOTSTRAP.md`, `methodology_dashboard.py`) and the framework (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) under `docs/methodology/` — and *seeds* `SESSION_NOTES.md`, `CHANGELOG.md`, and `ROADMAP.md` at the root when they're absent. The exact mapping is defined once in [`bin/_manifest.py`](../../bin/_manifest.py).
+**Checkpoint:** the operating files are at your project root and the framework is under `docs/methodology/` — `ls SESSION_RUNNER.md SAFEGUARDS.md methodology_dashboard.py` and `ls docs/methodology/` both succeed.
 
 ### 2. Tell your agent to use it — the SESSION PROTOCOL block
 
@@ -80,10 +83,12 @@ The full block (with the three rules you'll be tempted to violate) and the `CLAU
 
 Open work, completed history, and future plans live in three separate files so the one the agent reads at session start (`BACKLOG.md`) stays scannable. See [`BOOTSTRAP.md` §Step 3](../../starter-kit/BOOTSTRAP.md#step-3-create-your-task-tracking-files).
 
-- **Track B:** the sample already ships a [`BACKLOG.md`](sample-project/BACKLOG.md) — that *is* your project backlog. Its first item, `F1: todo done <id>`, is exactly the feature you'll build end-to-end in Tutorial 2. Copy the `CHANGELOG.md` and `ROADMAP.md` templates from `starter-kit/` to the project root.
-- **Track A:** create a `BACKLOG.md` with your open items only (no completed work), and copy the `CHANGELOG.md` / `ROADMAP.md` templates from `starter-kit/`.
+Step 1's `bin/sync` already *seeded* `CHANGELOG.md` and `ROADMAP.md` at your root (they're SEED files — written once, then yours to edit). `BACKLOG.md` is the one it deliberately doesn't create: it's adopter-owned, so it's the file you author here. (If you took the manual copy path instead of `bin/sync`, copy `CHANGELOG.md`/`ROADMAP.md` from `starter-kit/` per [`BOOTSTRAP.md` §Step 3](../../starter-kit/BOOTSTRAP.md#step-3-create-your-task-tracking-files).)
 
-**Expected result:** three files at the root — `BACKLOG.md` (open items only), `CHANGELOG.md`, `ROADMAP.md`.
+- **Track B:** the sample already ships a [`BACKLOG.md`](sample-project/BACKLOG.md) — that *is* your project backlog. Its first item, `F1: todo done <id>`, is exactly the feature you'll build end-to-end in Tutorial 2. Confirm the seeded `CHANGELOG.md` and `ROADMAP.md` are present.
+- **Track A:** author a `BACKLOG.md` with your open items only (no completed work); `CHANGELOG.md` and `ROADMAP.md` are already at your root from Step 1.
+
+**Expected result:** three files at the root — `BACKLOG.md` (open items only, hand-authored) plus the seeded `CHANGELOG.md` and `ROADMAP.md`.
 **Checkpoint:** `BACKLOG.md` lists only actionable work and reads in under a minute; `CHANGELOG.md` and `ROADMAP.md` both exist.
 
 ### 4. Record your build equivalent
