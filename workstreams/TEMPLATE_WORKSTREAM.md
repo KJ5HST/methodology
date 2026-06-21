@@ -25,6 +25,12 @@ When a recommended skill is unavailable, the discipline in this document is the 
 
 ---
 
+## Recommended Reasoning Tier *(optional — set this domain's default)*
+
+One line keying this workstream's default reasoning tier to its blast radius × irreversibility × compounding cost, citing `ITERATIVE_METHODOLOGY.md` §Matching Reasoning Effort to Stakes. Heavy / irreversible / compounding → deepest mode; cheap / reversible / mechanical → lighter. Delete if the domain's tier is unremarkable.
+
+---
+
 ## Phase 2: Research ([Domain]-Specific)
 
 ### Step 1: Study the [Requirements/Domain/Problem]

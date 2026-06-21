@@ -12,6 +12,8 @@ Use this workstream when designing:
 - Visual hierarchy and interaction flow
 - Profile/theme/configuration variants of the same interface
 
+> Design output is iterative and cheap to revise — lower blast radius than development or research. A lighter reasoning tier is the honest default here; reserve the deepest mode for genuinely irreversible commitments (`ITERATIVE_METHODOLOGY.md` §Matching Reasoning Effort to Stakes). The axis runs both ways.
+
 ---
 
 ## Phase 2: Research (Design-Specific)

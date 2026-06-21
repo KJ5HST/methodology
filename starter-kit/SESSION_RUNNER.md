@@ -94,6 +94,8 @@ State your understanding back to the user: *"I'm going to [deliverable] followin
 
 **⚠ The plan is the deliverable. Do not start implementing it.** Write the plan document to `docs/planning/`, commit it, close out. Implementation happens in a separate session.
 
+**Set your agent's deepest available reasoning mode at session start** (capability: maximum reasoning depth — e.g. `/effort max` where supported). A plan is low-reversibility and high-compounding: its errors propagate into every executor session that trusts it (`ITERATIVE_METHODOLOGY.md` §Matching Reasoning Effort to Stakes).
+
 **A plan is a deliverable, not a preamble.** When the session's deliverable is a plan (architecture doc, migration plan, multi-phase implementation plan), additional discipline applies:
 
 #### Evidence-Based Inventory (MANDATORY for deletion/migration/rename plans)
@@ -122,6 +124,7 @@ Without explicit completion criteria, executors don't know when to stop and tend
 
 Before closing out a planning session, verify:
 
+- [ ] Deepest available reasoning mode set at session start
 - [ ] Plan document written with file paths and line numbers
 - [ ] Grep-based inventory completed for all affected symbols (if deletion/migration/rename)
 - [ ] Each phase has explicit completion criteria and verification commands
