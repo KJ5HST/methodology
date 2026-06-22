@@ -107,4 +107,4 @@ A real portfolio: a generated `dashboard.html` scoring two or more projects at o
 
 ## Next
 
-→ The next roadmap stop is **T8 — Keeping Adopters Current** (use `bin/sync` / `bin/status` to stay in step with the canonical repo) — see the [curriculum](README.md#curriculum) for what's landed. The dashboard tells you *where* to spend a session; `bin/sync` keeps the framework those projects run on *current*. For now, do it for real on Track A: point the scanner at the parent directory above your real repos and let the risk matrix — not your memory of which project felt neglected — choose your next session.
+→ **[Tutorial 8: Keeping Adopters Current](T8_keeping_current.md)** — the dashboard tells you *where* to spend a session; `bin/status`/`bin/sync` keep the framework those projects run on *current* as the canonical repo evolves. Before you move on, do this one for real on Track A: point the scanner at the parent directory above your real repos and let the risk matrix — not your memory of which project felt neglected — choose your next session.
