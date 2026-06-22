@@ -7,7 +7,8 @@ project, with a checkpoint after each step.
 > **Status:** The **core trio is published** — [T1: Setup & First Bootstrap](T1_setup.md),
 > [T2: Your First Session, End-to-End](T2_first_session.md) (with a
 > [worked transcript](T2_worked_transcript.md) of a real session against the sample project), and
-> [T5: Cautionary Use](T5_cautionary.md). The [tutorial template](TUTORIAL_TEMPLATE.md) and
+> [T5: Cautionary Use](T5_cautionary.md) — now extended by the first roadmap tutorial,
+> [T3: The Compounding Loop](T3_compounding_loop.md). The [tutorial template](TUTORIAL_TEMPLATE.md) and
 > [sample project](sample-project/) are in place. The curriculum below shows what's done and what's coming.
 
 ## Why bother?
@@ -25,7 +26,7 @@ sessions, and session N+1 reliably better than session N — is documented, not 
 
 - **One objective per tutorial** — mirrors the methodology's "1 deliverable per session." Each
   tutorial does exactly one thing.
-- **Progressive** — T1 → T2 → T5 build on each other; every tutorial names its predecessor.
+- **Progressive** — T1 → T2 → T5 build on each other, and T3 builds on T2; every tutorial names its predecessor.
 - **You produce a real artifact** — an installed framework, a saved session doc, a feature you
   shipped, a near-miss you caught. Not read-along.
 - **Cite, don't restate** — tutorials link into [`BOOTSTRAP.md`](../../starter-kit/BOOTSTRAP.md),
@@ -44,20 +45,21 @@ Choose a single track for a given run (do one, then the other if you like — no
   with a real test suite and a [backlog](sample-project/BACKLOG.md)) and follow the steps
   step-for-step in a throwaway sandbox.
 
-One running example threads the core trio: T1 installs the framework onto the sample project, T2
-runs the first session (building one todo-CLI feature), and T5 uses that same session's
-near-misses as its cautionary cases.
+One running example threads the series: T1 installs the framework onto the sample project, T2
+runs the first session (building one todo-CLI feature), T5 uses that same session's
+near-misses as its cautionary cases, and T3 runs *Session 2* — scoring Session 1's handoff and
+building the next feature — to make the compounding loop felt, not just described.
 
 ## Curriculum
 
-The **core trio (T1 · T2 · T5)** is the first cut; the rest is a roadmap.
+The **core trio (T1 · T2 · T5)** was the first cut; **T3** has since landed, and the rest is a roadmap.
 
-| # | Tutorial | You'll be able to… | In first cut? |
+| # | Tutorial | You'll be able to… | Status |
 |---|----------|--------------------|:-------------:|
 | [T1](T1_setup.md) | Setup & First Bootstrap | Install the framework into a project: root files, `CLAUDE.md` protocol block, task tracking, dashboard | ✅ **published** |
 | [T2](T2_first_session.md) | Your First Session, End-to-End | Run one full 6-phase pass to one deliverable — with Phase 0 Orient and the Present gate front and center | ✅ **published** |
 | [T5](T5_cautionary.md) | Cautionary Use | Read the gates, the 26 failure modes, "1 and done", the vertical-slice gates, and the Plan-Mode exit trap — and know when the methodology is too heavy | ✅ **published** |
-| T3 | The Compounding Loop | Run the handoff + scoring loop and watch session N+1 improve | roadmap |
+| [T3](T3_compounding_loop.md) | The Compounding Loop | Run the handoff + scoring loop and watch session N+1 improve | ✅ **published** |
 | T4 | Choosing & Adapting a Workstream | Pick the right workstream; spin up a custom one | roadmap |
 | T6 | Multi-Session Campaigns | Carry one deliverable across many sessions | roadmap |
 | T7 | Portfolio & Dashboard Ops | Run across many projects; read the health dashboard | roadmap |
