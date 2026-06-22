@@ -105,4 +105,4 @@ Session 2, complete: **F2 — `todo rm <id>`** shipped and runtime-verified, *an
 
 ## Next
 
-→ The next roadmap stop is **T4 — Choosing & Adapting a Workstream** (pick the right workstream for the work in front of you; spin up a custom one when none fits) — see the [curriculum](README.md#curriculum) for what's landed. For now, run a real *Session 2* on a project you actually return to: the loop only compounds on work you repeat, and you only trust the ratchet once you've felt your own past handoff give you a head start.
+→ **[Tutorial 4: Choosing & Adapting a Workstream](T4_workstreams.md)** — pick the right workstream for the work in front of you, and spin up a custom one when none fits. For now, run a real *Session 2* on a project you actually return to: the loop only compounds on work you repeat, and you only trust the ratchet once you've felt your own past handoff give you a head start.
