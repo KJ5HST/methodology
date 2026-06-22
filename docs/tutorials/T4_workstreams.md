@@ -131,4 +131,4 @@ A recorded workstream selection — the Audit lens chosen by matching the task t
 
 ## Next
 
-→ The next roadmap stop is **T6 — Multi-Session Campaigns** (carry one deliverable — like the repo-wide hardening your audit just recommended — across many sessions without losing the thread) — see the [curriculum](README.md#curriculum) for what's landed. For now, do it for real: name the workstream your *own* last session was in, and the next time a task doesn't fit, draft the lens before you start instead of forcing the work into Development.
+→ **[Tutorial 6: Multi-Session Campaigns](T6_campaigns.md)** — carry one deliverable, like the repo-wide hardening your audit just recommended, across many sessions without losing the thread. For now, do it for real: name the workstream your *own* last session was in, and the next time a task doesn't fit, draft the lens before you start instead of forcing the work into Development.
