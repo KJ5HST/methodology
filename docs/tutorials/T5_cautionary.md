@@ -87,6 +87,6 @@ Two near-misses you caught on purpose — recorded in `SESSION_NOTES.md` as gate
 
 ## Next
 
-That's the **core trio (T1 · T2 · T5)** — installed, run once for real, and stress-tested. The natural continuation is now live:
+You've now installed the framework, run one real session, and stress-tested the gates. Next in the track:
 
-→ **[Tutorial 3: The Compounding Loop](T3_compounding_loop.md)** — run the handoff-and-scoring loop across sessions and watch session N+1 beat session N. (See the [curriculum](README.md#curriculum) for the full roadmap.) And take the use/don't-use judgment from Step 5 to a real project — the methodology earns its keep on the work you'd otherwise repeat without learning from.
+→ **[Tutorial 3: The Compounding Loop](T3_compounding_loop.md)** — run the handoff-and-scoring loop across sessions and watch session N+1 beat session N. (See the [curriculum](README.md#curriculum) for the full track.) And take the use/don't-use judgment from Step 5 to a real project — the methodology earns its keep on the work you'd otherwise repeat without learning from.
