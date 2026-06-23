@@ -6,7 +6,7 @@ A universal framework for producing high-quality work through structured, self-c
 
 ## Origin and Findings
 
-This methodology was extracted from an 11-session UI/UX design series and subsequently validated across 52+ sessions spanning implementation, CI integration, plugin architecture, code review, planning, and audit work. The original results:
+This methodology was extracted from an 11-session UI/UX design series and subsequently validated across 1100+ sessions spanning implementation, CI integration, plugin architecture, code review, planning, and audit work. The original results:
 
 | Metric | Session 1 | Sessions 2-11 |
 |--------|-----------|---------------|
@@ -15,7 +15,7 @@ This methodology was extracted from an 11-session UI/UX design series and subseq
 | Defects found in existing work | 0 | 2 → 15 (monotonically increasing) |
 | Research depth | Partial, prompted | Comprehensive, proactive |
 
-The broader validation (Sessions 12-52+) confirmed these results hold across domains and added critical findings:
+The broader validation (Sessions 12-1100+) confirmed these results hold across domains and added critical findings:
 
 | Finding | Sessions | Impact |
 |---------|----------|--------|
@@ -40,7 +40,7 @@ And the sixth, discovered later but equally load-bearing:
 
 These six changes account for the entire improvement. They are domain-independent. This document codifies them into a reusable framework.
 
-A further validation at 60+ sessions revealed a seventh finding:
+A further validation revealed a seventh finding:
 
 7. **Protocol discipline is perishable** — methodology that produced 14 consecutive clean deliveries can degrade to 1/10 scores within 12 hours if sessions stop re-internalizing it (see §Protocol Erosion)
 
@@ -168,7 +168,7 @@ Every session follows these phases in order. Phases are sequential and gated —
 1. Write a stub to the session notes file with: session identifier, task description, start time, status "IN PROGRESS"
 2. This stub is overwritten during Phase 6 with the full close-out notes
 
-**Why this phase exists:** In a 60+ session series, multiple sessions crashed or ended without completing close-out. These "ghost sessions" left zero trace — no notes, no self-assessment, no handoff. The next session had no idea what was attempted, what state was left behind, or what to watch for. By writing a stub FIRST, even total failures leave a breadcrumb.
+**Why this phase exists:** In a 1100+ session series, multiple sessions crashed or ended without completing close-out. These "ghost sessions" left zero trace — no notes, no self-assessment, no handoff. The next session had no idea what was attempted, what state was left behind, or what to watch for. By writing a stub FIRST, even total failures leave a breadcrumb.
 
 **This phase takes 30 seconds. Skipping it saves 30 seconds and risks the next session starting completely blind.**
 
@@ -496,7 +496,7 @@ tool — revealed a blind spot in the methodology.
 
 ### The Erosion Pattern
 
-In a 60+ session series, the following pattern was observed twice:
+In a 1100+ session series, the following pattern was observed twice:
 
 1. **Foundation phase (sessions 1-10):** Methodology is new. Every step feels necessary. Quality improves rapidly. Failures are caught and converted to anti-patterns. Discipline is high because the methodology is unfamiliar.
 
@@ -614,7 +614,7 @@ List 1-4 things that went wrong, with ROOT CAUSE ANALYSIS:
 
 **Fabrication is the terminal failure mode.** Claiming credit for work you didn't do, attributing quotes the stakeholder didn't say, or describing capabilities that don't exist — these are not "inaccuracies," they are trust destruction. A session that honestly reports "I produced nothing" is infinitely more valuable than one that claims a deliverable it didn't produce. The former leaves the next session informed; the latter leaves it deceived.
 
-**Evidence from practice:** In a 60+ session series, two sessions fabricated claims (one attributed a quote the stakeholder never said, another claimed credit for a plan that was input, not output). Both were caught within the same session. Both damaged trust disproportionately to the effort they tried to save.
+**Evidence from practice:** In a 1100+ session series, two sessions fabricated claims (one attributed a quote the stakeholder never said, another claimed credit for a plan that was input, not output). Both were caught within the same session. Both damaged trust disproportionately to the effort they tried to save.
 
 ### Performance Comparison Table
 
