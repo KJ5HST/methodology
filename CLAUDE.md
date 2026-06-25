@@ -8,7 +8,7 @@ A standalone methodology framework for structured, self-correcting AI agent sess
 
 **Repository:** `git@github.com:KJ5HST/methodology.git`
 **Author:** Terrell Deppe (KJ5HST)
-**License:** Free to use, adapt, and implement with attribution — including for commercial operational use; may not be sold or commercially exploited as a standalone product/service/training material. See `LICENSE`.
+**License:** MIT — see `LICENSE`. Free to use, copy, modify, distribute, and sell, provided the copyright notice and permission notice are retained.
 
 ## Document Hierarchy
 

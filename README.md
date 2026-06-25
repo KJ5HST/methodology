@@ -442,10 +442,6 @@ Combined release covering two contributions: a new Research Documentation workst
 
 Iterative Session Methodology — Copyright © 2025-2026 Terrell Deppe (KJ5HST)
 
-Permission is granted to use, reproduce, adapt, and implement this methodology for personal, educational, research, internal, or commercial operational purposes, provided that attribution to the original author is retained.
+Licensed under the [MIT License](LICENSE). You are free to use, copy, modify, merge, publish, distribute, sublicense, and sell copies of this methodology, provided that the above copyright notice and the permission notice are retained in all copies or substantial portions.
 
-You may not sell, sublicense, redistribute, publish, market, or commercially exploit this methodology itself — in whole or in part — as a standalone product, service, training material, framework, or derivative work without prior written permission from the copyright holder.
-
-Attribution must include: "Iterative Session Methodology © 2025-2026 Terrell Deppe (KJ5HST)"
-
-All rights reserved except as expressly granted above. See the [`LICENSE`](LICENSE) file for the authoritative text.
+The methodology is provided "as is", without warranty of any kind. See the [`LICENSE`](LICENSE) file for the authoritative text.
