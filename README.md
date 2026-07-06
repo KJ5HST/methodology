@@ -1,5 +1,8 @@
 # Iterative Session Methodology
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![REUSE status](https://api.reuse.software/badge/github.com/KJ5HST/methodology)](https://api.reuse.software/info/github.com/KJ5HST/methodology)
+
 A framework for producing high-quality software through structured, self-correcting AI agent sessions. Each session follows a fixed phase sequence, accumulates knowledge, and feeds lessons back into the process. The result: sessions compound — session 40 is dramatically better than session 10, using the same tools on the same type of work.
 
 ## The Problem

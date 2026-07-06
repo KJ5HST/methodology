@@ -1,0 +1,12 @@
+version = 1
+
+# Bulk license/copyright declaration for the whole tree (REUSE 3.x).
+# This repository is a documentation framework plus a few standard-library-only
+# scripts; every file is MIT-licensed. Declaring it here — rather than adding an
+# SPDX header to each of the ~50 Markdown documents — keeps the docs clean while
+# still making `reuse lint` pass and the licensing machine-readable per file.
+
+[[annotations]]
+path = "**"
+SPDX-FileCopyrightText = "2025-2026 Terrell Deppe (KJ5HST)"
+SPDX-License-Identifier = "MIT"
