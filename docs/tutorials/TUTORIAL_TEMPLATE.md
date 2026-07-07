@@ -7,7 +7,7 @@ tutorials stay consistent:
 
   • Cite, don't restate. Link into BOOTSTRAP / SESSION_RUNNER / ITERATIVE_METHODOLOGY
     at the right beat. One source of truth — never copy the 9 principles, 6 phases,
-    or the 26 failure modes into a tutorial; they drift the moment you do.
+    or the 27 failure modes into a tutorial; they drift the moment you do.
   • One objective per tutorial (mirrors "1 deliverable per session").
   • The learner *produces* something — every tutorial ends with a real artifact.
   • State the predecessor; point to the successor.

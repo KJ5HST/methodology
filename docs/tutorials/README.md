@@ -63,7 +63,7 @@ Eight tutorials, listed in series order. Each does one thing and names the next.
 |---|----------|--------------------|
 | [T1](T1_setup.md) | Setup & First Bootstrap | Install the framework into a project: root files, `CLAUDE.md` protocol block, task tracking, dashboard |
 | [T2](T2_first_session.md) | Your First Session, End-to-End | Run one full 6-phase pass to one deliverable — with Phase 0 Orient and the Present gate front and center |
-| [T5](T5_cautionary.md) | Cautionary Use | Read the gates, the 26 failure modes, "1 and done", the vertical-slice gates, and the Plan-Mode exit trap — and know when the methodology is too heavy |
+| [T5](T5_cautionary.md) | Cautionary Use | Read the gates, the 27 failure modes, "1 and done", the vertical-slice gates, and the Plan-Mode exit trap — and know when the methodology is too heavy |
 | [T3](T3_compounding_loop.md) | The Compounding Loop | Run the handoff + scoring loop and watch session N+1 improve |
 | [T4](T4_workstreams.md) | Choosing & Adapting a Workstream | Pick the right workstream; spin up a custom one when none fits |
 | [T6](T6_campaigns.md) | Multi-Session Campaigns | Carry one deliverable across many sessions — planning → execution → consolidation, with a checkpoint at each boundary |

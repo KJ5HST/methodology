@@ -203,8 +203,8 @@ The methodology framework describes WHAT to do and WHY. In practice, it needs an
 - **Mandatory orientation** — prevents starting work without understanding current state
 - **"1 and done" rule** — prevents scope creep and quality degradation
 - **Automatic close-out** — prevents skipping the self-improvement loop
-- **26 known failure modes** — documents agent tendencies with specific countermeasures
-- **Degradation detection** — 16 warning signs that predict protocol erosion
+- **27 known failure modes** — documents agent tendencies with specific countermeasures
+- **Degradation detection** — 17 warning signs that predict protocol erosion
 - **Handoff accountability** — ensures each session sets up the next for success
 
 ### The Handoff Accountability Loop
