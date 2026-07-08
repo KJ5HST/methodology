@@ -20,6 +20,7 @@ import filecmp
 import importlib.util
 import os
 import re
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -128,6 +129,15 @@ class TestDetection(unittest.TestCase):
         self.assertFalse(r["is_doc_only"])
         self.assertEqual(r["reason"], "heuristic")
 
+    def test_marker_with_utf8_bom_is_honored(self):
+        # A BOM-prefixed marker (Notepad-authored) must still be read as the token, not silently
+        # dropped to the heuristic (which would flip to the opposite of the owner's request).
+        (self.p / md.DOC_ONLY_MARKER).write_bytes(b"\xef\xbb\xbfcode\n")
+        r = md.detect_doc_only(self.p, files(src=0, docs_loc=800, docs_count=12),
+                               {"toolchain_present": True})
+        self.assertFalse(r["is_doc_only"])
+        self.assertEqual(r["reason"], "marker")
+
 
 class TestRenderMetrics(unittest.TestCase):
     def setUp(self):
@@ -182,7 +192,9 @@ class TestRenderMetrics(unittest.TestCase):
         (self.p / "CITATION.cff").write_text("x\n")
         (self.p / "refs.bib").write_text("@book{a}\n")
         (self.p / "RESEARCH_DOCUMENTATION_WORKSTREAM.md").write_text("x\n")
-        self.assertLessEqual(self._score()["score"], 20)
+        # Exact-value lock (not the tautological `<= 20`): redundant signals must still land on 20,
+        # so a broken bucket weight / regex / double-count moves it off 20 and fails.
+        self.assertEqual(self._score()["score"], 20)
 
 
 class TestScoreHealth(unittest.TestCase):
@@ -231,11 +243,34 @@ class TestRiskReshaping(unittest.TestCase):
         src_big = base_metrics(files={"largest_files": [{"loc": 2500, "ext": ".py", "path": "big.py"}]})
         self.assertTrue(any("Large files detected" in d for d in risk_descs(src_big)))
 
+    def test_large_file_source_not_masked_by_nonsource_number_one(self):
+        # A big lockfile/JSON at rank #1 must not hide a genuine large source file below it.
+        m = base_metrics(files={"largest_files": [
+            {"loc": 15000, "ext": ".json", "path": "package-lock.json"},
+            {"loc": 3000, "ext": ".py", "path": "app.py"},
+        ]})
+        descs = risk_descs(m)
+        self.assertTrue(any("Large files detected" in d and "app.py" in d for d in descs))
+
+    def test_render_dep_advisory_fires_when_toolchain_unverified(self):
+        # anti-pattern #20: toolchain present but no post-render dependency check wired.
+        m = base_metrics(doc_only={"is_doc_only": True},
+                         render={"score": 6, "toolchain_present": True, "render_dep_verified": False},
+                         tests={"test_file_count": 0, "source_loc": 0})
+        self.assertTrue(any("no post-render dependency check" in d for d in risk_descs(m)))
+
+    def test_render_dep_advisory_silent_when_verified(self):
+        m = base_metrics(doc_only={"is_doc_only": True},
+                         render={"score": 12, "toolchain_present": True, "render_dep_verified": True},
+                         tests={"test_file_count": 0, "source_loc": 0})
+        self.assertFalse(any("no post-render dependency check" in d for d in risk_descs(m)))
+
 
 class TestFmtRatioAndTwins(unittest.TestCase):
     def test_fmt_ratio(self):
-        self.assertEqual(md.fmt_ratio(0.0, 0), "n/a (doc-only)")
-        self.assertTrue(md.fmt_ratio(0.25, 400, True).startswith("n/a"))
+        self.assertEqual(md.fmt_ratio(0.0, 0, True), "n/a (doc-only)")    # actually doc-only
+        self.assertEqual(md.fmt_ratio(0.0, 0, False), "n/a (no source)")  # code repo, no source
+        self.assertNotIn("doc-only", md.fmt_ratio(0.0, 0))                # default is NOT doc-only
         self.assertEqual(md.fmt_ratio(0.25, 400, False), "0.250")
 
     def test_twins_byte_identical(self):
@@ -247,6 +282,56 @@ class TestFmtRatioAndTwins(unittest.TestCase):
         starter_src = Path(STARTER_PY).read_text(encoding="utf-8")
         self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.8\.0"', starter_src, re.MULTILINE),
                         "starter-kit twin must also declare DASHBOARD_VERSION 2.8.0")
+
+
+class TestEndToEnd(unittest.TestCase):
+    """Exercise the WIRED path (collect_all -> render/detect/score/risk + render_project_card) so a
+    wiring or card-display regression cannot pass while every pure-helper test stays green."""
+
+    def _repo(self, files_map):
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        p = Path(td.name)
+        subprocess.run(["git", "init", "-q", str(p)], check=True)
+        for name, content in files_map.items():
+            fp = p / name
+            fp.parent.mkdir(parents=True, exist_ok=True)
+            fp.write_text(content)
+        subprocess.run(["git", "-C", str(p), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(p), "-c", "user.email=t@t", "-c", "user.name=t",
+                        "commit", "-q", "-m", "init"], check=True)
+        return p
+
+    def test_doc_only_tree_end_to_end(self):
+        p = self._repo({
+            "chapter1.md": "# Ch1\n" + "prose line\n" * 400,
+            "chapter2.md": "# Ch2\n" + "prose line\n" * 400,
+            "_quarto.yml": "format:\n  pdf:\n    mainfont: TeX Gyre\n",
+            "Makefile": "render:\n\tquarto render\n\tpdffonts out.pdf\n",
+        })
+        m = md.collect_all(p)
+        self.assertTrue(m["doc_only"]["is_doc_only"])
+        # The Testing slot is filled by the render score end to end.
+        self.assertEqual(m["scores"]["health"]["testing"], m["render"]["score"])
+        self.assertGreater(m["render"]["score"], 0)
+        self.assertFalse(any("No test infrastructure" in r["description"]
+                             for r in m["scores"]["risks"]))
+        card = md.render_project_card(m)
+        self.assertIn("Render / Verification (proxy)", card)
+        self.assertIn("infrastructure proxy", card)
+        self.assertNotIn("<h4>Testing</h4>", card)
+
+    def test_code_tree_end_to_end_keeps_testing(self):
+        p = self._repo({
+            "app.py": "def f():\n    return 1\n" * 150,   # ~300 source LOC -> over the 200 cap
+            "test_app.py": "def test_f():\n    assert True\n" * 10,
+            "README.md": "# app\n" * 5,
+        })
+        m = md.collect_all(p)
+        self.assertFalse(m["doc_only"]["is_doc_only"])
+        card = md.render_project_card(m)
+        self.assertIn("<h4>Testing</h4>", card)
+        self.assertNotIn("Render / Verification", card)
 
 
 if __name__ == "__main__":

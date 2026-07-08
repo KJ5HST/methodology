@@ -1215,7 +1215,7 @@ def detect_doc_only(path, files, render):
     marker = path / DOC_ONLY_MARKER
     try:
         if marker.is_file():
-            tokens = marker.read_text(encoding="utf-8", errors="ignore").strip().split()
+            tokens = marker.read_text(encoding="utf-8-sig", errors="ignore").strip().split()
             token = tokens[0].lower() if tokens else ""
             if token == "doc-only":
                 return {"is_doc_only": True, "reason": "marker"}
@@ -1244,10 +1244,13 @@ def detect_doc_only(path, files, render):
 
 
 def fmt_ratio(value, source_loc, doc_only=False):
-    """Format a *-to-source ratio for display. 'n/a (doc-only)' when the repo is doc-only or has
-    ~no source, where the ratio is meaningless and a bare 0.000 misreads as 'no docs'."""
-    if doc_only or source_loc == 0:
+    """Format a *-to-source ratio for display. A bare 0.000 misreads as 'no docs', so a repo with
+    ~no source shows 'n/a' — qualified '(doc-only)' only when the repo was actually classified
+    doc-only, else '(no source)' for a code repo that merely happens to have no source LOC."""
+    if doc_only:
         return "n/a (doc-only)"
+    if source_loc == 0:
+        return "n/a (no source)"
     return f"{value:.3f}"
 
 
@@ -1371,11 +1374,14 @@ def assess_risks(metrics):
     if not metrics["docs"]["has_license"]:
         risks.append({"severity": "low", "description": "No LICENSE file"})
 
-    # BL-5: only a large *source* file is a code-smell; a 2500-line chapter (.md/.tex) is normal
-    # for a document repo, so gate on a source extension (helps mixed repos too — no doc_only branch).
-    largest = metrics["files"]["largest_files"]
-    if largest and largest[0]["loc"] > 2000 and largest[0].get("ext") in SOURCE_EXTS:
-        risks.append({"severity": "medium", "description": f"Large files detected ({largest[0]['path']}: {largest[0]['loc']:,} lines)"})
+    # BL-5: only a large *source* file is a code-smell; a 2500-line chapter (.md/.tex) is normal for
+    # a document repo. Scan for the largest *source* file over the threshold rather than inspecting
+    # only largest[0], so a non-source #1 (e.g. a big lockfile/JSON) doesn't mask a real large source
+    # file below it (helps mixed repos too — no doc_only branch needed).
+    big_src = next((f for f in metrics["files"]["largest_files"]
+                    if f["loc"] > 2000 and f.get("ext") in SOURCE_EXTS), None)
+    if big_src:
+        risks.append({"severity": "medium", "description": f"Large files detected ({big_src['path']}: {big_src['loc']:,} lines)"})
 
     commits = metrics["git"]["total_commits"]
     age = metrics["git"]["project_age_days"]
@@ -1747,11 +1753,15 @@ def render_project_card(p):
         </div>'''
     dim_footnote = ""
     if is_doc_only:
+        reason = doc_only_info.get("reason", "heuristic")
+        # The source_loc <= cap justification holds only on the heuristic path; a marker override
+        # can force doc-only at any source size, so don't print a (possibly false) inequality there.
+        detail = ("marker override" if reason == "marker"
+                  else f"heuristic, source_loc {src_loc} &le; {DOC_ONLY_SOURCE_LOC_MAX}")
         dim_footnote = (
             '<div class="dim-footnote" style="font-size:0.8em;opacity:0.7;margin-top:4px">'
             'Render/Verify is an infrastructure proxy — the scanner cannot execute a render; '
-            f'doc-only repo detected ({esc(doc_only_info.get("reason", "heuristic"))}, source_loc '
-            f'{src_loc} &le; {DOC_ONLY_SOURCE_LOC_MAX}).</div>')
+            f'doc-only repo detected ({esc(detail)}).</div>')
 
     # Testing / Render-Verification card section (swap the whole block for a doc-only repo).
     if is_doc_only:
