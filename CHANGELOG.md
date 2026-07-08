@@ -32,11 +32,11 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
-### 2026-07-08 · [ad hoc] Close-out receipt — durable machine-checkable handoff artifact (in progress)
-- **Change:** implementing the ratified plan (fork `main`:
+### 2026-07-08 · [ad hoc] Close-out receipt — durable machine-checkable handoff artifact (slice complete on-branch; PR pending)
+- **Change:** implemented the ratified plan (fork `main`:
   `docs/planning/close-out-receipt-durable-artifact-plan.md`) as a pre-declared **vertical slice** —
   one capability, checkpoint commit + verification at each layer boundary. Fixes "agent had to be
-  prompted for the close-out report." **P1 (this commit):** new `starter-kit/HANDOFFS.md` SEED — a
+  prompted for the close-out report." **P1:** new `starter-kit/HANDOFFS.md` SEED — a
   per-session `handoff`-block receipt ledger (twin of this action ledger) — added to `bin/_manifest.py`
   `DISTRIBUTION` (SEED) + `SEED_FORMAT_MARKERS` (`"Handoff Receipts"`); `sync` seeds it, `status`
   reports `present` / `present (stale format)`, `sync` never clobbers it. **P2:** `bin/check-handoff`
@@ -55,19 +55,26 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   (commits landed but receipt never completed → FM #6), **Learning #9** (a handoff is dependable only
   as a durable machine-checkable artifact: gate-on-write AND reconcile-on-read), and the
   SAFEGUARDS/BOOTSTRAP harness stop-hook **recommendation** (agent-specific, soft-remind, never shipped;
-  `bin/check-handoff` noted canonical-only/copyable). P6 (dogfood + versioning) follows.
+  `bin/check-handoff` noted canonical-only/copyable). **P6:** dogfood close-out — the canonical repo's
+  own root `HANDOFFS.md` receives its first receipt (S1) for this very slice, and `bin/check-handoff`
+  validates it green (first non-fixture run). Slice complete on-branch; the PR to `KJ5HST/methodology`
+  and the version-event decision (D4 — `CLAUDE.md` §Versioning v3.3 vs none) are pending operator sign-off.
 - **Commit/PR:** `4f0bea7` (P1: artifact + manifest) · `1646773` (P2: checker + tests, built by
   Sonnet 5; Opus review accepted `status: reconciled` for P4's backfill and made the `HANDOFFS.md`
   template checker-safe — no inline `#` comments, since `#` is a literal value char as in `PR #52`) ·
   `f722a84` (P3a: SESSION_RUNNER + IM protocol wiring, Opus) · `afbbe7d` (P3b: 3 campaign
-  checklists, Opus) · this commit (P4: Phase 0 receipt reconcile, built by Sonnet 5; Opus review
+  checklists, Opus) · `5f13c99` (P4: Phase 0 receipt reconcile, built by Sonnet 5; Opus review
   verified the false-positive scoping — one receipt per session, not per commit — and documented the
-  `reconciled` status in the seed) · this commit (P5: framing — FM #6 + degradation row + Learning #9 +
-  stop-hook recommendation, Opus) — branch `feat/close-out-receipt` (from `upstream/main`); model
-  split hybrid (P2/P4/P6 Sonnet 5; P3/P5 Opus 4.8 + review of all).
+  `reconciled` status in the seed) · `719a41d` (P5: framing — FM #6 + degradation row + Learning #9 +
+  stop-hook recommendation, Opus) · this commit (P6: dogfood root receipt + final verification, Opus —
+  P6's deliverable is the session's own handoff, so authored, not delegated) — branch
+  `feat/close-out-receipt` (from `upstream/main`); model
+  split hybrid — **P2 + P4 Sonnet 5; P1/P3/P5/P6 Opus 4.8**, Opus reviewing every Sonnet phase (P6
+  moved to Opus because its deliverable is the session's own close-out handoff, not a delegable task).
 - **Session:** close-out-receipt slice · **Verified:** `bin/tests.sh` **81/82** (the 1 = github-source
-  404 on the not-yet-pushed `HANDOFFS.md`, clears on merge); block-isolation + per-field-defect
-  fixtures green; `check-handoff` on the real seed reports fresh-ledger.
+  404 on the not-yet-pushed `HANDOFFS.md`, clears on merge); `bin/check-links` clean; block-isolation +
+  per-field-defect fixtures green; **`bin/check-handoff` green on the first real receipt** (root
+  `HANDOFFS.md`, S1 — dogfood, first non-fixture run).
 
 ### 2026-07-08 · [ad hoc] bin/status flags stale-format adopter seeds (BL-6 item 2)
 - **Change:** `bin/status` now surfaces a SEED file whose *format* predates the current methodology —
