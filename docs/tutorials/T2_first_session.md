@@ -86,7 +86,7 @@ python -m pytest -q                # green: 12 passed  (7 original + 5 new)
 
 ### 6. Close out — hand off, runtime-verify, commit, and STOP
 
-**Phase 3** is automatic; the agent does it without being asked, in order: record any project learning (3C), write the handoff (3D), then — because this deliverable changes runtime behavior — actually run the app to confirm the feature is live (3E; "tests pass" is not enough for a runtime change), and finally commit one atomic change (3F) and stop.
+**Phase 3** is automatic; the agent does it without being asked, in order: record any project learning (3C), write the handoff (3D), then — because this deliverable changes runtime behavior — actually run the app to confirm the feature is live (3E; "tests pass" is not enough for a runtime change), and finally record the action in the `CHANGELOG.md` ledger and commit one atomic change with that entry co-staged (3F), then stop.
 
 ```sh
 # Track B runtime smoke test — the feature is active, not just compiled:
@@ -95,8 +95,8 @@ python3 todo.py --file demo.json done 1     # -> done #1: write the report
 python3 todo.py --file demo.json list        # -> 1 [x] write the report
 ```
 
-**Expected result:** A full handoff written to `SESSION_NOTES.md` (what was done + commit, what's next, key files with line numbers, gotchas, a self-assessment score), a runtime smoke test, one commit, and a stop.
-**Checkpoint:** `SESSION_NOTES.md` holds a handoff that names the next item (F2) and the key files; `git log` shows one feature commit; the agent did **not** start F2 or fix B1. That stop is "1 and done" — [FM #2](../../starter-kit/SESSION_RUNNER.md#known-failure-modes).
+**Expected result:** A full handoff written to `SESSION_NOTES.md` (what was done + commit, what's next, key files with line numbers, gotchas, a self-assessment score), a runtime smoke test, one `CHANGELOG.md` ledger entry (with F1 struck from `BACKLOG.md`), one commit, and a stop.
+**Checkpoint:** `SESSION_NOTES.md` holds a handoff that names the next item (F2) and the key files; `git log` shows one feature commit; `CHANGELOG.md` gained one dated entry for F1 and `BACKLOG.md` no longer lists it; the agent did **not** start F2 or fix B1. That stop is "1 and done" — [FM #2](../../starter-kit/SESSION_RUNNER.md#known-failure-modes).
 
 ## Common mistakes
 
