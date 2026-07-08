@@ -229,10 +229,19 @@ no todo with id 99            # exit status 1
 
 The feature is *active*, not just compiled. (Skipping this is [FM #24, build-passes-ship-it](../../starter-kit/SESSION_RUNNER.md#known-failure-modes).)
 
-### 3F — Commit *(one fix, one commit)*
+### 3F — Record the ledger, then commit *(one action, one commit)*
+
+F1 came from the backlog, so its close-out does two paired things in the **same commit**: prepend a dated, source-tagged line to the project's `CHANGELOG.md` action ledger (setup seeded one — [T1 Step 3](T1_setup.md)) **and** strike F1 from `BACKLOG.md` (a `[BL-N]` entry clears its item). Stage both **explicitly** — a freshly-seeded ledger may still be untracked, and `git commit -am` skips untracked files, so it would silently drop the entry — the very [FM #27, unrecorded action](../../starter-kit/SESSION_RUNNER.md#known-failure-modes) this step prevents:
 
 ```text
-$ git commit -am "feat(todo): add `done <id>` to mark a task complete (F1)"
+# prepended to CHANGELOG.md (newest on top):
+### 2026-06-22 · [BL-F1] todo done <id> — mark a task complete
+- **Commit:** (hash) · **Session:** S1 · **Verified:** 12/12 tests green; CLI smoke-tested (done + invalid id → exit 1)
+
+# F1 struck from BACKLOG.md in the same commit
+
+$ git add CHANGELOG.md BACKLOG.md todo.py test_done.py
+$ git commit -m "feat(todo): add `done <id>` to mark a task complete (F1)"
 ```
 
 ### 3G — Report and STOP
