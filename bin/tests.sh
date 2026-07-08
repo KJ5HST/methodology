@@ -227,6 +227,20 @@ NMOD="$(echo "$OUT" | grep -c "locally modified")"
 echo "$OUT" | grep "SESSION_RUNNER.md" | grep -q "locally modified" && pass "status: the stale file is SESSION_RUNNER" || fail "status: wrong file flagged stale"
 rm -rf "$P"
 
+echo "== Test 18: dashboard scoring unit tests (BL-5 doc-only reshape) =="
+if python3 "$METHODOLOGY/tools/test_methodology_dashboard.py" >/dev/null 2>&1; then
+    pass "dashboard scoring unit tests green"
+else
+    fail "dashboard scoring unit tests failed"
+fi
+
+echo "== Test 19: dashboard twins byte-identical + same DASHBOARD_VERSION =="
+diff -q "$METHODOLOGY/tools/methodology_dashboard.py" "$STARTER/methodology_dashboard.py" >/dev/null \
+    && pass "dashboard twins byte-identical" || fail "dashboard twins differ"
+TV="$(grep -E '^DASHBOARD_VERSION' "$METHODOLOGY/tools/methodology_dashboard.py")"
+SV="$(grep -E '^DASHBOARD_VERSION' "$STARTER/methodology_dashboard.py")"
+[ "$TV" = "$SV" ] && pass "dashboard twins carry the same DASHBOARD_VERSION" || fail "DASHBOARD_VERSION mismatch across twins"
+
 echo ""
 echo "== Summary: $PASS passed, $FAIL failed =="
 [ "$FAIL" = "0" ]
