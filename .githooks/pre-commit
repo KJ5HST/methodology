@@ -1,0 +1,67 @@
+#!/bin/sh
+# Methodology ledger gate — failure mode #27 "Unrecorded action", decision D1.
+#
+# Refuses a commit that changes tracked content unless CHANGELOG.md is co-staged,
+# so an action cannot land in git history without a line in the authoritative
+# ledger. This is the mechanical enforcement of the Phase 3F close-out gate in a
+# repo (like this one) that has no root SESSION_RUNNER.md to run that gate.
+#
+# It is the *fast path*, never the guarantee: the guarantee is Component B,
+# Phase 0 reconcile-on-read, which backfills anything committed past this hook.
+# So the hook is deliberately bypassable and deliberately narrow.
+#
+#   Enable:      git config core.hooksPath .githooks
+#   Bypass once: git commit --no-verify   (reconcile-on-read backfills it)
+#   Opt out:     delete CHANGELOG.md and record that decision in CLAUDE.md
+#
+set -u
+
+git_dir=$(git rev-parse --git-dir)
+
+# Skip merge/rebase/cherry-pick/am: they replay commits already in the ledger's
+# history; forcing a fresh entry onto a replayed commit would double-log.
+for marker in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD rebase-merge rebase-apply; do
+	if [ -e "$git_dir/$marker" ]; then
+		exit 0
+	fi
+done
+
+staged=$(git diff --cached --name-only)
+
+# Empty index (e.g. `--allow-empty`, or an all-unstaged tree): nothing to gate.
+if [ -z "$staged" ]; then
+	exit 0
+fi
+
+# CHANGELOG.md co-staged (this also covers the very first ledger commit): pass.
+# -F: match the literal path, not a regex — an unescaped '.' would let a
+# same-length sibling (CHANGELOGxmd, CHANGELOG-md) satisfy the gate.
+if printf '%s\n' "$staged" | grep -qxF 'CHANGELOG.md'; then
+	exit 0
+fi
+
+# No ledger has ever been committed and none is staged now: self-provisioning is
+# the session runner's job (decision D3, Phase 0), not the hook's. Never block a
+# repo that legitimately has no ledger — an adopter mid-bootstrap, or one that
+# opted out. Reconcile-on-read catches the commit either way.
+if ! git ls-files --error-unmatch CHANGELOG.md >/dev/null 2>&1; then
+	exit 0
+fi
+
+# A tracked ledger exists but this action does not touch it.
+cat >&2 <<'MSG'
+✗ CHANGELOG.md not staged — failure mode #27 (unrecorded action).
+
+This commit changes tracked content but does not update the authoritative
+ledger. Append one dated, source-tagged entry to CHANGELOG.md — exactly one of
+[issue #<N>] | [BL-<N>] | [ad hoc] — newest on top, then stage it and re-commit.
+
+  * Bypass this once:  git commit --no-verify
+      Phase 0 reconcile-on-read backfills anything bypassed, so the ledger is
+      true again on the next session's Orient. The hook is the fast path, not
+      the guarantee.
+  * Opt out for good:  delete CHANGELOG.md and record the decision in CLAUDE.md.
+
+"Too small to log" is the failure mode, not an exception (SESSION_RUNNER.md FM #27).
+MSG
+exit 1

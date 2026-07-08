@@ -302,7 +302,9 @@ git config core.hooksPath .githooks
 
 **Pre-commit hooks (recommended).** A pre-commit hook that runs the project's formatter, linter, type-checker, and fast tests on staged changes catches the same defects CI catches, but at commit time instead of after the fact — shifting failures left and reducing the ratio of red CI runs to green ones. The dashboard scores CI/CD presence (workflow files exist on the remote side); pre-commit is the complementary local-side lever the dashboard does not measure. Pick a hook runner that fits your stack — `pre-commit` (Python, polyglot), Husky + lint-staged (Node), `lefthook` (Go), `cargo-husky` (Rust), Maven Spotless plugin or Gradle git-hooks plugins (JVM), or a hand-written shell script in `.githooks/pre-commit` for projects that want zero new dependencies. The methodology is intentionally tool-agnostic here; what matters is that *some* check runs before the commit, not which one. Pocock's `/setup-pre-commit` is one option for Node/Husky projects — see [`RECOMMENDED_SKILLS.md`](RECOMMENDED_SKILLS.md).
 
-**Mechanical SAFEGUARDS enforcement (optional).** [`SAFEGUARDS.md`](SAFEGUARDS.md)'s "Blast Radius Limits" table lists destructive git operations as no-exception rules, enforced textually. For mechanical enforcement of those rules — `git push --force`, `git reset --hard`, `git clean -f`, etc. blocked at runtime by a Claude Code `PreToolUse` hook — the methodology recommends Pocock's `/git-guardrails-claude-code` skill, see [`RECOMMENDED_SKILLS.md`](RECOMMENDED_SKILLS.md). The methodology does not ship its own hook script; the recommended skill is the structural countermeasure for failure modes #1 (eager-to-start) and #17 (protocol erosion).
+**Ledger co-staging hook (recommended).** The one hook the methodology *does* ship is narrow and single-purpose: [`.githooks/pre-commit`](https://github.com/KJ5HST/methodology/blob/main/.githooks/pre-commit) refuses a commit that changes tracked content unless `CHANGELOG.md` is co-staged — the mechanical form of the Phase 3F close-out gate (failure mode #27, "unrecorded action"). Enable it with the `core.hooksPath` line above after copying it into your `.githooks/`; bypass a single commit with `git commit --no-verify` (Phase 0 reconcile-on-read backfills anything bypassed, so the ledger stays true on the next Orient); opt out permanently by deleting `CHANGELOG.md` and recording that in `CLAUDE.md`. It never blocks a repo that has no ledger yet, and it skips merges/rebases. Details in [`SAFEGUARDS.md`](SAFEGUARDS.md) → Commit Discipline → "Ledger Co-Staging Hook."
+
+**Mechanical SAFEGUARDS enforcement (optional).** [`SAFEGUARDS.md`](SAFEGUARDS.md)'s "Blast Radius Limits" table lists destructive git operations as no-exception rules, enforced textually. For mechanical enforcement of those rules — `git push --force`, `git reset --hard`, `git clean -f`, etc. blocked at runtime by a Claude Code `PreToolUse` hook — the methodology recommends Pocock's `/git-guardrails-claude-code` skill, see [`RECOMMENDED_SKILLS.md`](RECOMMENDED_SKILLS.md). The methodology ships no *blast-radius* hook of its own (that skill is the structural countermeasure for failure modes #1, eager-to-start, and #17, protocol erosion) — the only hook it ships is the narrow ledger co-staging gate above.
 
 ---
 
@@ -364,7 +366,7 @@ After setup, your first session should:
 4. Agent waits for you to give a task
 5. You give a task — agent identifies the deliverable and workstream
 6. Agent executes the deliverable
-7. Agent auto-closes: self-assesses, writes handoff notes, commits, reports, stops
+7. Agent auto-closes: self-assesses, writes handoff notes, records the `CHANGELOG.md` ledger entry (Phase 3F, failure mode #27), commits, reports, stops
 
 There's no previous handoff to evaluate on Session 1. Starting from Session 2, the full close-out protocol (including handoff evaluation) kicks in.
 

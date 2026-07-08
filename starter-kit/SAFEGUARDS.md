@@ -162,6 +162,16 @@ A deliverable that compiles, renders, and embeds the right assets is correct. A 
 
 **Checkpoint and WIP commits are not optional luxuries. They are safety nets.**
 
+### Ledger Co-Staging Hook (failure mode #27)
+
+An optional `pre-commit` hook makes the authoritative-ledger rule mechanical: it **refuses a commit that changes tracked content unless `CHANGELOG.md` is co-staged**, so an action cannot reach git history without a line in the ledger. This is the *mechanical* form of the Phase 3F close-out gate — the only enforcement available in a repo that has no `SESSION_RUNNER.md` at its root to run that gate on itself.
+
+- **It is the fast path, not the guarantee.** The guarantee is Phase 0 **reconcile-on-read**, which backfills any commit that slipped past the hook. So the hook is deliberately **bypassable** — `git commit --no-verify` commits without it, and the next session's Orient re-truths the ledger. Bypass freely for genuine WIP; do not treat the bypass as an escape from FM #27. (A `git commit --amend` that adds a file without re-staging `CHANGELOG.md` is also blocked — the ledger line already rides the commit being amended, so use `--no-verify`.)
+- **It never blocks a repo that has no ledger.** If `CHANGELOG.md` is untracked (an adopter mid-bootstrap, or a project that opted out), the hook passes — self-provisioning is the session runner's job (Phase 0), not the hook's. It also skips merges, rebases, and cherry-picks, which replay commits already in the ledger's history.
+- **Setup is opt-in and per-clone.** `git config core.hooksPath .githooks` enables it; each clone and CI runner sets it independently. See [`BOOTSTRAP.md`](BOOTSTRAP.md) Step 10. The canonical reference implementation is [`.githooks/pre-commit`](https://github.com/KJ5HST/methodology/blob/main/.githooks/pre-commit).
+
+The hook is a convenience, not a substitute: the SESSION_RUNNER Phase 3F write-gate and Phase 0 reconcile are the primary mechanisms and hold with or without it.
+
 ---
 
 ## What the User Should Do

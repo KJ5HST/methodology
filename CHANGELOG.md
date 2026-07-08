@@ -32,15 +32,18 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
-### 2026-07-07 · [ad hoc] Authoritative CHANGELOG ledger campaign — gate + reconcile + dashboard (in progress)
-- **Change:** `CHANGELOG.md` is being made a dependable cross-source action ledger — a write-time
-  gate (FM #27, Phase 3F), a reconcile-on-read backstop (Phase 0), a recomposed seed template, a
-  dashboard freshness monitor, and this dogfooded root ledger. S2–S6 done; S7 (git pre-commit hook
-  + the step added to the other session-type checklists) is pending.
+### 2026-07-07 · [ad hoc] Authoritative CHANGELOG ledger campaign — gate + reconcile + dashboard + hook (S2–S7 complete)
+- **Change:** `CHANGELOG.md` is now a dependable cross-source action ledger, closed on two
+  mechanisms rather than one: a write-time gate (FM #27, Phase 3F), a reconcile-on-read backstop
+  (Phase 0), a recomposed seed template, a dashboard freshness monitor, this dogfooded root ledger,
+  a `.githooks/pre-commit` co-staging gate (decision D1 — the mechanical enforcement where a repo
+  has no root runner), and the ledger close-out step propagated into every session-type and campaign
+  checklist (escape #8). The whole campaign S2–S7 is complete.
 - **Commit/PR:** `2227aab` (S2, FM #27) · `4828929` (S3, Phase 0 reconcile) · `f25e0c4` (S4, seed) ·
-  `89b8f60` (S5, dashboard) · this commit (S6, root ledger) — branch `feat/changelog-authoritative-ledger`.
+  `89b8f60` (S5, dashboard) · `339dfb2` (S6, root ledger) · `d2184cc` (S7, checklists) · this commit
+  (S7, hook + docs) — branch `feat/changelog-authoritative-ledger`.
   Ratified plan: [`docs/planning/changelog-authoritative-ledger-gate-plan.md`](https://github.com/rmsharp/methodology/blob/main/docs/planning/changelog-authoritative-ledger-gate-plan.md) (`1710e90`, fork `main` only).
-- **Session:** S6 · **Verified:** 51/51 `bin/tests.sh` (S4/S5); 35 dashboard fixture assertions + live portfolio render (S5).
+- **Session:** S7 · **Verified:** 9/9 hook behavior tests (block / pass / absent-ledger / mid-merge / `--no-verify`) + 51/51 `bin/tests.sh`.
 
 <!-- Entries below were backfilled at ledger creation (S6), covering everything v3.0-forward per decision D5.
      They were reconstructed from git history at ledger birth, not logged live at the time of the action. -->
