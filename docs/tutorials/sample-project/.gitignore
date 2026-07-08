@@ -1,4 +1,5 @@
 # Runtime + test artifacts generated while practicing — never commit these.
 todos.json
+demo.json
 __pycache__/
 .pytest_cache/

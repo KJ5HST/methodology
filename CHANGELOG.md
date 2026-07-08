@@ -32,6 +32,17 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-07-08 · [ad hoc] sample-project/.gitignore ignores demo.json (Tutorial 2/3 smoke-test store)
+- **Change:** `docs/tutorials/sample-project/.gitignore` now ignores **`demo.json`** — the `--file demo.json`
+  store that the Tutorial 2 (and Tutorial 3) Phase 3E runtime smoke test writes. The ignore list previously
+  covered only `todos.json`/`__pycache__/`/`.pytest_cache/`, and T2's 3F stages four named files, so a
+  learner replaying T2 was left with `demo.json` **untracked** after close-out — undercutting the clean-tree
+  discipline the tutorial teaches. `demo.json` is the only non-ignored artifact the tutorials generate
+  (verified: sole `--file` store; the default `todos.json` is already ignored). Resolves fork backlog BL-6
+  follow-up 1c. Canonical-only tutorial asset — **no version event**.
+- **Commit/PR:** this commit — branch `docs/sample-gitignore-demo-json` → upstream PR.
+- **Session:** BL-6 follow-up 1c · **Verified:** 51/51 `bin/tests.sh`; grep-confirmed `demo.json` is the complete untracked-artifact set (T2/T3 `--file` sweep); co-staged through `.githooks/pre-commit`.
+
 ### 2026-07-08 · [ad hoc] HOW_TO_USE close-out gains Phase 3E smoke test (re-lettered 3E→3F, 3F→3G); T1 commits the seeded ledger
 - **Change:** two v3.1 close-out fidelity fixes to the teaching docs (fork backlog BL-6 follow-ups 1a + 1b).
   **1a** — `HOW_TO_USE.md` §Phase 3 Close Out gained the missing **3E: Runtime smoke test** step and
