@@ -77,8 +77,12 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   incidental colon-digit in prose (`John 3:16`, `10:30`, `3:1`) no longer passes (C1); `what_was_done`'s
   sha-shape now requires a **hex letter**, so a bare 7+ digit decimal/timestamp no longer counts as a sha
   (C2); + a docstring caveat that an unwrapped example fence shadows the real receipt (C7). Regression
-  tests added (**81 → 83**). Fixes B (adopter-fidelity caveats + double-count wording) and C (BOOTSTRAP
-  seed enumeration + campaign checklists) follow. 5 findings were refuted (e.g. the missing `--range`
+  tests added (**81 → 83**). **Fix B (synced docs):** the mandatory-procedure references to
+  `bin/check-handoff` in `SESSION_RUNNER.md` §3D, `ITERATIVE_METHODOLOGY.md` Phase 6, and the
+  `HANDOFFS.md` seed now carry the "canonical-only — copy it in; the dependable backstop is Phase 0
+  reconcile" caveat the optional-hook subsections already had (C4/C5), and the receipt-to-requirements
+  wording no longer double-counts `self_score` (C6: "the six requirements, the sixth being `self_score`,
+  plus `predecessor_score`"). **Fix C (BOOTSTRAP seed enumeration + campaign checklists)** follows. 5 findings were refuted (e.g. the missing `--range`
   mode — plan-optional; the last-wins duplicate-key parse — benign).
 - **Session:** close-out-receipt slice · **Verified:** `bin/tests.sh` **83/84** (the 1 = github-source
   404 on the not-yet-pushed `HANDOFFS.md`, clears on merge); `bin/check-links` clean; block-isolation +

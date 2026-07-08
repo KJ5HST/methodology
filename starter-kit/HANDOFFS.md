@@ -6,9 +6,11 @@ did the session hand its successor?"* — the part of close-out that otherwise l
 transient `SESSION_NOTES.md` (overwritten every session) or the spoken report (which leaves no file
 at all).
 
-One `handoff` block per **session** (not per commit), newest on top. `bin/check-handoff` asserts each
-block is present and structurally complete; the next session's Phase 0 reconcile greps this file for a
-missing or still-`pending` receipt and backfills it. Together — a write-step at close-out **and** a
+One `handoff` block per **session** (not per commit), newest on top. The canonical-only
+`bin/check-handoff` (copy it into your `bin/` if you want the structural check) asserts each block is
+present and structurally complete; the next session's Phase 0 reconcile greps this file for a missing
+or still-`pending` receipt and backfills it — that reconcile, not the checker, is the dependable
+backstop, so the discipline needs no tooling. Together — a write-step at close-out **and** a
 reconcile-on-read backstop — this makes a skipped handoff *detectable* rather than silent.
 
 > **A green `bin/check-handoff` is not a good handoff.** The check verifies presence and structure,
@@ -49,8 +51,9 @@ commit: <short-sha — or `pending` until the next session reconciles it>
 <free-text prose: the durable proxy for the Phase 3G spoken report, plus the +/- self-score breakdown>
 
 Write clean `key: value` lines — no inline `#` comments (a `#` is a literal value character,
-as in `changelog_ref: PR #52`). The keys map one-to-one to the six Phase 3D Minimum Handoff
-Requirements plus the two scores. `status` is `pending` at the Phase 1B claim and `complete` at
+as in `changelog_ref: PR #52`). The keys are the six Phase 3D Minimum Handoff Requirements (the sixth
+*is* `self_score`) plus `predecessor_score` (the Phase 3A evaluation) and a little metadata. `status`
+is `pending` at the Phase 1B claim and `complete` at
 close-out; a third value, `reconciled`, is written *only* by a later session's Phase 0 reconcile
 when it reconstructs a receipt a crashed session never completed — you never write it yourself.
 ````
