@@ -248,6 +248,15 @@ Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during develop
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
 
+### What's New in v3.2
+
+The **portfolio dashboard now scores document-only / research repositories fairly** instead of penalizing them for having no code to unit-test (rmsharp, [PR #50](https://github.com/KJ5HST/methodology/pull/50)). A doc-only repo previously drew 0/20 Testing and a HIGH "No test infrastructure" risk; now the dashboard detects it and reshapes the scoring. Advisory tool — nothing hard-fails.
+
+- **Doc-only detection** — a bidirectional `.methodology-profile` marker (`doc-only` | `code`) overrides; otherwise a 200 source-LOC cap → a doc-corpus / render-toolchain check. The cap guarantees a mixed code+docs repo is never misclassified.
+- **Render/Verification dimension** — when doc-only, the 2nd score slot is filled by an **honest static proxy** for render/verification *configuration* (a render toolchain + the v2.5 `pdffonts`/`fc-list`/`kpsewhich` dependency check + docs-render/link-check CI + verification artifacts); it never claims render *success*. Code-centric test risks are suppressed; the "Large files" flag is fixed to fire only on source files.
+- **First functional scoring tests** — `tools/test_methodology_dashboard.py` (29 cases) wired into `bin/tests.sh`; `DASHBOARD_VERSION` → **2.8.0**.
+- **No principle, phase, gate, workstream, or failure-mode change; the failure-mode count stays 27.**
+
 ### What's New in v3.1
 
 `CHANGELOG.md` becomes a dependable cross-source **action ledger** — the authoritative record of *what was done here, ever* across backlog items, repository issues, and ad-hoc work (rmsharp, [PR #46](https://github.com/KJ5HST/methodology/pull/46)). The design's key finding: a close-out write-gate **alone** is not dependable, so the ledger rests on two mechanisms — **gate-on-write** at close-out *and* **reconcile-on-read** at orientation, which backfills anything the gate missed.

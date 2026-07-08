@@ -1,4 +1,5 @@
 .DS_Store
 dashboard.html
 tools/__pycache__/
+starter-kit/__pycache__/
 bin/__pycache__/

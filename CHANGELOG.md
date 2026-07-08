@@ -32,6 +32,48 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-07-08 · [ad hoc] Dashboard: fair scoring for document-only / research repos (DASHBOARD_VERSION 2.8.0)
+- **Change:** `methodology_dashboard.py` (both byte-identical twins, `tools/` + `starter-kit/`) now
+  detects a **document-only / research** repo and reshapes scoring so it is no longer falsely
+  penalized for having nothing to unit-test. Detection is marker-override → source-loc cap (200) →
+  corpus-disjunction: an explicit bidirectional **`.methodology-profile`** marker (`doc-only` |
+  `code`) wins; otherwise a repo with negligible source but a real doc corpus **or** a render
+  toolchain (the latter catches pure-LaTeX/Quarto repos whose `.tex`/`.qmd` aren't counted as docs)
+  is doc-only. When doc-only, the 2nd health slot (dict key `testing`, stable for JSON/portfolio)
+  is filled by a new **Render/Verification** score — an *honest static proxy* (the scanner cannot
+  execute a render; it scores render/verification *configuration*: toolchain configs, the v2.5
+  `pdffonts`/`fc-list`/`kpsewhich` render-dependency check, docs-render/link-check CI, and
+  Research-Documentation verification artifacts). The code-centric **No test infrastructure** /
+  thin-coverage risks are suppressed for doc-only repos and replaced with render/verification
+  advisories; the **Large files** risk is fixed (unconditionally) to fire only on a *source* file,
+  so a 2500-line `.md`/`.tex` chapter no longer trips it; the doc-to-source ratio display shows
+  `n/a (doc-only)` / Doc LOC instead of a misleading `0.000`. Two BL-5 polish items ride along:
+  `.gitignore` now covers `starter-kit/__pycache__/`, and **Signal F** (unmigrated `- [x]` BACKLOG
+  done-marks) is gated on methodology adoption so it can't fire on a non-adopter sibling. Adds
+  `tools/test_methodology_dashboard.py` — the **first functional scoring tests** (23 cases, stdlib
+  `unittest`, canonical-only) — wired into `bin/tests.sh` (51 → 54 suite checks). Advisory tool,
+  **no hard gate**. Resolves fork backlog **BL-5** (the `[BL-5]` BACKLOG removal lands on fork
+  `main` at merge, since this upstream-based branch carries no `docs/planning/`). Designated
+  framework **v3.2** (minor) — annotated tag + GitHub Release at the PR #50 merge commit;
+  `DASHBOARD_VERSION` bumps **2.7.0 → 2.8.0**. → full narrative:
+  [`CLAUDE.md` §Versioning "v3.2"](CLAUDE.md#versioning).
+- **Commit/PR:** `b2efd76` (dashboard logic, both twins) · `536837f` (tests + `.gitignore` +
+  `bin/tests.sh` wiring + ledger) · `bad258c` (review-hardening fixes) · this commit (v3.2 release
+  narration — `CLAUDE.md` §Versioning + `README.md` What's New) — branch
+  `feat/dashboard-doc-only-scoring` (from `upstream/main`) → [PR #50](https://github.com/KJ5HST/methodology/pull/50).
+  Design pressure-tested by a judge panel + adversarial synthesis (`wf_7174281b-754`); the
+  implementation was then hardened by a 4-dimension adversarial review + default-to-refuted verify (`wf_7c95bb29-131`).
+- **Session:** BL-5 dashboard doc-only scoring · **Verified:** 29/29 dashboard unit tests + 54/54
+  `bin/tests.sh`; twins byte-identical + both `DASHBOARD_VERSION` 2.8.0; real runs — this mixed
+  repo stays code-scored (Testing kept; Large-files still trips on the 2465-line `.py`), a
+  synthetic doc-only tree detects doc-only, fills the slot with Render/Verify, and drops the false
+  no-test-infra + big-`.md` risks; no `starter-kit/__pycache__` generated. The review found **6
+  real defects** — a BOM-prefixed `.methodology-profile` override silently dropped; the large-file
+  check inspecting only `largest[0]` (a non-source #1 masking a real large source file below it);
+  `fmt_ratio` mislabeling a zero-source *code* repo `(doc-only)`; the footnote printing a false
+  `source_loc ≤ 200` on a marker-forced repo; a tautological cap test; an untested render-dependency
+  advisory — **all fixed and regression-tested**.
+
 ### 2026-07-08 · [ad hoc] sample-project/.gitignore ignores demo.json (Tutorial 2/3 smoke-test store)
 - **Change:** `docs/tutorials/sample-project/.gitignore` now ignores **`demo.json`** — the `--file demo.json`
   store that the Tutorial 2 (and Tutorial 3) Phase 3E runtime smoke test writes. The ignore list previously
