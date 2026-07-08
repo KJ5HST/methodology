@@ -53,14 +53,16 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   `tools/test_methodology_dashboard.py` — the **first functional scoring tests** (23 cases, stdlib
   `unittest`, canonical-only) — wired into `bin/tests.sh` (51 → 54 suite checks). Advisory tool,
   **no hard gate**. Resolves fork backlog **BL-5** (the `[BL-5]` BACKLOG removal lands on fork
-  `main` at merge, since this upstream-based branch carries no `docs/planning/`). Framework
-  version-event decision (v3.2 tag vs `CLAUDE.md`-only) deferred to merge; `DASHBOARD_VERSION`
-  bumps **2.7.0 → 2.8.0**.
+  `main` at merge, since this upstream-based branch carries no `docs/planning/`). Designated
+  framework **v3.2** (minor) — annotated tag + GitHub Release at the PR #50 merge commit;
+  `DASHBOARD_VERSION` bumps **2.7.0 → 2.8.0**. → full narrative:
+  [`CLAUDE.md` §Versioning "v3.2"](CLAUDE.md#versioning).
 - **Commit/PR:** `b2efd76` (dashboard logic, both twins) · `536837f` (tests + `.gitignore` +
-  `bin/tests.sh` wiring + ledger) · this commit (review-hardening fixes) — branch
-  `feat/dashboard-doc-only-scoring` (from `upstream/main`) → upstream PR (pending). Design
-  pressure-tested by a judge panel + adversarial synthesis (`wf_7174281b-754`); the implementation
-  was then hardened by a 4-dimension adversarial review + default-to-refuted verify (`wf_7c95bb29-131`).
+  `bin/tests.sh` wiring + ledger) · `bad258c` (review-hardening fixes) · this commit (v3.2 release
+  narration — `CLAUDE.md` §Versioning + `README.md` What's New) — branch
+  `feat/dashboard-doc-only-scoring` (from `upstream/main`) → [PR #50](https://github.com/KJ5HST/methodology/pull/50).
+  Design pressure-tested by a judge panel + adversarial synthesis (`wf_7174281b-754`); the
+  implementation was then hardened by a 4-dimension adversarial review + default-to-refuted verify (`wf_7c95bb29-131`).
 - **Session:** BL-5 dashboard doc-only scoring · **Verified:** 29/29 dashboard unit tests + 54/54
   `bin/tests.sh`; twins byte-identical + both `DASHBOARD_VERSION` 2.8.0; real runs — this mixed
   repo stays code-scored (Testing kept; Large-files still trips on the 2465-line `.py`), a
