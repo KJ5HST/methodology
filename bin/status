@@ -6,10 +6,13 @@ full Option-B corpus is visible, not just a fixed three. The distribution set an
 each file's disposition come from the shared bin/_manifest.py (B1 plan Decision 5);
 status previously carried its own three-file copy of the list.
 
-SEED files are adopter-owned: status reports only present/absent for them and never
-flags an absent seed as drift (B1 plan Phase 4 DONE criterion). TRACKED files are
-compared against canonical and may report current / locally modified / N versions
-behind / missing.
+SEED files are adopter-owned: status reports present / absent for them and never flags
+an absent seed as drift (B1 plan Phase 4 DONE criterion). A present seed that carries a
+_manifest.SEED_FORMAT_MARKERS entry but whose content lacks the marker predates the
+current seed format and is reported advisory-only as "present (stale format)" with a
+migration note — never as drift, and sync never auto-overwrites it (BL-6 item 2).
+TRACKED files are compared against canonical and may report current / locally modified /
+N versions behind / missing.
 
 Contract: methodology v2.2 plan §4E; B1 plan Phase 4.
 """
@@ -22,7 +25,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _manifest import DISTRIBUTION, TRACKED  # noqa: E402  (bin/ on sys.path)
+from _manifest import DISTRIBUTION, TRACKED, SEED_FORMAT_MARKERS  # noqa: E402  (bin/ on sys.path)
 
 REPO = "KJ5HST/methodology"
 HEADERS = ("Project", "File", "Disposition", "Status")
@@ -100,10 +103,29 @@ def file_status(project: Path, dest: str, canonical_sha: str, history: list) -> 
     return "locally modified"
 
 
+STALE_SEED = "present (stale format)"
+
+
 def seed_status(project: Path, dest: str) -> str:
     """SEED files are adopter-owned; only existence matters and an absent seed is
-    NOT drift (B1 plan Phase 4 DONE criterion)."""
-    return "present" if (project / dest).exists() else "absent"
+    NOT drift (B1 plan Phase 4 DONE criterion).
+
+    A present seed that carries a known SEED_FORMAT_MARKERS entry but whose content
+    lacks the marker predates the current seed format. That is reported advisory-only
+    as STALE_SEED, never as drift and never acted on — sync leaves adopter-owned seeds
+    untouched (BL-6 item 2)."""
+    target = project / dest
+    if not target.exists():
+        return "absent"
+    marker = SEED_FORMAT_MARKERS.get(dest)
+    if marker:
+        try:
+            content = target.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            return "present"  # unreadable → don't guess the format
+        if marker not in content:
+            return STALE_SEED
+    return "present"
 
 
 def render_table(headers: tuple, rows: list) -> str:
@@ -157,6 +179,18 @@ def main() -> int:
 
     print(f"source: {source}" + (f" ({methodology_root})" if source == "local" else ""))
     print(render_table(HEADERS, rows))
+
+    stale_rows = [dest for _proj, dest, _disp, state in rows if state == STALE_SEED]
+    if stale_rows:
+        dests = sorted(set(stale_rows))  # count instances (one per project), list distinct files
+        noun = "seed predates" if len(stale_rows) == 1 else "seeds predate"
+        print(
+            f"\nnote: {len(stale_rows)} {noun} the current format ({', '.join(dests)}, marked "
+            f"'{STALE_SEED}'). These are adopter-owned and are never auto-overwritten. To migrate, "
+            f"reconcile against the current starter-kit seed by hand, or delete the file and re-run "
+            f"bin/sync to reseed (see BOOTSTRAP.md \"Updating an existing project from an earlier "
+            f"methodology version\")."
+        )
     return 0
 
 

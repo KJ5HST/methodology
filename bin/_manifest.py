@@ -68,3 +68,24 @@ DISTRIBUTION = [
     ("workstreams/TEMPLATE_CAMPAIGN.md",
      "docs/methodology/workstreams/TEMPLATE_CAMPAIGN.md", TRACKED),
 ]
+
+# Optional "current-format" markers for SEED dests, keyed by adopter-relative dest path.
+#
+# A SEED is adopter-owned and never overwritten (Decision 2a), so an adopter upgrading from a
+# pre-v3.1 methodology keeps its OLD-shaped seed: it gains the new behavior (the synced
+# SESSION_RUNNER.md's FM #27 + Phase 0 reconcile) but silently misses the new seed FORMAT. When a
+# seed listed here is PRESENT but its content lacks the marker string, bin/status reports it
+# advisory-only as "present (stale format)" so the migration is DISCOVERABLE. sync still never
+# auto-overwrites it — reconcile manually or delete-and-reseed (BOOTSTRAP.md "Updating an existing
+# project…"; BL-6 item 2).
+#
+# The marker must be a token that PERSISTS across the seed's whole lifetime, not a one-shot banner:
+#   * CHANGELOG.md keys on the ledger TITLE ("Authoritative Action Ledger"), which append-only
+#     entries never remove — NOT the METHODOLOGY-SEED-SENTINEL, which the adopter deletes on its
+#     first real entry, so keying on the sentinel would mis-flag an in-use current-format ledger.
+#   * SESSION_NOTES.md is deliberately omitted: it is rewritten wholesale every session, so no
+#     token is stable enough to detect its format without false positives. Add an entry here only
+#     when a seed gains a lifetime-stable marker.
+SEED_FORMAT_MARKERS = {
+    "CHANGELOG.md": "Authoritative Action Ledger",
+}

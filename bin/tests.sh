@@ -241,6 +241,52 @@ TV="$(grep -E '^DASHBOARD_VERSION' "$METHODOLOGY/tools/methodology_dashboard.py"
 SV="$(grep -E '^DASHBOARD_VERSION' "$STARTER/methodology_dashboard.py")"
 [ "$TV" = "$SV" ] && pass "dashboard twins carry the same DASHBOARD_VERSION" || fail "DASHBOARD_VERSION mismatch across twins"
 
+echo "== Test 20: a seed whose format predates canonical is flagged advisory-only (BL-6 item 2) =="
+P="$(mktemp_project)"
+"$BIN/sync" "$P" >/dev/null
+# Row-vs-note isolation: the migration note also names CHANGELOG.md and contains the tokens 'seed'
+# and 'stale format', so any row-specific assertion must exclude the note line (`grep -v '^note:'`)
+# or it is vacuous — it would pass on the prose note regardless of the table row (adversarial-review fix).
+# (a) Freshly-seeded CHANGELOG carries the current action-ledger format → plain 'present', no note.
+OUT="$("$BIN/status" "$P")"
+echo "$OUT" | grep "CHANGELOG.md" | grep -v '^note:' | grep -q "stale format" && fail "status: current-format (fresh) seed mis-flagged stale" || pass "status: current-format (fresh) seed not flagged"
+echo "$OUT" | grep -q "^note:" && fail "status: spurious stale-format note on fresh tree" || pass "status: no stale-format note on fresh tree"
+# (b) In-use current-format ledger: the METHODOLOGY-SEED-SENTINEL is deleted (as the adopter does on its
+# first real entry) and a dated entry appended, but the ledger TITLE is retained. This is the exact case
+# the marker choice is engineered around (key on the lifetime-stable title, NOT the deletable sentinel);
+# it must NOT be flagged, or binding constraint #2 (no false positive on a current-format seed) breaks.
+printf '# Changelog — Authoritative Action Ledger\n\nThe action ledger.\n\n---\n\n### 2026-01-01 · [ad hoc] a real entry\n- Change: something real.\n' > "$P/CHANGELOG.md"
+grep -q "METHODOLOGY-SEED-SENTINEL" "$P/CHANGELOG.md" && fail "test-bug: in-use fixture still carries the sentinel" || pass "test: in-use fixture is title-only (sentinel deleted)"
+OUT="$("$BIN/status" "$P")"
+echo "$OUT" | grep "CHANGELOG.md" | grep -v '^note:' | grep -q "stale format" && fail "status: in-use current-format ledger mis-flagged stale (constraint #2)" || pass "status: in-use current-format ledger not flagged"
+echo "$OUT" | grep -q "^note:" && fail "status: spurious note on in-use current-format ledger" || pass "status: no note on in-use current-format ledger"
+# (c) Replace the seed with a pre-v3.1 (Keep-a-Changelog) shape lacking the ledger-title marker.
+printf '# Changelog\n\nAll notable changes to this project.\n\n## [Unreleased]\n' > "$P/CHANGELOG.md"
+OUT="$("$BIN/status" "$P")"
+ROW="$(echo "$OUT" | grep "CHANGELOG.md" | grep -v '^note:')"   # table row only, note excluded
+echo "$ROW" | grep -q "seed" && pass "status: stale seed keeps its seed disposition" || fail "status: stale seed lost seed disposition"
+echo "$ROW" | grep -q "stale format" && pass "status: pre-v3.1 seed flagged 'present (stale format)'" || fail "status: stale seed not flagged"
+# Advisory only — never reclassified as drift.
+if echo "$ROW" | grep -Eq "missing|locally modified|versions? behind"; then fail "status: stale seed mislabeled as drift"; else pass "status: stale seed NOT treated as drift"; fi
+echo "$OUT" | grep -q "^note:" && pass "status: emits the migration note beneath the table" || fail "status: no migration note for stale seed"
+# (d) A seed without a format marker (SESSION_NOTES.md) is never format-checked → never stale.
+echo "arbitrary adopter content" > "$P/SESSION_NOTES.md"
+"$BIN/status" "$P" | grep "SESSION_NOTES.md" | grep -v '^note:' | grep -q "stale format" && fail "status: markerless seed mis-flagged" || pass "status: markerless seed never flagged stale"
+# (e) The flag never triggers an overwrite: sync leaves the adopter-owned stale seed untouched.
+"$BIN/sync" "$P" >/dev/null
+grep -q "\[Unreleased\]" "$P/CHANGELOG.md" && pass "sync: stale seed left untouched (still adopter-owned)" || fail "sync: stale seed was overwritten"
+"$BIN/status" "$P" | grep "CHANGELOG.md" | grep -v '^note:' | grep -q "stale format" && pass "status: still flags stale after a re-sync" || fail "status: stale flag lost after re-sync"
+# (f) Multi-project scan: the note headline counts stale INSTANCES (one per project), matching the number
+# of flagged table rows — not distinct file types (adversarial-review fix). P is still stale from (c/e).
+P2="$(mktemp_project)"
+"$BIN/sync" "$P2" >/dev/null
+printf '# Changelog\n\n## [Unreleased]\n' > "$P2/CHANGELOG.md"
+MULTI="$("$BIN/status" "$P" "$P2")"
+NROWS="$(echo "$MULTI" | grep -v '^note:' | grep -c "stale format")"
+[ "$NROWS" = "2" ] && pass "status: two stale rows across two projects" || fail "status: expected 2 stale rows, got $NROWS"
+echo "$MULTI" | grep '^note:' | grep -q "2 seeds predate" && pass "status: note count matches flagged rows (2), not deduped file types" || fail "status: note count != flagged rows"
+rm -rf "$P" "$P2"
+
 echo ""
 echo "== Summary: $PASS passed, $FAIL failed =="
 [ "$FAIL" = "0" ]
