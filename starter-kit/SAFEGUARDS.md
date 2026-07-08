@@ -172,6 +172,15 @@ An optional `pre-commit` hook makes the authoritative-ledger rule mechanical: it
 
 The hook is a convenience, not a substitute: the SESSION_RUNNER Phase 3F write-gate and Phase 0 reconcile are the primary mechanisms and hold with or without it.
 
+### Close-Out Completeness Hook (recommended — agent-specific)
+
+The `HANDOFFS.md` receipt and Phase 0 reconcile catch a skipped close-out report *durably* and *at the next Orient*. The fastest catch, though, is *in-session* — the moment the agent tries to end its turn. Git has no session-end hook; only the agent harness does. So, as a **recommendation, not a shipped mechanism** (the methodology recommends; it does not reimplement), an adopter can wire their harness's session-end / "stop" hook to check the receipt and re-prompt the agent to finish close-out before the turn ends.
+
+- **How to check.** Grep `HANDOFFS.md` for a trailing `status: pending` (portable), or run the canonical `bin/check-handoff`. That checker is **canonical-only** — it is not synced into adopter projects; copy it if you want the structural checker, exactly as you copy `.githooks/pre-commit`. The receipt discipline itself needs no tooling: it is the synced Phase 3D write-step plus Phase 0 reconcile.
+- **Fast path, not the guarantee** — same status as the ledger co-staging hook. It is agent-specific (each harness names the hook differently; some have none), human-dismissable, and defeated by a crash before the callback fires. The guarantee remains Phase 0 reconcile-on-read.
+- **Soft-remind, not hard-block** by default — surface the incomplete receipt and let the agent finish it, rather than refusing to stop (which risks a livelock).
+- The methodology ships no such hook — it is external harness configuration, in the same class as agent-level memory. See [`BOOTSTRAP.md`](BOOTSTRAP.md) Step 10.
+
 ---
 
 ## What the User Should Do

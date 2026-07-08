@@ -50,14 +50,20 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   Learning #8 fully discharged. **P4:** Phase 0 reconcile-on-read extended to backstop the receipt — a
   missing or still-`pending` receipt for a session that left commits is reconstructed `status:
   reconciled` at the next Orient, folded into the one write Phase 0 already permits (`SESSION_RUNNER.md`
-  step 6 + mechanics note, `ITERATIVE_METHODOLOGY.md` Pre-Flight). P5–P6 (framing, dogfood) follow.
+  step 6 + mechanics note, `ITERATIVE_METHODOLOGY.md` Pre-Flight). **P5:** framing — strengthened
+  **FM #6** to name the durable receipt (count stays 27, no new FM), a degradation-detection row
+  (commits landed but receipt never completed → FM #6), **Learning #9** (a handoff is dependable only
+  as a durable machine-checkable artifact: gate-on-write AND reconcile-on-read), and the
+  SAFEGUARDS/BOOTSTRAP harness stop-hook **recommendation** (agent-specific, soft-remind, never shipped;
+  `bin/check-handoff` noted canonical-only/copyable). P6 (dogfood + versioning) follows.
 - **Commit/PR:** `4f0bea7` (P1: artifact + manifest) · `1646773` (P2: checker + tests, built by
   Sonnet 5; Opus review accepted `status: reconciled` for P4's backfill and made the `HANDOFFS.md`
   template checker-safe — no inline `#` comments, since `#` is a literal value char as in `PR #52`) ·
   `f722a84` (P3a: SESSION_RUNNER + IM protocol wiring, Opus) · `afbbe7d` (P3b: 3 campaign
   checklists, Opus) · this commit (P4: Phase 0 receipt reconcile, built by Sonnet 5; Opus review
   verified the false-positive scoping — one receipt per session, not per commit — and documented the
-  `reconciled` status in the seed) — branch `feat/close-out-receipt` (from `upstream/main`); model
+  `reconciled` status in the seed) · this commit (P5: framing — FM #6 + degradation row + Learning #9 +
+  stop-hook recommendation, Opus) — branch `feat/close-out-receipt` (from `upstream/main`); model
   split hybrid (P2/P4/P6 Sonnet 5; P3/P5 Opus 4.8 + review of all).
 - **Session:** close-out-receipt slice · **Verified:** `bin/tests.sh` **81/82** (the 1 = github-source
   404 on the not-yet-pushed `HANDOFFS.md`, clears on merge); block-isolation + per-field-defect
