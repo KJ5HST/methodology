@@ -762,8 +762,9 @@ The session runner is deliberately short. It fits in a single read. Every line i
 - **3B: Self-assess** — Compare work to previous sessions' quality bar
 - **3C: Document learnings** — Update the workstream document; record project learnings in CLAUDE.md → Adaptations → Project-specific Learnings (adopters), or append to the SESSION_RUNNER learnings table (canonical repo dogfooding)
 - **3D: Write handoff notes** — Update SESSION_NOTES.md for the next session. **The agent knows the next session will score these notes**, which changes the quality of what gets written.
-- **3E: Commit** — All changes committed. **Record the action ledger:** append one dated, source-tagged entry per action to `CHANGELOG.md` and co-stage it with the commit (Failure Mode #27) — the durable answer to "what was done here, ever?", distinct from the session-overwritten handoff notes.
-- **3F: Report and STOP** — Summary to user including previous session's handoff score, then session is over
+- **3E: Runtime smoke test** — If the deliverable changes runtime behavior (startup, service registration, config resolution, dispatch, plugin loading), launch the app and confirm the change is active *and not silently overridden* before committing — "build clean" is necessary but not sufficient. If you cannot runtime-verify (needs hardware, an external service, or CI), say so in the handoff *and treat it as a defect* — disclosing the gap is not the same as discharging it (Failure Mode #24).
+- **3F: Commit** — All changes committed. **Record the action ledger:** append one dated, source-tagged entry per action to `CHANGELOG.md` and co-stage it with the commit (Failure Mode #27) — the durable answer to "what was done here, ever?", distinct from the session-overwritten handoff notes.
+- **3G: Report and STOP** — Summary to user including previous session's handoff score, then session is over
 
 The close-out is the most important innovation. Before the session runner, close-out was manual — the user had to explicitly tell the agent to self-assess, update the prompt, and stop. The agent's natural tendency is to finish the deliverable and immediately start the next one (Failure Mode #2). Making close-out automatic and mandatory means the self-improvement loop runs every session, not just the sessions where the user remembers to ask for it.
 
@@ -796,10 +797,10 @@ The **handoff accountability loop** (steps 3A and 3D) is what makes sessions com
 | 21 | Greenfield assumption | Assume existing capabilities; read baseline docs during Orient |
 | 22 | Overwrite user edits | Check git blame before modifying; never regenerate without confirming |
 | 23 | Question-as-instruction | Present options and wait; a question is not a go-ahead |
-| 24 | Build-passes-ship-it (build success ≠ runtime correctness) | If the deliverable changes runtime behavior, launch the app before close-out; "build clean" is necessary but not sufficient |
+| 24 | Build-passes-ship-it (build success ≠ runtime correctness) | If the deliverable changes runtime behavior, launch the app before close-out (Phase 3E); "build clean" is necessary but not sufficient |
 | 25 | Horizontal slicing (all-of-a-layer, never end-to-end) | Vertical slices (tracer bullets) — one feature through every layer; ask "if I stop here, is something working?" |
 | 26 | Mega-session posing as a vertical slice | One slice = ONE capability = one pre-declared, operator-approved layer list; split multiple intents |
-| 27 | Unrecorded action (commit/close out without logging it) | Append one dated, source-tagged CHANGELOG.md entry per action at close-out, newest on top |
+| 27 | Unrecorded action (commit/close out without logging it) | Append one dated, source-tagged CHANGELOG.md entry per action at close-out (Phase 3F), newest on top |
 
 The failure modes table serves two purposes: it warns the agent about its own tendencies, and it gives the user language for course-correction ("You're doing Failure Mode #2 — stop and close out").
 

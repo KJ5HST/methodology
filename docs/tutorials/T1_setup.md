@@ -109,16 +109,30 @@ python -m unittest      # stdlib fallback, zero dependencies
 python3 methodology_dashboard.py
 ```
 
-This writes `dashboard.html` and opens it; the page auto-refreshes every 60 seconds. Add `dashboard.html` to your `.gitignore` — it's a generated artifact. See [`BOOTSTRAP.md` §Step 9](../../starter-kit/BOOTSTRAP.md#step-9-set-up-the-methodology-dashboard-recommended).
+This writes `dashboard.html` and opens it; the page auto-refreshes every 60 seconds. It's a generated artifact, so ignore it *before* you commit — otherwise the next step's `git add -A` would track it and every refresh would dirty your tree:
+
+```sh
+echo 'dashboard.html' >> .gitignore
+```
+
+See [`BOOTSTRAP.md` §Step 9](../../starter-kit/BOOTSTRAP.md#step-9-set-up-the-methodology-dashboard-recommended).
 
 **Expected result:** a health report you can open in a browser.
-**Checkpoint:** `dashboard.html` exists and your project's methodology-compliance score is no longer zero.
+**Checkpoint:** `dashboard.html` exists (and is gitignored) and your project's methodology-compliance score is no longer zero.
 
-### 6. Stop here — then start a *fresh* session
+### 6. Commit the setup, then start a *fresh* session
 
-This is the one step everyone gets wrong. The agent read `CLAUDE.md` when this session began — *before* you installed the protocol — so the procedure you just set up is not loaded in the session you set it up in. Do **not** give a real task now.
+First commit the setup, so the synced methodology files and the Step-1-seeded `CHANGELOG.md`/`ROADMAP.md` are **tracked** before your first real session:
 
-**Expected result:** setup is complete and committed; no feature work has begun.
+```sh
+git add -A && git commit -m "chore: bootstrap the methodology framework"
+```
+
+Tracking the seeded ledger now keeps `git status` clean and puts `CHANGELOG.md` under version control before any session writes to it. Tutorial 2's close-out is already careful here — it stages the ledger with an explicit `git add CHANGELOG.md …`, *not* `git commit -am` (which skips a still-untracked seed) — so committing it now just makes that a non-issue.
+
+Then **stop.** This is the one step everyone gets wrong. The agent read `CLAUDE.md` when this session began — *before* you installed the protocol — so the procedure you just set up is not loaded in the session you set it up in. Do **not** give a real task now.
+
+**Expected result:** the setup is committed — `git status` is clean; no feature work has begun.
 **Checkpoint:** You have started a brand-new session (or are about to). The agent's first act in that session is to orient — read `SAFEGUARDS.md` and `SESSION_NOTES.md`, run the dashboard, check `git status`, report, and wait for you. That's [`BOOTSTRAP.md` §First Session Checklist](../../starter-kit/BOOTSTRAP.md#first-session-checklist), and it's exactly what Tutorial 2 walks through.
 
 ## Common mistakes
