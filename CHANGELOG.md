@@ -46,8 +46,9 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   never auto-overwrites an adopter-owned seed, the status string is never reclassified as drift, and the
   exit code is unchanged. Docs updated in lockstep: `starter-kit/BOOTSTRAP.md`'s update-existing-project
   note and the `docs/tutorials/T8_keeping_current.md` SEED-state model now name the third state.
-- **Commit/PR:** this commit (`bin/_manifest.py` + `bin/status` + `bin/tests.sh`); docs follow in the
-  next commit — branch `feat/status-stale-seed-advisory` (from `upstream/main`). The `[BL-6]`-item-2
+- **Commit/PR:** `346ac01` (feature + Test 20: `bin/_manifest.py` + `bin/status` + `bin/tests.sh`) ·
+  this commit (docs: `starter-kit/BOOTSTRAP.md` note + `docs/tutorials/T8_keeping_current.md` third
+  state) — branch `feat/status-stale-seed-advisory` (from `upstream/main`). The `[BL-6]`-item-2
   backlog closure + the item-3 hook-distribution decision land on fork `main` at merge (this
   upstream-based branch carries no `docs/planning/`). Design + fixes hardened by a 6-lens adversarial
   review + default-to-refuted verify (`wf_52a1df0d-068`): **5 findings confirmed → all fixed** (an

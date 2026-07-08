@@ -59,7 +59,7 @@ adopter  docs/methodology/ITERATIVE_METHODOLOGY.md  tracked      current
 …
 ```
 
-The two **dispositions** are the whole model ([`bin/_manifest.py`](../../bin/_manifest.py)): **TRACKED** files are canonical-owned — `bin/sync` keeps them current and `bin/status` can report `current` / `N versions behind` / `locally modified` / `missing`. **SEED** files (`SESSION_NOTES.md`, `CHANGELOG.md`, `ROADMAP.md`) are *yours* after first creation — `bin/status` reports only `present` / `absent`, and an absent seed is **not** drift.
+The two **dispositions** are the whole model ([`bin/_manifest.py`](../../bin/_manifest.py)): **TRACKED** files are canonical-owned — `bin/sync` keeps them current and `bin/status` can report `current` / `N versions behind` / `locally modified` / `missing`. **SEED** files (`SESSION_NOTES.md`, `CHANGELOG.md`, `ROADMAP.md`) are *yours* after first creation — `bin/status` reports `present` / `absent` (and, for a seed whose *format* predates the current methodology, `present (stale format)` — advisory only, never drift), and an absent seed is **not** drift.
 
 **Expected result:** A per-file table, every TRACKED row `current` and every SEED row `present` — and your working tree is byte-for-byte unchanged (status never writes).
 **Checkpoint:** You can point at any row and say which disposition it is and what its status word means — and you confirm status changed *nothing* (`git status` in your project shows no new modifications from running it).
