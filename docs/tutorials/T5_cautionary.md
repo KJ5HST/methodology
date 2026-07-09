@@ -65,6 +65,8 @@ Some gates you won't trip in a tutorial, but you must recognize them on sight:
 **Expected result:** You can state, in one sentence each, why "Implement the following plan" doesn't mean start coding, and why F2+B1 is not a slice.
 **Checkpoint:** You can tell a legitimate slice (data + service + client + tests of *one* capability, four gates met) from a mega-session wearing the slice costume (two capabilities, or a plan plus its code).
 
+**Corollary — capability-tiered review is not the masquerade.** A slice's layers can legitimately be built by agents of different capability tiers, with the strongest tier reviewing each delegated layer's output before its checkpoint commit lands ([§Vertical Slice Sessions](../../starter-kit/SESSION_RUNNER.md#vertical-slice-sessions), capability-tiered review — an elective refinement of the same four gates). That is not FM #26: the slice test is about how many *capabilities* a pre-declared contract enumerates, not about how many agents or tiers touched the layers. This framework repository's own close-out-receipt slice (root [`CHANGELOG.md`](../../CHANGELOG.md) and [`HANDOFFS.md`](../../HANDOFFS.md) session S1 — not the sample project's) is a real instance: one capability, six checkpoint commits, split across two capability tiers, every lighter-tier layer reviewed before its commit landed.
+
 ### 5. Make the "don't use it" call
 
 Take one real task you actually have and run it through the [When to Use](../../ITERATIVE_METHODOLOGY.md#when-to-use-this-methodology) test. Is it repeated work where quality compounds and a stakeholder approves the output — or a genuine one-off where the overhead exceeds the work? Write a one-line verdict.

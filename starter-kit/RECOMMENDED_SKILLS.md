@@ -72,6 +72,8 @@ Not a skill — a setting. The methodology owns *when* to raise reasoning effort
 
 A higher tier sharpens a phase; it never licenses crossing a gate (failure mode #17).
 
+**Capability-tiered review — a related, distinct mechanism.** Reasoning effort raises how hard *one* agent thinks; capability-tiered review splits a pre-declared vertical slice's layers across agents of different capability tiers, with the strongest tier reviewing every lighter-tier layer's output before that layer's checkpoint commit lands (`SESSION_RUNNER.md` §Vertical Slice Sessions, capability-tiered review). Illustrative Claude Code mechanism: a sub-agent on a lighter/faster model (e.g. Sonnet) drafts spec-driven, test-graded layers; the primary session on the deepest available model (e.g. Opus) keeps invariant-sensitive layers and reviews every lighter-tier layer's diff before committing it. This framework repository's own close-out-receipt slice (`CHANGELOG.md`; `HANDOFFS.md` session S1; shipped v3.3) is a live worked example, not a hypothetical. Other agents: a distinct review pass, a human-in-the-loop checkpoint, or a second tool satisfies the same requirement — the mechanism above is illustrative only. Elective; single-tier-throughout remains the default.
+
 ---
 
 ## Skills not recommended (and why)

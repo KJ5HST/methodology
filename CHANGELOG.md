@@ -32,6 +32,33 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-07-08 · [ad hoc] Capability-tiered review — elective vertical-slice addition (BL-7)
+- **Change:** codifies the operator-observed pattern from the close-out-receipt slice's hybrid model
+  split (session S1) as an elective addition to `starter-kit/SESSION_RUNNER.md` §Vertical Slice
+  Sessions: **capability-tiered review** — a pre-declared slice's layers may be delegated to a
+  lighter/faster capability tier only where an objective gate (test suite, exhaustive grep, mechanical
+  spec) proves correctness, with the strongest tier reviewing every delegated layer's output before
+  that layer's checkpoint commit lands; explicitly additional evidence for gates (c)/(d), never a
+  substitute, and explicitly not a fifth gate — forecloses two FM #26 misreadings (treating review as
+  proof on its own, batching review to the end instead of per boundary). Four files: **`starter-kit/SESSION_RUNNER.md`**
+  the core paragraph + new **Learning #11**; **`ITERATIVE_METHODOLOGY.md`** a one-sentence routing
+  pointer in §Matching Reasoning Effort to Stakes; **`starter-kit/RECOMMENDED_SKILLS.md`** an
+  illustrative Claude-Code-specific addendum after §Reasoning Effort (brand names confined to this file
+  only); **`docs/tutorials/T5_cautionary.md`** a corollary citing this repo's own close-out-receipt
+  slice as the worked "doing it right" counter-example to FM #26. Preceded by an operator-approved
+  3-candidate design panel (placement, naming, scope, and all three optional extras decided by the
+  operator). **No new phase, gate, principle, workstream, or failure mode; failure-mode count stays 27.**
+  All four touched files are `bin/_manifest.py`-distributed except the tutorial (canonical-only), so
+  adopters receive the core/recommendation discipline via `bin/sync`.
+- **Design verification:** drafted, then adversarially checked by a 4-lens review (guardrail fidelity,
+  citation/numbering fact-check, voice & agent-independence, completeness-critic whole-corpus sweep) —
+  all four lenses independently confirmed the same real defect (brand names "Sonnet-5/Opus-4.8" leaking
+  into the new Learning #11's Source column in the brand-neutral core file) — fixed before commit; no
+  other findings across links, anchors, FM/gate byte-stability, or corpus-wide staleness checks.
+- **Commit/PR:** this commit — branch `feat/capability-tiered-review` (from `upstream/main`).
+- **Session:** capability-tiered review (BL-7 design + implementation) · **Verified:** `bin/tests.sh`
+  84/84; `bin/check-links` clean.
+
 ### 2026-07-08 · [ad hoc] Released v3.4 — completeness-critic review lens
 - **Change:** version bumped **v3.3 → v3.4** (`CLAUDE.md` "Current version" line + a new §Versioning
   entry; `README.md` What's New) covering the completeness-critic lens (issue #55). Cite-don't-restate:

@@ -394,7 +394,7 @@ Inline pointers in this document and in the workstream files reference skills by
 
 Cheap, reversible, mechanical work — a one-line fix, a rename the compiler catches, a reversible config tweak — does not need it; a lighter setting is the honest default there. The axis runs both ways.
 
-Methodology owns *when and why* to raise the tier (this rule); your agent owns *how* (the specific effort or model mechanism — see [`RECOMMENDED_SKILLS.md`](../../RECOMMENDED_SKILLS.md) for concrete example settings). And a higher tier is not a license: like a skill, a deeper-reasoning mode sharpens a phase — it never authorizes skipping orientation, the stub, close-out, or any hard gate, nor widening a session beyond its one declared deliverable (failure mode #17, `SESSION_RUNNER.md` Protocol erosion). Reason harder; stop at the same gates.
+Methodology owns *when and why* to raise the tier (this rule); your agent owns *how* (the specific effort or model mechanism — see [`RECOMMENDED_SKILLS.md`](../../RECOMMENDED_SKILLS.md) for concrete example settings). Within a pre-declared vertical slice, that mechanism can vary *by layer* too — see `SESSION_RUNNER.md` §Vertical Slice Sessions, capability-tiered review, for the elective pattern and its guardrails. And a higher tier is not a license: like a skill, a deeper-reasoning mode sharpens a phase — it never authorizes skipping orientation, the stub, close-out, or any hard gate, nor widening a session beyond its one declared deliverable (failure mode #17, `SESSION_RUNNER.md` Protocol erosion). Reason harder; stop at the same gates.
 
 ---
 
