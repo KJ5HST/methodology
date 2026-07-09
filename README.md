@@ -248,6 +248,16 @@ Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during develop
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
 
+### What's New in v3.3
+
+The mandatory **close-out handoff is now a durable, machine-checkable artifact** — closing the one close-out sub-step that left no git-tracked file (rmsharp, [PR #52](https://github.com/KJ5HST/methodology/pull/52)). Previously the handoff lived only in the transient `SESSION_NOTES.md` or the spoken report, so a *skipped* close-out report was invisible until a human noticed. Mirrors v3.1's ledger — **gate-on-write AND reconcile-on-read**.
+
+- **`HANDOFFS.md` receipt** — one machine-checkable ` ```handoff ` block per session (the six Phase 3D handoff fields + both 1–10 scores), seeded to adopters; written `status: pending` at claim, `complete` at close-out.
+- **`bin/check-handoff`** (canonical-only) asserts a receipt's presence and structure — never its quality (a green check is not a good handoff).
+- **Phase 0 reconcile backstop** — a missing or `pending` receipt is reconstructed `status: reconciled` at the next Orient.
+- **Framing** — FM #6 strengthened, a degradation-detection row, new **Learning #9**, and a *recommended* (never shipped) agent-harness stop-hook for the in-session catch.
+- **No principle, phase, gate, or workstream change; the failure-mode count stays 27.**
+
 ### What's New in v3.2
 
 The **portfolio dashboard now scores document-only / research repositories fairly** instead of penalizing them for having no code to unit-test (rmsharp, [PR #50](https://github.com/KJ5HST/methodology/pull/50)). A doc-only repo previously drew 0/20 Testing and a HIGH "No test infrastructure" risk; now the dashboard detects it and reshapes the scoring. Advisory tool — nothing hard-fails.

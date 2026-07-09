@@ -32,7 +32,16 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
-### 2026-07-08 · [ad hoc] Close-out receipt — durable machine-checkable handoff artifact (slice complete on-branch; PR pending)
+### 2026-07-08 · [ad hoc] Released v3.3 — durable close-out receipt
+- **Change:** version bumped **v3.2 → v3.3** (`CLAUDE.md` "Current version" line + a new §Versioning
+  entry; `README.md` What's New) and shipped as an **annotated tag `v3.3` + GitHub Release (Latest)**,
+  covering the close-out-receipt slice (PR #52, merge `e5638af`). Cite-don't-restate: the full narrative
+  lives in [`CLAUDE.md` §Versioning "v3.3"](CLAUDE.md#versioning).
+- **Commit/PR:** this commit (release narration) → merged; annotated tag `v3.3` + GitHub Release.
+- **Session:** release · **Verified:** post-merge `bin/tests.sh` green — Test 9's github-source 404
+  clears now that `HANDOFFS.md` is on the default branch.
+
+### 2026-07-08 · [ad hoc] Close-out receipt — durable machine-checkable handoff artifact (shipped in v3.3, PR #52)
 - **Change:** implemented the ratified plan (fork `main`:
   `docs/planning/close-out-receipt-durable-artifact-plan.md`) as a pre-declared **vertical slice** —
   one capability, checkpoint commit + verification at each layer boundary. Fixes "agent had to be
@@ -57,8 +66,8 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   SAFEGUARDS/BOOTSTRAP harness stop-hook **recommendation** (agent-specific, soft-remind, never shipped;
   `bin/check-handoff` noted canonical-only/copyable). **P6:** dogfood close-out — the canonical repo's
   own root `HANDOFFS.md` receives its first receipt (S1) for this very slice, and `bin/check-handoff`
-  validates it green (first non-fixture run). Slice complete on-branch; the PR to `KJ5HST/methodology`
-  and the version-event decision (D4 — `CLAUDE.md` §Versioning v3.3 vs none) are pending operator sign-off.
+  validates it green (first non-fixture run). Merged to `KJ5HST/main` as **PR #52** (merge `e5638af`);
+  the version event (D4) resolved to a **v3.3** minor — see the release entry above.
 - **Commit/PR:** `4f0bea7` (P1: artifact + manifest) · `1646773` (P2: checker + tests, built by
   Sonnet 5; Opus review accepted `status: reconciled` for P4's backfill and made the `HANDOFFS.md`
   template checker-safe — no inline `#` comments, since `#` is a literal value char as in `PR #52`) ·
