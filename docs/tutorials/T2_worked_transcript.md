@@ -212,6 +212,25 @@ The sample project is an *adopter* (it copied `SESSION_RUNNER.md`), so any proje
 **Self-assessment:** 0 corrections; scope held; runtime-verified. 9/10.
 ```
 
+The same handoff is also completed as a durable ` ```handoff ` receipt in [`HANDOFFS.md`](../../starter-kit/HANDOFFS.md) (the sample project seeded one — [T1 Step 1](T1_setup.md)) — the machine-checkable proof the handoff was written, kept forever, distinct from the session-overwritten `SESSION_NOTES.md`. The `status: pending` stub written at the Phase 1B claim is completed to `status: complete`:
+
+```handoff
+session: S1
+date: 2026-06-22
+status: complete
+self_score: 9
+active_task: F1 — todo done <id> (DONE)
+what_was_done: mark_done() + cmd_done() + done subparser in todo.py; 5 tests in test_done.py; commit (hash)
+next_steps: F2 — todo rm <id> (BACKLOG); decide id-reuse policy after delete
+key_files: todo.py:57 (mark_done), todo.py:103 (cmd_done), todo.py:127 (done subparser)
+gotchas: core stays I/O-free — cmd_done persists, mark_done must not; B1 deliberately untouched
+runtime_smoke: ran done 1 (ok) and done 99 (exit 1) — see 3E
+changelog_ref: CHANGELOG.md [BL-F1] entry
+commit: pending
+```
+
+`predecessor_score` is omitted — Session 1 has no predecessor to score. `commit: pending` is legal (the receipt ships in the very commit it would name; the next session reconciles it). `bin/check-handoff --file HANDOFFS.md` would pass this — presence and structure, never quality.
+
 ### 3E — Runtime smoke test
 
 The deliverable changes runtime behavior (a new subcommand and dispatch), so "tests pass" is necessary but not sufficient — the app is actually run:
@@ -231,7 +250,7 @@ The feature is *active*, not just compiled. (Skipping this is [FM #24, build-pas
 
 ### 3F — Record the ledger, then commit *(one action, one commit)*
 
-F1 came from the backlog, so its close-out does two paired things in the **same commit**: prepend a dated, source-tagged line to the project's `CHANGELOG.md` action ledger (setup seeded one — [T1 Step 1](T1_setup.md)) **and** strike F1 from `BACKLOG.md` (a `[BL-N]` entry clears its item). Stage both **explicitly** — a freshly-seeded ledger may still be untracked, and `git commit -am` skips untracked files, so it would silently drop the entry — the very [FM #27, unrecorded action](../../starter-kit/SESSION_RUNNER.md#known-failure-modes) this step prevents:
+F1 came from the backlog, so its close-out commits three things together: the completed `HANDOFFS.md` receipt from 3D, a dated, source-tagged line prepended to the project's `CHANGELOG.md` action ledger (setup seeded both — [T1 Step 1](T1_setup.md)), **and** F1 struck from `BACKLOG.md` (a `[BL-N]` entry clears its item). Stage them **explicitly** — a freshly-seeded ledger or receipt may still be untracked, and `git commit -am` skips untracked files, so it would silently drop the entry — the very [FM #27, unrecorded action](../../starter-kit/SESSION_RUNNER.md#known-failure-modes) this step prevents:
 
 ```text
 # prepended to CHANGELOG.md (newest on top):
@@ -240,7 +259,7 @@ F1 came from the backlog, so its close-out does two paired things in the **same 
 
 # F1 struck from BACKLOG.md in the same commit
 
-$ git add CHANGELOG.md BACKLOG.md todo.py test_done.py
+$ git add HANDOFFS.md CHANGELOG.md BACKLOG.md todo.py test_done.py
 $ git commit -m "feat(todo): add `done <id>` to mark a task complete (F1)"
 ```
 

@@ -32,6 +32,23 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-07-08 · [ad hoc] v3.3 doc-completeness — propagate the receipt into HOW_TO_USE, README tree, tutorials
+- **Change:** the v3.3 close-out receipt is now reflected in the *secondary* docs that describe or
+  demonstrate close-out, closing the Learning #7 propagation gap the release surfaced (the operator
+  asked "has documentation been fully updated?" — it had not). **`HOW_TO_USE.md`** §Phase 3 3D now names
+  the durable `HANDOFFS.md` receipt (it is DISTRIBUTED — was inconsistent with the synced
+  `SESSION_RUNNER.md`); **`README.md`** Repository-Structure tree lists `HANDOFFS.md` (starter-kit) +
+  `check-handoff` (bin/); the **tutorials** `T2_worked_transcript.md` (a full ` ```handoff ` receipt in
+  its Phase-3 close-out + the receipt joins the `git add`), `T2_first_session.md` (1B receipt stub + the
+  3D/expected-result), and `T3_compounding_loop.md` (the receipt carries `predecessor_score`, making the
+  compounding loop machine-checkable). Mirrors the v3.1→BL-6 downstream-completeness pattern; **no version
+  event** (docs-lag). No principle/phase/gate/workstream/FM change.
+- **Commit/PR:** `67581fd` (distributed: `HOW_TO_USE.md` + `README.md`) · this commit (tutorials:
+  `T2_worked_transcript.md`, `T2_first_session.md`, `T3_compounding_loop.md`) — branch
+  `docs/v3.3-doc-completeness` (from `upstream/main`).
+- **Session:** doc-completeness follow-on · **Verified:** `bin/check-links` clean; a completeness sweep
+  found no other tutorial demonstrating close-out without the receipt (T5 only references a prior handoff).
+
 ### 2026-07-08 · [ad hoc] Released v3.3 — durable close-out receipt
 - **Change:** version bumped **v3.2 → v3.3** (`CLAUDE.md` "Current version" line + a new §Versioning
   entry; `README.md` What's New) and shipped as an **annotated tag `v3.3` + GitHub Release (Latest)**,

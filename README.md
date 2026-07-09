@@ -177,6 +177,7 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 │   ├── SESSION_NOTES.md              ← Session continuity template
 │   ├── SAFEGUARDS.md                 ← Safety rails template
 │   ├── CHANGELOG.md                  ← Completed work history template
+│   ├── HANDOFFS.md                   ← Durable close-out receipts template
 │   ├── ROADMAP.md                    ← Feature inventory & future plans template
 │   └── methodology_dashboard.py      ← Health scanner (also in tools/)
 │
@@ -187,6 +188,7 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 │   ├── sync                          ← Copy starter-kit files into a project (dual-mode, dual-source)
 │   ├── status                        ← Report drift of synced files across projects
 │   ├── check-links                   ← Validate relative links resolve in the adopter layout
+│   ├── check-handoff                 ← Validate a close-out receipt's structure (canonical-only)
 │   ├── _manifest.py                  ← Shared (src, dest, disposition) manifest — single source of truth
 │   └── tests.sh                      ← Test suite for the bin/ tooling
 │

@@ -73,7 +73,7 @@ decision (I had to make the call this session). ROI: saved ~one research cycle.
 
 ### 4. Write Session 2's handoff — knowing Session 3 will score it
 
-Now you're on the *other* side of the loop. Write Session 2's handoff to all [six minimum requirements](../../starter-kit/SESSION_RUNNER.md#3d-write-handoff-notes): current state, what was done + commit, **F3 (`undo`) as the specific next item**, key files with the new line numbers, the id-reuse decision as a gotcha, and a self-assessment score. Write the notes you'd want to *receive* — the ones you just gave Session 1 a 9 for.
+Now you're on the *other* side of the loop. Write Session 2's handoff to all [six minimum requirements](../../starter-kit/SESSION_RUNNER.md#3d-write-handoff-notes): current state, what was done + commit, **F3 (`undo`) as the specific next item**, key files with the new line numbers, the id-reuse decision as a gotcha, and a self-assessment score. Write the notes you'd want to *receive* — the ones you just gave Session 1 a 9 for. Write it both to `SESSION_NOTES.md` and as a durable ` ```handoff ` receipt in [`HANDOFFS.md`](../../starter-kit/HANDOFFS.md): the receipt carries `predecessor_score: 9` — the score you just handed Session 1 — next to your own `self_score`, so *both* halves of the loop are machine-checkable, not just prose.
 
 **Expected result:** A full handoff that names F3, the key files (`remove_todo`/`cmd_rm` and their lines), the id-reuse gotcha, and a self-score — meeting every minimum requirement.
 **Checkpoint:** Re-read your handoff against the score you just handed out. A handoff like *"Done. Pick next from backlog"* would earn the ≤4/10 you'd refuse to write — that's [FM #15 (minimal handoff)](../../starter-kit/SESSION_RUNNER.md#known-failure-modes). You wrote one that would earn a 9.
@@ -85,6 +85,7 @@ The loop is real only if it's *written down*. Check that this session left both 
 ```sh
 grep -n "Handoff Evaluation (by Session 2)" SESSION_NOTES.md   # incoming: you -> Session 1
 grep -n "What's next.*F3"                  SESSION_NOTES.md     # outgoing: you -> Session 3
+grep -n "predecessor_score: 9"             HANDOFFS.md          # the receipt: durable, machine-checkable
 ```
 
 **Expected result:** Both lines are present; F2 is shipped, tested, and runtime-verified; the session stopped at one deliverable.

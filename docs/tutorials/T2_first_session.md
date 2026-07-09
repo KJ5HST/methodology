@@ -51,7 +51,7 @@ Now hand over **one** deliverable:
 - **Track B:** *"Implement F1 — `todo done <id>`."*
 - **Track A:** name one small, vertical, testable item from your own backlog. One. Not two "while we're here."
 
-The agent restates the deliverable, then — before any code — writes a **claim stub** to `SESSION_NOTES.md` (Phase 1B). That stub is what guarantees even a crashed session leaves a trace.
+The agent restates the deliverable, then — before any code — writes a **claim stub** to `SESSION_NOTES.md` and opens a `status: pending` receipt in `HANDOFFS.md` (Phase 1B). Those stubs are what guarantee even a crashed session leaves a trace — the committed `pending` receipt is found by the next session's Phase 0 reconcile.
 
 **Expected result:** The agent echoes back one deliverable and one workstream, then writes the IN-PROGRESS stub.
 **Checkpoint:** `SESSION_NOTES.md` now contains a "What Session 1 Did … Status: Session claimed" stub. (See the transcript's [Phase 1B](T2_worked_transcript.md#1b--claim-the-session).)
@@ -86,7 +86,7 @@ python -m pytest -q                # green: 12 passed  (7 original + 5 new)
 
 ### 6. Close out — hand off, runtime-verify, commit, and STOP
 
-**Phase 3** is automatic; the agent does it without being asked, in order: record any project learning (3C), write the handoff (3D), then — because this deliverable changes runtime behavior — actually run the app to confirm the feature is live (3E; "tests pass" is not enough for a runtime change), and finally record the action in the `CHANGELOG.md` ledger and commit one atomic change with that entry co-staged (3F), then stop.
+**Phase 3** is automatic; the agent does it without being asked, in order: record any project learning (3C), write the handoff — to `SESSION_NOTES.md` and as a durable, machine-checkable `HANDOFFS.md` receipt (3D) — then — because this deliverable changes runtime behavior — actually run the app to confirm the feature is live (3E; "tests pass" is not enough for a runtime change), and finally record the action in the `CHANGELOG.md` ledger and commit one atomic change with that entry co-staged (3F), then stop.
 
 ```sh
 # Track B runtime smoke test — the feature is active, not just compiled:
@@ -95,7 +95,7 @@ python3 todo.py --file demo.json done 1     # -> done #1: write the report
 python3 todo.py --file demo.json list        # -> 1 [x] write the report
 ```
 
-**Expected result:** A full handoff written to `SESSION_NOTES.md` (what was done + commit, what's next, key files with line numbers, gotchas, a self-assessment score), a runtime smoke test, one `CHANGELOG.md` ledger entry (with F1 struck from `BACKLOG.md`), one commit, and a stop.
+**Expected result:** A full handoff written to `SESSION_NOTES.md` **and completed as a `HANDOFFS.md` receipt** (what was done + commit, what's next, key files with line numbers, gotchas, a self-assessment score), a runtime smoke test, one `CHANGELOG.md` ledger entry (with F1 struck from `BACKLOG.md`), one commit, and a stop.
 **Checkpoint:** `SESSION_NOTES.md` holds a handoff that names the next item (F2) and the key files; `git log` shows one feature commit; `CHANGELOG.md` gained one dated entry for F1 and `BACKLOG.md` no longer lists it; the agent did **not** start F2 or fix B1. That stop is "1 and done" — [FM #2](../../starter-kit/SESSION_RUNNER.md#known-failure-modes).
 
 ## Common mistakes
