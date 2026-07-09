@@ -250,6 +250,15 @@ Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during develop
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
 
+### What's New in v3.5
+
+Vertical-slice sessions get an **elective capability-tiered review** pattern — when a slice's layers are built by agents of different capability tiers, the strongest tier reviews every lighter-tier layer's output before that layer's checkpoint commit lands (rmsharp, fork backlog BL-7). Codifies a pattern the operator observed live in the v3.3 close-out-receipt slice's own hybrid model split.
+
+- **`SESSION_RUNNER.md` §Vertical Slice Sessions** — a lighter/faster tier may draft a layer only where an objective gate (tests, exhaustive grep, a mechanical spec) proves correctness; the strongest tier keeps judgment-heavy layers and reviews everything delegated. Explicitly additional evidence for gates (c)/(d), never a substitute, and not a fifth gate.
+- **New Learning #11**, a routing pointer in `ITERATIVE_METHODOLOGY.md`, an illustrative Claude-Code addendum in `RECOMMENDED_SKILLS.md`, and a "doing it right" corollary in the `T5_cautionary.md` tutorial.
+- **Process** — an operator-approved 3-candidate design panel, then a 4-lens adversarial review that caught and fixed one real defect (brand names leaking into a brand-neutral core file).
+- **No principle, phase, gate, or workstream change; the failure-mode count stays 27.**
+
 ### What's New in v3.4
 
 Review and audit passes get a **completeness-critic lens** — a review scoped only to the diff misses what the change made stale *elsewhere* in the corpus (rmsharp, [issue #55](https://github.com/KJ5HST/methodology/issues/55)). Motivated by the v3.3 close-out-receipt work: a clean 6-lens adversarial review missed three out-of-diff surfaces (`HOW_TO_USE.md`, the `README.md` tree, and three tutorials) that still described close-out without the new receipt.

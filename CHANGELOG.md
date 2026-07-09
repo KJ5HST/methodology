@@ -32,6 +32,14 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-07-08 · [ad hoc] Released v3.5 — capability-tiered review
+- **Change:** version bumped **v3.4 → v3.5** (`CLAUDE.md` "Current version" line + a new §Versioning
+  entry; `README.md` What's New) covering the capability-tiered review elective addition (BL-7, PR #57,
+  already merged). Cite-don't-restate: the full narrative lives in
+  [`CLAUDE.md` §Versioning "v3.5"](CLAUDE.md#versioning).
+- **Commit/PR:** this commit (release narration) → merged; annotated tag `v3.5` + GitHub Release.
+- **Session:** release · **Verified:** `bin/tests.sh` 84/84; `bin/check-links` clean.
+
 ### 2026-07-08 · [ad hoc] Capability-tiered review — elective vertical-slice addition (BL-7)
 - **Change:** codifies the operator-observed pattern from the close-out-receipt slice's hybrid model
   split (session S1) as an elective addition to `starter-kit/SESSION_RUNNER.md` §Vertical Slice
