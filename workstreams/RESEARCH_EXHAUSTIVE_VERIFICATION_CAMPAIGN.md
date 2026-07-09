@@ -435,6 +435,7 @@ A crashed mid-unit session is recovered by the next session reading the unit fil
 - [ ] The drafted section renders cleanly to every target format
 - [ ] Phase 6 Claim-Source Audit (per `RESEARCH_DOCUMENTATION_WORKSTREAM.md`) ran on the rendered output — exhaustive planning does not exempt the final correctness check
 - [ ] Unit deliverable is committed to `verification/exhaustive/units/<unit>.md`
+- [ ] The session's handoff is written as a durable `HANDOFFS.md` receipt (Phase 3D)
 - [ ] The session's action is recorded in `CHANGELOG.md` (Phase 3F ledger entry, failure mode #27)
 - [ ] Handoff records sub-agent strategy, calibration adjustments, and any rows that ended up unused
 
@@ -446,6 +447,7 @@ A crashed mid-unit session is recovered by the next session reading the unit fil
 - [ ] Every `re-attribute` row has a specific replacement source recommendation
 - [ ] No row is `pending`
 - [ ] Unit deliverable is committed to `verification/exhaustive/units/<unit>.md`
+- [ ] The session's handoff is written as a durable `HANDOFFS.md` receipt (Phase 3D)
 - [ ] The session's action is recorded in `CHANGELOG.md` (Phase 3F ledger entry, failure mode #27)
 - [ ] Handoff records sub-agent strategy and any calibration adjustments
 
@@ -458,6 +460,7 @@ A crashed mid-unit session is recovered by the next session reading the unit fil
 - [ ] Cross-unit patterns are surfaced explicitly, not buried in per-finding remediation
 - [ ] Remediation plan (audit) or open-items list (creation) is ordered by priority and dependency, not by paper order
 - [ ] Estimate-to-actual ratio is recorded for future-campaign calibration
+- [ ] The consolidation session's handoff is written as a `HANDOFFS.md` receipt (Phase 3D)
 - [ ] The consolidation session's action (the committed report) is recorded in `CHANGELOG.md` (Phase 3F ledger entry, failure mode #27)
 
 ---

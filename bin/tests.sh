@@ -287,6 +287,125 @@ NROWS="$(echo "$MULTI" | grep -v '^note:' | grep -c "stale format")"
 echo "$MULTI" | grep '^note:' | grep -q "2 seeds predate" && pass "status: note count matches flagged rows (2), not deduped file types" || fail "status: note count != flagged rows"
 rm -rf "$P" "$P2"
 
+# Shared fixture builder for Tests 21-22: a fully well-formed, status: complete
+# `handoff` receipt (starter-kit/HANDOFFS.md field list). Each variant below pipes
+# this through sed/grep to break exactly one thing.
+good_handoff() {
+    cat <<'EOF'
+```handoff
+session: S12
+date: 2026-07-08
+status: complete
+self_score: 8
+predecessor_score: 7
+active_task: Implementing bin/check-handoff (Phase P2)
+what_was_done: Wrote bin/check-handoff and Tests 21-22; commit a1b2c3d
+next_steps: Wire bin/check-handoff into SESSION_RUNNER.md Phase 3D close-out gate
+key_files: bin/check-handoff:1, bin/tests.sh:230
+gotchas: A bare-backtick wrapper around an example must not parse as a real block
+runtime_smoke: n/a — docs-only
+changelog_ref: PR #52
+commit: a1b2c3d
+```
+Free-text prose: implemented the checker end to end, self-score +8/-2 (docstring could be tighter).
+EOF
+}
+
+echo "== Test 21: check-handoff — well-formed receipt passes; field/value defects are caught =="
+F="$(mktemp)"
+good_handoff > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && pass "well-formed complete receipt passes" || fail "well-formed complete receipt should pass"
+rm -f "$F"
+
+F="$(mktemp)"
+good_handoff | grep -v '^gotchas:' > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && fail "missing required key (gotchas) not caught" || pass "missing required key (gotchas) caught"
+rm -f "$F"
+
+F="$(mktemp)"
+good_handoff | sed 's/^next_steps:.*/next_steps: /' > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && fail "empty required field (next_steps) not caught" || pass "empty required field (next_steps) caught"
+rm -f "$F"
+
+F="$(mktemp)"
+good_handoff | sed 's/^self_score:.*/self_score: 11/' > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && fail "self_score out of 1..10 not caught" || pass "self_score out of 1..10 caught"
+rm -f "$F"
+
+F="$(mktemp)"
+good_handoff | sed 's#^key_files:.*#key_files: bin/check-handoff, bin/tests.sh#' > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && fail "key_files missing path:line token not caught" || pass "key_files missing path:line token caught"
+rm -f "$F"
+
+# Regression (final-review C1): an incidental colon-digit run in prose (a scripture
+# ref, a time, a ratio) must NOT satisfy key_files — the pre-colon token must be path-like.
+F="$(mktemp)"
+good_handoff | sed 's#^key_files:.*#key_files: reviewed the citation John 3:16, no files edited#' > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && fail "key_files incidental colon-digit (John 3:16) wrongly passed" || pass "key_files incidental colon-digit (no path) caught"
+rm -f "$F"
+
+# Regression (final-review C2): a bare 7+ digit decimal (a count/timestamp) must NOT
+# satisfy what_was_done's sha-shape check — a real sha carries a hex letter.
+F="$(mktemp)"
+good_handoff | sed 's#^what_was_done:.*#what_was_done: processed 12345678 records, forgot to note the sha#' > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && fail "what_was_done decimal-only (12345678, no sha) wrongly passed" || pass "what_was_done decimal-only (no hex letter) caught"
+rm -f "$F"
+
+echo "== Test 22: check-handoff — anti-pattern lints, modes (--allow-pending), fresh-seed, block isolation =="
+F="$(mktemp)"
+good_handoff | sed 's/^next_steps:.*/next_steps: pick next from backlog/' > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && fail "'pick next from backlog' not caught" || pass "'pick next from backlog' caught"
+rm -f "$F"
+
+F="$(mktemp)"
+good_handoff | sed 's/^gotchas:.*/gotchas: need to verify this later/' > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && fail "'need to verify' placeholder not caught" || pass "'need to verify' placeholder caught"
+rm -f "$F"
+
+F="$(mktemp)"
+good_handoff | sed 's/^commit:.*/commit: pending/' > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && pass "commit: pending is accepted" || fail "commit: pending should be accepted"
+rm -f "$F"
+
+F="$(mktemp)"
+good_handoff | sed 's/^session:.*/session: S1/' | grep -v '^predecessor_score:' > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && pass "Session-1 fixture without predecessor_score passes" || fail "Session-1 exemption not honored"
+rm -f "$F"
+
+F="$(mktemp)"
+good_handoff | sed 's/^status:.*/status: pending/' > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && fail "status: pending should fail by default" || pass "status: pending fails by default"
+"$BIN/check-handoff" --file "$F" --allow-pending >/dev/null 2>&1 && pass "status: pending passes with --allow-pending" || fail "--allow-pending did not accept status: pending"
+rm -f "$F"
+
+F="$(mktemp)"
+good_handoff | sed 's/^status:.*/status: reconciled/' > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && pass "status: reconciled (Phase 0 backfill) is accepted" || fail "status: reconciled should be accepted"
+rm -f "$F"
+
+F="$(mktemp)"
+cat > "$F" <<'EOF'
+# Handoff Receipts
+
+<!-- METHODOLOGY-SEED-SENTINEL: fresh receipt ledger, no receipts yet. -->
+
+Receipts go below, newest on top.
+EOF
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && pass "fresh-seed fixture (sentinel, no blocks) passes" || fail "fresh-seed fixture should pass"
+rm -f "$F"
+
+# Block isolation: a prose line OUTSIDE the fenced block contains the exact
+# anti-pattern text, and does not satisfy any field either — the real block below
+# it is well-formed, so the outside noise must not affect the verdict either way.
+F="$(mktemp)"
+{
+    echo 'NOTE: a bad example looks like "next_steps: pick next from backlog" - avoid it.'
+    echo
+    good_handoff
+} > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && pass "prose outside the fenced block does not trigger the lint (block isolation)" || fail "block isolation: outside prose leaked into the check"
+rm -f "$F"
+
 echo ""
 echo "== Summary: $PASS passed, $FAIL failed =="
 [ "$FAIL" = "0" ]

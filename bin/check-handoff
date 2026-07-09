@@ -1,0 +1,269 @@
+#!/usr/bin/env python3
+"""check-handoff — validate a session's `handoff` receipt block in HANDOFFS.md.
+
+starter-kit/HANDOFFS.md (SEED disposition, see bin/_manifest.py) is a per-session
+close-out receipt ledger: one fenced ```handoff block per session, newest on top
+(see that file's own "Format" section for the field list and the two write points —
+Phase 1B writes a `status: pending` stub, Phase 3D overwrites it to `status:
+complete`).
+
+This checker verifies PRESENCE and STRUCTURE only, never semantic quality (that
+remains a human judgement call at Phase 3A — see the file's own epigraph: "a green
+bin/check-handoff is not a good handoff"). It isolates the newest fenced block and
+asserts: every required key is present and non-empty (Session 1 is exempt from
+`predecessor_score`); `self_score` / `predecessor_score` are integers 1..10;
+`key_files` carries at least one `path:line` token; `what_was_done` names a commit
+sha or the literal `pending`; `status` is `complete` unless `--allow-pending`; and a
+handful of anti-pattern lints reject lazy filler ("pick next from backlog", "need to
+verify", bare TODO/TBD/"Done."/"Fixed stuff"/"...").
+
+Block isolation matters: a receipt is parsed from the text BETWEEN a
+```handoff / ``` fence pair, never by grepping the whole file — prose outside the
+fence (including this file's own illustrative example, wrapped in a 4-backtick
+outer fence per CommonMark's fence-nesting rule) must never satisfy or trip a check.
+The newest receipt is the FIRST ```handoff block in file order, so a documentation
+example MUST be wrapped in a stronger (4-backtick) fence — an UNWRAPPED ```handoff
+placed above the real receipt would be treated as a real receipt and shadow it.
+
+Part of the close-out-receipt vertical slice (P1: starter-kit/HANDOFFS.md + manifest
+wiring; P2: this checker + bin/tests.sh Tests 21-22).
+
+Usage:
+  bin/check-handoff                    # check the newest receipt in ./HANDOFFS.md,
+                                        # falling back to starter-kit/HANDOFFS.md
+  bin/check-handoff --file PATH        # check an explicit file (what tests use)
+  bin/check-handoff --allow-none       # "no receipt blocks found" is success (empty-diff session)
+  bin/check-handoff --allow-pending    # accept status: pending (e.g. checking a Phase 1B stub)
+
+Exit: 0 = a receipt is present and structurally complete, or legitimately absent
+      (fresh seed, or --allow-none with none found); 1 = missing / structurally
+      incomplete / an anti-pattern lint fired.
+Python 3 stdlib only; cross-platform.
+"""
+import argparse
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+SEED_SENTINEL = "METHODOLOGY-SEED-SENTINEL"
+
+REQUIRED_KEYS = (
+    "session", "date", "status", "self_score", "predecessor_score", "active_task",
+    "what_was_done", "next_steps", "key_files", "gotchas", "runtime_smoke",
+    "changelog_ref", "commit",
+)
+
+KEY_RE = re.compile(r"^(" + "|".join(REQUIRED_KEYS) + r"):\s*(.*)$")
+HANDOFF_OPEN_RE = re.compile(r"^```handoff[ \t]*$")
+
+# `key_files` must carry a `path:line` token somewhere in the value (e.g.
+# "SessionManager.java:245"). The pre-colon token must be PATH-LIKE — contain a
+# "/" or "." — so an incidental colon-digit run in prose (a time "10:30", a ratio
+# "3:1", a scripture ref "John 3:16", "auth:2fa") does NOT vacuously satisfy the
+# check. Tradeoff: an extension-less top-level file needs a path prefix
+# ("./Makefile:12"). This is the "at least one path:line token in the whole value"
+# reading, not a stricter per-entry reading (each comma/space-separated entry
+# carrying its own token).
+KEY_FILES_RE = re.compile(r"[^\s:]*[/.][^\s:]*:\d+")
+
+# A sha-shaped token anywhere in what_was_done; short (7) to full (40) hex, and
+# containing at least one hex LETTER so a bare 7+ digit decimal (a count, a unix
+# timestamp) does not pass as a "commit sha" — the far more common false-negative.
+# (A rare all-numeric short sha is still carried in the separate `commit:` field.)
+SHA_RE = re.compile(r"\b(?=[0-9a-f]{7,40}\b)[0-9a-f]*[a-f][0-9a-f]*\b")
+
+PICK_BACKLOG_RE = re.compile(r"pick next(\s+from)?(\s+the)?\s+backlog", re.IGNORECASE)
+NEED_TO_VERIFY_RE = re.compile(r"need to verify", re.IGNORECASE)
+BARE_PLACEHOLDERS = {"todo", "tbd", "done.", "fixed stuff", "..."}
+
+
+def extract_blocks(text: str) -> list:
+    """Return each top-level ```handoff ... ``` block's inner content, in file
+    order (first = newest, since the file is newest-on-top).
+
+    Fence-nesting aware: a bare all-backtick line (3+ backticks, no language tag —
+    e.g. HANDOFFS.md's own 4-backtick "````" wrapper around its illustrative
+    example) opens an inert wrapper that is skipped whole, per CommonMark's
+    fence-nesting rule (a fence can only be closed by a fence of >= its own
+    backtick count). Without this, a ```handoff shown as documentation INSIDE a
+    stronger wrapper would be misparsed as a real receipt.
+    """
+    lines = text.splitlines()
+    blocks = []
+    i, n = 0, len(lines)
+    while i < n:
+        stripped = lines[i].strip()
+        if stripped and set(stripped) == {"`"} and len(stripped) >= 3:
+            # Bare wrapper fence: skip to its matching (or stronger) closer.
+            fence_len = len(stripped)
+            i += 1
+            while i < n:
+                s2 = lines[i].strip()
+                i += 1
+                if set(s2) == {"`"} and len(s2) >= fence_len:
+                    break
+            continue
+        if HANDOFF_OPEN_RE.match(lines[i]):
+            i += 1
+            content = []
+            while i < n:
+                s2 = lines[i].strip()
+                if set(s2) == {"`"} and len(s2) >= 3:
+                    i += 1
+                    break
+                content.append(lines[i])
+                i += 1
+            blocks.append("\n".join(content))
+            continue
+        i += 1
+    return blocks
+
+
+def parse_block(block_text: str) -> dict:
+    """key: value pairs found INSIDE an already-isolated block. Only recognized
+    keys (REQUIRED_KEYS) are captured, so free-text prose lines never masquerade
+    as a field."""
+    fields = {}
+    for line in block_text.splitlines():
+        m = KEY_RE.match(line)
+        if m:
+            fields[m.group(1)] = m.group(2).strip()
+    return fields
+
+
+def check_int_range(key: str, value: str, lo: int = 1, hi: int = 10):
+    try:
+        n = int(value.strip())
+    except ValueError:
+        return "%s must be an integer %d..%d (got %r)" % (key, lo, hi, value)
+    if not (lo <= n <= hi):
+        return "%s must be an integer %d..%d (got %r)" % (key, lo, hi, value)
+    return None
+
+
+def validate(fields: dict, allow_pending: bool) -> list:
+    """Return a list of finding strings; empty list = structurally clean."""
+    findings = []
+    session = fields.get("session", "").strip()
+    is_s1 = session == "S1"
+
+    for key in REQUIRED_KEYS:
+        if key == "predecessor_score" and is_s1:
+            continue  # Session-1 exemption — no predecessor to score
+        if key not in fields:
+            findings.append("missing required key: %s" % key)
+        elif not fields[key].strip():
+            findings.append("empty required field: %s" % key)
+
+    # self_score / predecessor_score are distinct keys — each validated on its own
+    # value, so one can never stand in for the other.
+    if fields.get("self_score", "").strip():
+        msg = check_int_range("self_score", fields["self_score"])
+        if msg:
+            findings.append(msg)
+    if fields.get("predecessor_score", "").strip():
+        msg = check_int_range("predecessor_score", fields["predecessor_score"])
+        if msg:
+            findings.append(msg)
+
+    if fields.get("key_files", "").strip() and not KEY_FILES_RE.search(fields["key_files"]):
+        findings.append(
+            "key_files has no path:line token (e.g. SessionManager.java:245): %r" % fields["key_files"]
+        )
+
+    wwd = fields.get("what_was_done", "")
+    if wwd.strip() and wwd.strip() != "pending" and not SHA_RE.search(wwd):
+        findings.append(
+            "what_was_done names no commit sha and is not the literal 'pending': %r" % wwd
+        )
+
+    # "reconciled" is the terminal status the next session's Phase 0 backfill writes for a
+    # receipt it reconstructed after a crash/skip (see the reconcile-on-read backstop); it is a
+    # valid closed state, like "complete".
+    status = fields.get("status", "").strip()
+    if status == "pending" and not allow_pending:
+        findings.append("receipt still pending — close-out not completed")
+    elif status and status not in ("pending", "complete", "reconciled"):
+        findings.append("status must be 'complete', 'reconciled', or 'pending' (got %r)" % status)
+
+    next_steps = fields.get("next_steps", "")
+    if PICK_BACKLOG_RE.search(next_steps):
+        findings.append("next_steps is a non-actionable placeholder ('pick next from backlog')")
+
+    # Anti-pattern lints applied to every present field's value.
+    for key, value in fields.items():
+        if NEED_TO_VERIFY_RE.search(value):
+            findings.append("%s contains a deferred-verification placeholder ('need to verify')" % key)
+        if value.strip().lower() in BARE_PLACEHOLDERS:
+            findings.append("%s is a bare placeholder (%r)" % (key, value.strip()))
+
+    return findings
+
+
+def repo_root() -> Path:
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True,
+        )
+        return Path(out.stdout.strip())
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return Path.cwd()
+
+
+def default_path() -> Path:
+    """The repo's own HANDOFFS.md if present, else the starter-kit seed template
+    (the only place HANDOFFS.md lives inside the canonical methodology repo, which
+    has no root-level receipt ledger of its own)."""
+    root = repo_root()
+    root_file = root / "HANDOFFS.md"
+    if root_file.exists():
+        return root_file
+    return root / "starter-kit" / "HANDOFFS.md"
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(
+        description="Validate the newest `handoff` receipt block in a HANDOFFS.md ledger."
+    )
+    p.add_argument("--file", help="explicit HANDOFFS.md path to check (what bin/tests.sh uses)")
+    p.add_argument("--allow-none", action="store_true",
+                    help="treat 'no receipt blocks found' as success (empty-diff / no-action session)")
+    p.add_argument("--allow-pending", action="store_true",
+                    help="accept status: pending (e.g. checking a just-written Phase 1B stub)")
+    args = p.parse_args()
+
+    path = Path(args.file) if args.file else default_path()
+    if not path.exists():
+        print("error: handoff file not found: %s" % path)
+        return 1
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    blocks = extract_blocks(text)
+
+    if not blocks:
+        if SEED_SENTINEL in text:
+            print("note: fresh receipt ledger, no receipts yet (%s)" % path)
+            return 0
+        if args.allow_none:
+            print("note: no receipt blocks found in %s (--allow-none)" % path)
+            return 0
+        print("error: no ```handoff``` receipt block found in %s" % path)
+        return 1
+
+    fields = parse_block(blocks[0])  # newest = first block in the file
+    findings = validate(fields, args.allow_pending)
+
+    if findings:
+        print("check-handoff: FAIL — %d issue(s) in the newest receipt in %s:" % (len(findings), path))
+        for msg in findings:
+            print("  error: %s" % msg)
+        return 1
+
+    print("check-handoff: OK — newest receipt in %s is structurally complete." % path)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

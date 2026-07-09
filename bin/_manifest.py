@@ -44,6 +44,7 @@ DISTRIBUTION = [
     # seed-once root-files: created if absent, then adopter-owned (never clobbered)
     ("starter-kit/SESSION_NOTES.md", "SESSION_NOTES.md", SEED),
     ("starter-kit/CHANGELOG.md", "CHANGELOG.md", SEED),
+    ("starter-kit/HANDOFFS.md", "HANDOFFS.md", SEED),
     ("starter-kit/ROADMAP.md", "ROADMAP.md", SEED),
     # framework docs -> docs/methodology/
     ("ITERATIVE_METHODOLOGY.md", "docs/methodology/ITERATIVE_METHODOLOGY.md", TRACKED),
@@ -88,4 +89,5 @@ DISTRIBUTION = [
 #     when a seed gains a lifetime-stable marker.
 SEED_FORMAT_MARKERS = {
     "CHANGELOG.md": "Authoritative Action Ledger",
+    "HANDOFFS.md": "Handoff Receipts",
 }

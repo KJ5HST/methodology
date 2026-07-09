@@ -448,6 +448,7 @@ In interview mode, `interviews/round-N-*.md` is a separate checkpoint stream. A 
 - [ ] (Interview mode) Cold-read owner-bias check completed and recorded
 - [ ] (Archaeology mode) Doc spot-check completed; results recorded
 - [ ] Unit deliverable is committed to `familiarization/units/<unit>.md`
+- [ ] The session's handoff is written as a durable `HANDOFFS.md` receipt (Phase 3D)
 - [ ] The session's action is recorded in `CHANGELOG.md` (Phase 3F ledger entry, failure mode #27)
 - [ ] Handoff records sub-agent strategy, calibration adjustments, residual-unknown count, and any cross-unit hypotheses to verify in subsequent sessions
 
@@ -461,6 +462,7 @@ In interview mode, `interviews/round-N-*.md` is a separate checkpoint stream. A 
 - [ ] Prioritized backlog is ordered by priority and dependency, not by module order
 - [ ] Estimate-to-actual ratios are recorded for future-campaign calibration (unit count, session length, residual-unknown rate)
 - [ ] Operational-responsibility sign-off is captured — either the responsibility is assumable, or the gaps blocking that are listed with closing actions
+- [ ] The consolidation session's handoff is written as a `HANDOFFS.md` receipt (Phase 3D)
 - [ ] The consolidation session's action (the committed report) is recorded in `CHANGELOG.md` (Phase 3F ledger entry, failure mode #27)
 
 ---

@@ -236,6 +236,7 @@ A crashed mid-unit session is recovered by the next session reading the unit fil
 - [ ] Every row has the required evidence
 - [ ] No row is in a transient/pending state
 - [ ] Unit deliverable is committed
+- [ ] The session's handoff is written as a durable `HANDOFFS.md` receipt (Phase 3D)
 - [ ] The session's action is recorded in `CHANGELOG.md` (Phase 3F ledger entry, failure mode #27)
 - [ ] Handoff records sub-agent strategy and calibration adjustments
 
@@ -248,6 +249,7 @@ A crashed mid-unit session is recovered by the next session reading the unit fil
 - [ ] Cross-unit patterns are surfaced explicitly, not buried in per-finding remediation
 - [ ] Remediation plan is ordered by priority and dependency, not by unit order
 - [ ] Estimate-to-actual ratio is recorded for future-campaign calibration
+- [ ] The consolidation session's handoff is written as a `HANDOFFS.md` receipt (Phase 3D)
 - [ ] The consolidation session's action (the committed report) is recorded in `CHANGELOG.md` (Phase 3F ledger entry, failure mode #27)
 
 ---
