@@ -32,6 +32,43 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-07-26 · [ad hoc] Dashboard signal-integrity campaign lands upstream — the scanner's signals now mean what they say (v3.6)
+- **Change:** the portfolio health scanner's signals are reconciled with what they actually measure,
+  closing upstream issues [#59](https://github.com/KJ5HST/methodology/issues/59),
+  [#60](https://github.com/KJ5HST/methodology/issues/60) and
+  [#61](https://github.com/KJ5HST/methodology/issues/61) plus five defects that were never filed.
+  **One root cause, eight defects:** every one was *a proxy presented as a semantic finding* — a
+  110-point weighted sum rendered as a percentage; `.exists()` at the repo root rendered as
+  "adoption"; a checkbox regex rendered as "completed work not migrated"; any file whose name starts
+  with `CHANGELOG` rendered as "has an action ledger"; and a signal that never executes rendered as
+  "no finding". The motivating case was a **false GREEN on a real adopter**, which silenced the exact
+  finding the operator needed. Seven layers, one per session: scale honesty (2.9.0), ledger identity
+  (2.9.1), backlog shape with abstention (2.9.2), repo role (2.10.0, closes #59), a
+  completeness-critic doc sweep, the installer no longer defeating doc-only detection (2.10.1), and
+  close-out. `DASHBOARD_VERSION` **2.8.0 → 2.10.1**, both twins byte-identical; the scanner grows
+  **2,475 → 3,275** lines and its unit suite **29 → 191**. `bin/tests.sh` is unchanged at **84** —
+  the campaign added no shell checks. Cite-don't-restate: the full narrative, the honest limits, and
+  the one live defect that ships **disclosed rather than quietly fixed** (the seed-discount hole —
+  not a regression, since the pre-Layer-7 scanner returns the identical wrong result) live in
+  [`CLAUDE.md` §Versioning "v3.6"](CLAUDE.md#versioning).
+- **Commit/PR:** this commit + `9e93588` (the S3 claim) — branch `feat/dashboard-signal-integrity`,
+  built from `upstream/main` because fork `main` carries fork-only `docs/planning/*` that must not
+  ship here. **The per-layer development history is fork-`main`-only and is not reachable from this
+  repo's history** — unlike the v3.1 campaign, whose per-session commits were branch commits that
+  merged here. For archaeology those layer commits are `6b10f09` (L1) · `3838a13` (L2) · `9ebedda`
+  (L3) · `abb3b29` (L4) · `baa1dd1`+`fc65013` (L5) · `ae9e5b7`+`ef71946`+`6f10460`+`f1cfdbc`+`d78cd41`
+  (L7) · `307a7a8`+`79fb2b1`+`99ee81c`+`081d77c`+`cbde2a1`+`ae6050d` (L6, close-out and release
+  narration), all on [`rmsharp/methodology@main`](https://github.com/rmsharp/methodology/commits/main).
+  Ratified plan: [`docs/planning/dashboard-signal-integrity-plan.md`](https://github.com/rmsharp/methodology/blob/main/docs/planning/dashboard-signal-integrity-plan.md) (`bc2481d`, fork `main` only).
+  Tagged `[ad hoc]` rather than `[issue #NN]` because the one-tag-per-entry rule admits a single
+  source and this action spans three issues; the per-layer entries carrying the individual `[issue
+  #59]`/`[issue #60]`/`[issue #61]` tags are on the fork's ledger. The annotated tag and GitHub
+  Release for **v3.6** are cut at the merge commit, per the v3.2/v3.4/v3.5 pattern.
+- **Session:** S3 · **Verified:** `tools/test_methodology_dashboard.py` **191/191 OK** · `bin/tests.sh`
+  **84 passed / 0 failed** · `bin/check-links` OK (82 relative links across 21 distributed markdown
+  files) · `diff -q` on the two dashboard twins identical · `py_compile` clean on all three Python
+  files · `CLAUDE.md`'s starter-kit table asserted row-for-row against `ls starter-kit/` (11 of 11).
+
 ### 2026-07-08 · [ad hoc] Released v3.5 — capability-tiered review
 - **Change:** version bumped **v3.4 → v3.5** (`CLAUDE.md` "Current version" line + a new §Versioning
   entry; `README.md` What's New) covering the capability-tiered review elective addition (BL-7, PR #57,

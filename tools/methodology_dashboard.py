@@ -48,7 +48,21 @@ CUSTOMIZATION
   vendor dependencies, etc.).
 
 - METHODOLOGY_ITEMS: The weighted checklist used for compliance scoring.
-  Adjust weights to match what matters most for your team.
+  Adjust weights to match what matters most for your team. This is the
+  checklist for a repo that ADOPTS the methodology.
+
+- FRAMEWORK_ITEMS: The separate checklist scored instead of METHODOLOGY_ITEMS
+  when a repo is detected as PUBLISHING the methodology rather than consuming
+  it — a framework publisher owes different artifacts than an adopter, so
+  scoring it against adopter-root files reports a false "partial adoption".
+
+- .methodology-profile: A repo-root marker that overrules either structural
+  detection when the heuristic is wrong about your repo. Only its first line
+  that is neither blank nor a comment is read. It carries whitespace-separated
+  tokens from two independent axes: repo CLASS (doc-only | code) and repo ROLE
+  (framework | adopter). Naming one token of a pair forces that classification;
+  naming both abstains on that axis alone and falls back to detection. Declaring
+  is exact where detection is a guess.
 """
 
 import json
@@ -68,7 +82,7 @@ from collections import defaultdict
 # Every other copy (portfolio root + per-project) is a synced copy of the canonical and must
 # carry the same value. A copy whose DASHBOARD_VERSION is older than the canonical is stale —
 # re-sync from the canonical. Bump on any change to the canonical script.
-DASHBOARD_VERSION = "2.8.0"
+DASHBOARD_VERSION = "2.10.1"
 
 ROOT = Path(__file__).parent
 EXCLUDE_DIRS = {"methodology", "BrogueCE-iOS", ".git", "__pycache__", "node_modules", ".venv", "venv"}
@@ -113,10 +127,67 @@ METHODOLOGY_ITEMS = [
     ("SESSION_NOTES.md", 20, "file"),
     ("BACKLOG.md", 15, "file"),
     ("CHANGELOG.md", 5, "file"),
+    ("HANDOFFS.md", 5, "file"),
     ("ROADMAP.md", 5, "file"),
     ("docs/methodology", 10, "dir"),
     ("docs/methodology/workstreams", 10, "dir"),
 ]
+
+# The compliance DENOMINATOR — derived from the checklist itself, never written as a literal.
+# History is the argument for deriving it: the original six items summed to exactly 100, so the
+# "%" label and a bare `* 0.2` health dimension were correct *by construction*; two 5-point items
+# were later appended without re-cutting the scale, and from then on a fully-compliant project
+# rendered "110%" over a 22-of-20 sub-score. A hardcoded denominator is what drifted, so a
+# hardcoded 100 would drift again the next time this list grows.
+#
+# Adopter-root files that the methodology distributes are expected to appear on this checklist or
+# to be recorded as deliberately unscored — an invariant the canonical test suite enforces against
+# the distribution manifest (tools/test_methodology_dashboard.py, CHECKLIST_EXEMPT), since the
+# manifest is canonical-only and an adopter's copy has nothing to check itself against.
+METHODOLOGY_MAX = sum(weight for _, weight, _ in METHODOLOGY_ITEMS)
+
+# The FRAMEWORK checklist — scored instead of METHODOLOGY_ITEMS when detect_repo_role says this
+# repo PUBLISHES the methodology rather than consuming it. METHODOLOGY_ITEMS lists adopter-root
+# DESTINATIONS; a distributor does not install a second copy of its own corpus into its own root,
+# so grading it against that list asks a question it was never going to answer yes to.
+#
+# Two halves, both checkable by existence:
+#   - does it publish a complete corpus (the artifacts an adopter receives, plus the machinery
+#     that delivers them)?
+#   - does it OPERATE the methodology it publishes (the root action ledger and close-out
+#     receipts it asks every adopter to keep)?
+# The second half is why the role swap is not a hiding place: without it, becoming a "framework"
+# repo would stop the scanner asking whether the publisher runs its own rules.
+#
+# NOT SCORED, deliberately: the two paths detect_repo_role uses to prove the role
+# (bin/_manifest.py, starter-kit/SESSION_RUNNER.md). If the evidence for the role also earned
+# points, the raw sum would have a nonzero floor on the structural path and the "no corpus at
+# all" branch would become an assertion over an input that can never occur — the same
+# unreachable-signal defect this campaign exists to close, re-created inside its own fix. Their
+# provenance is DISPLAYED on the card instead.
+#
+# NOT SCORED for a different reason: any distribution SEED source. Those are placeholders here
+# (starter-kit/SESSION_NOTES.md is a 27-line stub, starter-kit/ROADMAP.md an 18-line skeleton),
+# and crediting a placeholder is precisely the harm the campaign plan's line-255 prohibition
+# names. The canonical test suite enforces that rule mechanically against bin/_manifest.py.
+FRAMEWORK_ITEMS = [
+    ("ITERATIVE_METHODOLOGY.md", 15, "file"),      # the theory layer the runner cross-references
+    ("starter-kit/SAFEGUARDS.md", 15, "file"),     # the enforcement half of the runner
+    ("workstreams", 15, "dir"),                    # 9 of the 22 distributed sources live here
+    ("bin/sync", 15, "file"),                      # what separates HAVING a methodology from PUBLISHING one
+    ("bin/tests.sh", 10, "file"),                  # the framework's build equivalent
+    ("CHANGELOG.md", 10, "file"),                  # its OWN action ledger (FM #27)
+    ("HANDOFFS.md", 10, "file"),                   # its OWN close-out receipts (v3.3)
+    ("starter-kit/BOOTSTRAP.md", 5, "file"),       # the documented install path
+    ("HOW_TO_USE.md", 5, "file"),                  # onboarding prose
+    ("bin/status", 5, "file"),                     # how an adopter learns its copy has drifted
+]
+
+# Derived for the same reason METHODOLOGY_MAX is (see above): a literal denominator is what
+# drifted last time. Deliberately not 100 — a denominator of exactly 100 makes raw == pct, which
+# renders every value-sweep test inert because an implementation that scaled the RAW sum would
+# pass unnoticed.
+FRAMEWORK_MAX = sum(weight for _, weight, _ in FRAMEWORK_ITEMS)
 
 # Component C — CHANGELOG ledger-freshness thresholds (advisory only; see
 # evaluate_changelog_freshness). This monitor stops rewarding mere presence: a CHANGELOG.md
@@ -129,6 +200,32 @@ LEDGER_REAL_HISTORY_MIN = 10   # below this commit count a repo gets new-adopter
 SEED_SENTINEL = "METHODOLOGY-SEED-SENTINEL"  # Signal D: an untouched seed still carries this token
 _DATED_ENTRY_RE = re.compile(r'^###\s+\d{4}-\d{2}-\d{2}', re.MULTILINE)
 _BACKLOG_DONE_RE = re.compile(r'^\s*[-*]\s*\[x\]', re.IGNORECASE | re.MULTILINE)
+_BACKLOG_BOX_RE = re.compile(r'^\s*[-*]\s*\[[x ]\]', re.IGNORECASE | re.MULTILINE)
+_BACKLOG_BULLET_RE = re.compile(r'^\s*[-*]\s+\S', re.MULTILINE)
+_FENCE_RE = re.compile(r'^\s*(?:```|~~~)')
+_TABLE_SEP_RE = re.compile(r'^\s*\|[\s:|-]+\|\s*$')
+
+# Signal F's table predicate: a cell that STARTS WITH one of these tokens, in a row of >= 3
+# cells, ignoring the ID column. EMPIRICALLY TUNED — do not re-derive it. Against a real
+# 643-line table backlog the campaign plan measured: *contains* a token = 321; *equals* a token
+# = 227 (misses `**DONE (Session 30, ...)**` and counts the 2-cell Status legend); this predicate
+# = 256, within 3 of an independent hand count of 253. All three counts reproduce here exactly.
+# The plan calls the contains/equals gap of 94 "false positives"; treat that as the plan's
+# characterization of why *contains* was rejected, not as a measured error count — it is the
+# arithmetic 321 - 227, and roughly a third of those rows are ones this predicate also counts.
+# What is independently verified is the ranking the choice rests on: *contains* admits
+# NOTES-column prose that this predicate rejects. The plan records the three counts but not the
+# token list, so this set was
+# recovered by search: it reproduces all three numbers against that corpus, where a DONE-only set
+# scores 277 rather than 321 on the *contains* probe. That is corroboration, NOT uniqueness — any
+# superset adding tokens the corpus never uses reproduces the same three numbers, so this set is
+# *a* set consistent with the tuning rather than provably *the* one. Only DONE / FIXED / RESOLVED
+# are exercised by that corpus at all; the other five add 0 matches there, true or false, and are
+# carried for conventions it happens not to use. All eight are pinned by test, because a token no
+# test exercises is a token no one can safely change.
+_BACKLOG_DONE_TOKENS = ("DONE", "COMPLETE", "COMPLETED", "SHIPPED", "FIXED", "RESOLVED",
+                        "CLOSED", "✅")  # U+2705 WHITE HEAVY CHECK MARK
+_BACKLOG_LOCATIONS = ("BACKLOG.md", "docs/BACKLOG.md", "docs/planning/BACKLOG.md")
 
 # Doc-only / research-repo scoring reshape (BL-5). A document-only repo (papers, dissertations,
 # technical reports, regulatory analyses — the Research-Documentation workstream population, and
@@ -149,7 +246,19 @@ _BACKLOG_DONE_RE = re.compile(r'^\s*[-*]\s*\[x\]', re.IGNORECASE | re.MULTILINE)
 DOC_ONLY_SOURCE_LOC_MAX = 200            # source LOC at/below this is "essentially no real code"
 DOC_ONLY_DOC_LOC_MIN    = 200            # doc LOC at/above this signals a real doc corpus
 DOC_ONLY_DOC_FILES_MIN  = 3              # this many doc files also signals a real doc corpus
-DOC_ONLY_MARKER         = ".methodology-profile"  # bidirectional opt-in: token "doc-only" | "code"
+
+# The .methodology-profile marker answers TWO independent questions as of 2.10.0, so it is named
+# for the file rather than for either axis. Each axis is a bidirectional pair: naming one token
+# forces that classification, naming both abstains on THAT AXIS ONLY (decision D4 — a
+# declaration this scanner cannot read is disclosed, never resolved by guessing), and tokens
+# belonging to neither pair are ignored so an older synced twin cannot crash or flip on a marker
+# naming an axis it has never heard of.
+#
+# The two pairs must stay DISJOINT: one file is one token bag, so a token serving both axes would
+# let a single word silently answer two questions. A canonical test asserts it.
+PROFILE_MARKER        = ".methodology-profile"
+PROFILE_CORPUS_TOKENS = ("doc-only", "code")        # is there anything here to unit-test? (BL-5)
+PROFILE_ROLE_TOKENS   = ("framework", "adopter")    # does this repo publish the methodology?
 
 
 # === HELPERS ===
@@ -215,6 +324,135 @@ def open_in_browser(filepath):
 CANONICAL_REL = Path("methodology") / "starter-kit" / "methodology_dashboard.py"
 
 _VERSION_RE = re.compile(r'''^DASHBOARD_VERSION\s*=\s*["']([^"']+)["']''', re.MULTILINE)
+
+# Non-markdown files `bin/sync` installs into an ADOPTER project root, as adopter-relative dest
+# paths. Installing the methodology must not change how the adopter's OWN code is measured: this
+# scanner is thousands of lines against a 200-LOC doc-only cap, so counting it as adopter source made
+# `bin/sync` destroy the very fair-scoring v3.2 shipped (a synced Quarto book flipped doc_only
+# True -> False and got its "No test infrastructure" penalty back). The signal did not mean what
+# it appeared to mean: it meant *we put our own scanner in your repo and then counted it against
+# you*. See §"Layer 7" of the campaign plan, which lives on the fork's `main` only:
+# https://github.com/rmsharp/methodology/blob/main/docs/planning/dashboard-signal-integrity-plan.md
+#
+# Mirrors the non-markdown dests in bin/_manifest.py; a canonical test asserts the two agree, so
+# the pair cannot drift silently (that plan's §8 learning 1 — make the cross-reference
+# machine-checkable, not re-greppable). Markdown dests are deliberately NOT listed: this tuple
+# exists to correct the source-LOC read, and a general "skip framework files" rule is exactly the
+# laundering hole the exclusion must not become.
+FRAMEWORK_INSTALLED_SOURCE = ("methodology_dashboard.py",)
+
+# The markdown half of the same problem, and the mirror of the defect above. `bin/sync` also
+# installs 21 markdown files (~6,353 LOC), which on its own satisfies detect_doc_only's corpus
+# disjunction (>= 3 doc files). Excluding only the scanner therefore FLIPPED the defect rather
+# than fixing it: a 148-LOC utility repo that correctly read `code` before sync read `doc-only`
+# after it, and lost a TRUE "No test infrastructure" risk. The old source cap had been masking
+# that; removing the cap's grip on synced repos exposes it.
+#
+# ALL 21 markdown dests are listed, TRACKED *and* SEED. Listing only the 17 TRACKED ones was
+# tried first, on the reasoning that a SEED is adopter-owned from creation (bin/_manifest.py) —
+# and MEASURED AGAINST A REAL `bin/sync` RUN it does not close the hole: the four seeds
+# (SESSION_NOTES/CHANGELOG/HANDOFFS/ROADMAP) plus the adopter's own README are 5 doc files, which
+# clears DOC_ONLY_DOC_FILES_MIN (3) by themselves, so the 148-LOC fixture still flipped to
+# doc-only. At sync time a seed is OUR template, not the adopter's writing; it only becomes their
+# content later. The corpus question is "does this repo hold a real document corpus?", and a set
+# of methodology bookkeeping files is not one no matter who later edits it.
+#
+# Used ONLY by detect_doc_only's corpus check, by operator decision: the question "is this a
+# DOCUMENT project?" must not be answered with documents we installed. No content check is needed
+# here (unlike the source list): excluding docs can only make doc-only classification HARDER, so
+# a repo cannot use this list to launder anything — it would only penalize itself.
+#
+# SPLIT INTO TWO LISTS, because the false-penalty direction is a real defect even though the
+# laundering direction is not. These 17 names are DISTINCTIVE — nobody writes a root
+# `SESSION_RUNNER.md` or a `docs/methodology/workstreams/…` by coincidence — so their presence is
+# itself the evidence that the framework was installed, and they are discounted unconditionally.
+FRAMEWORK_INSTALLED_DOCS = (
+    "SESSION_RUNNER.md",
+    "SAFEGUARDS.md",
+    "RECOMMENDED_SKILLS.md",
+    "CONTEXT_TEMPLATE.md",
+    "CLAUDE_TEMPLATE.md",
+    "BOOTSTRAP.md",
+    "docs/methodology/ITERATIVE_METHODOLOGY.md",
+    "docs/methodology/HOW_TO_USE.md",
+    "docs/methodology/workstreams/DESIGN_WORKSTREAM.md",
+    "docs/methodology/workstreams/ARCHITECTURE_WORKSTREAM.md",
+    "docs/methodology/workstreams/DEVELOPMENT_WORKSTREAM.md",
+    "docs/methodology/workstreams/AUDIT_WORKSTREAM.md",
+    "docs/methodology/workstreams/RESEARCH_DOCUMENTATION_WORKSTREAM.md",
+    "docs/methodology/workstreams/TEMPLATE_WORKSTREAM.md",
+    "docs/methodology/workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md",
+    "docs/methodology/workstreams/INHERITED_CODEBASE_FAMILIARIZATION_CAMPAIGN.md",
+    "docs/methodology/workstreams/TEMPLATE_CAMPAIGN.md",
+)
+
+# The four SEED dests. These names are ORDINARY — thousands of repos author a CHANGELOG.md or a
+# ROADMAP.md and never heard of this framework — so they are discounted only when one of the
+# distinctive dests above proves the framework really was installed. Discounting them
+# unconditionally was a measured regression: a spec repo that never ran `bin/sync`, whose corpus
+# lived in its own 900-line CHANGELOG.md, lost that file from the corpus check, flipped
+# `doc-only -> code`, and gained a false HIGH "No test infrastructure" — the exact false penalty
+# v3.2 exists to remove, re-created by the fix for its mirror. Found by the delta boundary review.
+#
+# The evidence gate is deliberately NOT "is the installed scanner present": BOOTSTRAP.md documents
+# a manual-copy install, and three real fleet repos carry framework markdown with no root scanner,
+# so keying on the scanner would silently stop discounting for them.
+FRAMEWORK_SEED_DOCS = (
+    "SESSION_NOTES.md",
+    "CHANGELOG.md",
+    "HANDOFFS.md",
+    "ROADMAP.md",
+)
+
+
+# Structural signatures of this scanner, for copies too old to carry DASHBOARD_VERSION. Two must
+# match. Three are ordinary function names, so two hits are suggestive rather than proof — this is
+# a heuristic, and the .methodology-profile marker is the documented override. Measured need: a
+# live adopter (feedback-loop-comparison) still runs a 1,614-line pre-version copy, and a
+# DASHBOARD_VERSION-only gate silently skipped it — the fix quietly not applying is the same class
+# of defect as the fix being wrong.
+_FRAMEWORK_SIGNATURES = (
+    "METHODOLOGY_ITEMS",
+    "def collect_all",
+    "def score_health",
+    "def assess_risks",
+    "https://github.com/KJ5HST/methodology",
+)
+_FRAMEWORK_SIGNATURE_MIN = 2
+
+
+def is_framework_installed(rel_path, fpath):
+    """True for a source file `bin/sync` installed at the adopter's project ROOT.
+
+    Root-anchored, not basename-matched: an adopter's own `src/methodology_dashboard.py` stays
+    their source, and the canonical repo's `tools/` + `starter-kit/` copies stay ITS source — it
+    authors that file, so its own health score must keep paying for it.
+
+    Content-verified: the file must declare `DASHBOARD_VERSION`, or carry at least two structural
+    signatures of this scanner (for copies predating that constant). The **whole file** is read,
+    not a fixed prefix — an earlier version searched only the first 4096 bytes, and the real
+    constant sits at byte 2,524 with just 1,572 bytes of headroom, so ~1.5 KB of added header
+    comment would have silently switched the exclusion off and regressed every doc-only adopter
+    to the defect this exists to fix. A silent cliff inside the fix for a silent-signal bug is
+    not a tradeoff worth keeping; the read costs nothing, since the file is read for line-counting
+    anyway.
+
+    **The threat model is accidental miscounting, not an adversarial adopter.** These checks make
+    it unlikely that the scanner mistakes an adopter's own work for ours. They do NOT stop someone who
+    deliberately pastes `DASHBOARD_VERSION` into their application to dodge a score — nothing
+    file-local could, and the only thing they would win is a wrong dashboard for themselves.
+    """
+    if str(rel_path).replace("\\", "/") not in FRAMEWORK_INSTALLED_SOURCE:
+        return False
+    try:
+        with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+            text = fh.read()
+    except OSError:
+        return False
+    if _VERSION_RE.search(text):
+        return True
+    hits = sum(1 for sig in _FRAMEWORK_SIGNATURES if sig in text)
+    return hits >= _FRAMEWORK_SIGNATURE_MIN
 
 
 def find_canonical(start):
@@ -461,12 +699,21 @@ def collect_file_metrics(path):
         "by_language": defaultdict(lambda: {"count": 0, "loc": 0}),
         "by_category": {
             "source": {"count": 0, "loc": 0},
+            # Framework-installed source (bin/sync's own files), held OUT of "source" so the
+            # adopter is measured on code they wrote. Given its own bucket rather than silently
+            # subtracted: every consumer then reads one consistent number, and the file stays
+            # visible in the card's file-type table instead of vanishing from the inventory.
+            "vendor": {"count": 0, "loc": 0},
             "test": {"count": 0, "loc": 0},
             "docs": {"count": 0, "loc": 0},
             "config": {"count": 0, "loc": 0},
             "assets": {"count": 0},
             "other": {"count": 0},
         },
+        # Framework-installed markdown, counted alongside (NOT subtracted from) by_category.docs:
+        # the documentation dimension keeps crediting it, only detect_doc_only's corpus check
+        # discounts it. See FRAMEWORK_INSTALLED_DOCS for why the two questions differ.
+        "framework_docs": {"count": 0, "loc": 0},
         "largest_files": [],
         "directory_depth_max": 0,
         "directory_count": 0,
@@ -474,6 +721,10 @@ def collect_file_metrics(path):
 
     all_files = []
     dirs_seen = set()
+    # Seed-named docs are held aside during the walk: whether they are OURS depends on evidence
+    # that only appears elsewhere in the tree, which the walk may not have reached yet.
+    seed_docs = {"count": 0, "loc": 0}
+    saw_distinctive_framework_doc = False
 
     for root_dir, dirs, files in os.walk(path):
         dirs[:] = [d for d in dirs if d not in WALK_SKIP]
@@ -487,6 +738,12 @@ def collect_file_metrics(path):
             rel_path = fpath.relative_to(path)
             ext = fpath.suffix.lower()
             category = categorize_file(rel_path, ext, fname)
+            # Layer 7: reclassify only what WE installed, and only where it would otherwise be
+            # counted as the adopter's code. Checked after categorize_file so a file that is
+            # already test/docs/config is untouched.
+            if category == "source" and is_framework_installed(rel_path, fpath):
+                category = "vendor"
+            rel_posix = str(rel_path).replace("\\", "/")
 
             metrics["total_files"] += 1
 
@@ -508,15 +765,31 @@ def collect_file_metrics(path):
                 metrics["by_language"][lang]["loc"] += loc
 
             # By category
-            if category in ("source", "test", "docs", "config"):
+            if category in ("source", "vendor", "test", "docs", "config"):
                 metrics["by_category"][category]["count"] += 1
                 metrics["by_category"][category]["loc"] += loc
+                if category == "docs":
+                    if rel_posix in FRAMEWORK_INSTALLED_DOCS:
+                        metrics["framework_docs"]["count"] += 1
+                        metrics["framework_docs"]["loc"] += loc
+                        saw_distinctive_framework_doc = True
+                    elif rel_posix in FRAMEWORK_SEED_DOCS:
+                        # Held aside; folded in below only if the framework is really installed.
+                        seed_docs["count"] += 1
+                        seed_docs["loc"] += loc
             elif category in ("assets", "other"):
                 metrics["by_category"][category]["count"] += 1
 
-            # Track for largest files
+            # Track for largest files. The vendor flag rides along so the "Large files" risk can
+            # skip a file we installed without re-deriving the predicate at risk time.
             if loc > 0:
-                all_files.append({"path": str(rel_path), "loc": loc, "ext": ext})
+                all_files.append({"path": str(rel_path), "loc": loc, "ext": ext,
+                                  "vendor": category == "vendor"})
+
+    # A CHANGELOG.md is ours only in a repo that also carries a file nobody writes by accident.
+    if saw_distinctive_framework_doc:
+        metrics["framework_docs"]["count"] += seed_docs["count"]
+        metrics["framework_docs"]["loc"] += seed_docs["loc"]
 
     metrics["directory_count"] = len(dirs_seen)
     all_files.sort(key=lambda f: f["loc"], reverse=True)
@@ -642,33 +915,226 @@ def collect_doc_metrics(path, file_metrics):
 
 
 def _find_changelog(path):
-    """Return the Path to a CHANGELOG in the project root or docs/, else None.
-    Mirrors collect_doc_metrics's has_changelog detection (case-insensitive prefix), but
-    restricted to regular files so a CHANGELOG *directory* is not treated as a ledger."""
+    """LOCATION — return the Path to the changelog freshness should be measured against (project
+    root or docs/), else None. Mirrors collect_doc_metrics's has_changelog detection
+    (case-insensitive prefix), but restricted to regular files so a CHANGELOG *directory* is not
+    treated as a ledger.
+
+    Within a base, an exact `CHANGELOG.md` (any case) wins over every name-prefix sibling:
+    `sorted()` alone returned `CHANGELOG-archive.md` ahead of `CHANGELOG.md` ('-' is 0x2D, '.' is
+    0x2E), so freshness was measured against a deliberately frozen archive and the repo was then
+    reported as lagging behind its own history. The prefix search remains as the fallback, so a
+    project whose only changelog is `CHANGELOG.rst` is still measured.
+
+    The preference is scoped WITHIN a base on purpose, so the pre-existing root-over-docs
+    precedence is preserved exactly. Hoisting it across bases would additionally fix a root that
+    holds only `CHANGELOG-archive.md` while an exact `docs/CHANGELOG.md` exists — but it would also
+    silently move which file is measured, and with it the ±1 freshness point, for the repo shape
+    that keeps a non-`.md` root changelog (`CHANGELOG.rst`) alongside an exact `docs/CHANGELOG.md`,
+    where nothing is being shadowed and no defect here asks for a change. D3 is specifically about
+    a fix that moves a score it claimed not to touch, so the narrower reading shipped. Both
+    arrangements — the one fixed and the one deliberately left alone — are pinned by tests.
+
+    This answers *which file*, never *does this repo keep an action ledger* — that is
+    _find_action_ledger. Keeping the two questions apart is ratified decision D3."""
     for base in (path, path / "docs"):
         if not base.is_dir():
             continue
+        exact = prefix = None
         try:
             for entry in sorted(base.iterdir()):
-                if entry.is_file() and entry.name.upper().startswith("CHANGELOG"):
-                    return entry
+                if not entry.is_file():
+                    continue
+                upper = entry.name.upper()
+                if upper == "CHANGELOG.MD":
+                    exact = entry
+                    break
+                if prefix is None and upper.startswith("CHANGELOG"):
+                    prefix = entry
         except OSError:
-            continue
+            pass          # keep whatever this base yielded before the listing failed
+        if exact or prefix:
+            return exact or prefix
     return None
 
 
-def _count_backlog_done(path):
-    """Signal F: BACKLOG.md checklist items still marked done (`- [x]`). The methodology
-    removes a backlog item from BACKLOG.md in the same commit that logs it to CHANGELOG, so
-    surviving done-marks are a best-effort proxy for 'completed but never migrated'."""
-    for name in ("BACKLOG.md", "docs/BACKLOG.md", "docs/planning/BACKLOG.md"):
+def _find_action_ledger(path):
+    """MEMBERSHIP — return the Path to this repo's action ledger (the root `CHANGELOG.md`,
+    exactly), else None.
+
+    Deliberately narrower than _find_changelog, and deliberately the same root-anchored, exact,
+    case-sensitive name that collect_methodology_metrics probes for the compliance checklist:
+    three subsystems used to answer "does this repo have a changelog" three different ways, and
+    the risk layer trusted the widest of them. So a `docs/` product changelog — release notes for
+    a shipped artifact, a different document with a different job — suppressed the finding that a
+    methodology adopter kept no action ledger at all, and replaced it with advice to go update the
+    release notes.
+
+    One deliberate difference from the checklist probe, which uses a bare `exists()`: a
+    `CHANGELOG.md` *directory* is not a ledger, so this requires a regular file, matching the same
+    guard _find_changelog already applies. The cross-platform case divergence the two share is
+    pre-existing and out of scope here (see the campaign plan §7 residual risk 6)."""
+    ledger = path / "CHANGELOG.md"
+    return ledger if ledger.is_file() else None
+
+
+def _strip_fenced_blocks(text):
+    """Drop fenced code blocks (``` or ~~~) before scanning for done-marks.
+
+    A backlog that DOCUMENTS its own convention — "mark an item `- [x]`, then migrate it" — inside
+    a fenced example is not a repo with unmigrated work. Counting that example is a match presented
+    as a finding, which is the defect class this whole campaign exists to remove.
+
+    Only a CLOSED fence is stripped. An unterminated one is left intact, which is the opposite of
+    what a markdown renderer does and is deliberate: a single stray ``` line would otherwise swallow
+    the rest of the file, and "no done-marks found" is not a harmless under-count here — it is
+    reported as a clean backlog, which is defect 4 itself. A stray fence must not be able to
+    manufacture a healthy verdict, so an unclosed one is treated as ordinary prose.
+    """
+    lines = text.splitlines()
+    keep = [True] * len(lines)
+    fence = start = None
+    for i, line in enumerate(lines):
+        stripped = line.lstrip()
+        if fence is None:
+            if _FENCE_RE.match(line):
+                fence, start = stripped[:3], i
+        elif stripped.startswith(fence):
+            for j in range(start, i + 1):
+                keep[j] = False
+            fence = start = None
+    return "\n".join(line for line, k in zip(lines, keep) if k)
+
+
+def _split_row(line):
+    """Split one markdown table row into cells on UNESCAPED pipes.
+
+    `\\|` is the only way GFM lets a literal pipe sit inside a cell, and splitting on it invents
+    cells that were never there — which can shift a prose fragment into the position the done
+    predicate reads. Splitting on the escape is how a NOTES cell can fabricate a done-mark.
+    """
+    body = line.strip().strip("|")
+    return [c.replace(r"\|", "|").strip() for c in re.split(r'(?<!\\)\|', body)]
+
+
+def _header_line_indices(lines):
+    """Indices of the table HEADER rows — each the row directly above a `|---|` separator.
+    Line-by-line on purpose: _TABLE_SEP_RE is anchored but not MULTILINE, so it must be matched
+    against individual lines and never searched across a whole document."""
+    return {i - 1 for i, line in enumerate(lines)
+            if i and _TABLE_SEP_RE.match(line) and lines[i - 1].strip().startswith("|")}
+
+
+def _table_headers(text):
+    """Yield the cell list of every table header row."""
+    lines = text.splitlines()
+    for i in sorted(_header_line_indices(lines)):
+        yield _split_row(lines[i])
+
+
+def _table_data_rows(text):
+    """Yield the cell list of every table DATA row — skipping `|---|` separators AND header rows.
+
+    Headers are excluded because a header is a label, not an item: a table with a `Completed` or
+    `Resolved` column would otherwise count its own heading as a finished piece of work. (Zero rows
+    of the 643-line corpus this predicate was tuned against are affected either way, so this
+    protects against a shape that corpus happens not to contain rather than changing its count.)
+    """
+    lines = text.splitlines()
+    headers = _header_line_indices(lines)
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if i in headers or not s.startswith("|") or _TABLE_SEP_RE.match(line):
+            continue
+        yield _split_row(line)
+
+
+def _has_status_column(text):
+    """True when some table header names a Status column. This, not the mere presence of a table,
+    is what makes a table backlog readable: it is the author declaring that a column carries item
+    state. A table with no such column (`| Item | Scope | Outcome |`) is item-bearing content whose
+    convention this scanner cannot read, and it abstains rather than guess."""
+    return any(any("STATUS" in c.upper() for c in header) for header in _table_headers(text))
+
+
+def _cell_marks_done(cell):
+    """The tuned predicate for one cell: strip markdown decoration, then match a leading token.
+    `**DONE (Session 30, ...)**` is done; `blocked until SEC-013 is DONE` is not."""
+    return cell.strip().strip("*`~ ").strip().upper().startswith(_BACKLOG_DONE_TOKENS)
+
+
+def _count_table_done(text):
+    """Data rows of >= 3 cells in which any cell BUT THE FIRST starts with a done token. The first
+    cell is skipped because it is the ID column, and an ID may legitimately read `DONE-9` while the
+    row itself is open. The >= 3 floor drops the 2-cell Status *legend*, which defines the
+    vocabulary rather than reporting work.
+
+    KNOWN LIMITATION, measured rather than assumed: the predicate is a union over every non-ID
+    cell, not a read of the Status column, so a row whose TITLE cell begins with a done token
+    ("Fixed login redirect", status READY) counts, as does a 3-column legend whose MEANING cell
+    reads "Completed and tested". On the 643-line corpus this was tuned against, that costs
+    nothing — all 256 counted rows are counted via a Status column (242) or sit in a table with no
+    Status column at all (14), and NONE are counted only via some other column. Narrowing to the
+    Status column is therefore not a free improvement: it would drop those 14 and move the ratified
+    count to 242, so it is an operator decision, not an implementer's.
+    """
+    return sum(1 for cells in _table_data_rows(text)
+               if len(cells) >= 3 and any(_cell_marks_done(c) for c in cells[1:]))
+
+
+def _scan_backlog_done(path):
+    """Signal F — backlog items marked done but never migrated to CHANGELOG.
+
+    The methodology removes a backlog item from BACKLOG.md in the same commit that logs it to
+    CHANGELOG.md, so a surviving done-mark is a proxy for 'completed but never migrated'.
+
+    Returns `{"format", "done", "recognized", "source"}`. ABSTENTION IS A FIRST-CLASS RESULT
+    (campaign decision D4): a `done` of 0 from a format this scanner cannot read is
+    indistinguishable from a genuinely clean backlog, and that silence IS defect 4 — a real
+    643-line table backlog carrying 256 done-marks reported "nothing unmigrated" for as long as
+    the predicate was checkbox-only. So the count now travels with the convention it was read
+    under, and `recognized` states whether the count can be trusted at all.
+
+    The six formats, in decision order:
+
+    - `unreadable` — the file exists but could not be read. Abstains: an I/O error is the one case
+      where a 0 is guaranteed to mean nothing at all.
+    - `checkbox`  — `- [x]` / `- [ ]` marks, counted by the unchanged checkbox regex. The count is
+      unchanged for every input EXCEPT one this layer deliberately moves: marks inside a closed
+      fenced block are no longer counted, because a documented example is not work.
+    - `table`     — a table declaring a Status column, counted by the tuned predicate above.
+    - `unrecognized` — item-bearing content whose done convention cannot be read: a table with no
+      Status column (this repo's own `| Item | Scope | Outcome |` backlog), or plain list items
+      with neither checkboxes nor a table. Abstains out loud.
+    - `none`      — no checkboxes, no tables, no list items. NOT an abstention: an empty backlog is
+      the healthy state and 0 is a correct measurement of it. Keeping this distinct is what stops
+      the disclosure from firing on every adopter who is simply up to date.
+    - `absent`    — no BACKLOG.md at any known location; nothing to recognize.
+
+    `recognized` is True only for `checkbox` and `table` — the two formats whose count can be
+    trusted. It is False for `none` and `absent` too, where the 0 is correct but is not the result
+    of reading a convention; those two are distinguished from the abstaining formats by staying
+    SILENT rather than by this flag.
+    """
+    for name in _BACKLOG_LOCATIONS:
         bl = path / name
-        if bl.is_file():
-            try:
-                return len(_BACKLOG_DONE_RE.findall(bl.read_text(encoding="utf-8", errors="ignore")))
-            except OSError:
-                return 0
-    return 0
+        if not bl.is_file():
+            continue
+        try:
+            raw = bl.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            return {"format": "unreadable", "done": 0, "recognized": False, "source": name}
+        text = _strip_fenced_blocks(raw)
+        if _BACKLOG_BOX_RE.search(text):
+            return {"format": "checkbox", "done": len(_BACKLOG_DONE_RE.findall(text)),
+                    "recognized": True, "source": name}
+        if _has_status_column(text):
+            return {"format": "table", "done": _count_table_done(text),
+                    "recognized": True, "source": name}
+        if any(True for _ in _table_headers(text)) or _BACKLOG_BULLET_RE.search(text):
+            return {"format": "unrecognized", "done": 0, "recognized": False, "source": name}
+        return {"format": "none", "done": 0, "recognized": False, "source": name}
+    return {"format": "absent", "done": 0, "recognized": False, "source": None}
 
 
 def evaluate_changelog_freshness(path, git):
@@ -681,18 +1147,53 @@ def evaluate_changelog_freshness(path, git):
     methodology seed sentinel, and the backlog signal on unmigrated BACKLOG.md done-marks.
     `git` is the already-collected collect_git_metrics dict.
     """
+    backlog = _scan_backlog_done(path)
     result = {
-        "present": False,
+        "present": False,             # a changelog was LOCATED (root or docs/, best-available)
+        "ledger_present": False,      # a root CHANGELOG.md action ledger EXISTS (membership)
         "unlogged_commits": 0,        # Signal C
         "frontier_lag_days": None,    # Signal B
         "dated_entry_count": 0,
         "has_seed_sentinel": False,
         "never_used": False,          # Signal D
-        "backlog_done_unmigrated": _count_backlog_done(path),  # Signal F
+        "backlog_done_unmigrated": backlog["done"],       # Signal F — pre-existing key
+        "backlog_format": backlog["format"],              # which convention it was read under
+        "backlog_recognized": backlog["recognized"],      # whether that count can be trusted
         "new_adopter_grace": False,
         "is_fresh": False,
         "signals": [],                # list of (severity, description) advisory tuples
     }
+
+    # Membership, and the two findings that do not depend on locating a changelog, are computed
+    # ABOVE the early return below — the return is about having nothing to measure freshness
+    # against, which is not the same as having nothing to say.
+    result["ledger_present"] = _find_action_ledger(path) is not None
+
+    # Signal F keys on BACKLOG.md, not on any changelog, yet it used to be emitted below the early
+    # return — so an adopter with unmigrated done-marks and NO ledger, strictly the worse case,
+    # went silent while one with a ledger was warned. Adopter-scoped (root SESSION_RUNNER.md):
+    # only an adopter follows the "remove from BACKLOG.md in the commit that logs it to CHANGELOG"
+    # convention, so surviving done-marks are a defect there and not on a non-adopter sibling.
+    #
+    # Abstention (decision D4) rides the SAME adopter gate: a note that this scanner could not read
+    # a backlog is only owed where the convention it cannot check actually applies. It is also
+    # deliberately narrow — an EMPTY backlog reports a silent, correct 0 rather than abstaining,
+    # because telling an adopter who is simply up to date that its "format was not recognized"
+    # would itself be a signal that does not mean what it appears to mean.
+    adopter = (path / "SESSION_RUNNER.md").is_file()
+    if adopter and result["backlog_done_unmigrated"] > 0:
+        result["signals"].append((
+            "low",
+            f"{backlog['source']}: {result['backlog_done_unmigrated']} done-marked item(s) "
+            f"not migrated to CHANGELOG ({backlog['format']} format)",
+        ))
+    elif adopter and backlog["format"] in ("unrecognized", "unreadable"):
+        why = ("could not be read" if backlog["format"] == "unreadable"
+               else "done-mark format not recognized (no `- [x]` checkboxes and no Status column)")
+        result["signals"].append((
+            "low",
+            f"{backlog['source']}: {why} — the unmigrated-work signal is inactive for this repo",
+        ))
 
     changelog = _find_changelog(path)
     if changelog is None:
@@ -707,8 +1208,10 @@ def evaluate_changelog_freshness(path, git):
     result["new_adopter_grace"] = grace
 
     # Signals C & B: git-only. A path outside a git repo yields "" and leaves both inert.
+    # POSIX separators: `rel` is both a git pathspec (portable either way) and the display name in
+    # every advisory below, so a Windows adopter's dashboard reads "docs/changelog.md" too.
     try:
-        rel = str(changelog.relative_to(path))
+        rel = changelog.relative_to(path).as_posix()
     except ValueError:
         rel = changelog.name
     last_touch = git_cmd(path, "log", "-1", "--format=%H", "--", rel)
@@ -749,65 +1252,99 @@ def evaluate_changelog_freshness(path, git):
     result["is_fresh"] = grace or not (lagging or result["never_used"])
 
     # Advisory RISK descriptions — suppressed under new-adopter grace so a fresh seed is silent.
+    #
+    # Each one NAMES the file it was computed against and does not call that file "the ledger",
+    # because it may not be one. An adopter whose only changelog was `docs/changelog.md` used to be
+    # told its "CHANGELOG ledger" was lagging: advice to go update a product release-notes file,
+    # while the actual finding — no action ledger at all — was suppressed by the same file's
+    # existence. Naming the measured file is what makes the advisory unable to misdirect.
     if not grace:
         if result["unlogged_commits"] >= LEDGER_UNLOGGED_MAX:
             result["signals"].append((
                 "medium",
-                f"CHANGELOG ledger lag: {result['unlogged_commits']} commits since it was "
+                f"{rel}: {result['unlogged_commits']} commits since it was "
                 f"last updated (Component C)",
             ))
         if active and lag_days is not None and lag_days > LEDGER_LAG_DAYS_MAX:
             result["signals"].append((
-                "low", f"CHANGELOG frontier trails HEAD by {lag_days} days",
+                "low", f"{rel} trails HEAD by {lag_days} days",
             ))
         if result["never_used"]:
             result["signals"].append((
                 "medium",
-                "CHANGELOG present but never used — still the untouched seed on a repo with "
+                f"{rel} present but never used — still the untouched seed on a repo with "
                 "real commit history",
             ))
-    # Signal F is adopter-scoped: only a methodology adopter (root SESSION_RUNNER.md) follows the
-    # "remove from BACKLOG.md in the commit that logs it to CHANGELOG" convention, so surviving
-    # done-marks are a defect only there — not on a non-adopter sibling that keeps a [x] backlog.
-    if result["backlog_done_unmigrated"] > 0 and (path / "SESSION_RUNNER.md").is_file():
-        result["signals"].append((
-            "low",
-            f"{result['backlog_done_unmigrated']} done-marked BACKLOG.md item(s) not migrated "
-            f"to CHANGELOG",
-        ))
 
     return result
 
 
-def collect_methodology_metrics(path):
-    present = 0
-    missing = []
+def checklist_pct(raw_score, maximum):
+    """Normalize a raw weighted checklist sum to a true 0-100 percentage of ITS OWN scale.
 
-    for item_path, weight, kind in METHODOLOGY_ITEMS:
-        full_path = path / item_path
-        exists = full_path.is_dir() if kind == "dir" else full_path.exists()
-        if exists:
-            present += 1
-        else:
-            missing.append(item_path)
+    Two checklists now feed the same 0-20 health dimension and the same rendered "%", on
+    different denominators (115 and 105). Passing the scale in is what keeps a single site
+    knowing how to normalize; the alternative — consumers dividing by whichever module constant
+    they think applies — is exactly the several-sites-know-the-scale arrangement that produced
+    the 110%-rendered-as-a-percentage defect in the first place."""
+    if maximum <= 0:
+        return 0
+    return int(round(100 * raw_score / maximum))
 
-    # Weighted score
-    score = 0
-    for item_path, weight, kind in METHODOLOGY_ITEMS:
+
+def compliance_pct(raw_score):
+    """Normalize a raw weighted checklist sum to a true 0-100 percentage.
+
+    Normalization happens ONCE, here on the producer side. Every consumer — the health
+    dimension, the risk thresholds, the portfolio grid and the project card — then reads an
+    already-correct percentage instead of re-deriving one, so no site can drift from the scale
+    independently, and only this function knows the denominator.
+
+    The health dimension does scale the rounded percentage again (`int(pct * 0.2)`), which on
+    the current checklist credits one extra point at two of the twenty-four reachable sums
+    (raw 40 and 80). That is deliberate: the alternative — each consumer dividing by
+    METHODOLOGY_MAX itself — re-creates the several-sites-know-the-scale arrangement that
+    produced the defect, at a cost of one advisory point in a 0-20 band."""
+    return checklist_pct(raw_score, METHODOLOGY_MAX)
+
+
+def collect_methodology_metrics(path, role="adopter"):
+    """Score the repo against the checklist its ROLE makes it answerable to.
+
+    `role` defaults to "adopter" so every existing caller keeps its meaning, and so a project
+    dict produced by an older run stays readable.
+
+    The result keeps the dict key `methodology` and every field name it had — portfolio
+    aggregation, the JSON export and the radar all key on those, and a context-dependent
+    meaning behind a stable key is the established convention here (the `testing` slot already
+    holds Render/Verification for a doc-only repo). What is added is the identity of the
+    checklist that ran, so no consumer has to infer it.
+    """
+    checklist = FRAMEWORK_ITEMS if role == "framework" else METHODOLOGY_ITEMS
+    maximum = FRAMEWORK_MAX if role == "framework" else METHODOLOGY_MAX
+
+    # One existence probe per item: the weighted score, the present/missing counts and the
+    # per-item map are all derived from this single map (they were previously three separate
+    # loops over the same paths, each re-hitting the filesystem).
+    items = {}
+    for item_path, weight, kind in checklist:
         full_path = path / item_path
-        exists = full_path.is_dir() if kind == "dir" else full_path.exists()
-        if exists:
-            score += weight
+        items[item_path] = full_path.is_dir() if kind == "dir" else full_path.exists()
+
+    score = sum(weight for item_path, weight, _ in checklist if items[item_path])
 
     return {
-        "methodology_files_present": present,
-        "methodology_files_total": len(METHODOLOGY_ITEMS),
+        "role": role,
+        "checklist": "framework" if role == "framework" else "adopter",
+        "checklist_max": maximum,
+        "methodology_files_present": sum(1 for present in items.values() if present),
+        "methodology_files_total": len(checklist),
+        # Both are exported: the raw weighted sum stays inspectable (and scale-independent for
+        # the "no adoption at all" test), while compliance_pct is what may be rendered as a "%".
         "compliance_score": score,
-        "missing_files": missing,
-        "items": {
-            item_path: (path / item_path).is_dir() if kind == "dir" else (path / item_path).exists()
-            for item_path, weight, kind in METHODOLOGY_ITEMS
-        },
+        "compliance_pct": checklist_pct(score, maximum),
+        "missing_files": [item_path for item_path, present in items.items() if not present],
+        "items": items,
     }
 
 
@@ -1206,41 +1743,136 @@ def collect_render_metrics(path, files, ci, meth):
     return result
 
 
+def _profile_tokens(path):
+    """Read .methodology-profile into a set of lowercase declaration tokens.
+
+    ONE reader for both axes. Two readers would each have to re-implement six invariants
+    (utf-8-sig, errors=ignore, the is_file and OSError guards, lowercasing, comment stripping)
+    and they would drift — this file already documents three subsystems that disagreed about
+    "does this repo have a changelog", and reconciling them was an entire layer of work.
+
+    COMMENTS ARE STRIPPED BEFORE TOKENIZING, and that is load-bearing rather than cosmetic. The
+    only marker in the live adopter population is 8 lines / 87 whitespace tokens: one
+    declaration followed by seven lines of `#` prose explaining WHY the owner set it, and that
+    prose mentions the opposite token twice. It survives being read as a token bag only because
+    both mentions happen to carry trailing punctuation ("code," and "code."). Delete one comma
+    and a reader that tokenizes comments discards the very override the file exists to assert.
+    So scanning the whole file without stripping comments is strictly more dangerous than
+    reading only the first token, which is what this replaces.
+    """
+    marker = path / PROFILE_MARKER
+    try:
+        if not marker.is_file():
+            return frozenset()
+        text = marker.read_text(encoding="utf-8-sig", errors="ignore")
+    except OSError:
+        return frozenset()
+    # Everything from the first "#" on a line is prose, so a whole-line comment contributes
+    # nothing and a trailing comment contributes only what precedes it. One rule covers both.
+    #
+    # ONLY THE FIRST LINE THAT SURVIVES THAT IS A DECLARATION; every later line is prose, even
+    # uncommented prose. Mining the whole file was this reader's first shape and it was WRONG in
+    # a way that inverted the very defect this layer fixes: an owner who wrote an unmarked
+    # sentence of explanation — "We keep our docs in the framework style" — had a bare axis token
+    # read as a deliberate override, and an adopter was graded as the publisher with
+    # reason="marker" and nothing disclosed. Worse, "This is a code repository with helper
+    # scripts" under a `doc-only` declaration fabricated a CONTRADICTION and destroyed the
+    # override entirely. Reading tokens[0] never had that failure, so whole-file scanning would
+    # have been a regression dressed as a fix. Composing the two axes needs one line, not two.
+    for line in text.splitlines():
+        declaration = line.split("#", 1)[0].strip()
+        if declaration:
+            return frozenset(declaration.lower().split())
+    return frozenset()
+
+
+def _resolve_marker_axis(tokens, axis):
+    """Resolve one bidirectional axis of the profile marker.
+
+    Returns (value, reason): (True|False, "marker") when exactly one of the pair is declared,
+    (None, "marker-contradiction") when both are, (None, "") when neither is. The caller falls
+    back to its heuristic for both None cases — but the reasons are kept distinct, because a
+    contradiction is a declaration this scanner could not read and gets said out loud, while an
+    absent declaration is simply silence.
+    """
+    positive, negative = axis
+    declared_yes, declared_no = positive in tokens, negative in tokens
+    if declared_yes and declared_no:
+        return None, "marker-contradiction"
+    if declared_yes:
+        return True, "marker"
+    if declared_no:
+        return False, "marker"
+    return None, ""
+
+
+def detect_repo_role(path):
+    """Classify a repo as the methodology's PUBLISHER or one of its consumers.
+
+    Returns {"role": "framework"|"adopter", "reason": "marker"|"marker-contradiction"|
+    "structural"|"default"}. Advisory only; nothing gates.
+
+    The structural test is a three-way AND: distribution machinery, a starter-kit runner, and NO
+    runner of its own at the root. The first two are the campaign plan's; the third mechanizes
+    the plan's own description of the one shape this heuristic could misfire on — a repo that
+    ships starter-kit/ templates plus distribution machinery *without installing to its own
+    root*. A monorepo that vendors this framework and also genuinely runs it keeps its adoption
+    grading, so the conjunct can only remove false positives, never create one.
+
+    bin/ is a sound marker because the distribution manifest ships nothing from it: no adopter
+    can acquire bin/_manifest.py through bin/sync, so no synced repo can drift into this branch.
+    """
+    role, reason = _resolve_marker_axis(_profile_tokens(path), PROFILE_ROLE_TOKENS)
+    if role is not None:
+        return {"role": "framework" if role else "adopter", "reason": reason}
+
+    publishes = (path / "bin" / "_manifest.py").is_file()
+    templates = (path / "starter-kit" / "SESSION_RUNNER.md").is_file()
+    installed = (path / "SESSION_RUNNER.md").is_file()
+    if publishes and templates and not installed:
+        return {"role": "framework", "reason": reason or "structural"}
+    return {"role": "adopter", "reason": reason or "default"}
+
+
 def detect_doc_only(path, files, render):
     """BL-5 — classify a repo as document-only / research: marker -> source-cap -> corpus.
 
-    Returns {"is_doc_only": bool, "reason": "marker"|"heuristic"|""}. Advisory only; nothing gates.
+    Returns {"is_doc_only": bool, "reason": "marker"|"marker-contradiction"|"heuristic"}.
+    Advisory only; nothing gates.
     """
-    # 1. Explicit bidirectional marker wins (force either classification).
-    marker = path / DOC_ONLY_MARKER
-    try:
-        if marker.is_file():
-            tokens = marker.read_text(encoding="utf-8-sig", errors="ignore").strip().split()
-            token = tokens[0].lower() if tokens else ""
-            if token == "doc-only":
-                return {"is_doc_only": True, "reason": "marker"}
-            if token == "code":
-                return {"is_doc_only": False, "reason": "marker"}
-            # empty/unknown -> fall through to the heuristic
-    except OSError:
-        pass
+    # 1. Explicit bidirectional marker wins (force either classification). Read from the shared
+    #    token set rather than the first word, so a marker can declare this axis and the role
+    #    axis together in either order. Reading only tokens[0] meant "framework doc-only"
+    #    silently discarded the doc-only declaration while "doc-only framework" honoured it.
+    doc_only, reason = _resolve_marker_axis(_profile_tokens(path), PROFILE_CORPUS_TOKENS)
+    if doc_only is not None:
+        return {"is_doc_only": doc_only, "reason": reason}
+    # A contradicted axis still falls through to the heuristic for its VALUE, but keeps its own
+    # reason: the reader is owed the fact that a declaration was made and could not be read.
+    reason = reason or "heuristic"
 
     # 2. Source-cap short-circuit: real code should be tested; never silently exempt it.
     src = files["by_category"]["source"]["loc"]
     if src > DOC_ONLY_SOURCE_LOC_MAX:
-        return {"is_doc_only": False, "reason": "heuristic"}
+        return {"is_doc_only": False, "reason": reason}
 
     # 3. Corpus disjunction (only when source is negligible): a real doc corpus OR a render
     #    toolchain — the latter catches a pure-LaTeX/Quarto repo whose .tex/.qmd are not counted
     #    as docs (so its doc_loc is ~0), the exact source_loc≈0 research repo that must not be missed.
-    doc_loc = files["by_category"]["docs"]["loc"]
-    doc_files = files["by_category"]["docs"]["count"]
+    #    Framework-installed markdown is discounted here and ONLY here: bin/sync ships 21 doc
+    #    files, which clears DOC_ONLY_DOC_FILES_MIN by itself, so counting them would let the
+    #    installer answer the question "is this a document project?" — the mirror of the very
+    #    defect the source exclusion above fixes. `.get` keeps older synthetic `files` dicts
+    #    (and any caller that builds one by hand) working unchanged.
+    fw_docs = files.get("framework_docs", {"count": 0, "loc": 0})
+    doc_loc = files["by_category"]["docs"]["loc"] - fw_docs["loc"]
+    doc_files = files["by_category"]["docs"]["count"] - fw_docs["count"]
     corpus = (
         doc_loc >= DOC_ONLY_DOC_LOC_MIN
         or doc_files >= DOC_ONLY_DOC_FILES_MIN
         or render["toolchain_present"]
     )
-    return {"is_doc_only": bool(corpus), "reason": "heuristic"}
+    return {"is_doc_only": bool(corpus), "reason": reason}
 
 
 def fmt_ratio(value, source_loc, doc_only=False):
@@ -1325,8 +1957,10 @@ def score_health(metrics):
     else:
         scores["ci_cd"] = 0
 
-    # 5. Methodology (0-20)
-    scores["methodology"] = int(metrics["methodology"]["compliance_score"] * 0.2)
+    # 5. Methodology (0-20) — from the normalized percentage, and clamped. This was the one
+    #    dimension of the five with no clamp, so a checklist that outgrew its 100-point scale
+    #    pushed both this sub-score and the "0-100" total past their bands.
+    scores["methodology"] = min(20, int(metrics["methodology"]["compliance_pct"] * 0.2))
 
     scores["total"] = sum(scores.values())
     return scores
@@ -1336,6 +1970,9 @@ def assess_risks(metrics):
     risks = []
     doc_only = metrics.get("doc_only", {}).get("is_doc_only", False)
     render = metrics.get("render", {})
+    # Defaulted rather than indexed: a metrics dict built before roles existed still reads as an
+    # adopter, which is what it was.
+    role = metrics["methodology"].get("role", "adopter")
 
     days = metrics["git"]["days_since_last_commit"]
     if days is not None and days > 90:
@@ -1365,11 +2002,45 @@ def assess_risks(metrics):
     if not metrics["docs"]["has_readme"] or metrics["docs"]["readme_quality"] == "stub":
         risks.append({"severity": "medium", "description": "README is missing or insufficient"})
 
-    meth = metrics["methodology"]["compliance_score"]
-    if meth == 0:
+    # Both thresholds are stated in percent, so the partial-adoption test reads the normalized
+    # percentage. The "none at all" test deliberately stays on the RAW sum: it is scale-
+    # independent, so a single small-weight item in a future larger checklist cannot round down
+    # to 0% and false-fire "no adoption" on a project that has some.
+    meth = metrics["methodology"]
+    meth_raw = meth["compliance_score"]
+    meth_pct = meth["compliance_pct"]
+    if role == "framework":
+        # The adoption wording is not merely unflattering here, it is FALSE: the checklist paths
+        # are adopter-root destinations, and a repo that publishes SESSION_RUNNER.md does not
+        # install a second copy into its own root. Replaced rather than suppressed — a publisher
+        # with half a corpus is a real finding, and going silent would be the mirror defect.
+        missing = meth.get("missing_files", [])
+        if meth_raw == 0:
+            # Reachable precisely because the two files that prove the role are unscored.
+            risks.append({"severity": "high",
+                          "description": f"No framework corpus detected (0 of "
+                                         f"{meth.get('checklist_max', FRAMEWORK_MAX)} framework "
+                                         f"integrity)"})
+        elif missing:
+            # The percentage alone is not the finding: losing both root ledgers still scores in
+            # the eighties, so a pct-only rung would say nothing about it. The member names are
+            # what a reader can act on; the severity only ranks them.
+            risks.append({"severity": "medium" if meth_pct < 50 else "low",
+                          "description": f"Framework integrity incomplete ({meth_pct}%) — "
+                                         f"missing: {', '.join(missing)}"})
+    elif meth_raw == 0:
         risks.append({"severity": "high", "description": "No methodology adoption (0% compliance)"})
-    elif meth < 50:
-        risks.append({"severity": "medium", "description": f"Partial methodology adoption ({meth}%)"})
+    elif meth_pct < 50:
+        risks.append({"severity": "medium", "description": f"Partial methodology adoption ({meth_pct}%)"})
+
+    # A profile marker that declares both tokens of one axis is a declaration this scanner could
+    # not read. Disclosed once, however many axes conflict — decision D4 applied to the marker:
+    # abstention is a first-class result and is never silent.
+    if "marker-contradiction" in (meth.get("role_reason"),
+                                  metrics.get("doc_only", {}).get("reason")):
+        risks.append({"severity": "low",
+                      "description": f"{PROFILE_MARKER} declares conflicting tokens; that axis "
+                                     f"fell through to the heuristic"})
 
     if not metrics["docs"]["has_license"]:
         risks.append({"severity": "low", "description": "No LICENSE file"})
@@ -1378,8 +2049,14 @@ def assess_risks(metrics):
     # a document repo. Scan for the largest *source* file over the threshold rather than inspecting
     # only largest[0], so a non-source #1 (e.g. a big lockfile/JSON) doesn't mask a real large source
     # file below it (helps mixed repos too — no doc_only branch needed).
+    # Layer 7: and never a file WE installed. "Large files detected (methodology_dashboard.py:
+    # 2,475 lines)" was firing on 4 of 10 real repos — the same defect class as the source-LOC
+    # miscount, one signal over: we put our scanner in their repo, then flagged it as their
+    # problem. The canonical repo still pays for the copies it authors (tools/, starter-kit/),
+    # which are not root dests and so are never vendor.
     big_src = next((f for f in metrics["files"]["largest_files"]
-                    if f["loc"] > 2000 and f.get("ext") in SOURCE_EXTS), None)
+                    if f["loc"] > 2000 and f.get("ext") in SOURCE_EXTS
+                    and not f.get("vendor")), None)
     if big_src:
         risks.append({"severity": "medium", "description": f"Large files detected ({big_src['path']}: {big_src['loc']:,} lines)"})
 
@@ -1404,11 +2081,29 @@ def assess_risks(metrics):
     # Component C: CHANGELOG ledger freshness (advisory). Decision D3 — a methodology adopter
     # (SESSION_RUNNER.md present) with real commit history but no ledger is a defect, not a
     # silent absence. For projects that keep a ledger, surface the ledger-lag signals.
+    #
+    # This is the one RISK that asks about membership, and therefore the only consumer of
+    # `ledger_present` (root CHANGELOG.md, exactly) rather than `present` (any located changelog).
+    # Reading `present` here is what let a `docs/` product changelog answer for a missing ledger.
+    # The compliance checklist asks the same membership question independently and scores it; the
+    # two agreeing is the point of _find_action_ledger, not a duplication to collapse.
+    #
+    # The gate is an explicit PREDICATE, not a probe of a checklist key. Reading
+    # items["SESSION_RUNNER.md"] worked only while one checklist existed: under FRAMEWORK_ITEMS
+    # that key is absent, so .get would return False forever and this risk would go unreachable
+    # for every framework repo — silently, with no test failing. That is the same
+    # unreachable-signal defect this campaign was opened to close, and it would have landed on
+    # the one repo that dogfoods the ledger rule it publishes.
     cl = metrics.get("changelog", {})
-    adopter = metrics["methodology"]["items"].get("SESSION_RUNNER.md", False)
-    if not cl.get("present") and adopter and metrics["git"]["total_commits"] >= LEDGER_REAL_HISTORY_MIN:
+    owes_ledger = (metrics["methodology"]["items"].get("SESSION_RUNNER.md", False)
+                   or role == "framework")
+    if not cl.get("ledger_present") and owes_ledger and metrics["git"]["total_commits"] >= LEDGER_REAL_HISTORY_MIN:
+        # The finding is identical; only the noun changes. Calling a publisher an "adopter" would
+        # be the same category error this layer exists to remove from the score above.
+        who = "Methodology framework repo" if role == "framework" else "Methodology adopter"
         risks.append({"severity": "medium",
-                      "description": "Methodology adopter has commit history but no CHANGELOG ledger (Component C)"})
+                      "description": f"{who} has commit history but no root "
+                                     "CHANGELOG.md action ledger (Component C)"})
     for sev, desc in cl.get("signals", []):
         risks.append({"severity": sev, "description": desc})
 
@@ -1472,7 +2167,12 @@ def collect_all(path):
     tests = collect_test_metrics(files)
     ci = collect_ci_metrics(path)
     docs = collect_doc_metrics(path, files)
-    meth = collect_methodology_metrics(path)
+    # The role decides WHICH checklist collect_methodology_metrics scores, so it is resolved
+    # first. It needs only the path (a marker read plus three existence probes), so unlike
+    # doc-only detection it has no dependency on the collected metrics.
+    role_info = detect_repo_role(path)
+    meth = collect_methodology_metrics(path, role=role_info["role"])
+    meth["role_reason"] = role_info["reason"]
     deps = collect_dependency_metrics(path)
     cov = collect_coverage_config(path)
 
@@ -1566,30 +2266,77 @@ def render_risk_matrix(projects):
     return f'<div class="risk-matrix">{cells}</div>'
 
 
+def methodology_item_label(item_path, kind):
+    """Human column label for a checklist item, derived from its path:
+    'SESSION_RUNNER.md' -> 'Session Runner', 'docs/methodology' -> 'Methodology Dir'."""
+    tail = item_path.rstrip("/").split("/")[-1]
+    if tail.lower().endswith(".md"):
+        tail = tail[:-3]
+    label = tail.replace("_", " ").replace("-", " ").title()
+    return f"{label} Dir" if kind == "dir" else label
+
+
+def methodology_grid_headers():
+    """The grid's full header row: Project + one column per checklist item + Score.
+
+    Derived rather than hand-written because the cells below already derive from
+    METHODOLOGY_ITEMS: a hand-maintained header list silently falls one column short of the
+    data every time the checklist grows (which is how the two items appended in v2.1 left every
+    project row running two cells wider than its headers)."""
+    return (["Project"]
+            + [methodology_item_label(p, kind) for p, _weight, kind in METHODOLOGY_ITEMS]
+            + ["Score"])
+
+
 def render_methodology_grid(projects):
-    headers = ["Project", "Session Runner", "Safeguards", "Session Notes", "Backlog", "Methodology Dir", "Workstreams", "Score"]
+    headers = methodology_grid_headers()
     item_keys = [item[0] for item in METHODOLOGY_ITEMS]
 
     rows = ""
+    any_framework = False
     for p in projects:
         items = p["methodology"]["items"]
         cells = f'<td class="proj-name">{esc(p["name"])}</td>'
-        for key in item_keys:
-            present = items.get(key, False)
-            if present:
-                cells += '<td class="meth-yes">&#10003;</td>'
-            else:
-                cells += '<td class="meth-no">&#10007;</td>'
-        score = p["methodology"]["compliance_score"]
-        score_color = "#44ff88" if score >= 80 else "#ffcc00" if score >= 40 else "#ff4444"
-        cells += f'<td style="color: {score_color}; font-weight: bold">{score}%</td>'
+        # A framework repo was scored against a DIFFERENT checklist, and the two overlap only at
+        # CHANGELOG.md and HANDOFFS.md — the two artifacts both a publisher and an adopter owe.
+        # Rendering it against these columns does not break the table: it produces a correctly
+        # aligned row of two ticks beside seven crosses, under headers naming files the repo was
+        # never scored on. That is worse than a broken row and worse than an all-red one — it is
+        # aligned AND partly true, so nothing looks wrong. A third glyph says "not applicable"
+        # instead of asserting failure; the per-item finding lives on the project card, which
+        # shows the checklist that actually ran.
+        if p["methodology"].get("role") == "framework":
+            any_framework = True
+            cells += (f'<td class="meth-na" colspan="{len(item_keys)}" '
+                      f'style="opacity:0.55">&mdash; framework checklist &mdash;</td>')
+        else:
+            for key in item_keys:
+                present = items.get(key, False)
+                if present:
+                    cells += '<td class="meth-yes">&#10003;</td>'
+                else:
+                    cells += '<td class="meth-no">&#10007;</td>'
+        # The colour ladder is stated in percent, so it reads the normalized percentage — on the
+        # raw 0-115 sum its 80/40 rungs sat at the wrong places and the cell rendered ">100%".
+        pct = p["methodology"]["compliance_pct"]
+        score_color = "#44ff88" if pct >= 80 else "#ffcc00" if pct >= 40 else "#ff4444"
+        dagger = "&#8224;" if p["methodology"].get("role") == "framework" else ""
+        cells += f'<td style="color: {score_color}; font-weight: bold">{pct}%{dagger}</td>'
         rows += f"<tr>{cells}</tr>"
 
     header_row = "".join(f"<th>{h}</th>" for h in headers)
+    legend = ""
+    if any_framework:
+        # "do not apply" would be the same kind of overstatement this campaign exists to remove:
+        # two of these columns (CHANGELOG.md, HANDOFFS.md) ARE on the framework checklist too.
+        legend = ('<div class="meth-legend" style="font-size:0.8em;opacity:0.7;margin-top:6px">'
+                  '&#8224; framework repo &mdash; scored against the framework checklist, not '
+                  'these columns. The two overlap only at CHANGELOG.md and HANDOFFS.md. See the '
+                  'project card for the checklist that ran.</div>')
     return f'''<table class="meth-table">
         <thead><tr>{header_row}</tr></thead>
         <tbody>{rows}</tbody>
-    </table>'''
+    </table>{legend}'''
 
 
 def render_activity_bars(projects):
@@ -1653,13 +2400,41 @@ def render_project_card(p):
     else:
         risk_html = '<div class="risk-flag" style="color: #44ff88">No risks identified</div>'
 
-    # Methodology checklist
+    # Methodology / framework checklist. The heading shows the normalized percentage with the raw
+    # weighted sum kept inspectable beside it, so a reader can still see what the checklist
+    # actually totalled without the "%" ever exceeding 100.
+    #
+    # The denominator is read from the project, not from the module global: a framework repo
+    # scoring 105 of 105 rendered against METHODOLOGY_MAX would print the literal arithmetic
+    # falsehood "100% (105 of 115)".
+    meth = p["methodology"]
+    meth_role = meth.get("role", "adopter")
+    meth_max = meth.get("checklist_max", METHODOLOGY_MAX)
+    meth_title = "Framework Integrity" if meth_role == "framework" else "Methodology Compliance"
+    meth_compliance = f'{meth["compliance_pct"]}% ({meth["compliance_score"]} of {meth_max})'
+    # Iterate the items that were SCORED rather than the adopter checklist, so every glyph on the
+    # card names something the percentage above it actually counted.
     meth_items = ""
-    for item_path, weight, kind in METHODOLOGY_ITEMS:
-        present = p["methodology"]["items"].get(item_path, False)
+    for item_path, present in meth["items"].items():
         icon = "&#10003;" if present else "&#10007;"
         cls = "meth-yes" if present else "meth-no"
         meth_items += f'<span class="{cls}">{icon} {esc(item_path)}</span> '
+    # Residual risk 8, stated on the card instead of only in the plan: this score is .exists()
+    # and cannot tell a maintained artifact from an abandoned one. True of both checklists.
+    meth_note = ('<div class="kv" style="font-size:0.8em;opacity:0.7;margin-top:6px">'
+                 'presence check &mdash; the scanner does not verify these files are used')
+    if meth_role == "framework":
+        reason = meth.get("role_reason", "structural")
+        provenance = {
+            "marker": f"{PROFILE_MARKER} marker override",
+            "marker-contradiction": (f"{PROFILE_MARKER} declared conflicting role tokens; "
+                                     f"classified structurally"),
+        }.get(reason, "structural: bin/_manifest.py + starter-kit/SESSION_RUNNER.md, "
+                     "no root SESSION_RUNNER.md")
+        # Never print the role silently: the marker is a one-word grading opt-out, so how this
+        # repo came to be graded as a publisher has to be visible to whoever reads the score.
+        meth_note += f'<br>role: framework &mdash; {esc(provenance)}'
+    meth_note += '</div>'
 
     # CI info
     ci = p["ci"]
@@ -1738,9 +2513,26 @@ def render_project_card(p):
     is_doc_only = doc_only_info.get("is_doc_only", False)
     render = p.get("render", {})
     src_loc = p["tests"]["source_loc"]
+    # Layer 7: framework-installed files are held out of Source, so the file-type table shows the
+    # excluded LOC on its own row. The row is emitted only when something was actually excluded —
+    # a permanent "Framework 0 / 0" would be noise on the repos that never ran bin/sync.
+    vendor = p["files"]["by_category"].get("vendor", {"count": 0, "loc": 0})
+    vendor_row = (
+        f'<tr><td>Framework (installed)</td><td class="num">{vendor["count"]:,}</td>'
+        f'<td class="num">{vendor["loc"]:,}</td></tr>' if vendor["count"] else "")
+    # Same disclosure in the Testing section, where "Source LOC: 0" on a repo that visibly
+    # contains a multi-thousand-line file would otherwise read as a scanner error.
+    vendor_note = (
+        f'<div class="kv" style="font-size:0.8em;opacity:0.7">'
+        f'(excludes {vendor["loc"]:,} LOC of framework-installed files)</div>'
+        if vendor["count"] else "")
     dims = ["activity", "testing", "documentation", "ci_cd", "methodology"]
+    # Slot 5 swaps label the same way slot 2 already does for a doc-only repo: the dict key stays
+    # "methodology" for JSON export / portfolio aggregation / the radar, and only the display
+    # label follows the checklist that ran.
     dim_labels = ["Activity", "Render/Verify" if is_doc_only else "Testing",
-                  "Documentation", "CI/CD", "Methodology"]
+                  "Documentation", "CI/CD",
+                  "Framework" if meth_role == "framework" else "Methodology"]
     dim_bars = ""
     for dim, label in zip(dims, dim_labels):
         val = health[dim]
@@ -1781,6 +2573,7 @@ def render_project_card(p):
                         <div class="kv">Test Files: <b>{p["tests"]["test_file_count"]}</b></div>
                         <div class="kv">Test LOC: <b>{p["tests"]["test_loc"]:,}</b></div>
                         <div class="kv">Source LOC: <b>{p["tests"]["source_loc"]:,}</b></div>
+                        {vendor_note}
                         <div class="kv">Test:Source Ratio: <b>{fmt_ratio(p["tests"]["test_to_source_ratio"], src_loc)}</b></div>
                         <div class="kv">Coverage Config: <b>{cov_html}</b></div>
                     </div>'''
@@ -1873,6 +2666,7 @@ def render_project_card(p):
                             <thead><tr><th>Category</th><th>Files</th><th>LOC</th></tr></thead>
                             <tbody>
                                 <tr><td>Source</td><td class="num">{p["files"]["by_category"]["source"]["count"]:,}</td><td class="num">{p["files"]["by_category"]["source"]["loc"]:,}</td></tr>
+                                {vendor_row}
                                 <tr><td>Test</td><td class="num">{p["files"]["by_category"]["test"]["count"]:,}</td><td class="num">{p["files"]["by_category"]["test"]["loc"]:,}</td></tr>
                                 <tr><td>Docs</td><td class="num">{p["files"]["by_category"]["docs"]["count"]:,}</td><td class="num">{p["files"]["by_category"]["docs"]["loc"]:,}</td></tr>
                                 <tr><td>Config</td><td class="num">{p["files"]["by_category"]["config"]["count"]:,}</td><td class="num">{p["files"]["by_category"]["config"]["loc"]:,}</td></tr>
@@ -1889,8 +2683,9 @@ def render_project_card(p):
                     </div>
 
                     <div class="card-section">
-                        <h4>Methodology Compliance ({p["methodology"]["compliance_score"]}%)</h4>
+                        <h4>{meth_title} ({meth_compliance})</h4>
                         <div class="meth-checklist">{meth_items}</div>
+                        {meth_note}
                     </div>
 
                     <div class="card-section">
@@ -2254,6 +3049,11 @@ def append_history(root, portfolio, projects):
     """Append current run metrics to JSONL history file."""
     entry = {
         "timestamp": datetime.now().isoformat(),
+        # Stamped so a scoring change is interpretable in the trend: history persists only
+        # derived totals, and the trend renderer diffs first-vs-last across its window, so a
+        # one-time re-scaling would otherwise render as a red regression arrow indistinguishable
+        # from a project that genuinely got worse.
+        "dashboard_version": DASHBOARD_VERSION,
         "portfolio": {
             "health_score": portfolio["health_score"],
             "project_count": portfolio["project_count"],
