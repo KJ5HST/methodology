@@ -168,8 +168,10 @@ METHODOLOGY_MAX = sum(weight for _, weight, _ in METHODOLOGY_ITEMS)
 #
 # NOT SCORED for a different reason: any distribution SEED source. Those are placeholders here
 # (starter-kit/SESSION_NOTES.md is a 27-line stub, starter-kit/ROADMAP.md an 18-line skeleton),
-# and crediting a placeholder is precisely the harm the campaign plan's line-255 prohibition
-# names. The canonical test suite enforces that rule mechanically against bin/_manifest.py.
+# and crediting a placeholder is precisely the harm the prohibition in the campaign plan's
+# §"Layer 4 — Repo role" names. (Cited by section, not by line: that plan says outright it is the
+# second time its line citations went stale, and this one had already drifted 255 -> 275.)
+# The canonical test suite enforces that rule mechanically against bin/_manifest.py.
 FRAMEWORK_ITEMS = [
     ("ITERATIVE_METHODOLOGY.md", 15, "file"),      # the theory layer the runner cross-references
     ("starter-kit/SAFEGUARDS.md", 15, "file"),     # the enforcement half of the runner
@@ -431,9 +433,13 @@ def is_framework_installed(rel_path, fpath):
     Content-verified: the file must declare `DASHBOARD_VERSION`, or carry at least two structural
     signatures of this scanner (for copies predating that constant). The **whole file** is read,
     not a fixed prefix — an earlier version searched only the first 4096 bytes, and the real
-    constant sits at byte 2,524 with just 1,572 bytes of headroom, so ~1.5 KB of added header
-    comment would have silently switched the exclusion off and regressed every doc-only adopter
-    to the defect this exists to fix. A silent cliff inside the fix for a silent-signal bug is
+    constant sits close enough to that boundary that ordinary growth of this module header would
+    have crossed it, silently switching the exclusion off and regressing every doc-only adopter
+    to the defect this exists to fix. (Measured at 2.10.1: byte 3,409, only 687 bytes clear of
+    the old window. That margin is a snapshot, not an invariant — it was 1,572 bytes one commit
+    earlier, and a single docstring addition consumed 56% of it, which is exactly the hazard.
+    test_predicate_reads_the_whole_file_not_a_prefix is what actually holds the line.)
+    A silent cliff inside the fix for a silent-signal bug is
     not a tradeoff worth keeping; the read costs nothing, since the file is read for line-counting
     anyway.
 

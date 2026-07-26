@@ -1685,7 +1685,8 @@ class TestFrameworkChecklist(unittest.TestCase):
                                 f"FRAMEWORK_ITEMS scores {item_path}, which does not exist here")
 
     def test_no_framework_item_is_a_distribution_seed(self):
-        """The operator-ratified mechanization of the plan's line-255 prohibition. Its stated harm
+        """The operator-ratified mechanization of the prohibition in the plan's §"Layer 4 — Repo
+        role" (cited by section: that citation had already drifted 255 -> 275). Its stated harm
         is crediting placeholders, and every placeholder it names is a manifest SEED source:
         starter-kit/SESSION_NOTES.md (a 27-line stub) and starter-kit/ROADMAP.md (an 18-line
         skeleton). Excluding SEED sources draws that line mechanically instead of by reading."""
@@ -2308,10 +2309,13 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
             Path("test_methodology_dashboard.py"), p / "test_methodology_dashboard.py"))
 
     def test_predicate_reads_the_whole_file_not_a_prefix(self):
-        """The real scanner declares DASHBOARD_VERSION at byte ~2,524. A 4096-byte read window
-        left ~1,572 bytes of headroom, so ordinary growth of the module header would have
-        switched the exclusion off silently — a signal that stops meaning what it appears to
-        mean, inside the fix for exactly that bug. RED against the windowed version."""
+        """The real scanner declares DASHBOARD_VERSION only a few hundred bytes clear of where a
+        4096-byte read window ended, so ordinary growth of the module header would have switched
+        the exclusion off silently — a signal that stops meaning what it appears to mean, inside
+        the fix for exactly that bug. RED against the windowed version. (The margin is a snapshot,
+        deliberately not asserted here: it was ~1,572 bytes when this test was written and 687 by
+        the time the release branch was cut. This test does not depend on the number, which is the
+        point — assert the behavior, not the measurement.)"""
         p = self._repo({"methodology_dashboard.py":
                         "# padding\n" * 900 + 'DASHBOARD_VERSION = "2.10.1"\n' + "x = 1\n" * 2000})
         self.assertTrue(md.is_framework_installed(
@@ -2320,7 +2324,7 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
 
     def test_the_real_shipped_artifact_is_recognized(self):
         """Guard-the-guard, and it passes both before and after by construction — the real file's
-        marker sits at byte 2,524, inside the old 4,096-byte window, so this cannot RED against it
+        marker still sits inside the old 4,096-byte window, so this cannot RED against it
         (test_predicate_reads_the_whole_file_not_a_prefix is what catches that). Its value is as a
         stand-in-vs-real-artifact drift guard. Every other fixture uses a stand-in. If the stand-in and the real file ever diverge in
         a way the predicate cares about, only this test notices."""
