@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S3
+date: 2026-07-26
+status: pending
+active_task: Build and open the curated upstream PR carrying the v3.6 dashboard signal-integrity campaign. Fork main is 85 commits ahead of upstream/main and carries fork-only docs/planning/* that must NOT go upstream, so this branch is built from upstream/main (6b06fd4, v3.5, dashboard 2.8.0) and ports only the 13 non-planning files, excluding all 10 docs/planning/*. FOUR OPERATOR DECISIONS WERE SETTLED BEFORE ANY FILE WAS TOUCHED — do not re-open them: (1) ship v3.6 with the seed-discount gap DISCLOSED, not fixed (it is not a regression — the pre-Layer-7 scanner returns the identical wrong result — and the disclosure is already committed in cbde2a1); (2) regenerate docs/images/*.png in its own later session, disclosed in the PR body rather than folded in; (3) let this PR's condensed ledger entry stand as the upstream record for defects 6/7/8 and the fenced-block false positive, filing no issues, since all eight are narrated in the CLAUDE.md §Versioning entry this PR carries; (4) fold the three missing rows (CLAUDE_TEMPLATE.md, CONTEXT_TEMPLATE.md, RECOMMENDED_SKILLS.md) into CLAUDE.md's starter-kit table. Two further edits ride along: the docstring CUSTOMIZATION fold-in, and the three fork-only plan citations converted to absolute fork URLs per the v2.8 link-topology convention. Session numbering here is upstream-branch-local — upstream HANDOFFS.md carries S1 (v3.3) and S2 (v3.5), a separate sequence from the fork's own S1-S16; do not renumber either, and reconcile at fork-sync the way CHANGELOG.md unions already are (newest-on-top).
+```
+
+```handoff
 session: S2
 date: 2026-07-08
 status: complete
