@@ -54,12 +54,13 @@ adopter  RECOMMENDED_SKILLS.md                      tracked      current
 …
 adopter  SESSION_NOTES.md                           seed         present
 adopter  CHANGELOG.md                               seed         present
+adopter  HANDOFFS.md                                seed         present
 adopter  ROADMAP.md                                 seed         present
 adopter  docs/methodology/ITERATIVE_METHODOLOGY.md  tracked      current
 …
 ```
 
-The two **dispositions** are the whole model ([`bin/_manifest.py`](../../bin/_manifest.py)): **TRACKED** files are canonical-owned — `bin/sync` keeps them current and `bin/status` can report `current` / `N versions behind` / `locally modified` / `missing`. **SEED** files (`SESSION_NOTES.md`, `CHANGELOG.md`, `ROADMAP.md`) are *yours* after first creation — `bin/status` reports `present` / `absent` (and, for a seed whose *format* predates the current methodology, `present (stale format)` — advisory only, never drift), and an absent seed is **not** drift.
+The two **dispositions** are the whole model ([`bin/_manifest.py`](../../bin/_manifest.py)): **TRACKED** files are canonical-owned — `bin/sync` keeps them current and `bin/status` can report `current` / `N versions behind` / `locally modified` / `missing`. **SEED** files (`SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, `ROADMAP.md`) are *yours* after first creation — `bin/status` reports `present` / `absent` (and, for a seed whose *format* predates the current methodology, `present (stale format)` — advisory only, never drift), and an absent seed is **not** drift.
 
 **Expected result:** A per-file table, every TRACKED row `current` and every SEED row `present` — and your working tree is byte-for-byte unchanged (status never writes).
 **Checkpoint:** You can point at any row and say which disposition it is and what its status word means — and you confirm status changed *nothing* (`git status` in your project shows no new modifications from running it).
@@ -174,11 +175,11 @@ Cite the failure mode by number; link the list, don't paste it.
 - **Editing a synced file in place — then forcing past the refusal.** A direct edit to `SESSION_RUNNER.md` / `SAFEGUARDS.md` / any TRACKED file becomes drift that blocks the next update; reaching for `--force` *before* relocating the edit discards your work and keeps you forking the shared procedure release after release. That's **FM #17 (protocol erosion)** — improvement-by-subtraction-or-fork during a session. The countermeasure is the customization seam: project additions live in `CLAUDE.md`'s Adaptations section, synced files stay byte-identical to canonical ([`BOOTSTRAP.md` §Step 5](../../starter-kit/BOOTSTRAP.md#step-5-customizations-go-in-claudemd-not-in-synced-files)).
 - **Trusting memory that you're current instead of running `bin/status`.** "I synced a while ago, I'm probably fine" is exactly the false confidence the v2.8 work existed to kill — the old tool tracked three files and reported `current` while the rest of the corpus silently fell behind. Read the per-file report, don't assume ([§What's New in v2.8](../../README.md#whats-new-in-v28)).
 - **Syncing from a stale checkout.** `status`/`sync` compare against your local `methodology/` checkout, so `current` against a checkout you never `git pull` isn't current against canonical. Pull the checkout first, or pass `--source=github` to compare against the live repo.
-- **Chasing an `absent` seed as if it were drift.** `SESSION_NOTES.md` / `CHANGELOG.md` / `ROADMAP.md` are adopter-owned; `absent` is a legitimate state, not a defect. Sync will re-seed a missing one, but you never *have* to — they're yours, not canonical's.
+- **Chasing an `absent` seed as if it were drift.** `SESSION_NOTES.md` / `CHANGELOG.md` / `HANDOFFS.md` / `ROADMAP.md` are adopter-owned; `absent` is a legitimate state, not a defect. Sync will re-seed a missing one, but you never *have* to — they're yours, not canonical's.
 
 ## You produced
 
-An installed project whose `bin/status` reads `current` / `present` across all 21 distributed files — reached honestly. You ran the read-only audit, manufactured real drift and watched status name it to the file, previewed with `--dry-run` and applied with `bin/sync`, and — the move that matters — handled a file you'd locally modified by relocating the edit into `CLAUDE.md` rather than force-overwriting it. Staying current is no longer a hope; it's a loop you can run on one project or the whole portfolio, and you know the one trap that turns "friction-free forever" into "merge conflict every release."
+An installed project whose `bin/status` reads `current` / `present` across all 22 distributed files — reached honestly. You ran the read-only audit, manufactured real drift and watched status name it to the file, previewed with `--dry-run` and applied with `bin/sync`, and — the move that matters — handled a file you'd locally modified by relocating the edit into `CLAUDE.md` rather than force-overwriting it. Staying current is no longer a hope; it's a loop you can run on one project or the whole portfolio, and you know the one trap that turns "friction-free forever" into "merge conflict every release."
 
 That closes the series. Tutorial 1 installed the framework; Tutorials 2–6 ran it on one project through sessions, a custom workstream, and a campaign; Tutorial 7 zoomed out to the portfolio; and Tutorial 8 keeps all of it current as the canonical methodology itself evolves.
 

@@ -743,8 +743,8 @@ Workstream prompts          ← Mission procedures (EXECUTE these)
 
 | Layer | Document | Read it to... | Length |
 |-------|----------|---------------|--------|
-| **Operating procedure** | `SESSION_RUNNER.md` (project root) | Know what to do RIGHT NOW, step by step | ~150 lines |
-| **Master framework** | `ITERATIVE_METHODOLOGY.md` | Understand WHY the steps exist | ~587 lines |
+| **Operating procedure** | `SESSION_RUNNER.md` (project root) | Know what to do RIGHT NOW, step by step | ~400 lines |
+| **Master framework** | `ITERATIVE_METHODOLOGY.md` | Understand WHY the steps exist | ~880 lines |
 | **Workstream prompts** | e.g., `DEVELOPMENT_WORKSTREAM.md` | Know HOW to execute for a specific domain | Varies |
 
 The session runner is deliberately short. It fits in a single read. Every line is an imperative instruction, not an explanation. It does not teach — it directs.

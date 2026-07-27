@@ -264,11 +264,22 @@ This is where session output documents go if you use them. The methodology works
 
 ## Step 9: Set Up the Methodology Dashboard (Recommended)
 
-The methodology includes a health scanner that scores projects on 5 dimensions (activity, testing, documentation, CI/CD, methodology compliance) and generates an HTML dashboard that auto-refreshes every 60 seconds.
+The methodology includes a health scanner that scores projects on 5 dimensions (activity, testing, documentation, CI/CD, methodology) and generates an HTML dashboard that auto-refreshes every 60 seconds. Two of those five adapt to the kind of repo being scored, so the rubric doesn't penalize a project for something it has no reason to have: **testing** becomes a render/verification score for a document-only repo (nothing to unit-test), and **methodology** becomes a framework-integrity score for a repo that *publishes* the methodology rather than adopting it. Most projects are neither and see the plain five.
 
 The dashboard auto-detects its context:
 - **Inside a git repo** → single-project mode (also scans git submodules as separate entries)
 - **Above git repos** → portfolio mode (scans all sibling repos)
+
+It also infers the two repo classes above structurally, and the inference now survives installation *through your source count*: the scanner excludes its own installed copy from that count, so a document-only project still reads as `doc-only` after `bin/sync` rather than being scored on tests it has no reason to have. (It did not always — before `methodology_dashboard.py` 2.10.1 the ~3,000-line file it copies to your root counted as *your* code and pushed you past the doc-only source cap. If your dashboard predates that version, either update it or declare the class explicitly.) The exclusion runs **both ways** — the markdown `bin/sync` installs is discounted too when the scanner asks whether yours is a *document* project, so installing the framework cannot flip a code repo into `doc-only`. **One gap remains:** four of the discounted names are *seeds* (`CHANGELOG.md`, `SESSION_NOTES.md`, `HANDOFFS.md`, `ROADMAP.md`) that `bin/sync` leaves alone when you already have your own, and the scanner cannot yet tell your file from a seed it wrote — so a document project whose corpus lives mostly in those filenames can still read as `code` after installation. Declaring the class fixes it. **Declaring is still worth doing for a document-only project** — a declaration is exact where a heuristic is a guess, and it is the supported escape hatch whenever the structural inference disagrees with you.
+
+Declare the class by creating a **`.methodology-profile`** file at the repo root. Its **first line that is neither blank nor a comment** is the declaration; that line holds whitespace-separated tokens — `doc-only` or `code` for the corpus axis, `framework` or `adopter` for the role axis (set either, or both, in any order). A declaration overrides the structural guess; two conflicting tokens on one axis cancel, and the structural guess stands.
+
+**Comment your explanation.** The declaration line is read as *tokens*, not prose — every word on it counts — and a leading `#` comment does not consume the declaration slot, so an explanation is safe above or below as long as it is commented. An *uncommented* sentence placed first does declare: a file starting `We follow the framework conventions for this paper.` is graded **framework**, and a `doc-only` on the next line is ignored.
+
+```
+doc-only                      # ← the declaration: first non-blank, non-comment line
+# No code here — this is a Quarto book. Scored on render/verification, not tests.
+```
 
 ### Per-Project Setup
 

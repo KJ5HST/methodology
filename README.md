@@ -72,11 +72,11 @@ Each phase is gated. You cannot enter the next phase until the current one is co
 ../methodology/bin/sync your-project/ --source=github  # or: pull from GitHub (needs gh CLI)
 ```
 
-This copies the full methodology corpus into the target: the operating files (`SESSION_RUNNER.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`) to the project root, and the framework (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) to `docs/methodology/`. These are kept current on every run. `SESSION_NOTES.md`, `CHANGELOG.md`, and `ROADMAP.md` are *seeded* at the root only when absent — once they exist they are yours and `bin/sync` never overwrites them. See [`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md) for the difference between committed and ignored modes.
+This copies the full methodology corpus into the target: the operating files (`SESSION_RUNNER.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`) to the project root, and the framework (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) to `docs/methodology/`. These are kept current on every run. `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, and `ROADMAP.md` are *seeded* at the root only when absent — once they exist they are yours and `bin/sync` never overwrites them. See [`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md) for the difference between committed and ignored modes.
 
 **Option B — manual:**
 
-Copy the starter-kit root-files to your project root — `SESSION_RUNNER.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`, plus `SESSION_NOTES.md`, `CHANGELOG.md`, and `ROADMAP.md` as starting points you then own. Copy the framework files (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`) and `workstreams/` to `docs/methodology/`. (Option A's `bin/sync` does all of this in one command.)
+Copy the starter-kit root-files to your project root — `SESSION_RUNNER.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`, plus `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, and `ROADMAP.md` as starting points you then own. Copy the framework files (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`) and `workstreams/` to `docs/methodology/`. (Option A's `bin/sync` does all of this in one command.)
 
 ### 2. Tell Claude to use it
 
@@ -111,6 +111,7 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 | `CONTEXT_TEMPLATE.md` | Project domain-glossary / `CONTEXT.md` template |
 | `RECOMMENDED_SKILLS.md` | Index of recommended skills, cited at the relevant phase/workstream |
 | `CHANGELOG.md` | Completed work history template — keeps BACKLOG.md lean |
+| `HANDOFFS.md` | Durable close-out receipt template — one machine-checkable block per session |
 | `ROADMAP.md` | Feature inventory and future plans template |
 | `methodology_dashboard.py` | Health scanner: project scoring, risk assessment, compliance dashboard |
 
@@ -126,11 +127,28 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 - **Discovers** git repositories automatically (sibling repos or submodules depending on mode)
 - **Collects** metrics across 7 dimensions: git activity, file structure, tests, CI/CD, documentation, methodology compliance, dependencies
 - **Scores** each project's health (0-100) across 5 weighted dimensions (activity, testing, documentation, CI/CD, methodology)
+- **Adapts** two of those dimensions to the repo class it detects — a document-only repo is scored on render/verification configuration instead of unit tests, and a repo that *publishes* the framework is scored on framework integrity instead of adoption. Both detections are structural; either can be overridden by a `.methodology-profile` file at the repo root (see below)
 - **Assesses** risk with severity-tagged flags (critical/high/medium/low) for issues like abandonment, missing tests, no CI, large files, low velocity
 - **Generates** a self-contained HTML dashboard with collapsible project cards, sortable by health/risk/name/activity
 - **Prints** a color-coded terminal summary for quick at-a-glance status
 
 **Live dashboard:** The generated HTML auto-refreshes every 60 seconds. Run the script once, open `dashboard.html` in your browser, and leave it open — it stays current as you work. Re-run the script whenever you want updated data.
+
+**Declaring what the scanner should infer — `.methodology-profile`:** the two class detections above are heuristics, and a heuristic can be wrong about your repo. Installation no longer breaks them *through your source count* — as of dashboard 2.10.1 the scanner holds its own installed copy out of that count, so a document-only project still reads as `doc-only` after `bin/sync` (before that, the ~3,000-line `methodology_dashboard.py` at your root counted as *your* code and pushed you past the source cap). The exclusion runs **both ways**: the 21 markdown files `bin/sync` installs are likewise discounted when the scanner asks whether yours is a *document* project, so installing the framework cannot push a code repo into `doc-only` either — a one-sided exclusion would simply have mirrored the defect instead of removing it. **One gap remains, and declaring is the fix:** four of those discounted names are *seeds* (`CHANGELOG.md`, `SESSION_NOTES.md`, `HANDOFFS.md`, `ROADMAP.md`), which `bin/sync` leaves alone when you already have your own. The scanner cannot currently tell your 900-line `CHANGELOG.md` from a seed it wrote, so a document project whose corpus is concentrated in those filenames can still read as `code` after installation. **Declaring is still the right move for a document-only project**, and it is the supported way to overrule either detection. Create a `.methodology-profile` file at the repo root; **only its first line that is neither blank nor a comment is read** as the declaration. That one line carries whitespace-separated tokens from two independent axes:
+
+| Axis | Tokens | Answers |
+|---|---|---|
+| Corpus | `doc-only` \| `code` | Is there anything here to unit-test? |
+| Role | `framework` \| `adopter` | Does this repo publish the methodology? |
+
+Set either or both, in any order (`doc-only framework` and `framework doc-only` are the same declaration). Unrecognized tokens are ignored, and two contradictory tokens on the same axis cancel — the scanner falls back to its structural detection rather than guessing. When the verdict is `framework` the card names the path that produced it (a marker, the structural check, or a declared contradiction that was overruled).
+
+**Comment your explanation — that declaration line is read as tokens, not as prose.** Every word on it is a candidate token, so an ordinary uncommented sentence placed *first* silently declares any axis word it happens to contain and consumes the declaration slot. A file whose first line reads `We follow the framework conventions for this paper.` is graded **framework — by marker**, and a `doc-only` on the line below it is ignored as prose. Put the declaration first and explain underneath, or prefix the explanation with `#`:
+
+```
+doc-only                      # ← the declaration: first non-blank, non-comment line
+# We follow the framework conventions for this paper, but there is no code here.
+```
 
 Requires only Python 3 (stdlib, no dependencies). Works on macOS, Linux, and Windows.
 
@@ -142,7 +160,7 @@ Portfolio health score, risk matrix, methodology compliance table, commit activi
 
 #### Project Detail View
 
-Expand any project card to see health breakdown by dimension, risk factors, git stats, code breakdown by language and category, test metrics, CI/CD status, documentation quality, dependency counts, methodology compliance checklist, and the 10 largest files.
+Expand any project card to see health breakdown by dimension, risk factors, git stats, code breakdown by language and category, test metrics, CI/CD status, documentation quality, dependency counts, whichever methodology checklist applies to that repo (compliance for an adopting project, framework integrity for a repo that publishes the framework), and the 10 largest files.
 
 ![Expanded project detail showing health breakdown, code metrics, and methodology compliance](docs/images/dashboard-detail.png)
 
@@ -193,7 +211,8 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 │   └── tests.sh                      ← Test suite for the bin/ tooling
 │
 └── tools/                            ← Portfolio-level tooling
-    └── methodology_dashboard.py      ← Health scanner & compliance dashboard
+    ├── methodology_dashboard.py      ← Health scanner & compliance dashboard
+    └── test_methodology_dashboard.py ← Scoring tests for the scanner (canonical-only)
 ```
 
 ## Key Concepts
@@ -249,6 +268,22 @@ Domain-specific adaptations of the master framework. Each workstream customizes 
 Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during development of a commercial software product. The methodology emerged organically from an initial 11-session design series, was codified into a reusable framework, and subsequently validated across 1100+ sessions of varied work.
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
+
+### What's New in v3.6
+
+The **portfolio health scanner's signals now mean what they say.** A multi-session campaign against one root cause — every defect was a *proxy presented as a semantic finding* — resolving upstream issues #59/#60/#61 plus five unfiled defects. `DASHBOARD_VERSION` **2.8.0 → 2.10.2**; unit suite **29 → 197**.
+
+- **Scale honesty** — the checklist weights summed **110** while the score was rendered as a percentage, and the methodology dimension was the only one of five with no clamp: one adopter's card read *"Methodology Compliance (110%)"* live. The denominator is now derived, and `HANDOFFS.md` — shipped to adopters since v3.3 but never scored — is on the checklist.
+- **Ledger identity** — a `docs/` product changelog no longer masks a missing action ledger, `CHANGELOG-archive.md` no longer shadows `CHANGELOG.md`, and the unmigrated-backlog signal is reachable when no changelog exists (previously the *worse* case went silent).
+- **Backlog shape, with abstention as a first-class result** — the done-mark predicate was checkbox-only and read a real 643-line table backlog as **0** against **256** true done-rows. A count now travels with the convention it was read under, because a `0` the scanner could not compute is indistinguishable from a clean backlog — and that silence was the defect.
+- **Repo role** — a framework publisher scanning itself no longer scores a false *"Partial methodology adoption (5%)"*; it is scored against what a publisher actually owes.
+- **The installer no longer defeats doc-only scoring** — `bin/sync` installs the scanner to the adopter root, which pushed document-only repos over the source-LOC cap: installing the methodology destroyed the fair-scoring v3.2 exists to provide. Live since v3.2.
+- **A framework filename is no longer taken as proof the framework is there** — the doc discount matched 17 names, six of them ordinary root filenames like `BOOTSTRAP.md` and `SAFEGUARDS.md`, with no evidence check. So a documentation project that had *never installed this framework* had its own file discounted, flipped to `code`, and drew a false HIGH *"No test infrastructure"* — and one such coincidence also unlocked the seed discount, subtracting that repo's own `CHANGELOG.md` and `ROADMAP.md` too. Now only a `docs/methodology/` path is self-evidencing; a root name counts only when enough of them co-occur. Found by this release's own pre-PR review, which reproduced it against both scanners.
+- **A repo with tests is never classified document-only** — it had become possible for a project with a green suite to be scored as a document corpus and then flagged for having *"no tests"*, a signal contradicted by the same metrics that emit it. This was live on the tutorials' own sample project.
+- **New Learning #12** — when an invariant is mechanical, encode it as a test; a review-time grep is a human step that silently stops happening.
+- **One case is disclosed, not silently shipped** — a document project whose corpus lives mostly in the four seed filenames (`CHANGELOG.md`, `SESSION_NOTES.md`, `HANDOFFS.md`, `ROADMAP.md`) can still read as `code` **after you install**, because `bin/sync` leaves those alone when you already have your own and the scanner cannot yet tell yours from a seed it wrote. This one is **not a regression** — v3.5 returns the identical wrong result, verified side by side — and declaring `doc-only` in `.methodology-profile` fixes it today.
+- **Still advisory, never a hard gate**, and **presence is still not use** — the checklist scores `.exists()` and cannot tell a maintained runner from an empty stub. Expect a **one-time step in your trend line**: the old scale was wrong, and history carries no scale marker, so the correction renders as a jump. The new `dashboard_version` stamp is what makes it interpretable.
+- **No principle, phase, gate, or workstream change; the failure-mode count stays 27.**
 
 ### What's New in v3.5
 

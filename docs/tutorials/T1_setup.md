@@ -60,7 +60,7 @@ You have two ways to do this; both are first-class. The scripted path is fastest
 
 For the manual path, or the difference between committed and ignored modes, see [`BOOTSTRAP.md` §Setup with `bin/sync`](../../starter-kit/BOOTSTRAP.md#setup-with-binsync-recommended) and [§Setup by manual copy](../../starter-kit/BOOTSTRAP.md#setup-by-manual-copy-always-valid).
 
-**Expected result:** `bin/sync` copies the **full methodology corpus** into the project — the operating files at the root (`SESSION_RUNNER.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, the `CONTEXT_TEMPLATE.md`/`CLAUDE_TEMPLATE.md` templates, `BOOTSTRAP.md`, `methodology_dashboard.py`) and the framework (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) under `docs/methodology/` — and *seeds* `SESSION_NOTES.md`, `CHANGELOG.md`, and `ROADMAP.md` at the root when they're absent. The exact mapping is defined once in [`bin/_manifest.py`](../../bin/_manifest.py).
+**Expected result:** `bin/sync` copies the **full methodology corpus** into the project — the operating files at the root (`SESSION_RUNNER.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, the `CONTEXT_TEMPLATE.md`/`CLAUDE_TEMPLATE.md` templates, `BOOTSTRAP.md`, `methodology_dashboard.py`) and the framework (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) under `docs/methodology/` — and *seeds* `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, and `ROADMAP.md` at the root when they're absent. The exact mapping is defined once in [`bin/_manifest.py`](../../bin/_manifest.py).
 **Checkpoint:** the operating files are at your project root and the framework is under `docs/methodology/` — `ls SESSION_RUNNER.md SAFEGUARDS.md methodology_dashboard.py` and `ls docs/methodology/` both succeed.
 
 ### 2. Tell your agent to use it — the SESSION PROTOCOL block
@@ -122,7 +122,7 @@ See [`BOOTSTRAP.md` §Step 9](../../starter-kit/BOOTSTRAP.md#step-9-set-up-the-m
 
 ### 6. Commit the setup, then start a *fresh* session
 
-First commit the setup, so the synced methodology files and the Step-1-seeded `CHANGELOG.md`/`ROADMAP.md` are **tracked** before your first real session:
+First commit the setup, so the synced methodology files and the Step-1-seeded `CHANGELOG.md`/`HANDOFFS.md`/`ROADMAP.md` are **tracked** before your first real session:
 
 ```sh
 git add -A && git commit -m "chore: bootstrap the methodology framework"
