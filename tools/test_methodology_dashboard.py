@@ -2025,10 +2025,10 @@ class TestFmtRatioAndTwins(unittest.TestCase):
                         "tools/ and starter-kit/ dashboards must be byte-identical")
 
     def test_dashboard_version(self):
-        self.assertEqual(md.DASHBOARD_VERSION, "2.10.1")
+        self.assertEqual(md.DASHBOARD_VERSION, "2.10.2")
         starter_src = Path(STARTER_PY).read_text(encoding="utf-8")
-        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.10\.1"', starter_src, re.MULTILINE),
-                        "starter-kit twin must also declare DASHBOARD_VERSION 2.10.1")
+        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.10\.2"', starter_src, re.MULTILINE),
+                        "starter-kit twin must also declare DASHBOARD_VERSION 2.10.2")
 
 
 class TestEndToEnd(unittest.TestCase):
@@ -2384,13 +2384,34 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
                            if dest.endswith(".md") and disp == mod.TRACKED)
         seed_md = tuple(dest for _s, dest, disp in mod.DISTRIBUTION
                         if dest.endswith(".md") and disp == mod.SEED)
-        self.assertEqual(tracked_md, md.FRAMEWORK_INSTALLED_DOCS,
-                         "the unconditional doc discount must be exactly the TRACKED markdown "
-                         "dests — the names nobody writes by coincidence")
+        self.assertEqual(set(tracked_md), set(md.FRAMEWORK_INSTALLED_DOCS),
+                         "the doc discount must cover exactly the TRACKED markdown dests — "
+                         "compared as a set because Layer 8 groups them by evidence tier, not by "
+                         "manifest order")
         self.assertEqual(seed_md, md.FRAMEWORK_SEED_DOCS,
                          "the evidence-gated discount must be exactly the SEED markdown dests")
         self.assertEqual(set(tracked_md) & set(seed_md), set(),
                          "a dest discounted both ways would be counted out twice")
+
+        # Layer 8: the two tiers must PARTITION the union — every TRACKED dest is either
+        # self-evidencing or evidence-gated, never both and never neither. A name that fell out of
+        # both tiers would stop being discounted on a real install with no test noticing.
+        self.assertEqual(set(md.FRAMEWORK_DISTINCTIVE_DOCS) & set(md.FRAMEWORK_AMBIGUOUS_DOCS),
+                         set(), "a dest in both tiers would be double-counted as evidence")
+        self.assertEqual(set(md.FRAMEWORK_DISTINCTIVE_DOCS) | set(md.FRAMEWORK_AMBIGUOUS_DOCS),
+                         set(tracked_md), "the two tiers must partition the TRACKED markdown dests")
+        # Only a docs/methodology/ path may be self-evidencing. A bare root name is exactly what
+        # Layer 8 demoted, so letting one back in unconditionally would re-open the regression.
+        for dest in md.FRAMEWORK_DISTINCTIVE_DOCS:
+            self.assertTrue(dest.startswith("docs/methodology/"),
+                            f"{dest} is a root-level name and cannot be self-evidencing — a "
+                            f"non-adopter can own that filename by coincidence")
+        # bin/sync installs all six ambiguous names, so a genuine install always clears the
+        # threshold. If this ever inverts, real installs silently stop being discounted.
+        self.assertGreaterEqual(len(md.FRAMEWORK_AMBIGUOUS_DOCS),
+                                md.FRAMEWORK_AMBIGUOUS_EVIDENCE_MIN,
+                                "a real bin/sync install must be able to satisfy the ambiguous "
+                                "evidence threshold on its own")
 
     def test_seed_docs_need_evidence_the_framework_was_installed(self):
         """The delta boundary review's confirmed regression, and the plan's RED-first clause (c)
@@ -2432,6 +2453,117 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
         self.assertFalse(m["doc_only"]["is_doc_only"])
         self.assertIn("No test infrastructure",
                       [r["description"] for r in m["scores"]["risks"]])
+
+    # === Layer 8 — an ambiguous ROOT name is not evidence for itself ===================
+    #
+    # RED against the pre-Layer-8 scanner: it listed all 17 TRACKED markdown dests as
+    # "distinctive" and discounted them unconditionally, so a non-adopter's own root file was
+    # subtracted from its own doc corpus. Found by the pre-PR review, reproduced under both the
+    # branch scanner and the PR base before being fixed.
+
+    def test_an_ambiguous_root_name_alone_is_not_evidence(self):
+        """The confirmed regression: a documentation project that never heard of this framework,
+        whose corpus is its own root BOOTSTRAP.md, was flipped `doc-only -> code` and handed a
+        false HIGH "No test infrastructure" — v3.2's exact false penalty, re-created a second time.
+
+        Measured before the fix: doc_only True -> False, framework_docs {'count': 1, 'loc': 302}.
+        BOOTSTRAP.md and SAFEGUARDS.md are ordinary names for any onboarding or policy repo.
+        """
+        for own in ("BOOTSTRAP.md", "SAFEGUARDS.md", "RECOMMENDED_SKILLS.md"):
+            with self.subTest(own_file=own):
+                repo = self._repo({
+                    "README.md": "# Field Guide\n\nA documentation project.\n",
+                    own: "# Ours\n" + "our own prose, nothing to do with any framework\n" * 300,
+                })
+                m = md.collect_all(repo)
+                self.assertEqual(m["files"]["framework_docs"], {"count": 0, "loc": 0},
+                                 f"{own} is the repo's OWN file — nothing here was installed")
+                self.assertTrue(m["doc_only"]["is_doc_only"],
+                                f"a doc repo owning {own} must still read doc-only")
+                self.assertNotIn("No test infrastructure",
+                                 [r["description"] for r in m["scores"]["risks"]])
+
+    def test_one_ambiguous_name_does_not_unlock_the_seed_fold_in(self):
+        """The sharper half: before the fix, ONE coincidental root name set the evidence flag and
+        unlocked the seed fold-in, so the same repo's own CHANGELOG.md and ROADMAP.md were
+        discounted too — one accident defeating the gate Layer 7 built to protect those four.
+
+        Measured before the fix: framework_docs {'count': 3, 'loc': 546}.
+        """
+        repo = self._repo({
+            "README.md": "# Field Guide\n\nA documentation project.\n",
+            "BOOTSTRAP.md": "# Onboarding\n" + "our own onboarding prose\n" * 300,
+            "CHANGELOG.md": "# Changelog\n" + "our own release history\n" * 120,
+            "ROADMAP.md": "# Roadmap\n" + "our own plans\n" * 120,
+        })
+        m = md.collect_all(repo)
+        self.assertEqual(m["files"]["framework_docs"], {"count": 0, "loc": 0},
+                         "one ambiguous root name must not make the seeds ours")
+        self.assertTrue(m["doc_only"]["is_doc_only"])
+
+    def test_ambiguous_names_are_discounted_once_enough_co_occur(self):
+        """The other side of the gate, so the fix cannot silently stop discounting real installs.
+        README.md's manual Option B copies the root files as a SET, and `bin/sync` writes all six,
+        so a genuine install clears FRAMEWORK_AMBIGUOUS_EVIDENCE_MIN without any
+        docs/methodology/ path present. Built from the manifest, not from the scanner constant.
+        """
+        mod = self._manifest()
+        root_md = [d for _s, d, disp in mod.DISTRIBUTION
+                   if d.endswith(".md") and disp == mod.TRACKED and "/" not in d]
+        self.assertGreaterEqual(len(root_md), md.FRAMEWORK_AMBIGUOUS_EVIDENCE_MIN)
+        tree = {"README.md": "# app\n",
+                "tool.py": "def s(x):\n    return x\n" * 74,        # 148 own LOC, under the cap
+                "CHANGELOG.md": "# Changelog\n" + "- a change\n" * 900}
+        for dest in root_md:
+            tree[dest] = "# framework doc\n" + "prose\n" * 60
+        m = md.collect_all(self._repo(tree))
+        self.assertGreaterEqual(m["files"]["framework_docs"]["count"], len(root_md) + 1,
+                                "the root framework docs AND the seed must both be discounted")
+        self.assertFalse(m["doc_only"]["is_doc_only"],
+                         "a code repo must not be flipped doc-only by the docs we installed")
+
+    def test_a_docs_methodology_path_is_evidence_on_its_own(self):
+        """A path under docs/methodology/ is this framework's own install location, so one is
+        proof. This is the tier that stays unconditional."""
+        tree = {"README.md": "# app\n",
+                "tool.py": "def s(x):\n    return x\n" * 74,
+                "docs/methodology/ITERATIVE_METHODOLOGY.md": "# theory\n" + "prose\n" * 200,
+                "CHANGELOG.md": "# Changelog\n" + "- a change\n" * 900}
+        m = md.collect_all(self._repo(tree))
+        self.assertGreaterEqual(m["files"]["framework_docs"]["count"], 2,
+                                "one docs/methodology/ path must also unlock the seed fold-in")
+
+    # === Layer 8 — a repo that HAS tests is never a document project =====================
+
+    def test_a_repo_with_tests_is_never_doc_only(self):
+        """The tutorials' own sample project: a Python CLI with a green pytest suite classified
+        doc-only once `bin/sync` discounted the framework markdown around it, and then drew a
+        "no tests" advisory ON A PASSING SUITE — a signal contradicted by the same metrics dict
+        that emits it. It also made T7's Track B worked example unproducible, since the tutorial
+        tells the learner to read a Testing dimension off a card that no longer renders one.
+        """
+        tree = {"README.md": "# todo\n", "GUIDE.md": "# guide\n", "NOTES.md": "# notes\n",
+                "todo.py": "def add(x):\n    return x\n" * 40,       # 80 LOC, under the cap
+                "tests/test_todo.py": "def test_add():\n    assert True\n" * 20}
+        m = md.collect_all(self._repo(tree))
+        self.assertGreater(m["files"]["by_category"]["test"]["count"], 0,
+                           "guard-the-guard: the fixture must actually carry a test file")
+        self.assertFalse(m["doc_only"]["is_doc_only"],
+                         "a repo with a real suite has already answered the question this "
+                         "dimension exists to ask")
+        self.assertNotIn("Doc-only repo contains",
+                         " ".join(r["description"] for r in m["scores"]["risks"]),
+                         "the doc-only advisory must not fire on a repo with tests")
+
+    def test_the_marker_still_overrides_the_has_tests_gate(self):
+        """Declaring is exact where detection is a guess, so the has-tests gate sits BELOW the
+        marker: a repo that declares `doc-only` keeps it even with a test file present."""
+        tree = {"README.md": "# r\n",
+                ".methodology-profile": "doc-only\n",
+                "tests/test_x.py": "def test_x():\n    assert True\n" * 20}
+        m = md.collect_all(self._repo(tree))
+        self.assertTrue(m["doc_only"]["is_doc_only"])
+        self.assertEqual(m["doc_only"]["reason"], "marker")
 
     def test_installed_docs_do_not_make_a_code_repo_doc_only(self):
         """The MIRROR defect, unmasked by the source exclusion and closed by operator decision.
@@ -2503,7 +2635,7 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
 
     def test_stale_installed_version_is_still_excluded(self):
         """Adopters lag canonical; the marker check must match any version, not the current one."""
-        for version in ("2.8.0", "2.9.2", "2.10.1"):
+        for version in ("2.8.0", "2.9.2", "2.10.1", "2.10.2"):
             with self.subTest(version=version):
                 p = self._repo({**self.QUARTO,
                                 "methodology_dashboard.py": installed_scanner(version=version)})

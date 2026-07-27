@@ -44,12 +44,14 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   "no finding". The motivating case was a **false GREEN on a real adopter**, which silenced the exact
   finding the operator needed. Seven layers, one per session: scale honesty (2.9.0), ledger identity
   (2.9.1), backlog shape with abstention (2.9.2), repo role (2.10.0, closes #59), a
-  completeness-critic doc sweep, the installer no longer defeating doc-only detection (2.10.1), and
-  close-out. `DASHBOARD_VERSION` **2.8.0 → 2.10.1**, both twins byte-identical; the scanner grows
-  **2,475 → 3,275** lines and its unit suite **29 → 191**. `bin/tests.sh` is unchanged at **84** —
+  completeness-critic doc sweep, the installer no longer defeating doc-only detection (2.10.1),
+  close-out, and — added after the pre-PR review — evidence-gating the ambiguous framework doc
+  names (2.10.2). `DASHBOARD_VERSION` **2.8.0 → 2.10.2**, both twins byte-identical; the scanner
+  grows **2,475 → 3,336** lines and its unit suite **29 → 197**. `bin/tests.sh` is unchanged at **84** —
   the campaign added no shell checks. Cite-don't-restate: the full narrative, the honest limits, and
   the one live defect that ships **disclosed rather than quietly fixed** (the seed-discount hole —
-  not a regression, since the pre-Layer-7 scanner returns the identical wrong result) live in
+  not a regression: v3.5, 2.10.1 and 2.10.2 were run side by side and all three return the
+  identical wrong result) live in
   [`CLAUDE.md` §Versioning "v3.6"](CLAUDE.md#versioning).
 - **Commit/PR:** this commit + `9e93588` (the S3 claim) — branch `feat/dashboard-signal-integrity`,
   built from `upstream/main` because fork `main` carries fork-only `docs/planning/*` that must not
@@ -64,7 +66,7 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   source and this action spans three issues; the per-layer entries carrying the individual `[issue
   #59]`/`[issue #60]`/`[issue #61]` tags are on the fork's ledger. The annotated tag and GitHub
   Release for **v3.6** are cut at the merge commit, per the v3.2/v3.4/v3.5 pattern.
-- **Session:** S3 · **Verified:** `tools/test_methodology_dashboard.py` **191/191 OK** · `bin/tests.sh`
+- **Session:** S3 · **Verified:** `tools/test_methodology_dashboard.py` **197/197 OK** · `bin/tests.sh`
   **84 passed / 0 failed** · `bin/check-links` OK (82 relative links across 21 distributed markdown
   files) · `diff -q` on the two dashboard twins identical · `py_compile` clean on all three Python
   files · `CLAUDE.md`'s starter-kit table asserted row-for-row against `ls starter-kit/` (11 of 11).

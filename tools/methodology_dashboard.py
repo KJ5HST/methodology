@@ -82,7 +82,7 @@ from collections import defaultdict
 # Every other copy (portfolio root + per-project) is a synced copy of the canonical and must
 # carry the same value. A copy whose DASHBOARD_VERSION is older than the canonical is stale —
 # re-sync from the canonical. Bump on any change to the canonical script.
-DASHBOARD_VERSION = "2.10.1"
+DASHBOARD_VERSION = "2.10.2"
 
 ROOT = Path(__file__).parent
 EXCLUDE_DIRS = {"methodology", "BrogueCE-iOS", ".git", "__pycache__", "node_modules", ".venv", "venv"}
@@ -364,17 +364,23 @@ FRAMEWORK_INSTALLED_SOURCE = ("methodology_dashboard.py",)
 # here (unlike the source list): excluding docs can only make doc-only classification HARDER, so
 # a repo cannot use this list to launder anything — it would only penalize itself.
 #
-# SPLIT INTO TWO LISTS, because the false-penalty direction is a real defect even though the
-# laundering direction is not. These 17 names are DISTINCTIVE — nobody writes a root
-# `SESSION_RUNNER.md` or a `docs/methodology/workstreams/…` by coincidence — so their presence is
-# itself the evidence that the framework was installed, and they are discounted unconditionally.
-FRAMEWORK_INSTALLED_DOCS = (
-    "SESSION_RUNNER.md",
-    "SAFEGUARDS.md",
-    "RECOMMENDED_SKILLS.md",
-    "CONTEXT_TEMPLATE.md",
-    "CLAUDE_TEMPLATE.md",
-    "BOOTSTRAP.md",
+# SPLIT INTO THREE TIERS by how much a name's mere presence PROVES. Layer 7 split "distinctive"
+# from "seed" and gated only the seeds; Layer 8 corrected where that line falls, because six of
+# the names it called distinctive are nothing of the kind.
+#
+# Only a path UNDER docs/methodology/ is self-evidencing. That directory is this framework's own
+# install location, so nothing lands there by coincidence.
+#
+# A bare ROOT filename proves nothing on its own, and calling it distinctive was a MEASURED
+# REGRESSION against the pre-Layer-7 scanner: a documentation project that never heard of this
+# framework, whose corpus was its own 302-line root `BOOTSTRAP.md`, had that file discounted, fell
+# under DOC_ONLY_DOC_LOC_MIN, flipped `doc-only -> code`, and gained a false HIGH "No test
+# infrastructure" — v3.2's exact false penalty, re-created a second time by the fix for its mirror.
+# `BOOTSTRAP.md` and `SAFEGUARDS.md` are ordinary names for any onboarding or policy repo.
+# Worse, ONE coincidental root name also unlocked the seed fold-in below, so the same repo's own
+# CHANGELOG.md and ROADMAP.md were discounted too — one accident defeating the very gate Layer 7
+# added to protect those four. Found by the pre-PR review; reproduced under both scanners.
+FRAMEWORK_DISTINCTIVE_DOCS = (
     "docs/methodology/ITERATIVE_METHODOLOGY.md",
     "docs/methodology/HOW_TO_USE.md",
     "docs/methodology/workstreams/DESIGN_WORKSTREAM.md",
@@ -387,6 +393,28 @@ FRAMEWORK_INSTALLED_DOCS = (
     "docs/methodology/workstreams/INHERITED_CODEBASE_FAMILIARIZATION_CAMPAIGN.md",
     "docs/methodology/workstreams/TEMPLATE_CAMPAIGN.md",
 )
+
+# The six TRACKED root dests. `bin/sync` installs every one of them, so a real install always
+# carries all six — but any single one can also be a coincidence, so they are discounted only
+# behind the same evidence gate as the seeds (see _framework_docs_are_evidenced).
+FRAMEWORK_AMBIGUOUS_DOCS = (
+    "SESSION_RUNNER.md",
+    "SAFEGUARDS.md",
+    "RECOMMENDED_SKILLS.md",
+    "CONTEXT_TEMPLATE.md",
+    "CLAUDE_TEMPLATE.md",
+    "BOOTSTRAP.md",
+)
+
+# The full markdown dest set, kept as the union so the canonical drift test against
+# bin/_manifest.py keeps checking all 21 names rather than silently narrowing to a subset.
+FRAMEWORK_INSTALLED_DOCS = FRAMEWORK_DISTINCTIVE_DOCS + FRAMEWORK_AMBIGUOUS_DOCS
+
+# How many of the six ambiguous root names must co-occur to stand in for a docs/methodology/ path.
+# `bin/sync` writes all six, and README.md's manual Option B copies them as a set, so a genuine
+# install clears this easily. A doc repo that happens to own three of these EXACT names is not a
+# coincidence worth protecting. One or two is (BOOTSTRAP.md alone; BOOTSTRAP.md + SAFEGUARDS.md).
+FRAMEWORK_AMBIGUOUS_EVIDENCE_MIN = 3
 
 # The four SEED dests. These names are ORDINARY — thousands of repos author a CHANGELOG.md or a
 # ROADMAP.md and never heard of this framework — so they are discounted only when one of the
@@ -730,6 +758,8 @@ def collect_file_metrics(path):
     # Seed-named docs are held aside during the walk: whether they are OURS depends on evidence
     # that only appears elsewhere in the tree, which the walk may not have reached yet.
     seed_docs = {"count": 0, "loc": 0}
+    ambiguous_docs = {"count": 0, "loc": 0}
+    ambiguous_names = set()          # distinct dests, so one file cannot be counted as evidence twice
     saw_distinctive_framework_doc = False
 
     for root_dir, dirs, files in os.walk(path):
@@ -775,10 +805,15 @@ def collect_file_metrics(path):
                 metrics["by_category"][category]["count"] += 1
                 metrics["by_category"][category]["loc"] += loc
                 if category == "docs":
-                    if rel_posix in FRAMEWORK_INSTALLED_DOCS:
+                    if rel_posix in FRAMEWORK_DISTINCTIVE_DOCS:
                         metrics["framework_docs"]["count"] += 1
                         metrics["framework_docs"]["loc"] += loc
                         saw_distinctive_framework_doc = True
+                    elif rel_posix in FRAMEWORK_AMBIGUOUS_DOCS:
+                        # Held aside like the seeds: a root name is not self-evidencing (Layer 8).
+                        ambiguous_docs["count"] += 1
+                        ambiguous_docs["loc"] += loc
+                        ambiguous_names.add(rel_posix)
                     elif rel_posix in FRAMEWORK_SEED_DOCS:
                         # Held aside; folded in below only if the framework is really installed.
                         seed_docs["count"] += 1
@@ -792,10 +827,15 @@ def collect_file_metrics(path):
                 all_files.append({"path": str(rel_path), "loc": loc, "ext": ext,
                                   "vendor": category == "vendor"})
 
-    # A CHANGELOG.md is ours only in a repo that also carries a file nobody writes by accident.
-    if saw_distinctive_framework_doc:
-        metrics["framework_docs"]["count"] += seed_docs["count"]
-        metrics["framework_docs"]["loc"] += seed_docs["loc"]
+    # A root BOOTSTRAP.md — or a CHANGELOG.md — is ours only in a repo that also carries proof the
+    # framework was installed: a docs/methodology/ path (nothing lands there by accident), or the
+    # six TRACKED root names co-occurring past FRAMEWORK_AMBIGUOUS_EVIDENCE_MIN. Neither the
+    # ambiguous names nor the seeds are evidence FOR themselves, which is the Layer 8 correction:
+    # letting them self-evidence is what discounted a non-adopter's own documentation.
+    if saw_distinctive_framework_doc or len(ambiguous_names) >= FRAMEWORK_AMBIGUOUS_EVIDENCE_MIN:
+        for held in (ambiguous_docs, seed_docs):
+            metrics["framework_docs"]["count"] += held["count"]
+            metrics["framework_docs"]["loc"] += held["loc"]
 
     metrics["directory_count"] = len(dirs_seen)
     all_files.sort(key=lambda f: f["loc"], reverse=True)
@@ -1841,7 +1881,10 @@ def detect_repo_role(path):
 
 
 def detect_doc_only(path, files, render):
-    """BL-5 — classify a repo as document-only / research: marker -> source-cap -> corpus.
+    """BL-5 — classify a repo as document-only / research.
+
+    Order: marker -> has-tests -> source-cap -> corpus. Each step before the corpus check is a
+    reason this CANNOT be a document project; the corpus check is the only positive evidence.
 
     Returns {"is_doc_only": bool, "reason": "marker"|"marker-contradiction"|"heuristic"}.
     Advisory only; nothing gates.
@@ -1857,12 +1900,24 @@ def detect_doc_only(path, files, render):
     # reason: the reader is owed the fact that a declaration was made and could not be read.
     reason = reason or "heuristic"
 
-    # 2. Source-cap short-circuit: real code should be tested; never silently exempt it.
+    # 2. A repo that HAS tests is not a document project, whatever its doc corpus looks like.
+    #    This dimension exists to stop penalizing repos with nothing to unit-test; a repo with a
+    #    real suite has already answered that question itself. Without this gate the tutorials'
+    #    own sample project — a Python CLI with a green pytest suite — classified doc-only once
+    #    `bin/sync` discounted the framework markdown around it, and then drew a "no tests"
+    #    advisory ON A PASSING SUITE. A signal contradicted by the very metrics dict that emits it
+    #    is this campaign's whole defect class, so it is gated here rather than explained on the
+    #    card. Below the marker on purpose: an explicit `doc-only` declaration still wins, because
+    #    declaring is exact where detection is a guess.
+    if files.get("by_category", {}).get("test", {}).get("count", 0) > 0:
+        return {"is_doc_only": False, "reason": reason}
+
+    # 3. Source-cap short-circuit: real code should be tested; never silently exempt it.
     src = files["by_category"]["source"]["loc"]
     if src > DOC_ONLY_SOURCE_LOC_MAX:
         return {"is_doc_only": False, "reason": reason}
 
-    # 3. Corpus disjunction (only when source is negligible): a real doc corpus OR a render
+    # 4. Corpus disjunction (only when source is negligible): a real doc corpus OR a render
     #    toolchain — the latter catches a pure-LaTeX/Quarto repo whose .tex/.qmd are not counted
     #    as docs (so its doc_loc is ~0), the exact source_loc≈0 research repo that must not be missed.
     #    Framework-installed markdown is discounted here and ONLY here: bin/sync ships 21 doc
