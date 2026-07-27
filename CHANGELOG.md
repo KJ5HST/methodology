@@ -53,7 +53,9 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   not a regression: v3.5, 2.10.1 and 2.10.2 were run side by side and all three return the
   identical wrong result) live in
   [`CLAUDE.md` §Versioning "v3.6"](CLAUDE.md#versioning).
-- **Commit/PR:** this commit + `9e93588` (the S3 claim) — branch `feat/dashboard-signal-integrity`,
+- **Commit/PR:** [PR #62](https://github.com/KJ5HST/methodology/pull/62) — `9e93588` (S3 claim) ·
+  `7a7e9a2` (the 13-file port + three approved edits + this entry) · `eeb827f` (pre-PR review
+  fixes) · `bec4095` (Layer 8) · this commit — branch `feat/dashboard-signal-integrity`,
   built from `upstream/main` because fork `main` carries fork-only `docs/planning/*` that must not
   ship here. **The per-layer development history is fork-`main`-only and is not reachable from this
   repo's history** — unlike the v3.1 campaign, whose per-session commits were branch commits that
