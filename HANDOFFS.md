@@ -8,6 +8,24 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S5
+date: 2026-08-01
+status: pending
+self_score: pending
+predecessor_score: pending
+active_task: Operator-directed close of two v3.6-cycle records — (1) merge PR #63 without requiring an upstream receipt, (2) add the missing `### … [ad hoc] Released v3.6` entry to CHANGELOG.md. Operator decided three questions raised by the PR #63 re-review: no version event; merge without the receipt; add the ledger entry here rather than take the contributor's offer of a one-line PR.
+what_was_done: pending
+next_steps: pending
+key_files: CHANGELOG.md:35 (prepend anchor, newest on top)
+gotchas: Numbered S5, not S4 — `main`'s newest receipt is S3, but the unpushed branch `docs/operator-gated-review-plan` (commit 1a90e05) already carries an S4 receipt for the 07-31 planning session, which chronologically precedes this one. Claiming S4 here would collide on that branch's merge; a visible S3→S5 gap that closes when the branch lands is the lesser defect, and no already-written receipt is renumbered.
+runtime_smoke: pending
+changelog_ref: pending
+commit: pending
+```
+
+---
+
+```handoff
 session: S3
 date: 2026-07-26
 status: complete
