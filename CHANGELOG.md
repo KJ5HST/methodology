@@ -32,6 +32,43 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-07-27 · [ad hoc] New `SESSION_RUNNER.md` Learning #13 — a forward-looking claim has to be computed, not re-read
+
+- **Change:** one row appended to the `starter-kit/SESSION_RUNNER.md` Learnings table (table was
+  **1–12**; appended, never renumbered — the diff on that file is a single added line with no
+  deletions, so rows 1–12 are byte-unchanged). That file is `bin/_manifest.py`-**distributed**, so
+  adopters receive the row via `bin/sync`. *A forward-looking claim cannot be checked by re-reading
+  a file — it has to be computed.*
+- **Why the existing rows did not cover it.** Learning #6 and FM #11 cover claims written *from
+  memory*, and both prescribe the same repair: go re-read the file that confirms the claim. #7, #10
+  and #12 cover cross-references that go stale in the *corpus*. Neither reaches the other half of a
+  handoff — its predictions. A prediction describes a state that does not exist yet, so no file
+  confirms it; the only honest check is to derive it from current state, or to say plainly that it
+  is a guess.
+- **The motivating case is in this repository's own history, and it refutes the tempting
+  diagnosis.** The S3 receipt's `next_steps` tells the next session to *"expect one CHANGELOG union
+  conflict, resolve newest-on-top."* The sync merge that followed met **seven** conflicting files.
+  But the prediction had not gone stale — it was never true. Two commands show why:
+  `git log -S 'expect one CHANGELOG union conflict' -- HANDOFFS.md` locates the sentence first
+  entering the tree in `bec4095`, and `git show --stat bec4095` shows that same commit changing
+  seven files. Every fact needed to get the prediction right was already in the author's own working
+  tree at the moment it was typed. (The seven-conflict outcome was measured against the contributing
+  fork's `main` at `ae6050d`, which is not reachable from this repository, so it is corroboration
+  here — the two commands above carry the argument on their own.)
+- **Why it earns a row rather than a gotcha:** a wrong prediction is worse than none, because it
+  licenses the successor to resolve *quickly* rather than *carefully* — and a merge resolved on the
+  belief that "only the ledger differs" discards work silently, with no failing check to catch it.
+  The countermeasure is mechanical and non-mutating: `git merge-tree --write-tree --name-only`
+  computes the conflicting paths without touching a working tree.
+- **Cross-reference sweep (Learnings #7/#10).** `git grep -nE 'table (was|is|now) ?1[–-][0-9]+'`
+  returns two live sites outside this entry — the v3.4 narration in this ledger and the matching
+  v3.4 bullet in `CLAUDE.md` §Versioning — both dated release narration this repo leaves verbatim by
+  design (the v2.7.1 precedent). The Learnings caption states no size. Nothing else needed updating.
+- **Commit/PR:** [PR #63](https://github.com/KJ5HST/methodology/pull/63)
+- **Session:** docs-only follow-on to the v3.6 ship · **Verified:** `bin/tests.sh` 84/84 ·
+  `bin/check-links` OK (82 links / 21 files) · Learnings table parses as contiguous rows 1–13, every
+  row 4-column, rows 1–12 byte-unchanged · brand-neutrality grep empty.
+
 ### 2026-07-26 · [ad hoc] Dashboard signal-integrity campaign lands upstream — the scanner's signals now mean what they say (v3.6)
 - **Change:** the portfolio health scanner's signals are reconciled with what they actually measure,
   closing upstream issues [#59](https://github.com/KJ5HST/methodology/issues/59),
