@@ -32,6 +32,32 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-08-01 · [ad hoc] Opened issue #65 — the repo's own numbered sets have no structural test
+
+- **Action:** filed [issue #65](https://github.com/KJ5HST/methodology/issues/65). No code or doc change;
+  this is the ledger record for a non-commit action (failure mode #27).
+- **The gap:** the `starter-kit/SESSION_RUNNER.md` **Learnings table** and the `HANDOFFS.md` **receipt
+  ledger** both enforce their structural invariants by human attention alone. Nothing in `bin/tests.sh`
+  (84 checks) or `tools/test_methodology_dashboard.py` (197 tests) asserts anything about either. This
+  is **Learning #12** pointed at the file Learning #12 lives in.
+- **Mutation-proved against `main` at `a4e2b30`, not argued.** Learnings table: a malformed 3-column row
+  14, a duplicate row number 12, and deleting row 11 outright each leave `bin/tests.sh` at **84 passed,
+  0 failed** — including the renumbering case `CLAUDE.md` forbids outright. Receipt ledger: stripping an
+  older receipt's fence, `session:` and `date:` drops the block count 4 → 3 and both `bin/check-handoff`
+  and `bin/tests.sh` still report green, because the checker validates only the **newest** receipt.
+- **Not hypothetical — it already happened here**, and the same corruption also breaks fence-matching for
+  the block below it, so one defect silently damages two receipts. The issue deliberately **cites no SHA**
+  for that incident: both the introducing and repairing commits live on an unpushed branch, and an
+  unreachable reference is precisely the trap Learning #13 was just added to prevent. Every claim in the
+  issue reproduces from a clean clone of `main` instead.
+- **Scope proposed:** test-only, canonical-only — contiguous/unique/4-column/one-line for the Learnings
+  table; balanced fences, mandatory `session:`+`date:`, unique session ids, and a `--all` mode for
+  `bin/check-handoff` that keeps newest-only as the close-out fast path. Non-goals stated explicitly:
+  structure never quality, no distributed-file change, failure-mode count stays **27**. Learning #12's
+  RED-first precondition carried over verbatim.
+- **Session:** S7 · **Verified:** all five mutations re-run against `main` in a throwaway worktree
+  (since removed) rather than quoted from the earlier PR #63 re-review; issue confirmed OPEN.
+
 ### 2026-07-27 · [ad hoc] New `SESSION_RUNNER.md` Learning #13 — a forward-looking claim has to be computed, not re-read
 
 - **Change:** one row appended to the `starter-kit/SESSION_RUNNER.md` Learnings table (table was
