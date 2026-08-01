@@ -8,6 +8,24 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S7
+date: 2026-08-01
+status: pending
+self_score: pending
+predecessor_score: pending
+active_task: File the upstream issue for the enumerable-set invariant gap — the Learnings table and the HANDOFFS.md receipt ledger both enforce structural invariants by human attention rather than by assertion. Operator-directed follow-on; the gap was mutation-proved during the PR #63 re-review (S524, oversight) and then hit a second time for real in S6, when a receipt defect lived undetected because bin/check-handoff validates only the newest block.
+what_was_done: pending
+next_steps: pending
+key_files: bin/check-handoff:50 (REQUIRED_KEYS; newest-receipt-only scope is the gap)
+gotchas: Numbered S7 — S6 exists only on the unpushed branch docs/operator-gated-review-plan, so main's visible sequence reads S5 then S7 until that branch lands. Same reasoning as S5's gotcha (1): never renumber an already-written receipt; a visible gap that closes on merge is the lesser defect.
+runtime_smoke: pending
+changelog_ref: pending
+commit: pending
+```
+
+---
+
+```handoff
 session: S5
 date: 2026-08-01
 status: complete
