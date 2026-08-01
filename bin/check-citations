@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+"""Assert every `Learning #N` cited in a distributed file resolves to a real row.
+
+Canonical-only (not in bin/_manifest.py) — adopters receive the corrected files,
+not this checker, exactly as with check-links and check-handoff.
+
+WHY LEARNINGS ONLY. The same shape would fit failure modes and principles, but
+neither can be driven RED against the corpus today, and anti-patterns cannot be
+checked at all: there is no single anti-pattern registry (AUDIT owns 1-9,
+RESEARCH_DOCUMENTATION owns 1-20) and several live citations deliberately point
+at an *adopter's* project-local list. Folding those in would ship a permanently
+red assertion — a proxy presented as a semantic finding, which is the defect
+class this checker exists to retire. Extend deliberately, with its own RED.
+
+SCOPE. The bin/_manifest.py DISTRIBUTION corpus, and only it. That is precisely
+the population for which "the reader cannot reach the source" is true: a reader
+of README.md or CHANGELOG.md is standing in the repo that holds the table, while
+an adopter holds only what bin/sync installed. It is also the corpus check-links
+already governs, so the two checkers describe the same set of files.
+
+WHAT THIS DOES NOT PROVE. That every citation has a referent — never that the
+sentence around it is true. A green run is not a correct claim.
+
+Exit codes: 0 clean · 1 corpus defect (unresolved citation) · 2 checker defect.
+"""
+
+import os
+import re
+import sys
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_REPO = os.path.dirname(HERE)
+
+REGISTRY_FILE = "starter-kit/SESSION_RUNNER.md"
+REGISTRY_HEADING = "## Learnings (added by sessions)"
+
+# Floors. Each guards against a silent regression to a vacuous pass; they are
+# floors, not pinned counts, so ordinary editing never trips them.
+MIN_DEFINED_ROWS = 12
+MIN_CITATIONS = 6
+MIN_CITING_FILES = 2
+
+# A citation is the literal word Learning/Learnings followed by #N. Requiring the
+# word is what keeps the table's own leading row-number column from reading as a
+# citation of itself, and what keeps `FM #27` / `anti-pattern #9` out.
+CITE_ANCHOR = re.compile(r"\bLearnings?\b\s*#(\d+)")
+# ...and a run of further #N joined by / , & + and — so `Learnings #28/#29` is two
+# citations. A naive `Learning #\d+` grep silently drops every trailing member.
+CITE_CONT = re.compile(r"\A\s*(?:/|,|&|\+|and|,\s*and)\s*#(\d+)")
+ROW = re.compile(r"\|\s*(\d+)\s*\|")
+
+
+class CheckerError(Exception):
+    """Raised when the checker cannot trust itself. Never a corpus finding."""
+
+
+def read(path):
+    # utf-8-sig: a BOM has silently defeated a marker match in this repo before.
+    # A missing/unreadable file is a CHECKER defect (exit 2), never a corpus
+    # finding (exit 1) — an uncaught OSError here would exit 1 and read as
+    # "unresolved citations" against a tree the checker simply could not open.
+    try:
+        with open(path, encoding="utf-8-sig", errors="replace") as fh:
+            return fh.read()
+    except OSError as exc:
+        raise CheckerError("cannot read %s: %s" % (path, exc))
+
+
+def distribution(repo):
+    binpath = os.path.join(repo, "bin")
+    if not os.path.isdir(binpath):
+        binpath = HERE
+    sys.path.insert(0, binpath)
+    try:
+        import _manifest
+    except ImportError as exc:
+        raise CheckerError("cannot import bin/_manifest.py: %s" % exc)
+    finally:
+        sys.path.pop(0)
+    srcs = [s for s, _d, _x in _manifest.DISTRIBUTION]
+    if REGISTRY_FILE not in srcs:
+        raise CheckerError(
+            "%s is no longer in DISTRIBUTION — the registry itself must ship, or "
+            "no adopter can resolve a citation at all" % REGISTRY_FILE)
+    return srcs
+
+
+def extract_definitions(text):
+    """Row numbers in the Learnings table only.
+
+    Section-anchored on purpose: SESSION_RUNNER.md holds a Known Failure Modes
+    table (rows 1..27) and a Degradation Detection table with the same `| N |`
+    shape. An unanchored scan would make `Learning #27` resolve against FM #27.
+    """
+    lines = text.split("\n")
+    start = None
+    for i, line in enumerate(lines):
+        if line.strip() == REGISTRY_HEADING:
+            start = i
+            break
+    if start is None:
+        raise CheckerError(
+            "heading %r not found in %s — do NOT let the checker return an empty "
+            "registry, against which every citation would falsely resolve. If the "
+            "heading was renamed, update REGISTRY_HEADING."
+            % (REGISTRY_HEADING, REGISTRY_FILE))
+    rows = set()
+    for line in lines[start + 1:]:
+        if line.startswith("## ") or line.strip() == "---":
+            break
+        m = ROW.match(line)
+        if m:
+            rows.add(int(m.group(1)))
+    return rows
+
+
+def guard_registry(rows):
+    if not rows:
+        raise CheckerError("the Learnings table parsed to zero rows")
+    if min(rows) != 1:
+        raise CheckerError("the Learnings table does not start at row 1")
+    missing = sorted(set(range(1, max(rows) + 1)) - rows)
+    if missing:
+        raise CheckerError(
+            "the Learnings table is not contiguous from 1 (missing %s) — the "
+            "table is append-only, so a hole means the parser lost rows" % missing)
+    if len(rows) < MIN_DEFINED_ROWS:
+        raise CheckerError(
+            "only %d rows parsed, floor is %d — the table is append-only, so a "
+            "shortfall is a parser failure, not a shrinking table"
+            % (len(rows), MIN_DEFINED_ROWS))
+
+
+def citations(repo, srcs):
+    found = []
+    for src in srcs:
+        path = os.path.join(repo, src)
+        if not os.path.exists(path):
+            raise CheckerError("distributed file missing from the tree: %s" % src)
+        for lineno, line in enumerate(read(path).split("\n"), 1):
+            for m in CITE_ANCHOR.finditer(line):
+                nums = [int(m.group(1))]
+                end = m.end()
+                while True:
+                    c = CITE_CONT.match(line[end:])
+                    if not c:
+                        break
+                    nums.append(int(c.group(1)))
+                    end += c.end()
+                for n in nums:
+                    found.append((src, lineno, n))
+    return found
+
+
+def guard_scan(found):
+    files = {src for src, _l, _n in found}
+    if len(found) < MIN_CITATIONS or len(files) < MIN_CITING_FILES:
+        raise CheckerError(
+            "found only %d citation(s) across %d distributed file(s) (floors %d/%d) "
+            "— the extractor is not matching, and an empty match set passes "
+            "vacuously" % (len(found), len(files), MIN_CITATIONS, MIN_CITING_FILES))
+
+
+SELF_TEST_REGISTRY = """
+## Learnings (added by sessions)
+
+| # | Learning | Source | When to Apply |
+|---|----------|--------|---------------|
+| 1 | a | b | c |
+| 2 | a | b | c |
+| 3 | a | b | c |
+| 4 | a | b | c |
+| 5 | a | b | c |
+| 6 | a | b | c |
+| 7 | a | b | c |
+| 8 | a | b | c |
+| 9 | a | b | c |
+| 10 | a | b | c |
+| 11 | a | b | c |
+| 12 | a | b | c |
+
+---
+
+## Known Failure Modes
+
+| # | Failure Mode | Symptom | Countermeasure |
+|---|---|---|---|
+| 28 | decoy | decoy | decoy |
+| 34 | decoy | decoy | decoy |
+"""
+
+SELF_TEST_PROSE = """
+Learnings #28/#29 and Learning #99 do not resolve.
+Learning #7 and Learning #8 do; so do Learnings #10 and #12.
+failure mode #30, FM #34, anti-pattern #28, Principle 30 are other registries.
+| 34 | a row-number column cell, not a citation | x | y |
+"""
+
+
+def self_test(verbose=True):
+    """Corpus-independent positive control: prove the detector detects.
+
+    This depends on no file in the repo, so it cannot go vacuous when the corpus
+    is clean — which is the whole point of running it before judging the corpus.
+    """
+    rows = extract_definitions(SELF_TEST_REGISTRY)
+    if rows != set(range(1, 13)):
+        raise CheckerError("self-test: registry parsed as %s, expected 1..12" % sorted(rows))
+    cited = set()
+    for line in SELF_TEST_PROSE.split("\n"):
+        for m in CITE_ANCHOR.finditer(line):
+            cited.add(int(m.group(1)))
+            end = m.end()
+            while True:
+                c = CITE_CONT.match(line[end:])
+                if not c:
+                    break
+                cited.add(int(c.group(1)))
+                end += c.end()
+    if sorted(cited - rows) != [28, 29, 99]:
+        raise CheckerError(
+            "self-test: unresolved set is %s, expected [28, 29, 99] — the extractor "
+            "is over- or under-matching" % sorted(cited - rows))
+    if not {7, 8, 10, 12} <= cited:
+        raise CheckerError("self-test: failed to find the resolvable citations")
+    if verbose:
+        print("check-citations: self-test OK — the detector reports #28/#29/#99 "
+              "unresolved, ignores the row-number column, and ignores other registries.")
+
+
+def main(argv):
+    repo = DEFAULT_REPO
+    try:
+        if "--repo" in argv:
+            i = argv.index("--repo") + 1
+            if i >= len(argv):
+                raise CheckerError("--repo requires a path argument")
+            repo = argv[i]
+        if "--self-test" in argv:
+            self_test()
+            return 0
+        self_test(verbose=False)
+        srcs = distribution(repo)
+        rows = extract_definitions(read(os.path.join(repo, REGISTRY_FILE)))
+        guard_registry(rows)
+        found = citations(repo, srcs)
+        guard_scan(found)
+    except CheckerError as exc:
+        sys.stderr.write("check-citations: GUARD FAIL — %s\n" % exc)
+        return 2
+
+    bad = [(s, l, n) for s, l, n in found if n not in rows]
+    if bad:
+        sys.stderr.write(
+            "check-citations: FAIL — %d unresolved `Learning #N` citation(s) in the "
+            "distributed corpus (the table defines 1..%d):\n" % (len(bad), max(rows)))
+        for src, lineno, n in bad:
+            sys.stderr.write("  %s:%d  ->  Learning #%d\n" % (src, lineno, n))
+        sys.stderr.write(
+            "Adopters receive these files via bin/sync and can reach no Learnings table\n"
+            "but the one in %s. Either append the row, or rewrite the\n"
+            "citation so it carries its own content and cites only what a reader of\n"
+            "this corpus can open.\n" % REGISTRY_FILE)
+        return 1
+
+    print("check-citations: OK — %d `Learning #N` citation(s) across %d distributed "
+          "file(s) all resolve against the %d-row table in %s."
+          % (len(found), len({s for s, _l, _n in found}), len(rows), REGISTRY_FILE))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

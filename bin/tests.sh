@@ -406,6 +406,79 @@ F="$(mktemp)"
 "$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && pass "prose outside the fenced block does not trigger the lint (block isolation)" || fail "block isolation: outside prose leaked into the check"
 rm -f "$F"
 
+echo "== Test 23: check-citations — every \`Learning #N\` in the distributed corpus resolves (RED-first, Learning #12) =="
+# The invariant is a relation between two enumerable sets — the Learnings table's
+# row numbers and the citations of them in bin/_manifest.py-distributed files — so
+# per Learning #12 it is an assertion, not a review-time grep. Fixtures are copies:
+# nothing here writes to the repo under test (issue #36's rule).
+
+# The positive control runs first and depends on no repo file, so a clean corpus
+# can never make this test vacuous.
+"$BIN/check-citations" --self-test >/dev/null 2>&1 && pass "check-citations self-test: the detector detects" || fail "check-citations self-test failed — the extractor is broken"
+
+"$BIN/check-citations" >/dev/null 2>&1 && pass "every \`Learning #N\` citation in the distributed corpus resolves" || fail "unresolved \`Learning #N\` citation(s) — run bin/check-citations"
+
+# A fixture copy in the canonical layout, so guards can be tripped without
+# mutating the repo. Only the files the checker reads need to be present.
+cite_fixture() {
+    local dir; dir="$(mktemp -d)"
+    mkdir -p "$dir/bin" "$dir/starter-kit" "$dir/workstreams"
+    cp "$BIN/_manifest.py" "$dir/bin/" 2>/dev/null
+    local src
+    while IFS= read -r src; do
+        mkdir -p "$dir/$(dirname "$src")"
+        cp "$METHODOLOGY/$src" "$dir/$src" 2>/dev/null
+    done < <(python3 -c "
+import sys; sys.path.insert(0, '$BIN')
+import _manifest
+for s, _d, _x in _manifest.DISTRIBUTION: print(s)
+")
+    echo "$dir"
+}
+
+# Fixture control, and it is load-bearing: the three exit-2 guard assertions below
+# would pass for the WRONG reason if cite_fixture silently produced an unreadable
+# tree (a broken fixture also exits 2). Prove an UNMUTATED fixture is clean first,
+# so those guards are known to be responding to the mutation and nothing else.
+D="$(cite_fixture)"
+"$BIN/check-citations" --repo "$D" >/dev/null 2>&1
+[ "$?" = "0" ] && pass "an unmutated fixture is clean (the guard assertions below are not vacuous)" || fail "cite_fixture is broken — every guard assertion below would pass for the wrong reason"
+rm -rf "$D"
+
+# RED control: an injected citation with no row must be caught, and must exit 1
+# (corpus defect) — never 2 (checker defect). A test that has never been seen to
+# fail is not evidence.
+D="$(cite_fixture)"
+printf '\nA stray reference to Learning #99 that resolves to nothing.\n' >> "$D/workstreams/DEVELOPMENT_WORKSTREAM.md"
+"$BIN/check-citations" --repo "$D" >/dev/null 2>&1
+[ "$?" = "1" ] && pass "an injected unresolvable citation is caught (exit 1)" || fail "injected Learning #99 was NOT caught — the assertion is vacuous"
+rm -rf "$D"
+
+# Guard-the-guard 1: if the registry heading is renamed, the table would parse to
+# zero rows and EVERY citation would falsely "resolve". That must be exit 2.
+D="$(cite_fixture)"
+sed 's/^## Learnings (added by sessions)/## Learnings RENAMED/' "$D/starter-kit/SESSION_RUNNER.md" > "$D/tmp" && mv "$D/tmp" "$D/starter-kit/SESSION_RUNNER.md"
+"$BIN/check-citations" --repo "$D" >/dev/null 2>&1
+[ "$?" = "2" ] && pass "a renamed Learnings heading trips the guard (exit 2), not a false pass" || fail "renamed heading did not trip the registry guard"
+rm -rf "$D"
+
+# Guard-the-guard 2: if the citation extractor stops matching, an empty result set
+# passes vacuously. The floor must catch that, and as a checker defect (exit 2).
+D="$(cite_fixture)"
+for f in starter-kit/SESSION_RUNNER.md starter-kit/RECOMMENDED_SKILLS.md workstreams/AUDIT_WORKSTREAM.md ITERATIVE_METHODOLOGY.md; do
+    [ -f "$D/$f" ] && { sed 's/Learnings\{0,1\} #/Lrn #/g' "$D/$f" > "$D/tmp" && mv "$D/tmp" "$D/$f"; }
+done
+"$BIN/check-citations" --repo "$D" >/dev/null 2>&1
+[ "$?" = "2" ] && pass "a broken extractor trips the vacuity floor (exit 2), not a false pass" || fail "zero citations did not trip the scan floor"
+rm -rf "$D"
+
+# The registry is append-only, so a hole means the parser lost rows — also exit 2.
+D="$(cite_fixture)"
+sed '/^| 7 | \*\*Cross-reference completeness at self-review/d' "$D/starter-kit/SESSION_RUNNER.md" > "$D/tmp" && mv "$D/tmp" "$D/starter-kit/SESSION_RUNNER.md"
+"$BIN/check-citations" --repo "$D" >/dev/null 2>&1
+[ "$?" = "2" ] && pass "a hole in the Learnings table trips the contiguity guard (exit 2)" || fail "a missing Learnings row did not trip the contiguity guard"
+rm -rf "$D"
+
 echo ""
 echo "== Summary: $PASS passed, $FAIL failed =="
 [ "$FAIL" = "0" ]

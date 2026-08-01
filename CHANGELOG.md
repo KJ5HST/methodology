@@ -61,6 +61,36 @@ repository — so every adopter has been carrying pointers that resolve to nothi
   that the linked audit argues from another instance's numbers, so a reader following the index's own
   link does not land back in the defect. The audit itself keeps its original wording as a dated
   record. **No Learnings row was added and none was edited** (the table is append-only).
+- **Mechanized, per Learning #12** — the invariant is a relation between two enumerable sets, so it
+  is an assertion rather than another review-time grep: new canonical-only **`bin/check-citations`**
+  (not in `bin/_manifest.py`; adopters receive the corrected files, not the tool) plus **Test 23** in
+  `bin/tests.sh` (**84 → 91**). Scoped to the distributed corpus, which is exactly the population for
+  which "the reader cannot reach the source" is true. Compound-aware: `Learnings #28/#29` is *two*
+  citations, and a naive `Learning #\d+` grep drops the trailing member of every compound form.
+  Exit **1** is a corpus defect, **2** a checker defect, so a guard trip can never be misread as a
+  finding.
+- **Driven RED first, and the guards were driven RED too.** Against the unpatched corpus the checker
+  reported exactly 6 findings across the 5 sites. A corpus-independent self-test runs before every
+  invocation, so a clean corpus cannot make the test vacuous; an injected `Learning #99`, a renamed
+  registry heading, a broken extractor and a hole in the table were each observed to trip. Mutation
+  testing of the *fixture* then caught a real defect in the checker itself: a missing registry file
+  raised an uncaught `OSError` and exited **1**, indistinguishable from a corpus finding. Fixed, and
+  a fixture control now fails loudly rather than letting the guard assertions pass for the wrong
+  reason.
+- **Honest ceiling.** The checker proves *referents*, never truth. "There is no length rule here to
+  trade against" carries no `#N` token, so if a future release adds one, the claim silently becomes
+  false and the suite stays green. That falls back to Learning #7's grep — the human step Learning
+  #12 says stops happening. Each such claim is therefore worded as a scope statement placed next to
+  the rule that would have to change. It also does not cover the Learnings table's *shape*: a
+  duplicate row number or a malformed row still passes, and only a **hole** is caught.
+- `bin/check-links` moves **82 → 85** (three new cross-references, all resolving in the adopter
+  layout) — a count change, not a regression.
+- **Commit/PR:** this branch · **Session:** BL-10 · **Model:** Claude Opus 5 (1M context), with a
+  12-agent design/adversarial-review workflow (5 discovery lenses → 3 candidate strategies →
+  synthesis → 3 verify lenses); every load-bearing claim re-derived from `git` before use.
+- **Verified:** `bin/tests.sh` **91/91** · `bin/check-citations` OK (15 citations / 3 files /
+  13-row table) · `bin/check-links` OK (85 links / 21 files) · no `Learning #N` above 13 anywhere in
+  the distributed corpus · no brand token introduced into a brand-neutral file.
 
 ---
 

@@ -207,6 +207,7 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 │   ├── status                        ← Report drift of synced files across projects
 │   ├── check-links                   ← Validate relative links resolve in the adopter layout
 │   ├── check-handoff                 ← Validate a close-out receipt's structure (canonical-only)
+│   ├── check-citations               ← Assert every `Learning #N` citation resolves (canonical-only)
 │   ├── _manifest.py                  ← Shared (src, dest, disposition) manifest — single source of truth
 │   └── tests.sh                      ← Test suite for the bin/ tooling
 │
