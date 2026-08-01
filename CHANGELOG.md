@@ -32,6 +32,38 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-08-01 · [BL-10] Five dangling `Learning #N` citations removed from the distributed corpus, and the invariant mechanized
+
+Five citations in two `bin/_manifest.py`-**distributed** files pointed at Learnings **#28**, **#29**,
+**#30** and **#34**. The Learnings table ships rows **1–13**. Those four are defined nowhere in this
+repository — so every adopter has been carrying pointers that resolve to nothing since v2.6.
+
+- **Where they came from.** All five trace to `docs/audits/2026-05-02-mattpocock-skills-evaluation.md`
+  (commits `151f743`, `3a497b4`), which was written in **session S438 of a different methodology
+  instance** — one whose own Learnings table ran into the 30s. The numbers were correct there and
+  meaningless here. This is the defect class Learning #13 was just added for, one level out: a
+  citation resolvable only against a source the reader does not have.
+- **Three of the five were worse than dangling — they asserted framework rules that do not exist.**
+  `RECOMMENDED_SKILLS.md:94` rejected `/caveman` because *"the methodology's length discipline
+  (≤150 lines for handoffs)"* covered it; the only `150`-as-handoff-length string in the entire
+  distributed corpus was that line itself. There is no handoff length rule — failure mode #15 names
+  the *thin* handoff as the failure, so the corpus's pressure runs the other way. Likewise
+  `DEVELOPMENT_WORKSTREAM.md:23` routed the reader to `ITERATIVE_METHODOLOGY.md` §Knowledge
+  Accumulation, a section that **does** exist (so `bin/check-links` and every heading check passed)
+  but contains no numbered learnings and nothing about issues. The reader was sent to an *absence*,
+  which is strictly harder to detect than a broken link. Stripping just the numbers would have left
+  unattributed false claims — worse, because no checker can see those.
+- **Change.** Each site is re-grounded on something a reader of this corpus can open: the
+  acceptance-criteria bar at `DEVELOPMENT_WORKSTREAM.md` §Issue Lifecycle transition rule 2, the six
+  Minimum Handoff Requirements and failure mode #15, and §Sub-Agent Dispatch Pattern in
+  `INHERITED_CODEBASE_FAMILIARIZATION_CAMPAIGN.md`. Dispositions are unchanged — every row in
+  "Skills not recommended" stays a rejection. A bridge sentence at `RECOMMENDED_SKILLS.md:83` notes
+  that the linked audit argues from another instance's numbers, so a reader following the index's own
+  link does not land back in the defect. The audit itself keeps its original wording as a dated
+  record. **No Learnings row was added and none was edited** (the table is append-only).
+
+---
+
 ### 2026-07-27 · [ad hoc] New `SESSION_RUNNER.md` Learning #13 — a forward-looking claim has to be computed, not re-read
 
 - **Change:** one row appended to the `starter-kit/SESSION_RUNNER.md` Learnings table (table was
