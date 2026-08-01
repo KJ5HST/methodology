@@ -69,6 +69,28 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   `bin/check-links` OK (82 links / 21 files) · Learnings table parses as contiguous rows 1–13, every
   row 4-column, rows 1–12 byte-unchanged · brand-neutrality grep empty.
 
+### 2026-07-27 · [ad hoc] Released v3.6 — dashboard signal integrity
+
+- **Change:** annotated tag `v3.6` (`23098da`) cut at `d7a482a`, the PR #62 merge commit, plus GitHub
+  Release *"v3.6 — Dashboard signal integrity"*, published 2026-07-27T06:02:04Z. Cite-don't-restate:
+  the full narrative lives in [`CLAUDE.md` §Versioning "v3.6"](CLAUDE.md#versioning).
+- **Unlike the v3.5/v3.4/v3.3 releases, this one had no release-narration commit of its own.** The
+  version bump rode PR #62 itself — `CLAUDE.md`'s "Current version" line, the §Versioning entry, and
+  `README.md` §What's New in v3.6 all landed inside that PR. So the release action reduced to *tag +
+  publish*, leaving **no commit at all**.
+- **Why this entry is four days late — it is the failure mode it records.** A release is precisely the
+  non-commit action failure mode #27 names, and the one class Phase 0 reconcile-on-read **cannot**
+  catch by design: reconcile diffs `git log` against the ledger frontier, and a tag plus a GitHub
+  Release move neither. With no release commit to notice either, nothing in the machinery could have
+  surfaced it. Two consecutive sessions' Orient reported the gap (S3's successor, then the PR #63
+  re-review) and neither was scoped to fix it. Recorded 2026-08-01 by operator direction; dated to the
+  action, not to the recording, so the timeline stays true.
+- **Commit/PR:** no release commit exists (see above); this entry is the record. Tag `v3.6` → `d7a482a`
+  (PR [#62](https://github.com/KJ5HST/methodology/pull/62)).
+- **Session:** S5 · **Verified:** tag confirmed annotated and pointing at `d7a482a`; Release publish
+  timestamp read from the API, not inferred; `bin/tests.sh` 84/84; `bin/check-links` OK (82 links / 21
+  files).
+
 ### 2026-07-26 · [ad hoc] Dashboard signal-integrity campaign lands upstream — the scanner's signals now mean what they say (v3.6)
 - **Change:** the portfolio health scanner's signals are reconciled with what they actually measure,
   closing upstream issues [#59](https://github.com/KJ5HST/methodology/issues/59),
