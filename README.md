@@ -269,6 +269,15 @@ Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during develop
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
 
+### Since v3.6 (unreleased)
+
+Shipped to `main` and distributed by `bin/sync`, but not yet part of a tagged release. These fold into the next release's section when one is cut.
+
+- **New Learning #13** — a forward-looking claim cannot be checked by re-reading a file; it has to be computed. Learning #6 and FM #11 catch claims written from memory and both prescribe "go re-read the file"; a prediction describes a state that does not exist yet, so no file confirms it. Where the answer is computable, compute it — `git merge-tree --write-tree --name-only` lists a merge's conflicting paths without touching a working tree (rmsharp, PR #63).
+- **Phase 3D now carries the writer-side half** — requirements 3 ("what's next") and 5 ("gotchas") are the two that hold predictions, so the rule is stated where a closing session actually reads it. No new requirement; the six are unchanged.
+- **Five citations to Learnings that never existed** — `RECOMMENDED_SKILLS.md` and `DEVELOPMENT_WORKSTREAM.md` cited Learnings #28/#29/#30/#34, carried in from a v2.6 audit that was quoting *rad-con's* project numbering. Each now states its substance instead of a number that resolves to nothing.
+- **No principle, phase, gate, or workstream change; the failure-mode count stays 27.**
+
 ### What's New in v3.6
 
 The **portfolio health scanner's signals now mean what they say.** A multi-session campaign against one root cause — every defect was a *proxy presented as a semantic finding* — resolving upstream issues #59/#60/#61 plus five unfiled defects. `DASHBOARD_VERSION` **2.8.0 → 2.10.2**; unit suite **29 → 197**.

@@ -32,6 +32,47 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-08-01 · [ad hoc] Discharged the three documentation follow-ons from the Learning #13 cycle
+
+- **Change:** three independent fixes, operator-directed in one run, as three checkpoint commits —
+  `15ccb38` (citations) · `faf42fb` (Phase 3D) · `f85a324`'s successor for the README. **Recorded as
+  bundling, not as a vertical slice:** three capabilities with no prior plan-mode contract does not pass
+  the failure-mode-#26 slice test, and calling it one would be the failure mode wearing a costume.
+- **(1) Five citations pointed at Learnings that do not exist.** `starter-kit/RECOMMENDED_SKILLS.md` and
+  `workstreams/DEVELOPMENT_WORKSTREAM.md` cited Learnings **#28/#29/#30/#34** against a canonical table
+  of 1–13, and one sent the reader to *"Learning #30 (in `ITERATIVE_METHODOLOGY.md` §Knowledge
+  Accumulation)"* — a section holding no numbered learnings at all. **Root cause, traced not guessed:**
+  all five descend from `docs/audits/2026-05-02-mattpocock-skills-evaluation.md`, which cites **rad-con's**
+  project Learnings by that project's own numbering (`"Learning #30 (rad-con UDP issue batch, S357…)"`);
+  v2.6 distilled the audit into the distributed corpus and the numbers came along without their referent.
+  Each site now states the substance the number stood for, so the text stands alone in the single-repo
+  install where these files actually land. The audit doc is deliberately untouched — dated record prose,
+  canonical-only, and correct about rad-con (v2.7.1 precedent).
+- **(2) Learning #13's writer-side duty now reaches Phase 3D.** The duty ("derive it or label it a
+  guess") lived only in the Learnings table, so a session following the operative close-out checklist
+  never met it — **Learning #8** exactly. Added as prose on requirements 3 and 5, the two that actually
+  carry predictions. **Deliberately not a seventh row:** seven live count-claims depend on the
+  requirements being six (`SESSION_RUNNER.md:254`/`:256`/`:258`, `HOW_TO_USE.md:764`/`:791`,
+  `ITERATIVE_METHODOLOGY.md:293`/`:523`) and `bin/check-handoff` maps the six onto receipt fields, so a
+  seventh would imply a seventh `REQUIRED_KEY` and invalidate every receipt already written. The
+  paragraph adds no requirement; it constrains how two of the six are written, and says so.
+- **(3) `README.md` §What's New no longer lags the shipped table.** Learning #13 shipped with no version
+  event (operator decision), which would have left the public restatement describing the corpus through
+  #12 while `bin/sync` distributed 13 — breaking a 6-for-6 pattern (#7–#12 each have a bullet). New
+  **`### Since v3.6 (unreleased)`** section rather than an invented version number; it states that it
+  folds into the next release's section when one is cut. Pattern is now 7-for-7.
+- **Verified at each of the three boundaries, not once at the end:** `bin/tests.sh` 84/84 and
+  `bin/check-links` OK after every checkpoint (82 → **83** links, the one added relative link resolving
+  in adopter layout per the v2.8 convention). Post-fix sweeps: no `Learning #N` with N > 13 survives in
+  `starter-kit/` or `workstreams/`; the requirements table is still exactly 6 rows; `REQUIRED_KEYS` still
+  13; the Learnings table still 1–13; all seven count-claims re-checked and still true.
+- **Distribution:** `SESSION_RUNNER.md`, `RECOMMENDED_SKILLS.md` and `DEVELOPMENT_WORKSTREAM.md` are
+  `bin/_manifest.py`-**TRACKED**, so adopters receive (1) and (2) via `bin/sync`; `README.md` is
+  canonical-only, so (3) is not distributed.
+- **Session:** S8 · **No principle, phase, gate, or workstream change; the failure-mode count stays 27**,
+  and the Learnings table is deliberately unchanged — **#14 is reserved** by the operator-gated-review
+  plan's decision D3.
+
 ### 2026-08-01 · [ad hoc] Opened issue #65 — the repo's own numbered sets have no structural test
 
 - **Action:** filed [issue #65](https://github.com/KJ5HST/methodology/issues/65). No code or doc change;
