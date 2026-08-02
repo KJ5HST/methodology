@@ -206,7 +206,8 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 │   ├── sync                          ← Copy starter-kit files into a project (dual-mode, dual-source)
 │   ├── status                        ← Report drift of synced files across projects
 │   ├── check-links                   ← Validate relative links resolve in the adopter layout
-│   ├── check-handoff                 ← Validate a close-out receipt's structure (canonical-only)
+│   ├── check-handoff                 ← Validate close-out receipts — newest, or --all (canonical-only)
+│   ├── check-learnings               ← Validate the Learnings table + its citations (canonical-only)
 │   ├── _manifest.py                  ← Shared (src, dest, disposition) manifest — single source of truth
 │   └── tests.sh                      ← Test suite for the bin/ tooling
 │
@@ -276,6 +277,7 @@ Shipped to `main` and distributed by `bin/sync`, but not yet part of a tagged re
 - **New Learning #13** — a forward-looking claim cannot be checked by re-reading a file; it has to be computed. Learning #6 and FM #11 catch claims written from memory and both prescribe "go re-read the file"; a prediction describes a state that does not exist yet, so no file confirms it. Where the answer is computable, compute it — `git merge-tree --write-tree --name-only` lists a merge's conflicting paths without touching a working tree (rmsharp, PR #63).
 - **Phase 3D now carries the writer-side half** — requirements 3 ("what's next") and 5 ("gotchas") are the two that hold predictions, so the rule is stated where a closing session actually reads it. No new requirement; the six are unchanged.
 - **Five citations to Learnings that never existed** — `RECOMMENDED_SKILLS.md` and `DEVELOPMENT_WORKSTREAM.md` cited Learnings #28/#29/#30/#34, carried in from a v2.6 audit that was quoting *rad-con's* project numbering. Each now states its substance instead of a number that resolves to nothing.
+- **The repo's own numbered sets now have tests** (issue [#65](https://github.com/KJ5HST/methodology/issues/65)) — Learning #12 applied to the files Learning #12 lives in. A Learning row could be renumbered, duplicated, malformed, or deleted, and an older `HANDOFFS.md` receipt destroyed outright, with every check still green. New **`bin/check-learnings`** asserts the table is contiguous from 1, four columns, one row per line, and that every `Learning #N` cited in the distributed corpus resolves; **`bin/check-handoff --all`** extends the checker past its newest-only blind spot to every receipt, plus fence balance, orphaned bodies, and unique session ids. Suite **84 → 99**. *Canonical-only — these guard this repo's corpus, not an adopter's, so `bin/sync` ships nothing new.*
 - **No principle, phase, gate, or workstream change; the failure-mode count stays 27.**
 
 ### What's New in v3.6

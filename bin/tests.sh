@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Smoke tests for bin/sync and bin/status.
+# Smoke tests for the bin/ tooling: sync, status, check-links, check-handoff,
+# check-learnings.
 # Run: ./bin/tests.sh  (from methodology repo root)
 set -uo pipefail
 
@@ -404,6 +405,148 @@ F="$(mktemp)"
     good_handoff
 } > "$F"
 "$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && pass "prose outside the fenced block does not trigger the lint (block isolation)" || fail "block isolation: outside prose leaked into the check"
+rm -f "$F"
+
+
+# ---------------------------------------------------------------------------
+# Tests 23-25 — structural invariants for the repo's OWN numbered sets (issue #65).
+#
+# Learning #12 pointed at the files Learning #12 lives in: before these, a Learning
+# row could be renumbered, duplicated, malformed or deleted, and an older handoff
+# receipt destroyed outright, with the whole suite still green.
+#
+# Every mutation below is driven RED first (issue #65 makes that precondition
+# non-negotiable) AND guarded against vacuity: `mutate` aborts if the edit did not
+# change the file, because a fixture that silently fails to break anything is a test
+# that proves nothing. Two mutations were caught being vacuous exactly this way while
+# these tests were written.
+# ---------------------------------------------------------------------------
+
+# mutate SRC DST PY — apply a python transform, failing loudly if it is a no-op.
+mutate() {
+    python3 - "$1" "$2" "$3" <<'PY'
+import sys
+src, dst, expr = sys.argv[1], sys.argv[2], sys.argv[3]
+s = open(src, encoding="utf-8").read()
+new = eval(expr, {"s": s, "re": __import__("re")})
+if new == s:
+    sys.stderr.write("MUTATION VACUOUS: %s\n" % expr)
+    sys.exit(2)
+open(dst, "w", encoding="utf-8").write(new)
+PY
+}
+
+echo "== Test 23: check-learnings — Learnings table shape (issue #65 Evidence A) =="
+RUNNER="$STARTER/SESSION_RUNNER.md"
+F="$(mktemp)"
+
+# Presence control: the real table must pass, or every RED below is meaningless.
+"$BIN/check-learnings" --file "$RUNNER" --no-citations >/dev/null 2>&1 \
+    && pass "canonical Learnings table passes (presence control)" \
+    || fail "canonical Learnings table should pass"
+
+# The canonical table and the citation sweep together, against the live corpus.
+"$BIN/check-learnings" >/dev/null 2>&1 \
+    && pass "canonical table + distributed-corpus citations all resolve" \
+    || fail "canonical citation sweep should pass"
+
+# A malformed 3-column row. Anchored on the LEARNINGS row 13, not the bare string
+# "| 13 |" — SESSION_RUNNER.md has a second numbered table whose row 13 comes first,
+# and anchoring there mutates the wrong set and proves nothing (this happened).
+if mutate "$RUNNER" "$F" 's.replace("| 13 | **A forward-looking", "| 14 | three | columns |\n| 13 | **A forward-looking", 1)'; then
+    "$BIN/check-learnings" --file "$F" --no-citations >/dev/null 2>&1 \
+        && fail "malformed 3-column row not caught" || pass "malformed 3-column row caught"
+else fail "3-column mutation was vacuous"; fi
+
+# Renumbering row 13 to a duplicate 12 — the regression CLAUDE.md forbids outright.
+if mutate "$RUNNER" "$F" 's.replace("| 13 | **A forward-looking", "| 12 | **A forward-looking", 1)'; then
+    "$BIN/check-learnings" --file "$F" --no-citations >/dev/null 2>&1 \
+        && fail "duplicate row number not caught" || pass "duplicate row number caught"
+else fail "duplicate-number mutation was vacuous"; fi
+
+# Deleting a row outright — leaves a gap in the numbering. Anchored on Learning
+# #11's own text: a bare "^| 11 |" matches the OTHER numbered table first (line ~313),
+# which mutates the wrong set. That mutation is not vacuous — it really does change
+# the file — so the vacuity guard cannot catch it. A wrong-target mutation is the
+# second failure mode, and only the RED run exposes it.
+if mutate "$RUNNER" "$F" 're.sub(r"(?m)^\| 11 \| \*\*Heterogeneous.*\n", "", s, count=1)'; then
+    "$BIN/check-learnings" --file "$F" --no-citations >/dev/null 2>&1 \
+        && fail "deleted row (numbering gap) not caught" || pass "deleted row (numbering gap) caught"
+else fail "row-deletion mutation was vacuous"; fi
+
+# A row wrapped onto a second physical line.
+if mutate "$RUNNER" "$F" 's.replace("mechanical, encode it as a test", "mechanical,\nencode it as a test", 1)'; then
+    "$BIN/check-learnings" --file "$F" --no-citations >/dev/null 2>&1 \
+        && fail "row split across two physical lines not caught" || pass "row split across two physical lines caught"
+else fail "line-wrap mutation was vacuous"; fi
+rm -f "$F"
+
+echo "== Test 24: check-learnings — citations into the distributed corpus resolve =="
+# A distributed file citing a Learning that does not exist. Uses a scratch COPY of
+# the corpus file so the real tree is never mutated; the sweep reads the live repo,
+# so the assertion runs against a temporarily-modified working file and restores it.
+SAFE="$STARTER/SAFEGUARDS.md"
+BAK="$(mktemp)"
+cp "$SAFE" "$BAK"
+if mutate "$SAFE" "$SAFE" 's.replace("## Commit Discipline", "## Commit Discipline\n\nSee Learning #4242 for background.\n", 1)'; then
+    "$BIN/check-learnings" >/dev/null 2>&1 \
+        && fail "dangling Learning citation in a distributed file not caught" \
+        || pass "dangling Learning citation in a distributed file caught"
+else fail "dangling-citation mutation was vacuous"; fi
+cp "$BAK" "$SAFE"; rm -f "$BAK"
+# Restoration control: the tree must be clean again, or the test poisoned the repo.
+"$BIN/check-learnings" >/dev/null 2>&1 \
+    && pass "corpus restored after the citation mutation" \
+    || fail "citation mutation left the corpus dirty"
+
+echo "== Test 25: check-handoff --all — whole-ledger invariants (issue #65 Evidence B) =="
+LEDGER="$METHODOLOGY/HANDOFFS.md"
+F="$(mktemp)"
+
+if [ -f "$LEDGER" ]; then
+    # Presence control. --allow-pending because a session in flight legitimately has
+    # a Phase 1B stub as its newest receipt; older ones must still be closed.
+    "$BIN/check-handoff" --file "$LEDGER" --all --allow-pending >/dev/null 2>&1 \
+        && pass "live receipt ledger passes --all (presence control)" \
+        || fail "live receipt ledger should pass --all"
+
+    # Evidence B: strip an older receipt's opening fence + its session/date lines.
+    # The default newest-only mode reports OK on this file — that IS the blind spot.
+    if mutate "$LEDGER" "$F" 're.sub(r"```handoff\nsession: S7\ndate: [0-9-]+\n", "", s, count=1)'; then
+        "$BIN/check-handoff" --file "$F" --allow-pending >/dev/null 2>&1 \
+            && pass "default mode still green on a destroyed older receipt (documents the gap)" \
+            || fail "default mode unexpectedly changed behaviour"
+        "$BIN/check-handoff" --file "$F" --all --allow-pending >/dev/null 2>&1 \
+            && fail "orphaned receipt body not caught by --all" || pass "orphaned receipt body caught by --all"
+    else fail "orphaned-receipt mutation was vacuous"; fi
+
+    # Duplicate session id.
+    if mutate "$LEDGER" "$F" 's.replace("session: S7", "session: S8", 1)'; then
+        "$BIN/check-handoff" --file "$F" --all --allow-pending >/dev/null 2>&1 \
+            && fail "duplicate session id not caught" || pass "duplicate session id caught"
+    else fail "duplicate-session mutation was vacuous"; fi
+
+    # session:/date: must lead every block.
+    if mutate "$LEDGER" "$F" 're.sub(r"session: S7\ndate: ([0-9-]+)\nstatus: complete", r"status: complete\nsession: S7\ndate: \1", s, count=1)'; then
+        "$BIN/check-handoff" --file "$F" --all --allow-pending >/dev/null 2>&1 \
+            && fail "session/date not leading a block was not caught" || pass "session/date must lead every block"
+    else fail "key-order mutation was vacuous"; fi
+
+    # An OLDER receipt left pending — --allow-pending exempts only the newest.
+    if mutate "$LEDGER" "$F" 're.sub(r"(session: S7\ndate: [0-9-]+\n)status: complete", r"\1status: pending", s, count=1)'; then
+        "$BIN/check-handoff" --file "$F" --all --allow-pending >/dev/null 2>&1 \
+            && fail "older pending receipt not caught (--allow-pending over-applied)" \
+            || pass "older pending receipt caught; --allow-pending exempts only the newest"
+    else fail "older-pending mutation was vacuous"; fi
+
+    # An unclosed fence.
+    if mutate "$LEDGER" "$F" 's[:s.rindex("```")] + s[s.rindex("```")+3:]'; then
+        "$BIN/check-handoff" --file "$F" --all --allow-pending >/dev/null 2>&1 \
+            && fail "unclosed fence not caught" || pass "unclosed fence caught"
+    else fail "unclosed-fence mutation was vacuous"; fi
+else
+    pass "no root HANDOFFS.md in this repo — --all ledger tests not applicable"
+fi
 rm -f "$F"
 
 echo ""

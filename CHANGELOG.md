@@ -35,6 +35,52 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-08-02 · [issue #65] The repo's own numbered sets now have structural tests
+
+- **Change:** implements [issue #65](https://github.com/KJ5HST/methodology/issues/65) — Learning #12
+  ("when an invariant is mechanical, encode it as a test") applied to the two records the framework's
+  own guarantees rest on. Before this, a Learning row could be **renumbered** (which `CLAUDE.md`
+  forbids outright), duplicated, malformed, or deleted, and an older `HANDOFFS.md` receipt destroyed
+  outright, with `bin/tests.sh` still reporting green. Suite **84 → 99**.
+- **New `bin/check-learnings`** — asserts the `starter-kit/SESSION_RUNNER.md` Learnings table is
+  contiguous from 1 with no gaps or duplicates, every row exactly 4 columns, every row one physical
+  line; then sweeps the **distributed corpus** (`bin/_manifest.py`, 21 markdown files) so every
+  `Learning #N` citation resolves to a row that exists — the defect S8 fixed by hand the day before.
+  The sweep deliberately **excludes** `docs/audits/`, `docs/planning/`, `README.md` and this ledger:
+  those legitimately cite *other projects'* numbering or name bad numbers as the defect being
+  described, so sweeping them would manufacture findings against correct prose.
+- **`bin/check-handoff --all`** — the checker validated only the **newest** receipt, so a mangled
+  older block reported green forever. `--all` validates every block and adds the ledger-level
+  invariants: fences balance, no receipt body stranded outside a fence, `session:`/`date:` lead every
+  block, session ids unique. The default stays newest-only for the close-out fast path.
+- **`--allow-pending` now narrows to the newest block, and relaxes a pending stub to its four
+  honest keys.** A Phase 1B claim is *by definition* incomplete, yet the checker demanded all 13 keys,
+  so a correct stub reported red for a whole session (S5 documented this friction) and the
+  whole-ledger mode was unusable as a live check. An **older** receipt left pending is still caught —
+  that is a session that never closed out. The close-out gate is untouched: at Phase 3D `status` is
+  `complete` and all 13 keys are demanded.
+- **RED-first, and it earned its keep — two mutations were caught proving nothing.** Issue #65 makes
+  the precondition non-negotiable, and it immediately paid: (1) the malformed-row mutation anchored on
+  the bare string `"| 13 |"`, which matches a **different numbered table** earlier in
+  `SESSION_RUNNER.md` — the file has more than one — so it mutated the wrong set and the checker was
+  *correct* to pass; (2) a citation mutation replaced the literal `Learning #7`, which does not occur
+  (the real text is the plural `Learnings #7/#8`), so it silently changed nothing. Both are now
+  guarded: `mutate` **aborts if the edit is a no-op**, and each anchor is pinned to text unique to the
+  set under test. The vacuity guard alone is *not sufficient* — defect (1) really did change the file,
+  just the wrong part of it, and only running RED exposed that.
+- **Known limit, stated rather than papered over:** the citation regex does not span a parenthetical
+  (`Learnings #7 (…) and #8` yields only `#7`). That is an under-detection — the checker never invents
+  a finding, so a form it cannot parse is simply unchecked, never falsely flagged.
+- **Commit/PR:** this commit. **Canonical-only** — `bin/check-learnings` is deliberately **not** in
+  `bin/_manifest.py` (same class as `check-handoff` and `check-links`), so `bin/sync` ships adopters
+  nothing new; this guards *this* repo's corpus, which is also the honest limit.
+- **Session:** S9 · **Verified:** `bin/tests.sh` **99 passed / 0 failed**; `bin/check-links` OK (83
+  links / 21 files); `bin/check-learnings` OK (13 rows, all citations resolve); `bin/check-handoff`
+  OK both default and `--all` (7 receipts, fences balanced, ids unique); dashboard twins still
+  byte-identical; `bin/_manifest.py` unchanged. No Learnings row appended — **#14 is reserved** by the
+  unpushed `docs/operator-gated-review-plan` branch's decision D3, and the new checker would now catch
+  that collision.
+
 ### 2026-08-02 · [ad hoc] Removed the Codex `AGENTS.md`; corrected four cross-repo citations that described the fork as "this repo"
 
 - **Change:** operator-directed cleanup preceding the issue #65 work, in two parts. Recorded as one
