@@ -8,6 +8,15 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S9
+date: 2026-08-02
+status: pending
+active_task: Operator-directed, three items in the order given — (1) delete the untracked Codex `AGENTS.md`, (2) clean up the `docs/planning` citation residue, (3) implement issue #65 (structural tests for the Learnings table and the HANDOFFS receipt ledger). THREE SEPARATE DELIVERABLES BUNDLED BY OPERATOR DIRECTION — this is NOT a vertical slice and does not pass the failure-mode-#26 slice test (three capabilities, no prior plan-mode contract). Recorded as bundling rather than mislabelled, per the S8 precedent; mitigated by one independently-verified checkpoint commit per item. Item 3 carries a non-negotiable RED-first precondition (Learning #12).
+```
+
+---
+
+```handoff
 session: S8
 date: 2026-08-01
 status: complete
