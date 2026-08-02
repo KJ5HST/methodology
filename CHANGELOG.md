@@ -14,10 +14,13 @@ the reusable seed, live in [`starter-kit/CHANGELOG.md`](starter-kit/CHANGELOG.md
 **Source tag — exactly one per entry**, so `grep -E '\[(issue #|BL-|ad hoc)' CHANGELOG.md`
 enumerates every logged action and proves all three sources landed:
 
-- `[issue #<N>]` — a repository issue. Issues for this repo live in the **upstream** parent
-  `KJ5HST/methodology` (this fork has Issues disabled), so entries cite an **absolute URL**, never
-  a bare `#<N>`.
-- `[BL-<N>]` — a `docs/planning/BACKLOG.md` item, removed from the backlog in the same commit.
+- `[issue #<N>]` — a repository issue. Issues live in `KJ5HST/methodology`; the fork
+  `rmsharp/methodology` has Issues disabled, so entries — authored from either side — cite an
+  **absolute URL**, never a bare `#<N>`, and resolve identically from both.
+- `[BL-<N>]` — a backlog item, removed from the backlog in the same commit. That backlog is
+  [`docs/planning/BACKLOG.md`](https://github.com/rmsharp/methodology/blob/main/docs/planning/BACKLOG.md)
+  on fork `main` only — **this repo has no `docs/planning/BACKLOG.md`** — so a `[BL-<N>]` entry here
+  records work whose origin lives in the fork.
 - `[ad hoc]` — work with no backlog or issue origin: releases, tag/branch ops, PR opens, upstream
   issue closes, access grants, and decline/wontfix/grooming decisions.
 
@@ -31,6 +34,46 @@ otherwise has no home but raw `git log`. Where the two overlap — a release —
 Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sections as it grows.
 
 ---
+
+### 2026-08-02 · [ad hoc] Removed the Codex `AGENTS.md`; corrected four cross-repo citations that described the fork as "this repo"
+
+- **Change:** operator-directed cleanup preceding the issue #65 work, in two parts. Recorded as one
+  entry because both parts share a root cause — **text written from one repository's vantage, landing
+  in another's** — and neither has a backlog or issue origin.
+- **(1) The Codex `AGENTS.md` is deleted — and its deletion leaves no commit.** An untracked 116-line
+  `AGENTS.md` had sat at the repo root since 2026-07-22 across at least four sessions, named in no
+  receipt, no ledger entry, and no `README`. It was a **mechanical find-and-replace of `CLAUDE.md`**
+  (`Claude`→`Codex`, `CLAUDE.md`→`AGENTS.md`, `claude.ai/code`→`Codex.ai/code`), applied blind across a
+  file that is mostly *dated release narration* — so it falsified records: its v2.7.1 entry claimed the
+  cross-doc split v2.7.1 fixed was between "`SESSION_RUNNER.md`/`AGENTS.md`", and its v2.7.2 entry
+  credited agent-level memory to "Codex's auto-memory" where the original names Claude Code's. It was
+  frozen at **v3.5** while `CLAUDE.md` is at v3.6, so it was also drifting. **Deliberately not
+  gitignored:** an ignored regeneration would stop being reported at Orient, which is worse than an
+  untracked one that gets flagged every session. Because the file was never tracked, removing it
+  produces **zero git diff** — a non-commit action, the exact class failure mode #27 names and Phase 0
+  reconcile-on-read cannot catch by design. This line *is* the only durable record that it happened.
+- **(2) Four citations described the fork as "this repo".** All four reached this repository through
+  fork PRs and were true where they were written: **`CHANGELOG.md`'s own source-tag key** claimed
+  *"Issues for this repo live in the upstream parent `KJ5HST/methodology` (this fork has Issues
+  disabled)"* — but this repository **is** `KJ5HST/methodology`, with Issues enabled (verified:
+  `has_issues=true` here, `false` on `rmsharp/methodology`), so the key misdescribed its own repo; and
+  the `[BL-<N>]` key pointed at a `docs/planning/BACKLOG.md` that has never existed here. The
+  absolute-URL convention is **kept unchanged** — retargeting it would strand every entry already
+  written — only its stated *reason* is corrected. Three `CLAUDE.md` §Versioning citations (v3.1, v3.3,
+  v3.6) and one `CHANGELOG.md` citation (v3.3) named fork-only plans by bare repo-relative path; each is
+  now an absolute fork URL plus an explicit "not present in this repo", matching the convention the
+  v3.1 and v3.6 entries already used. **Every URL was resolved against the API before being written**
+  (Learning #13 — an unresolvable reference is the trap), which is also how the `[BL-<N>]` fix was
+  corrected mid-edit: `BACKLOG.md` is **live** on fork `main`, not retired as this ledger's 2026-07-06
+  entry alone would suggest — it was reopened 07-07 with BL-5, exactly as the 2026-07-07 entry records.
+- **Left verbatim by design:** the dated record prose at `CHANGELOG.md` (the 2026-07-06/07 backlog
+  entries) and the S3/S7 receipts in `HANDOFFS.md` already label their fork references *fork-only* and
+  are frozen records — the v2.7.1 precedent and `README.md:387`. Receipts are never edited after the
+  fact regardless.
+- **Commit/PR:** `3b58abb` (1B claim) · this commit. Part (1) has no commit of its own, by nature.
+- **Session:** S9 · **Verified:** `bin/tests.sh` 84/84, `bin/check-links` OK, and all five cited fork
+  paths resolved via `gh api` (`operator-gated-review-plan.md` was checked too and is **404 — correctly
+  cited nowhere**).
 
 ### 2026-08-01 · [ad hoc] Discharged the three documentation follow-ons from the Learning #13 cycle
 
@@ -291,7 +334,8 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ### 2026-07-08 · [ad hoc] Close-out receipt — durable machine-checkable handoff artifact (shipped in v3.3, PR #52)
 - **Change:** implemented the ratified plan (fork `main`:
-  `docs/planning/close-out-receipt-durable-artifact-plan.md`) as a pre-declared **vertical slice** —
+  [`docs/planning/close-out-receipt-durable-artifact-plan.md`](https://github.com/rmsharp/methodology/blob/main/docs/planning/close-out-receipt-durable-artifact-plan.md))
+  as a pre-declared **vertical slice** —
   one capability, checkpoint commit + verification at each layer boundary. Fixes "agent had to be
   prompted for the close-out report." **P1:** new `starter-kit/HANDOFFS.md` SEED — a
   per-session `handoff`-block receipt ledger (twin of this action ledger) — added to `bin/_manifest.py`
