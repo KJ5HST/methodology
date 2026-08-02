@@ -8,6 +8,24 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S8
+date: 2026-08-01
+status: pending
+self_score: pending
+predecessor_score: pending
+active_task: Operator-directed: discharge all three remaining follow-ons in one run — (1) five dangling `Learning #28/#30/#34` citations in distributed files, (2) Learning #13's writer-side duty never reaching Phase 3D, (3) README §What's New lagging the shipped Learnings table by one row. THREE SEPARATE FIXES BUNDLED BY OPERATOR DIRECTION — this is NOT a vertical slice and does not pass the failure-mode-#26 slice test (three capabilities, no prior plan-mode contract). Recorded as bundling rather than mislabelled; mitigated by one independently-verified checkpoint commit per fix.
+what_was_done: pending
+next_steps: pending
+key_files: starter-kit/RECOMMENDED_SKILLS.md:90 (fix 1), workstreams/DEVELOPMENT_WORKSTREAM.md:23 (fix 1), starter-kit/SESSION_RUNNER.md:254 (fix 2), README.md:272 (fix 3)
+gotchas: FIX 2 MUST NOT ADD A 7TH TABLE ROW — seven live count-claims depend on the six (SESSION_RUNNER.md:254 "items 1-5", :256 heading, :258 "the sixth is self_score"; HOW_TO_USE.md:764, :791; ITERATIVE_METHODOLOGY.md:293, :523) and bin/check-handoff maps the six to receipt fields, so a 7th would imply a 7th REQUIRED_KEY and invalidate every existing receipt. Prose after the table, count unchanged.
+runtime_smoke: pending
+changelog_ref: pending
+commit: pending
+```
+
+---
+
+```handoff
 session: S7
 date: 2026-08-01
 status: complete
