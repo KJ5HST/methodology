@@ -20,7 +20,7 @@ Use this workstream when:
 
 ## Issue Lifecycle
 
-Learning #30 (in `ITERATIVE_METHODOLOGY.md` §Knowledge Accumulation) covers how to *create* issues. This section covers how to *track* an issue through its life so a future session can tell at a glance whether it is pickup-able.
+This section covers how to *track* an issue through its life so a future session can tell at a glance whether it is pickup-able. For how to *create* a batch of issues well, see §When to Bulk-Triage below.
 
 ### Five Canonical States
 
@@ -53,7 +53,7 @@ This is **recommended**, not mandated — apply it when the triage is non-trivia
 
 ### When to Bulk-Triage
 
-A repository with >20 `needs-triage` issues warrants a dedicated triage session run with Learning #30 batch discipline (table-first, decisions-first, parallel application). A repository with <5 is fine to triage opportunistically.
+A repository with >20 `needs-triage` issues warrants a dedicated triage session run with batch discipline: present the full table **first**, so the operator sees the shape before any decision; batch the decisions, each with a recommendation and its tradeoff; record add-scope decisions in the issue bodies and policy decisions where the agent will read them next session; then apply in parallel and verify the mapping. A repository with <5 is fine to triage opportunistically.
 
 The methodology dashboard currently counts issues but does not score triage health; that is future work, not a current gate. Treat the issue count as a signal of pressure, not a measurement of quality.
 

@@ -87,12 +87,12 @@ The entries below name skills considered during the v2.6 audit (or surfaced afte
 | Skill | Source | Why not cited |
 |---|---|---|
 | `/loop`, `/schedule` | Claude Code built-ins | Orchestration, not engineering. The methodology's phases are sequential and gated; loop/schedule belong above the session, not inside it. |
-| `/to-issues` | Pocock (`engineering/to-issues`) | Covered by Learning #30 (table-first, decisions batch, parallel creation, cross-reference verification). The methodology version is materially more rigorous. |
+| `/to-issues` | Pocock (`engineering/to-issues`) | Covered by the issue-batch discipline in [`DEVELOPMENT_WORKSTREAM.md` §Issue Lifecycle](docs/methodology/workstreams/DEVELOPMENT_WORKSTREAM.md) — table first, decisions batched with a recommendation and tradeoff per question, parallel creation with mapping verification, and a cross-reference appended to the source planning doc. Materially more rigorous than a template. |
 | `/to-prd` | Pocock (`engineering/to-prd`) | Covered by Planning Sessions discipline. `/to-prd` synthesizes what's been discussed; methodology's planning sessions require grep-verified evidence inventories (per FM #19, plan-mode bypass). |
 | `/tdd` | Pocock (`engineering/tdd`) | The vertical-slicing framing is incorporated as FM #25; the red-green-refactor workflow is left to adopter preference. |
 | `/handoff` | Pocock (`productivity/handoff`) | Targets ephemeral single-arc compaction to OS temp; methodology requires repo-versioned cross-session handoff notes scored by the next session (Phase 3D). Different scope, not a substitute. |
-| `/caveman` | Pocock (`productivity/caveman`) | Stylistic compression; the methodology's length discipline (Learning #34: ≤150 lines for handoffs) addresses token reduction without changing voice. |
-| `/zoom-out` | Pocock (`engineering/zoom-out`) | Covered better by Learnings #28/#29 (Plan-subagent architecture surveys with file:line citations). |
+| `/caveman` | Pocock (`productivity/caveman`) | Stylistic compression; the methodology's own handoff length discipline addresses token reduction without changing voice. |
+| `/zoom-out` | Pocock (`engineering/zoom-out`) | A single-prompt context elevation. Covered better by a structured architecture survey — delegated to a planning agent, output as `file:line` citations in a numbered structure — and by gap analysis as a drill-down shape. |
 | `/write-a-skill` | Pocock (`productivity/write-a-skill`) | The methodology doesn't ship its own skills (per the v2.6 principle). Becomes relevant only if that posture changes. |
 | `/prototype` | Pocock (`engineering/prototype`) | Not yet audited (Pocock shipped this after the 2026-05-02 audit). Future-audit candidate. |
 | `/setup-matt-pocock-skills` | Pocock (`engineering/setup-matt-pocock-skills`) | Out of scope — installs Pocock's skills; methodology's `BOOTSTRAP.md` is the equivalent for the methodology framework itself. Different concerns. |
