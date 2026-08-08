@@ -1,0 +1,66 @@
+{
+  "_": "SEED CONFIG — copied to your project root as .context-budget.json on first sync, then yours to own. Every ceiling below is a starting point, not a law. Replace each one with a number you can defend from a measurement of YOUR project, and record the derivation in the neighbouring _ key. Re-derive the calibration with: python3 context_budget.py --calibrate",
+
+  "bytes_per_token": 2.93,
+  "_bytes_per_token": "How many bytes of dense markdown cost one token. 2.93 was calibrated on one project by a natural experiment: a commit moved 156,574 B out of CLAUDE.md and the next session's opening context fell 53,520 tokens. Run --calibrate to derive your own; do not inherit this number if you can measure it.",
+
+  "fixed_harness_tokens": 35700,
+  "_fixed_harness_tokens": "The part of opening context you do NOT control — system prompt, tool schemas, skill listings. Budget your documents as a fraction of this. --calibrate prints it as the regression intercept.",
+
+  "growth_run": 10,
+  "_growth_run": "Consecutive non-shrinking measurements before this warns, INDEPENDENT of absolute size. This is the trigger that matters: the 38-session run that motivated this tool never tripped a ceiling, because every individual step was small. It is also the only check that survives someone raising a ceiling to silence a warning.",
+
+  "calibrate_against": "CLAUDE.md",
+
+  "classes": {
+    "resident": {
+      "total_bytes": 34000,
+      "warn_bytes": 30000,
+      "_": "Everything your harness injects in full before the session starts. 34,000 B / 2.93 = 11,604 tok = about a third of the 35,700-tok fixed floor. If your CLAUDE.md is bigger than this today, do not raise the ceiling to make it green — that records the problem as the standard."
+    }
+  },
+
+  "files": [
+    {
+      "path": "CLAUDE.md",
+      "class": "resident",
+      "max_bytes": 28000,
+      "warn_bytes": 24000,
+      "protected_fence": "budget:protected",
+      "protected_min_bytes": 800,
+      "_": "Auto-loaded in full by Claude Code. Wrap your project's statement of purpose in <!-- budget:protected --> ... <!-- /budget:protected --> and the tool will refuse to let a later compaction remove it. On the project this came from, 32.5% of this file was an index of past failures and 0.5% was what the software is for."
+    },
+    {
+      "path": "SESSION_NOTES.md",
+      "class": "read-mandated",
+      "max_lines": 400,
+      "max_bytes": 120000,
+      "max_line_bytes": 280,
+      "structure": [
+        { "pattern": "^## ACTIVE TASK", "max": 1,
+          "why": "Phase 3D says UPDATE the active task. Sessions read that as ADD one; three had accumulated on the project this came from, at lines 7, 10005 and 10218." },
+        { "pattern": "^## ", "expect_min": 2,
+          "why": "if this matches nothing the file has been restructured and every other check here is silently measuring the wrong thing" }
+      ],
+      "_": "Phase 0 step 2 orders a read of this file. That instruction is only honest while the file is readable. Set max_lines from what your sessions ACTUALLY read, not from what feels tidy — on the source project the median session read 180 of 26,097 lines and the maximum ever was 334, so 400 sits just above the observed ceiling. The per-line cap exists because a line-count ceiling alone just produces longer lines."
+    },
+    {
+      "path": "LEARNINGS.md",
+      "class": "on-demand",
+      "max_bytes": 60000,
+      "_": "Optional — delete this entry if your project keeps learnings in CLAUDE.md per Phase 3C. A file a pointer sends you to open whole still has a budget: on the source project this reached 215,750 B and was measured, across 51 transcripts, to have been opened exactly once."
+    }
+  ],
+
+  "synced": [
+    {
+      "path": "SESSION_RUNNER.md",
+      "canonical": "../methodology/starter-kit/SESSION_RUNNER.md",
+      "_": "Drift-checked, never size-checked — an adopter may not edit this file, so a size finding would be unactionable. Adjust the canonical path to wherever your methodology checkout lives. Zero local edits means `git diff` in your project shows nothing, so drift is otherwise invisible: on the source project both synced files were 13 and 2 commits behind for 48 days without anyone noticing."
+    },
+    {
+      "path": "SAFEGUARDS.md",
+      "canonical": "../methodology/starter-kit/SAFEGUARDS.md"
+    }
+  ]
+}

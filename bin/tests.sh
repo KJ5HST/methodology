@@ -549,6 +549,55 @@ else
 fi
 rm -f "$F"
 
+echo "== Test: context_budget.py =="
+CB="$STARTER/context_budget.py"
+[ -x "$CB" ] && pass "context_budget.py is executable" || fail "context_budget.py not executable"
+
+# The tool's own gate tests: every ceiling observed FAILING as well as passing.
+P="$(mktemp_project)"
+cp "$STARTER/context-budget.json" "$P/.context-budget.json"
+cp "$CB" "$P/context_budget.py"
+(cd "$P" && python3 context_budget.py --selftest >/dev/null 2>&1) \
+    && pass "context_budget --selftest: all gates observed failing and passing" \
+    || fail "context_budget --selftest reported a failing gate"
+
+# Seed config must be valid JSON and must not carry a --force escape hatch.
+python3 -c "import json,sys; json.load(open('$STARTER/context-budget.json'))" 2>/dev/null \
+    && pass "seed .context-budget.json parses as JSON" || fail "seed config is not valid JSON"
+grep -q '"--force" in args' "$CB" && fail "context_budget.py accepts --force" \
+    || pass "context_budget.py has no --force escape hatch (usage text may name it)"
+
+# An over-budget resident file must exit 2, and shrinking it must clear.
+printf 'x%.0s' $(seq 1 40000) > "$P/CLAUDE.md"
+(cd "$P" && python3 context_budget.py >/dev/null 2>&1); [ "$?" = "2" ] \
+    && pass "over-ceiling resident file exits 2" || fail "over-ceiling file did not exit 2"
+printf '<!-- budget:protected -->\n%s\n<!-- /budget:protected -->\n' \
+    "$(printf 'y%.0s' $(seq 1 900))" > "$P/CLAUDE.md"
+(cd "$P" && python3 context_budget.py >/dev/null 2>&1); [ "$?" != "2" ] \
+    && pass "shrinking below the ceiling clears the breach" || fail "shrunk file still exits 2"
+
+# Removing the protected purpose block must be refused even when the file is small.
+printf 'tiny\n' > "$P/CLAUDE.md"
+(cd "$P" && python3 context_budget.py >/dev/null 2>&1); [ "$?" = "2" ] \
+    && pass "removing the budget:protected block is refused" \
+    || fail "protected-block removal was not caught"
+rm -rf "$P"
+
+# sync must distribute the tool (TRACKED) and seed the config (SEED).
+P="$(mktemp_project)"
+"$BIN/sync" "$P" --mode=commit --source=local >/dev/null 2>&1
+[ -f "$P/context_budget.py" ] && pass "sync distributes context_budget.py" \
+    || fail "sync did not distribute context_budget.py"
+[ -f "$P/.context-budget.json" ] && pass "sync seeds .context-budget.json" \
+    || fail "sync did not seed .context-budget.json"
+echo "changed" >> "$P/.context-budget.json"
+BEFORE="$(md5 -q "$P/.context-budget.json" 2>/dev/null || md5sum "$P/.context-budget.json" | cut -d" " -f1)"
+"$BIN/sync" "$P" --mode=commit --source=local >/dev/null 2>&1
+AFTER="$(md5 -q "$P/.context-budget.json" 2>/dev/null || md5sum "$P/.context-budget.json" | cut -d" " -f1)"
+[ "$BEFORE" = "$AFTER" ] && pass "re-sync does not clobber an adopter-owned config" \
+    || fail "re-sync overwrote the adopter's .context-budget.json"
+rm -rf "$P"
+
 echo ""
 echo "== Summary: $PASS passed, $FAIL failed =="
 [ "$FAIL" = "0" ]

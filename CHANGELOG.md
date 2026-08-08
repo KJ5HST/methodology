@@ -35,6 +35,43 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-08-08 · [ad hoc] Failure mode #28 and `context_budget.py` — the artifacts Phase 0 mandates reading now have ceilings
+
+- **Change:** the methodology tells every session to *write* a durable record (Phase 3C a learning,
+  Phase 3D a handoff, Phase 3A an evaluation of its predecessor) and no phase ever tells one to
+  *reduce* one. That is a compounding term with no decay term, and past a threshold the artifacts
+  Phase 0 orders a session to read stop being readable. Adds **failure mode #28, "Unbounded mandatory
+  read"**, four Degradation Detection rows, and `starter-kit/context_budget.py` — a stdlib-only
+  checker with a declarative per-project config, distributed `TRACKED` with a `SEED` config, plus a
+  pre-commit gate. Suite **99 → 107**.
+- **Evidence — measured on adopter project ResortApp across 51 raw session transcripts, not
+  theorised.** Opening context (tokens present before the first word of the task) rose from
+  **45,931 to 103,241 over 38 consecutive sessions and never once decreased**, reversed only when a
+  human hand-extracted 156 KB out of `CLAUDE.md`; it regrew 7.6% in the next 43 hours, half of that
+  from learnings-index rows **this methodology instructs sessions to append**. `SESSION_NOTES.md`
+  reached **26,097 lines / 4,089,558 B ≈ 1.02M tokens** — larger than the window Phase 0 step 2
+  mandates reading it into. The measured median session read **180 lines, 0.72% of it.**
+- **Why a gate and not a report.** `methodology_dashboard.py` already printed
+  `Large files detected (SESSION_NOTES.md: 26,039 lines)` at every Phase 0 by protocol mandate — the
+  single risk flag in that project's `dashboard.html` — and **15+ consecutive sessions read past
+  it.** The signal was never missing; nothing gated on it. So `--precommit` refuses a commit that
+  grows a budgeted file past its ceiling, prints five ranked remedies with "raise the ceiling"
+  deliberately last, and states what `--no-verify` costs. All three branches were observed: growth
+  refused, shrink-while-over permitted, growth-again refused, then end-to-end through the installed
+  hook with `git rev-list --count HEAD` proving no commit was created.
+- **Two findings worth naming separately.** (1) Throughput is the wrong tell — source output on that
+  project *peaked* on the two days its documents were largest, with zero compactions and 428K of a
+  1M window used. What degrades is task selection, not volume. (2) Size hides the **refutation**, not
+  the false claim: the claim that cost one session its entire deliverable sat in `CLAUDE.md`, which
+  *is* read in full, while the evidence against it sat 503 lines past anything anyone reads.
+- **Also:** `bin/tests.sh` gains 10 cases, including the tool's own 13-gate `--selftest` (every gate
+  observed failing as well as passing), that re-sync never clobbers an adopter-owned config, and that
+  the tool ships no `--force`. Failure-mode count assertions updated 27 → 28 across `CLAUDE.md`,
+  `README.md` and four tutorials (Learning #7); the historical release note naming #27 is left alone.
+  Pre-existing and unrelated: two `bin/tests.sh` failures on this branch also fail on `main`
+  (`tools/test_methodology_dashboard.py` is byte-identical to `main` and fails there; the GitHub
+  dry-run needs network).
+
 ### 2026-08-02 · [issue #65] The repo's own numbered sets now have structural tests
 
 - **Change:** implements [issue #65](https://github.com/KJ5HST/methodology/issues/65) — Learning #12
