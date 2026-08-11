@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Smoke tests for bin/sync and bin/status.
+# Smoke tests for the bin/ tooling: sync, status, check-links, check-handoff,
+# check-learnings.
 # Run: ./bin/tests.sh  (from methodology repo root)
 set -uo pipefail
 
@@ -405,6 +406,244 @@ F="$(mktemp)"
 } > "$F"
 "$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && pass "prose outside the fenced block does not trigger the lint (block isolation)" || fail "block isolation: outside prose leaked into the check"
 rm -f "$F"
+
+
+# ---------------------------------------------------------------------------
+# Tests 23-25 — structural invariants for the repo's OWN numbered sets (issue #65).
+#
+# Learning #12 pointed at the files Learning #12 lives in: before these, a Learning
+# row could be renumbered, duplicated, malformed or deleted, and an older handoff
+# receipt destroyed outright, with the whole suite still green.
+#
+# Every mutation below is driven RED first (issue #65 makes that precondition
+# non-negotiable) AND guarded against vacuity: `mutate` aborts if the edit did not
+# change the file, because a fixture that silently fails to break anything is a test
+# that proves nothing. Two mutations were caught being vacuous exactly this way while
+# these tests were written.
+# ---------------------------------------------------------------------------
+
+# mutate SRC DST PY — apply a python transform, failing loudly if it is a no-op.
+mutate() {
+    python3 - "$1" "$2" "$3" <<'PY'
+import sys
+src, dst, expr = sys.argv[1], sys.argv[2], sys.argv[3]
+s = open(src, encoding="utf-8").read()
+new = eval(expr, {"s": s, "re": __import__("re")})
+if new == s:
+    sys.stderr.write("MUTATION VACUOUS: %s\n" % expr)
+    sys.exit(2)
+open(dst, "w", encoding="utf-8").write(new)
+PY
+}
+
+echo "== Test 23: check-learnings — Learnings table shape (issue #65 Evidence A) =="
+RUNNER="$STARTER/SESSION_RUNNER.md"
+F="$(mktemp)"
+
+# Presence control: the real table must pass, or every RED below is meaningless.
+"$BIN/check-learnings" --file "$RUNNER" --no-citations >/dev/null 2>&1 \
+    && pass "canonical Learnings table passes (presence control)" \
+    || fail "canonical Learnings table should pass"
+
+# The canonical table and the citation sweep together, against the live corpus.
+"$BIN/check-learnings" >/dev/null 2>&1 \
+    && pass "canonical table + distributed-corpus citations all resolve" \
+    || fail "canonical citation sweep should pass"
+
+# A malformed 3-column row. Anchored on the LEARNINGS row 13, not the bare string
+# "| 13 |" — SESSION_RUNNER.md has a second numbered table whose row 13 comes first,
+# and anchoring there mutates the wrong set and proves nothing (this happened).
+if mutate "$RUNNER" "$F" 's.replace("| 13 | **A forward-looking", "| 14 | three | columns |\n| 13 | **A forward-looking", 1)'; then
+    "$BIN/check-learnings" --file "$F" --no-citations >/dev/null 2>&1 \
+        && fail "malformed 3-column row not caught" || pass "malformed 3-column row caught"
+else fail "3-column mutation was vacuous"; fi
+
+# Renumbering row 13 to a duplicate 12 — the regression CLAUDE.md forbids outright.
+if mutate "$RUNNER" "$F" 's.replace("| 13 | **A forward-looking", "| 12 | **A forward-looking", 1)'; then
+    "$BIN/check-learnings" --file "$F" --no-citations >/dev/null 2>&1 \
+        && fail "duplicate row number not caught" || pass "duplicate row number caught"
+else fail "duplicate-number mutation was vacuous"; fi
+
+# Deleting a row outright — leaves a gap in the numbering. Anchored on Learning
+# #11's own text: a bare "^| 11 |" matches the OTHER numbered table first (line ~313),
+# which mutates the wrong set. That mutation is not vacuous — it really does change
+# the file — so the vacuity guard cannot catch it. A wrong-target mutation is the
+# second failure mode, and only the RED run exposes it.
+if mutate "$RUNNER" "$F" 're.sub(r"(?m)^\| 11 \| \*\*Heterogeneous.*\n", "", s, count=1)'; then
+    "$BIN/check-learnings" --file "$F" --no-citations >/dev/null 2>&1 \
+        && fail "deleted row (numbering gap) not caught" || pass "deleted row (numbering gap) caught"
+else fail "row-deletion mutation was vacuous"; fi
+
+# A row wrapped onto a second physical line.
+if mutate "$RUNNER" "$F" 's.replace("mechanical, encode it as a test", "mechanical,\nencode it as a test", 1)'; then
+    "$BIN/check-learnings" --file "$F" --no-citations >/dev/null 2>&1 \
+        && fail "row split across two physical lines not caught" || pass "row split across two physical lines caught"
+else fail "line-wrap mutation was vacuous"; fi
+rm -f "$F"
+
+echo "== Test 24: check-learnings — citations into the distributed corpus resolve =="
+# A distributed file citing a Learning that does not exist. Uses a scratch COPY of
+# the corpus file so the real tree is never mutated; the sweep reads the live repo,
+# so the assertion runs against a temporarily-modified working file and restores it.
+SAFE="$STARTER/SAFEGUARDS.md"
+BAK="$(mktemp)"
+cp "$SAFE" "$BAK"
+if mutate "$SAFE" "$SAFE" 's.replace("## Commit Discipline", "## Commit Discipline\n\nSee Learning #4242 for background.\n", 1)'; then
+    "$BIN/check-learnings" >/dev/null 2>&1 \
+        && fail "dangling Learning citation in a distributed file not caught" \
+        || pass "dangling Learning citation in a distributed file caught"
+else fail "dangling-citation mutation was vacuous"; fi
+cp "$BAK" "$SAFE"; rm -f "$BAK"
+# Restoration control: the tree must be clean again, or the test poisoned the repo.
+"$BIN/check-learnings" >/dev/null 2>&1 \
+    && pass "corpus restored after the citation mutation" \
+    || fail "citation mutation left the corpus dirty"
+
+echo "== Test 25: check-handoff --all — whole-ledger invariants (issue #65 Evidence B) =="
+LEDGER="$METHODOLOGY/HANDOFFS.md"
+F="$(mktemp)"
+
+if [ -f "$LEDGER" ]; then
+    # Presence control. --allow-pending because a session in flight legitimately has
+    # a Phase 1B stub as its newest receipt; older ones must still be closed.
+    "$BIN/check-handoff" --file "$LEDGER" --all --allow-pending >/dev/null 2>&1 \
+        && pass "live receipt ledger passes --all (presence control)" \
+        || fail "live receipt ledger should pass --all"
+
+    # Evidence B: strip an older receipt's opening fence + its session/date lines.
+    # The default newest-only mode reports OK on this file — that IS the blind spot.
+    if mutate "$LEDGER" "$F" 're.sub(r"```handoff\nsession: S7\ndate: [0-9-]+\n", "", s, count=1)'; then
+        "$BIN/check-handoff" --file "$F" --allow-pending >/dev/null 2>&1 \
+            && pass "default mode still green on a destroyed older receipt (documents the gap)" \
+            || fail "default mode unexpectedly changed behaviour"
+        "$BIN/check-handoff" --file "$F" --all --allow-pending >/dev/null 2>&1 \
+            && fail "orphaned receipt body not caught by --all" || pass "orphaned receipt body caught by --all"
+    else fail "orphaned-receipt mutation was vacuous"; fi
+
+    # Duplicate receipt identity — session AND date, the pair. The header is copied
+    # from the S8 block rather than hardcoded, so the mutation cannot degrade into a
+    # session-only collision if a date later changes and stop testing what it claims.
+    if mutate "$LEDGER" "$F" 're.sub(r"session: S7\ndate: [0-9-]+", re.search(r"session: S8\ndate: [0-9-]+", s).group(0), s, count=1)'; then
+        "$BIN/check-handoff" --file "$F" --all --allow-pending >/dev/null 2>&1 \
+            && fail "duplicate session+date not caught" || pass "duplicate session+date caught"
+    else fail "duplicate-identity mutation was vacuous"; fi
+
+    # The paired NEGATIVE: a repeated session id on DIFFERENT dates is legitimate, not
+    # corruption. `S<N>` is a per-sequence counter and one ledger may merge two
+    # sequences (a fork and its upstream), so keying uniqueness on the id alone
+    # false-positives on a valid file. Without this assertion the checker is free to
+    # silently tighten back to session-only and no test would notice.
+    if mutate "$LEDGER" "$F" 're.sub(r"session: S7\ndate: [0-9-]+", "session: S8\ndate: 2026-07-30", s, count=1)'; then
+        "$BIN/check-handoff" --file "$F" --all --allow-pending >/dev/null 2>&1 \
+            && pass "repeated session id on different dates is accepted (two merged sequences)" \
+            || fail "repeated session id on different dates was wrongly flagged"
+    else fail "merged-sequence mutation was vacuous"; fi
+
+    # session:/date: must lead every block.
+    if mutate "$LEDGER" "$F" 're.sub(r"session: S7\ndate: ([0-9-]+)\nstatus: complete", r"status: complete\nsession: S7\ndate: \1", s, count=1)'; then
+        "$BIN/check-handoff" --file "$F" --all --allow-pending >/dev/null 2>&1 \
+            && fail "session/date not leading a block was not caught" || pass "session/date must lead every block"
+    else fail "key-order mutation was vacuous"; fi
+
+    # An OLDER receipt left pending — --allow-pending exempts only the newest.
+    if mutate "$LEDGER" "$F" 're.sub(r"(session: S7\ndate: [0-9-]+\n)status: complete", r"\1status: pending", s, count=1)'; then
+        "$BIN/check-handoff" --file "$F" --all --allow-pending >/dev/null 2>&1 \
+            && fail "older pending receipt not caught (--allow-pending over-applied)" \
+            || pass "older pending receipt caught; --allow-pending exempts only the newest"
+    else fail "older-pending mutation was vacuous"; fi
+
+    # An unclosed fence.
+    if mutate "$LEDGER" "$F" 's[:s.rindex("```")] + s[s.rindex("```")+3:]'; then
+        "$BIN/check-handoff" --file "$F" --all --allow-pending >/dev/null 2>&1 \
+            && fail "unclosed fence not caught" || pass "unclosed fence caught"
+    else fail "unclosed-fence mutation was vacuous"; fi
+else
+    pass "no root HANDOFFS.md in this repo — --all ledger tests not applicable"
+fi
+rm -f "$F"
+
+echo "== Test: context_budget.py =="
+CB="$STARTER/context_budget.py"
+[ -x "$CB" ] && pass "context_budget.py is executable" || fail "context_budget.py not executable"
+
+# The tool's own gate tests: every ceiling observed FAILING as well as passing.
+P="$(mktemp_project)"
+cp "$STARTER/context-budget.json" "$P/.context-budget.json"
+cp "$CB" "$P/context_budget.py"
+(cd "$P" && python3 context_budget.py --selftest >/dev/null 2>&1) \
+    && pass "context_budget --selftest: all gates observed failing and passing" \
+    || fail "context_budget --selftest reported a failing gate"
+
+# Seed config must be valid JSON and must not carry a --force escape hatch.
+python3 -c "import json,sys; json.load(open('$STARTER/context-budget.json'))" 2>/dev/null \
+    && pass "seed .context-budget.json parses as JSON" || fail "seed config is not valid JSON"
+grep -q '"--force" in args' "$CB" && fail "context_budget.py accepts --force" \
+    || pass "context_budget.py has no --force escape hatch (usage text may name it)"
+
+# An over-budget resident file must exit 2, and shrinking it must clear.
+printf 'x%.0s' $(seq 1 40000) > "$P/CLAUDE.md"
+(cd "$P" && python3 context_budget.py >/dev/null 2>&1); [ "$?" = "2" ] \
+    && pass "over-ceiling resident file exits 2" || fail "over-ceiling file did not exit 2"
+printf '<!-- budget:protected -->\n%s\n<!-- /budget:protected -->\n' \
+    "$(printf 'y%.0s' $(seq 1 900))" > "$P/CLAUDE.md"
+(cd "$P" && python3 context_budget.py >/dev/null 2>&1); [ "$?" != "2" ] \
+    && pass "shrinking below the ceiling clears the breach" || fail "shrunk file still exits 2"
+
+# Removing the protected purpose block must be refused even when the file is small.
+printf 'tiny\n' > "$P/CLAUDE.md"
+(cd "$P" && python3 context_budget.py >/dev/null 2>&1); [ "$?" = "2" ] \
+    && pass "removing the budget:protected block is refused" \
+    || fail "protected-block removal was not caught"
+rm -rf "$P"
+
+# install-hook must write where git will actually LOOK. `core.hooksPath` redirects git
+# away from <git-dir>/hooks, and BOOTSTRAP.md Step 10 tells adopters to set it — so a
+# hook written to .git/hooks on such a repo is never run while "installed" is printed.
+# Paired presence control below: the default path must keep working.
+P="$(mktemp_project)"
+cp "$STARTER/context-budget.json" "$P/.context-budget.json"
+cp "$CB" "$P/context_budget.py"
+mkdir -p "$P/.githooks"
+git -C "$P" config core.hooksPath .githooks
+(cd "$P" && python3 context_budget.py install-hook >/dev/null 2>&1)
+[ -f "$P/.githooks/pre-commit" ] \
+    && pass "install-hook honors core.hooksPath" \
+    || fail "install-hook ignored core.hooksPath (hook git never runs)"
+[ ! -f "$P/.git/hooks/pre-commit" ] \
+    && pass "install-hook writes no dead hook under .git/hooks when redirected" \
+    || fail "install-hook wrote to .git/hooks despite core.hooksPath"
+# A foreign hook already in the redirected dir must be reported, never clobbered.
+printf '#!/bin/sh\n# ledger co-staging gate\nexit 0\n' > "$P/.githooks/pre-commit"
+(cd "$P" && python3 context_budget.py install-hook >/dev/null 2>&1)
+grep -q 'ledger co-staging' "$P/.githooks/pre-commit" \
+    && pass "install-hook never clobbers a foreign hook in the redirected dir" \
+    || fail "install-hook overwrote an existing foreign hook"
+rm -rf "$P"
+
+# Presence control: with no core.hooksPath, the default target is unchanged.
+P="$(mktemp_project)"
+cp "$STARTER/context-budget.json" "$P/.context-budget.json"
+cp "$CB" "$P/context_budget.py"
+(cd "$P" && python3 context_budget.py install-hook >/dev/null 2>&1)
+[ -f "$P/.git/hooks/pre-commit" ] \
+    && pass "install-hook falls back to .git/hooks when core.hooksPath is unset" \
+    || fail "install-hook did not write the default .git/hooks/pre-commit"
+rm -rf "$P"
+
+# sync must distribute the tool (TRACKED) and seed the config (SEED).
+P="$(mktemp_project)"
+"$BIN/sync" "$P" --mode=commit --source=local >/dev/null 2>&1
+[ -f "$P/context_budget.py" ] && pass "sync distributes context_budget.py" \
+    || fail "sync did not distribute context_budget.py"
+[ -f "$P/.context-budget.json" ] && pass "sync seeds .context-budget.json" \
+    || fail "sync did not seed .context-budget.json"
+echo "changed" >> "$P/.context-budget.json"
+BEFORE="$(md5 -q "$P/.context-budget.json" 2>/dev/null || md5sum "$P/.context-budget.json" | cut -d" " -f1)"
+"$BIN/sync" "$P" --mode=commit --source=local >/dev/null 2>&1
+AFTER="$(md5 -q "$P/.context-budget.json" 2>/dev/null || md5sum "$P/.context-budget.json" | cut -d" " -f1)"
+[ "$BEFORE" = "$AFTER" ] && pass "re-sync does not clobber an adopter-owned config" \
+    || fail "re-sync overwrote the adopter's .context-budget.json"
+rm -rf "$P"
 
 echo ""
 echo "== Summary: $PASS passed, $FAIL failed =="

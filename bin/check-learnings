@@ -1,0 +1,247 @@
+#!/usr/bin/env python3
+"""check-learnings — structural invariants for the SESSION_RUNNER Learnings table.
+
+`starter-kit/SESSION_RUNNER.md` §"Learnings (added by sessions)" is one of this
+repository's own numbered sets: canonical sessions APPEND a row as they dogfood the
+framework (Phase 3C), and `CLAUDE.md` forbids renumbering outright. Until issue #65
+that rule was enforced by human attention alone — a malformed row, a duplicate
+number, or a deleted row all passed `bin/tests.sh` green.
+
+This is Learning #12 pointed at the file Learning #12 lives in: when an invariant is
+mechanical, encode it as a test, because a review-time grep is a human step that
+silently stops happening.
+
+Checks STRUCTURE only, never whether a Learning is worth having (that stays the next
+session's Phase 3A judgement). Two families:
+
+  Table shape   — the numbered set is well formed: rows contiguous from 1 with no
+                  gaps and no duplicates, every row exactly 4 columns, every row on
+                  one physical line.
+  Citations     — every `Learning #N` cited in the DISTRIBUTED corpus (the files
+                  `bin/_manifest.py` ships to adopters) resolves to a row that
+                  exists. This is the defect S8 fixed by hand: five citations to
+                  `Learning #28/#30/#34` that had no referent anywhere, inherited
+                  from an audit doc that cites *rad-con's* project numbering.
+
+Scope note — the citation sweep deliberately covers ONLY the distributed corpus.
+`docs/audits/` and `docs/planning/` are frozen records that legitimately cite other
+projects' Learning numbers (rad-con's #1/#2/#3/#28/#30/#34); sweeping them would
+manufacture findings against correct, dated prose. `README.md`/`CHANGELOG.md` are
+excluded for the same reason — they narrate defects by naming the bad numbers.
+
+Usage:
+  bin/check-learnings                  # canonical table + distributed-corpus citations
+  bin/check-learnings --file PATH      # check an explicit file (what bin/tests.sh uses)
+  bin/check-learnings --no-citations   # table shape only (for isolated fixtures)
+
+Exit: 0 = clean; 1 = at least one structural finding.
+Python 3 stdlib only; cross-platform. Canonical-only — NOT in bin/_manifest.py, so
+adopters do not receive it (their SESSION_RUNNER.md is synced byte-identical, and
+their own learnings live in CLAUDE.md Adaptations per Phase 3C).
+"""
+import argparse
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+HEADING_RE = re.compile(r"^##\s+Learnings \(added by sessions\)\s*$")
+
+# A citation, including multi-number forms: "Learning #7", "Learnings #7 and #8",
+# "Learnings #7, #8", "Learnings #7/#8". The outer match is captured whole and every
+# `#N` inside it is then extracted, so a connector list never loses its tail.
+CITATION_RE = re.compile(r"Learnings?\s+#\d+(?:\s*(?:,|and|/|&)\s*#\d+)*")
+NUM_RE = re.compile(r"#(\d+)")
+
+# Split a markdown row on unescaped pipes only, so a row containing an escaped `\|`
+# in its prose is not miscounted as an extra column.
+CELL_SPLIT_RE = re.compile(r"(?<!\\)\|")
+
+
+def repo_root() -> Path:
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True,
+        )
+        return Path(out.stdout.strip())
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return Path.cwd()
+
+
+def default_path() -> Path:
+    return repo_root() / "starter-kit" / "SESSION_RUNNER.md"
+
+
+def parse_table(text: str):
+    """Return (rows, findings).
+
+    `rows` is a list of (number_str, cell_count, line_no) for each data row found
+    under the Learnings heading. Table region = the contiguous run of lines from the
+    header row up to the first blank line after it.
+    """
+    findings = []
+    lines = text.splitlines()
+
+    start = None
+    for i, line in enumerate(lines):
+        if HEADING_RE.match(line):
+            start = i
+            break
+    if start is None:
+        return [], ["Learnings table heading not found "
+                    "('## Learnings (added by sessions)')"]
+
+    # First table line at or after the heading.
+    header = None
+    for i in range(start + 1, len(lines)):
+        if lines[i].lstrip().startswith("|"):
+            header = i
+            break
+        if lines[i].startswith("## "):
+            break  # ran into the next section without finding a table
+    if header is None:
+        return [], ["Learnings table heading has no table under it"]
+
+    if header + 1 >= len(lines) or not re.match(r"^\s*\|[\s|:-]+\|\s*$", lines[header + 1]):
+        findings.append("line %d: Learnings table has no header separator row"
+                        % (header + 2))
+        body_start = header + 1
+    else:
+        body_start = header + 2
+
+    rows = []
+    for i in range(body_start, len(lines)):
+        raw = lines[i]
+        if not raw.strip():
+            break  # blank line ends the table region
+        if not raw.lstrip().startswith("|"):
+            # A row wrapped onto a second physical line lands here.
+            findings.append(
+                "line %d: non-table line inside the Learnings table — a row must be "
+                "one physical line: %r" % (i + 1, raw.strip()[:60])
+            )
+            continue
+        stripped = raw.strip()
+        inner = stripped[1:-1] if stripped.endswith("|") else stripped[1:]
+        cells = [c.strip() for c in CELL_SPLIT_RE.split(inner)]
+        rows.append((cells[0] if cells else "", len(cells), i + 1))
+
+    return rows, findings
+
+
+def check_table(rows: list, findings: list) -> list:
+    """Append shape findings: 4 columns per row, numbers contiguous from 1."""
+    if not rows:
+        findings.append("Learnings table has no data rows")
+        return findings
+
+    numbers = []
+    for num_str, ncells, line_no in rows:
+        if ncells != 4:
+            findings.append(
+                "line %d: row %r has %d column(s), expected exactly 4"
+                % (line_no, num_str or "?", ncells)
+            )
+        if not num_str.isdigit():
+            findings.append(
+                "line %d: row number is not an integer: %r" % (line_no, num_str[:40])
+            )
+            continue
+        numbers.append((int(num_str), line_no))
+
+    seen = {}
+    for n, line_no in numbers:
+        if n in seen:
+            findings.append(
+                "line %d: duplicate Learning number #%d (first seen at line %d) — "
+                "rows are append-only and must never be renumbered" % (line_no, n, seen[n])
+            )
+        else:
+            seen[n] = line_no
+
+    if numbers:
+        expected = list(range(1, len(numbers) + 1))
+        actual = [n for n, _ in numbers]
+        if actual != expected:
+            missing = sorted(set(expected) - set(actual))
+            if missing:
+                findings.append(
+                    "Learning numbers are not contiguous from 1 — missing %s"
+                    % ", ".join("#%d" % m for m in missing)
+                )
+            if actual != sorted(actual):
+                findings.append(
+                    "Learning numbers are out of ascending order: %s"
+                    % ", ".join("#%d" % n for n in actual)
+                )
+    return findings
+
+
+def distributed_md_files(root: Path) -> list:
+    """Markdown sources in the bin/_manifest.py DISTRIBUTION corpus."""
+    sys.path.insert(0, str(root / "bin"))
+    try:
+        import _manifest
+    except ImportError:
+        return []
+    out = []
+    for entry in _manifest.DISTRIBUTION:
+        src = entry[0]
+        p = root / src
+        if p.suffix == ".md" and p.exists():
+            out.append(p)
+    return out
+
+
+def check_citations(root: Path, valid: set, findings: list) -> list:
+    for path in distributed_md_files(root):
+        rel = path.relative_to(root)
+        for i, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            for cite in CITATION_RE.finditer(line):
+                for num in NUM_RE.findall(cite.group(0)):
+                    n = int(num)
+                    if n not in valid:
+                        findings.append(
+                            "%s:%d: cites Learning #%d, which does not exist "
+                            "(table has %d row(s))" % (rel, i, n, len(valid))
+                        )
+    return findings
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(
+        description="Validate the SESSION_RUNNER Learnings table's structural invariants."
+    )
+    p.add_argument("--file", help="explicit SESSION_RUNNER.md path (what bin/tests.sh uses)")
+    p.add_argument("--no-citations", action="store_true",
+                   help="skip the distributed-corpus citation sweep (isolated fixtures)")
+    args = p.parse_args()
+
+    path = Path(args.file) if args.file else default_path()
+    if not path.exists():
+        print("error: session runner not found: %s" % path)
+        return 1
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    rows, findings = parse_table(text)
+    findings = check_table(rows, findings)
+
+    valid = {int(n) for n, _c, _l in rows if n.isdigit()}
+    if not args.no_citations:
+        findings = check_citations(repo_root(), valid, findings)
+
+    if findings:
+        print("check-learnings: FAIL — %d issue(s) in %s:" % (len(findings), path))
+        for msg in findings:
+            print("  error: %s" % msg)
+        return 1
+
+    scope = "table shape only (--no-citations)" if args.no_citations else "all citations resolve"
+    print("check-learnings: OK — %d Learning row(s), contiguous 1..%d; %s."
+          % (len(rows), len(rows), scope))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

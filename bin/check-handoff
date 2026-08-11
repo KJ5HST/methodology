@@ -34,6 +34,17 @@ Usage:
   bin/check-handoff --file PATH        # check an explicit file (what tests use)
   bin/check-handoff --allow-none       # "no receipt blocks found" is success (empty-diff session)
   bin/check-handoff --allow-pending    # accept status: pending (e.g. checking a Phase 1B stub)
+  bin/check-handoff --all              # validate EVERY receipt + whole-file structure (issue #65)
+
+--all exists because the default newest-only scope is a real blind spot: a mangled
+OLDER receipt reported green forever, so a corruption could survive a full session
+and be caught only by hand-diffing the file across two revisions. It adds the
+ledger-level invariants — fences balance, no receipt body stranded outside a fence,
+`session:`/`date:` lead every block, no two receipts share a session id AND date
+(identity is the pair: a ledger may merge two `S<N>` sequences) — and validates every block
+rather than block 0. `--allow-pending` narrows to the NEWEST block under --all: a
+just-written Phase 1B stub is legitimately pending, an older one never closed out.
+The default stays newest-only so the close-out fast path is unchanged.
 
 Exit: 0 = a receipt is present and structurally complete, or legitimately absent
       (fresh seed, or --allow-none with none found); 1 = missing / structurally
@@ -53,6 +64,9 @@ REQUIRED_KEYS = (
     "what_was_done", "next_steps", "key_files", "gotchas", "runtime_smoke",
     "changelog_ref", "commit",
 )
+
+# The subset a Phase 1B claim stub can honestly carry before the work exists.
+STUB_KEYS = ("session", "date", "status", "active_task")
 
 KEY_RE = re.compile(r"^(" + "|".join(REQUIRED_KEYS) + r"):\s*(.*)$")
 HANDOFF_OPEN_RE = re.compile(r"^```handoff[ \t]*$")
@@ -78,9 +92,13 @@ NEED_TO_VERIFY_RE = re.compile(r"need to verify", re.IGNORECASE)
 BARE_PLACEHOLDERS = {"todo", "tbd", "done.", "fixed stuff", "..."}
 
 
-def extract_blocks(text: str) -> list:
-    """Return each top-level ```handoff ... ``` block's inner content, in file
-    order (first = newest, since the file is newest-on-top).
+def scan(text: str):
+    """Return (blocks, findings).
+
+    `blocks` is one dict per top-level ```handoff block — {"content", "line"} — in
+    file order (first = newest, since the file is newest-on-top). `findings` holds
+    LEDGER-level structural defects that only exist between blocks, not within one:
+    an unclosed fence, and a receipt body stranded outside every fence.
 
     Fence-nesting aware: a bare all-backtick line (3+ backticks, no language tag —
     e.g. HANDOFFS.md's own 4-backtick "````" wrapper around its illustrative
@@ -88,36 +106,123 @@ def extract_blocks(text: str) -> list:
     fence-nesting rule (a fence can only be closed by a fence of >= its own
     backtick count). Without this, a ```handoff shown as documentation INSIDE a
     stronger wrapper would be misparsed as a real receipt.
+
+    The orphan check is what catches the issue-#65 Evidence B corruption: a session
+    prepending its receipt reused the previous block's opening fence and overwrote
+    the `session:`/`date:` lines under it, leaving that receipt's body as loose
+    prose with an unmatched closing fence — which then also scrambles fence-matching
+    for the block BELOW it, so one corruption silently damages two receipts.
     """
     lines = text.splitlines()
     blocks = []
+    findings = []
+    outside = []
     i, n = 0, len(lines)
     while i < n:
         stripped = lines[i].strip()
         if stripped and set(stripped) == {"`"} and len(stripped) >= 3:
             # Bare wrapper fence: skip to its matching (or stronger) closer.
             fence_len = len(stripped)
+            open_line = i + 1
             i += 1
+            closed = False
             while i < n:
                 s2 = lines[i].strip()
                 i += 1
                 if set(s2) == {"`"} and len(s2) >= fence_len:
+                    closed = True
                     break
+            if not closed:
+                findings.append(
+                    "line %d: unclosed ``` fence — opened here, never closed" % open_line
+                )
             continue
         if HANDOFF_OPEN_RE.match(lines[i]):
+            open_line = i + 1
             i += 1
             content = []
+            closed = False
             while i < n:
                 s2 = lines[i].strip()
                 if set(s2) == {"`"} and len(s2) >= 3:
                     i += 1
+                    closed = True
                     break
                 content.append(lines[i])
                 i += 1
-            blocks.append("\n".join(content))
+            if not closed:
+                findings.append(
+                    "line %d: ```handoff block opened here is never closed" % open_line
+                )
+            blocks.append({"content": "\n".join(content), "line": open_line})
             continue
+        outside.append(i + 1)
         i += 1
-    return blocks
+
+    for ln in outside:
+        if KEY_RE.match(lines[ln - 1]):
+            findings.append(
+                "line %d: receipt field outside any ```handoff fence — an orphaned "
+                "receipt body: %r" % (ln, lines[ln - 1].strip()[:60])
+            )
+
+    return blocks, findings
+
+
+def extract_blocks(text: str) -> list:
+    """Inner content of each top-level ```handoff block, in file order."""
+    blocks, _findings = scan(text)
+    return [b["content"] for b in blocks]
+
+
+def validate_ledger(blocks: list, findings: list, allow_pending: bool) -> list:
+    """Whole-ledger invariants across EVERY receipt, not just the newest.
+
+    `allow_pending` applies ONLY to the newest block: a just-written Phase 1B stub
+    is legitimately pending mid-session, but an OLDER receipt left pending is a
+    session that never closed out — exactly what this mode exists to surface.
+    """
+    seen = {}
+    for idx, b in enumerate(blocks):
+        fields = parse_block(b["content"])
+        label = fields.get("session", "").strip() or "<no session>"
+        prefix = "block at line %d (%s)" % (b["line"], label)
+
+        order = []
+        for line in b["content"].splitlines():
+            m = KEY_RE.match(line)
+            if m:
+                order.append(m.group(1))
+        if order[:2] != ["session", "date"]:
+            findings.append(
+                "%s: first two keys must be `session` then `date` (got %s)"
+                % (prefix, ", ".join(order[:2]) or "none")
+            )
+
+        for msg in validate(fields, allow_pending and idx == 0):
+            findings.append("%s: %s" % (prefix, msg))
+
+        # Identity is session + date, NOT session alone. `S<N>` is a per-sequence
+        # counter, and a ledger may legitimately merge more than one sequence — a
+        # fork and its upstream each running their own, so two distinct sessions
+        # share an `S<N>` by construction. Keying on the id alone asserts an
+        # invariant the format in `starter-kit/HANDOFFS.md` never states, and
+        # false-positives on such a ledger; a checker that cries wolf on a valid
+        # file is how a gate becomes furniture. The realistic corruption this
+        # still catches is a block copied and not edited, which duplicates both.
+        sid = fields.get("session", "").strip()
+        date = fields.get("date", "").strip()
+        if sid:
+            key = (sid, date)
+            if key in seen:
+                findings.append(
+                    "%s: duplicate receipt identity — session %r on date %r "
+                    "(first seen at line %d)" % (prefix, sid, date, seen[key])
+                )
+            else:
+                seen[key] = b["line"]
+
+    return findings
 
 
 def parse_block(block_text: str) -> dict:
@@ -148,9 +253,19 @@ def validate(fields: dict, allow_pending: bool) -> list:
     session = fields.get("session", "").strip()
     is_s1 = session == "S1"
 
+    # A Phase 1B claim stub is BY DEFINITION incomplete — the runner tells it to write
+    # "the fields you can fill now" and Phase 3D completes the rest. So when the caller
+    # explicitly allows pending AND this block says pending, only the stub keys are
+    # required. Without this, a correct 1B stub reports red for the whole session, which
+    # made the whole-ledger mode unusable as a live check (the close-out gate is
+    # untouched: at Phase 3D status is `complete` and all REQUIRED_KEYS are demanded).
+    is_pending_stub = allow_pending and fields.get("status", "").strip() == "pending"
+
     for key in REQUIRED_KEYS:
         if key == "predecessor_score" and is_s1:
             continue  # Session-1 exemption — no predecessor to score
+        if is_pending_stub and key not in STUB_KEYS:
+            continue
         if key not in fields:
             findings.append("missing required key: %s" % key)
         elif not fields[key].strip():
@@ -232,6 +347,9 @@ def main() -> int:
                     help="treat 'no receipt blocks found' as success (empty-diff / no-action session)")
     p.add_argument("--allow-pending", action="store_true",
                     help="accept status: pending (e.g. checking a just-written Phase 1B stub)")
+    p.add_argument("--all", action="store_true",
+                    help="validate EVERY receipt in the ledger plus whole-file structure "
+                         "(issue #65); default stays newest-only for the close-out fast path")
     args = p.parse_args()
 
     path = Path(args.file) if args.file else default_path()
@@ -240,7 +358,8 @@ def main() -> int:
         return 1
 
     text = path.read_text(encoding="utf-8", errors="replace")
-    blocks = extract_blocks(text)
+    blocks_meta, struct_findings = scan(text)
+    blocks = [b["content"] for b in blocks_meta]
 
     if not blocks:
         if SEED_SENTINEL in text:
@@ -251,6 +370,18 @@ def main() -> int:
             return 0
         print("error: no ```handoff``` receipt block found in %s" % path)
         return 1
+
+    if args.all:
+        findings = validate_ledger(blocks_meta, list(struct_findings), args.allow_pending)
+        if findings:
+            print("check-handoff --all: FAIL — %d issue(s) across %d receipt(s) in %s:"
+                  % (len(findings), len(blocks), path))
+            for msg in findings:
+                print("  error: %s" % msg)
+            return 1
+        print("check-handoff --all: OK — %d receipt(s) in %s, all structurally complete, "
+              "fences balanced, no duplicate session+date." % (len(blocks), path))
+        return 0
 
     fields = parse_block(blocks[0])  # newest = first block in the file
     findings = validate(fields, args.allow_pending)
