@@ -35,6 +35,60 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-08-10 · [ad hoc] Resolved both review findings on [PR #66](https://github.com/KJ5HST/methodology/pull/66) — in the PR, not a follow-up
+
+- **Origin:** rmsharp reviewed PR #66 and filed two findings, each reproduced against real repo
+  state rather than theorised, with inline suggestions and an offer to take them to a follow-up PR.
+  Fixed here instead, because finding 1 is a defect in code *this PR introduces* — shipping it
+  would mean the failure-mode-#28 release note describes a gate that silently does nothing on the
+  adopters most likely to want it. The v3.6 precedent is explicit: Layer 7 ran before Layer 6 so no
+  release shipped with a known live defect in its own subsystem.
+- **Finding 1 — `install_hook()` ignored `core.hooksPath`** (`starter-kit/context_budget.py`).
+  It always wrote `<git-dir>/hooks/pre-commit` and printed "installed". `core.hooksPath` redirects
+  git away from that directory entirely, and **this methodology's own `BOOTSTRAP.md` Step 10 tells
+  adopters to set it** (`.githooks`) to enable the v3.1 ledger co-staging gate — so the population
+  following our own setup instructions got a silent no-op with a success message. Reproduced end to
+  end before the fix: a commit growing `CLAUDE.md` to 40,000 B against a 28,000 B ceiling was
+  *created* rather than refused; after, the same commit is refused and `git rev-list --count`
+  confirms none was created. A relative value now resolves against the worktree top level (what git
+  itself does when running the hook), an absolute value is used as given, and the pre-existing
+  "a hook is already here and is not ours" branch now fires correctly on a repo whose `.githooks/`
+  already holds the ledger hook — reporting and refusing to clobber instead of shadowing it.
+- **Finding 2 — receipt identity is `session` + `date`, not `session` alone** (`bin/check-handoff`).
+  `validate_ledger()` asserted an invariant the format in `starter-kit/HANDOFFS.md` never states.
+  `S<N>` is a per-sequence counter and one ledger may merge more than one sequence — a fork and its
+  upstream each running their own — so two distinct sessions share an `S<N>` by construction;
+  rmsharp reproduced four false positives on a real ledger. **The argument is not the false positive
+  itself but what one does to a gate:** this very PR's thesis is that the dashboard printed
+  `Large files detected` at every Phase 0 and 15+ sessions read past it. A checker that fires on a
+  structurally valid file trains that same blindness on the checker we most need believed. Coverage
+  lost is narrow — a block copied and not edited duplicates *both* keys and is still caught — and
+  the cross-branch collision it appeared to guard was never guarded, since the checker sees one tree
+  and could only ever fire after the merge landed. Code and spec now agree rather than the code
+  being stricter: `starter-kit/HANDOFFS.md` states the rule, including that keeping `S<N>` unique
+  within a sequence must never mean renumbering an already-written receipt.
+- **Verification:** suite **107 → 112**. Both fixes were driven **RED first and observed failing**
+  (Learning #12): 2 of the 4 new `install-hook` assertions fail against the unpatched tool (the
+  other 2 are deliberate presence controls that must pass either way), and finding 2's new negative
+  assertion fails with exactly the reported error, `duplicate session id 'S8'`, before passing. The
+  duplicate-identity mutation was also strengthened to copy the S8 header wholesale, so it cannot
+  quietly degrade into a session-only collision if a date later changes. The 2 remaining suite
+  failures are pre-existing and reproduce on `main` with this branch's changes stashed
+  (`tools/test_methodology_dashboard.py`, untouched here; and the GitHub-source dry-run, which needs
+  network). `bin/check-links` OK (83 links / 21 files); live ledger green under `--all`.
+- **Learning #10 caught one thing the diff could not:** `README.md`'s unreleased #65 bullet still
+  claimed "unique session ids". Dated `CHANGELOG.md` entries describing what #65 shipped are left
+  verbatim per the v2.7.1 frozen-record precedent; the unreleased What's New bullet describes
+  current behaviour and was corrected.
+- **Not recorded as a Learning row by design.** The candidate — *a checker's invariant must not be
+  stricter than the format it validates; the adopter who trips it is the one who finds out* — is
+  real, but `#14` is reserved by `docs/operator-gated-review-plan`'s decision D3. Appending it here
+  would create exactly the collision D3 exists to prevent. It is carried in the S10 receipt instead,
+  to be appended at the first free number after that branch merges.
+- **Commits:** `eacb516` (1B claim) · `14bd88a` (finding 1) · `63e1dcf` (finding 2).
+
+---
+
 ### 2026-08-08 · [ad hoc] Failure mode #28 and `context_budget.py` — the artifacts Phase 0 mandates reading now have ceilings
 
 - **Change:** the methodology tells every session to *write* a durable record (Phase 3C a learning,
