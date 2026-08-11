@@ -8,6 +8,16 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S10
+date: 2026-08-10
+status: pending
+active_task: Resolve the two review findings rmsharp filed on PR #66 (2026-08-10), in the PR itself rather than a follow-up — (1) `starter-kit/context_budget.py` `install_hook()` ignores `core.hooksPath`, so `--install-hook` silently no-ops on any adopter who followed `BOOTSTRAP.md` Step 10; (2) `bin/check-handoff` `validate_ledger()` keys receipt uniqueness on `session` alone, which is stricter than the format `starter-kit/HANDOFFS.md` specifies and false-positives on any ledger merging two `S<N>` counters. Plus the PR body, which still describes only the context-budget work while four of five commits are the S9 run. IN PROGRESS.
+key_files: starter-kit/context_budget.py:472 (install_hook), bin/check-handoff:204 (validate_ledger uniqueness), bin/tests.sh:526 (the duplicate-session-id mutation test)
+```
+
+---
+
+```handoff
 session: S9
 date: 2026-08-02
 status: complete
