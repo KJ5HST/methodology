@@ -45,8 +45,8 @@ next_steps: <specific and actionable; never "pick next from backlog">
 key_files: <each entry carries a path:line token, e.g. SessionManager.java:245>
 gotchas: <traps the next session should watch for>
 runtime_smoke: <a run result, or "n/a — docs-only", or "impossible: <reason>">
-changelog_ref: <PR #N or a short-sha into CHANGELOG.md>
-commit: <short-sha — or `pending` until the next session reconciles it>
+changelog_ref: <PR #N, a short-sha, or CHANGELOG.md "<its ### heading>" — never a bare line number, which decays once the ledger is trimmed>
+commit: <short-sha — or the literal `pending`, legal only for the newest receipt (see below)>
 ```
 <free-text prose: the durable proxy for the Phase 3G spoken report, plus the +/- self-score breakdown>
 
@@ -61,7 +61,8 @@ when it reconstructs a receipt a crashed session never completed — you never w
 `self_score` and `predecessor_score` are distinct keys so one can never stand in for the other; omit
 `predecessor_score` on Session 1 (there is no predecessor to score). `commit: pending` and
 `what_was_done: pending` are legal at write time (the receipt ships in the very commit whose sha it
-would name); the next session reconciles them to real shas.
+would name); no future session is assigned to fill either in later, so `pending` is a legitimate
+resting value for both, not a promise a later session owes.
 
 **A receipt's identity is `session` + `date`, not `session` alone.** `S<N>` is a per-sequence
 counter, and one ledger may legitimately merge more than one sequence — a fork and its upstream each

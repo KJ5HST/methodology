@@ -35,6 +35,26 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-08-10 · [ad hoc] Two defects in the HANDOFFS.md receipt spec: an unassigned reconcile promise, an unoffered locator form
+
+- **Change:** `starter-kit/HANDOFFS.md`'s fenced receipt-format spec, two independent fixes in one
+  pass since both sit in the same few lines.
+- **(1) The spec promised a reconcile no procedure ever assigns.** It said `commit: pending` and
+  `what_was_done: pending` are legal at write time because "the next session reconciles them to
+  real shas" — but `SESSION_RUNNER.md` Phase 0 step 6 only reconciles a *missing or still-
+  `status: pending`* receipt, never a `status: complete` receipt whose `commit:` field alone is
+  `pending`. No procedure anywhere performs the promise as written. Reworded to state `pending` as
+  a legitimate resting value for both fields, not a duty nobody is assigned to discharge.
+- **(2) `changelog_ref`'s spec offered two locator forms neither of which receipts actually use.**
+  The placeholder named `PR #N` or a short-sha; in practice, entries locate a `CHANGELOG.md`
+  action by its quoted `### ` heading instead — this repo's own `bin/check-handoff` diagnostic
+  hints already teach that convention in its remediation text, without the spec ever blessing it.
+  Added the quoted-heading form as a third explicit option and noted that a bare line number is
+  not a durable locator once a ledger is ever trimmed or archived.
+- **Distribution:** `HANDOFFS.md` is `bin/_manifest.py`-SEED (copied once, then adopter-owned), so
+  new adopters receive the corrected spec; existing adopters' own copies are unaffected until they
+  choose to re-seed.
+
 ### 2026-08-10 · [ad hoc] Re-grounded the /caveman row's remaining unsupported claim
 
 - **Change:** `starter-kit/RECOMMENDED_SKILLS.md`'s `/caveman` row.
