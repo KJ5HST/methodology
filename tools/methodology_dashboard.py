@@ -82,7 +82,7 @@ from collections import defaultdict
 # Every other copy (portfolio root + per-project) is a synced copy of the canonical and must
 # carry the same value. A copy whose DASHBOARD_VERSION is older than the canonical is stale —
 # re-sync from the canonical. Bump on any change to the canonical script.
-DASHBOARD_VERSION = "2.10.2"
+DASHBOARD_VERSION = "2.10.3"
 
 ROOT = Path(__file__).parent
 EXCLUDE_DIRS = {"methodology", "BrogueCE-iOS", ".git", "__pycache__", "node_modules", ".venv", "venv"}
@@ -341,7 +341,11 @@ _VERSION_RE = re.compile(r'''^DASHBOARD_VERSION\s*=\s*["']([^"']+)["']''', re.MU
 # machine-checkable, not re-greppable). Markdown dests are deliberately NOT listed: this tuple
 # exists to correct the source-LOC read, and a general "skip framework files" rule is exactly the
 # laundering hole the exclusion must not become.
-FRAMEWORK_INSTALLED_SOURCE = ("methodology_dashboard.py",)
+# The context-budget gate (context_budget.py, TRACKED; its .context-budget.json seed config)
+# added two more non-markdown dests to bin/_manifest.py without this tuple being extended to
+# match — exactly the silent drift the paragraph above warns about, caught by the
+# machine-checkable cross-reference test below, not by inspection.
+FRAMEWORK_INSTALLED_SOURCE = ("methodology_dashboard.py", "context_budget.py", ".context-budget.json")
 
 # The markdown half of the same problem, and the mirror of the defect above. `bin/sync` also
 # installs 21 markdown files (~6,353 LOC), which on its own satisfies detect_doc_only's corpus

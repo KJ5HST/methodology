@@ -293,6 +293,11 @@ CHECKLIST_EXEMPT = {
     "CLAUDE_TEMPLATE.md": "template; the operating artifact is the adopter's CLAUDE.md instance",
     "BOOTSTRAP.md": "one-time setup guide, not a per-session operating artifact",
     "methodology_dashboard.py": "the scanner itself — scoring its own presence is circular",
+    "context_budget.py": "an elective size-governance gate, same class as the scanner above — "
+                         "its presence indicates a pre-commit hook was installed, not that the "
+                         "session-operating discipline this checklist measures was followed",
+    ".context-budget.json": "SEED config for the context-budget gate above; scored the same way "
+                            "for the same reason, not a session-operating artifact",
 }
 
 
@@ -2025,10 +2030,10 @@ class TestFmtRatioAndTwins(unittest.TestCase):
                         "tools/ and starter-kit/ dashboards must be byte-identical")
 
     def test_dashboard_version(self):
-        self.assertEqual(md.DASHBOARD_VERSION, "2.10.2")
+        self.assertEqual(md.DASHBOARD_VERSION, "2.10.3")
         starter_src = Path(STARTER_PY).read_text(encoding="utf-8")
-        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.10\.2"', starter_src, re.MULTILINE),
-                        "starter-kit twin must also declare DASHBOARD_VERSION 2.10.2")
+        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.10\.3"', starter_src, re.MULTILINE),
+                        "starter-kit twin must also declare DASHBOARD_VERSION 2.10.3")
 
 
 class TestEndToEnd(unittest.TestCase):
