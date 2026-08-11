@@ -147,6 +147,18 @@ class TestDetection(unittest.TestCase):
         self.assertFalse(r["is_doc_only"])
         self.assertEqual(r["reason"], "marker")
 
+    def test_doc_only_thresholds_are_pinned_not_left_to_drift(self):
+        # These three constants are stated heuristics, not derived from a measured corpus (see
+        # the comment above their declaration) — but "unmeasured" must not mean "unpinned".
+        # test_source_cap_boundary above already hardcodes 200/201 as its own boundary literals,
+        # so it happens to catch drift in DOC_ONLY_SOURCE_LOC_MAX too, but that coverage is
+        # implicit and would silently vanish if that fixture were ever rewritten to derive its
+        # boundary from the constant instead of a literal. Assert all three values directly so a
+        # future edit to any of them is a deliberate, visible decision, not a silent drift.
+        self.assertEqual(md.DOC_ONLY_SOURCE_LOC_MAX, 200)
+        self.assertEqual(md.DOC_ONLY_DOC_LOC_MIN, 200)
+        self.assertEqual(md.DOC_ONLY_DOC_FILES_MIN, 3)
+
 
 class TestRenderMetrics(unittest.TestCase):
     def setUp(self):
@@ -2025,10 +2037,10 @@ class TestFmtRatioAndTwins(unittest.TestCase):
                         "tools/ and starter-kit/ dashboards must be byte-identical")
 
     def test_dashboard_version(self):
-        self.assertEqual(md.DASHBOARD_VERSION, "2.10.2")
+        self.assertEqual(md.DASHBOARD_VERSION, "2.10.3")
         starter_src = Path(STARTER_PY).read_text(encoding="utf-8")
-        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.10\.2"', starter_src, re.MULTILINE),
-                        "starter-kit twin must also declare DASHBOARD_VERSION 2.10.2")
+        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.10\.3"', starter_src, re.MULTILINE),
+                        "starter-kit twin must also declare DASHBOARD_VERSION 2.10.3")
 
 
 class TestEndToEnd(unittest.TestCase):

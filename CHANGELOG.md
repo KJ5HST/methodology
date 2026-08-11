@@ -35,6 +35,29 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-08-10 · [ad hoc] Documented and pinned the doc-only detection thresholds
+
+- **Change:** `tools/methodology_dashboard.py` (+ `starter-kit/` twin, kept byte-identical) and
+  `tools/test_methodology_dashboard.py`.
+- **The defect:** `DOC_ONLY_SOURCE_LOC_MAX`, `DOC_ONLY_DOC_LOC_MIN` and `DOC_ONLY_DOC_FILES_MIN`
+  are round numbers with no recorded derivation, and nothing asserted their values directly —
+  `test_source_cap_boundary` exercises `DOC_ONLY_SOURCE_LOC_MAX` only indirectly, via hardcoded
+  200/201 boundary literals, so that coverage would silently vanish if that fixture were ever
+  rewritten to derive its boundary from the constant instead. `DOC_ONLY_SOURCE_LOC_MAX` in
+  particular decides which of two scoring regimes a repo gets (the comment a few lines below it
+  already documents a real 148-LOC repo the cap alone misclassified), so an accidental drift here
+  is a user-visible verdict change, not cosmetic.
+- **Fix:** added a comment recording that all three are deliberate, stated heuristics — not
+  derived from a measured corpus of adopter repos — and a direct regression test
+  (`test_doc_only_thresholds_are_pinned_not_left_to_drift`) asserting all three current values, so
+  a future edit to any of them is a visible, deliberate decision.
+- **Verified:** `python3 tools/test_methodology_dashboard.py` 198/198 (197 prior + this one).
+  `DASHBOARD_VERSION` 2.10.2 → 2.10.3 in both twins; `test_dashboard_version` and
+  `test_twins_byte_identical` updated/re-confirmed.
+- **Distribution:** `starter-kit/methodology_dashboard.py` is `bin/_manifest.py`-TRACKED, so
+  adopters receive the documented, pinned thresholds via `bin/sync`; `tools/` and
+  `tools/test_methodology_dashboard.py` are canonical-only.
+
 ### 2026-08-10 · [ad hoc] Re-grounded the /caveman row's remaining unsupported claim
 
 - **Change:** `starter-kit/RECOMMENDED_SKILLS.md`'s `/caveman` row.
