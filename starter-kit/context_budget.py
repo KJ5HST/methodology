@@ -475,7 +475,18 @@ def install_hook(root):
         print(f"{RED}not a git repository: {err}{R}")
         return USAGE
     gd = top if os.path.isabs(top) else os.path.join(root, top)
-    hooks = os.path.join(gd, "hooks")
+    # `core.hooksPath` redirects git away from <git-dir>/hooks entirely, and the
+    # methodology's own BOOTSTRAP.md Step 10 tells adopters to set it (`.githooks`),
+    # so writing to <git-dir>/hooks unconditionally would install a hook git never
+    # runs — and print "installed". A relative value resolves against the worktree
+    # top level, which is what git itself does when it runs the hook.
+    rc2, configured, _ = run(["git", "config", "--get", "core.hooksPath"], cwd=root)
+    if rc2 == 0 and configured:
+        hooks = configured if os.path.isabs(configured) else os.path.join(root, configured)
+        via = f" (via core.hooksPath = {configured})"
+    else:
+        hooks = os.path.join(gd, "hooks")
+        via = ""
     os.makedirs(hooks, exist_ok=True)
     p = os.path.join(hooks, "pre-commit")
     if os.path.exists(p) and "context_budget.py" not in open(p, errors="ignore").read():
@@ -484,7 +495,7 @@ def install_hook(root):
         return WARN
     open(p, "w").write(HOOK)
     os.chmod(p, 0o755)
-    print(f"  installed {p}")
+    print(f"  installed {p}{via}")
     print(f"  {D}bypass with `git commit --no-verify`; the cost of doing so is printed "
           f"when it fires{R}")
     return CLEAN

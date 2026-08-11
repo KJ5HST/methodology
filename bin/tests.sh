@@ -583,6 +583,40 @@ printf 'tiny\n' > "$P/CLAUDE.md"
     || fail "protected-block removal was not caught"
 rm -rf "$P"
 
+# install-hook must write where git will actually LOOK. `core.hooksPath` redirects git
+# away from <git-dir>/hooks, and BOOTSTRAP.md Step 10 tells adopters to set it — so a
+# hook written to .git/hooks on such a repo is never run while "installed" is printed.
+# Paired presence control below: the default path must keep working.
+P="$(mktemp_project)"
+cp "$STARTER/context-budget.json" "$P/.context-budget.json"
+cp "$CB" "$P/context_budget.py"
+mkdir -p "$P/.githooks"
+git -C "$P" config core.hooksPath .githooks
+(cd "$P" && python3 context_budget.py install-hook >/dev/null 2>&1)
+[ -f "$P/.githooks/pre-commit" ] \
+    && pass "install-hook honors core.hooksPath" \
+    || fail "install-hook ignored core.hooksPath (hook git never runs)"
+[ ! -f "$P/.git/hooks/pre-commit" ] \
+    && pass "install-hook writes no dead hook under .git/hooks when redirected" \
+    || fail "install-hook wrote to .git/hooks despite core.hooksPath"
+# A foreign hook already in the redirected dir must be reported, never clobbered.
+printf '#!/bin/sh\n# ledger co-staging gate\nexit 0\n' > "$P/.githooks/pre-commit"
+(cd "$P" && python3 context_budget.py install-hook >/dev/null 2>&1)
+grep -q 'ledger co-staging' "$P/.githooks/pre-commit" \
+    && pass "install-hook never clobbers a foreign hook in the redirected dir" \
+    || fail "install-hook overwrote an existing foreign hook"
+rm -rf "$P"
+
+# Presence control: with no core.hooksPath, the default target is unchanged.
+P="$(mktemp_project)"
+cp "$STARTER/context-budget.json" "$P/.context-budget.json"
+cp "$CB" "$P/context_budget.py"
+(cd "$P" && python3 context_budget.py install-hook >/dev/null 2>&1)
+[ -f "$P/.git/hooks/pre-commit" ] \
+    && pass "install-hook falls back to .git/hooks when core.hooksPath is unset" \
+    || fail "install-hook did not write the default .git/hooks/pre-commit"
+rm -rf "$P"
+
 # sync must distribute the tool (TRACKED) and seed the config (SEED).
 P="$(mktemp_project)"
 "$BIN/sync" "$P" --mode=commit --source=local >/dev/null 2>&1
