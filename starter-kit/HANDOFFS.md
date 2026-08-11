@@ -63,6 +63,13 @@ when it reconstructs a receipt a crashed session never completed — you never w
 `what_was_done: pending` are legal at write time (the receipt ships in the very commit whose sha it
 would name); the next session reconciles them to real shas.
 
+**A receipt's identity is `session` + `date`, not `session` alone.** `S<N>` is a per-sequence
+counter, and one ledger may legitimately merge more than one sequence — a fork and its upstream each
+running their own, so two distinct sessions share an `S<N>` by construction. Keep `S<N>` unique
+within a sequence if you can (never renumber an already-written receipt to do it — a visible gap
+that closes on merge is the lesser defect), but do not treat a repeated id across sequences as
+corruption. `bin/check-handoff --all` keys on the pair for this reason.
+
 ## Three files, three questions, one shared key
 
 - **`SESSION_NOTES.md`** — the *transient scratchpad*: rich working notes, overwritten every session.

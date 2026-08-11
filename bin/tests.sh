@@ -520,11 +520,24 @@ if [ -f "$LEDGER" ]; then
             && fail "orphaned receipt body not caught by --all" || pass "orphaned receipt body caught by --all"
     else fail "orphaned-receipt mutation was vacuous"; fi
 
-    # Duplicate session id.
-    if mutate "$LEDGER" "$F" 's.replace("session: S7", "session: S8", 1)'; then
+    # Duplicate receipt identity — session AND date, the pair. The header is copied
+    # from the S8 block rather than hardcoded, so the mutation cannot degrade into a
+    # session-only collision if a date later changes and stop testing what it claims.
+    if mutate "$LEDGER" "$F" 're.sub(r"session: S7\ndate: [0-9-]+", re.search(r"session: S8\ndate: [0-9-]+", s).group(0), s, count=1)'; then
         "$BIN/check-handoff" --file "$F" --all --allow-pending >/dev/null 2>&1 \
-            && fail "duplicate session id not caught" || pass "duplicate session id caught"
-    else fail "duplicate-session mutation was vacuous"; fi
+            && fail "duplicate session+date not caught" || pass "duplicate session+date caught"
+    else fail "duplicate-identity mutation was vacuous"; fi
+
+    # The paired NEGATIVE: a repeated session id on DIFFERENT dates is legitimate, not
+    # corruption. `S<N>` is a per-sequence counter and one ledger may merge two
+    # sequences (a fork and its upstream), so keying uniqueness on the id alone
+    # false-positives on a valid file. Without this assertion the checker is free to
+    # silently tighten back to session-only and no test would notice.
+    if mutate "$LEDGER" "$F" 're.sub(r"session: S7\ndate: [0-9-]+", "session: S8\ndate: 2026-07-30", s, count=1)'; then
+        "$BIN/check-handoff" --file "$F" --all --allow-pending >/dev/null 2>&1 \
+            && pass "repeated session id on different dates is accepted (two merged sequences)" \
+            || fail "repeated session id on different dates was wrongly flagged"
+    else fail "merged-sequence mutation was vacuous"; fi
 
     # session:/date: must lead every block.
     if mutate "$LEDGER" "$F" 're.sub(r"session: S7\ndate: ([0-9-]+)\nstatus: complete", r"status: complete\nsession: S7\ndate: \1", s, count=1)'; then

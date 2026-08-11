@@ -40,7 +40,8 @@ Usage:
 OLDER receipt reported green forever, so a corruption could survive a full session
 and be caught only by hand-diffing the file across two revisions. It adds the
 ledger-level invariants — fences balance, no receipt body stranded outside a fence,
-`session:`/`date:` lead every block, session ids unique — and validates every block
+`session:`/`date:` lead every block, no two receipts share a session id AND date
+(identity is the pair: a ledger may merge two `S<N>` sequences) — and validates every block
 rather than block 0. `--allow-pending` narrows to the NEWEST block under --all: a
 just-written Phase 1B stub is legitimately pending, an older one never closed out.
 The default stays newest-only so the close-out fast path is unchanged.
@@ -201,15 +202,25 @@ def validate_ledger(blocks: list, findings: list, allow_pending: bool) -> list:
         for msg in validate(fields, allow_pending and idx == 0):
             findings.append("%s: %s" % (prefix, msg))
 
+        # Identity is session + date, NOT session alone. `S<N>` is a per-sequence
+        # counter, and a ledger may legitimately merge more than one sequence — a
+        # fork and its upstream each running their own, so two distinct sessions
+        # share an `S<N>` by construction. Keying on the id alone asserts an
+        # invariant the format in `starter-kit/HANDOFFS.md` never states, and
+        # false-positives on such a ledger; a checker that cries wolf on a valid
+        # file is how a gate becomes furniture. The realistic corruption this
+        # still catches is a block copied and not edited, which duplicates both.
         sid = fields.get("session", "").strip()
+        date = fields.get("date", "").strip()
         if sid:
-            if sid in seen:
+            key = (sid, date)
+            if key in seen:
                 findings.append(
-                    "%s: duplicate session id %r (first seen at line %d)"
-                    % (prefix, sid, seen[sid])
+                    "%s: duplicate receipt identity — session %r on date %r "
+                    "(first seen at line %d)" % (prefix, sid, date, seen[key])
                 )
             else:
-                seen[sid] = b["line"]
+                seen[key] = b["line"]
 
     return findings
 
@@ -369,7 +380,7 @@ def main() -> int:
                 print("  error: %s" % msg)
             return 1
         print("check-handoff --all: OK — %d receipt(s) in %s, all structurally complete, "
-              "fences balanced, session ids unique." % (len(blocks), path))
+              "fences balanced, no duplicate session+date." % (len(blocks), path))
         return 0
 
     fields = parse_block(blocks[0])  # newest = first block in the file
