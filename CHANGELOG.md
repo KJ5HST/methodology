@@ -35,6 +35,20 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-08-10 · [ad hoc] Re-grounded the /caveman row's remaining unsupported claim
+
+- **Change:** `starter-kit/RECOMMENDED_SKILLS.md`'s `/caveman` row.
+- **The defect:** `15ccb38` (the "Discharged the three documentation follow-ons" entry below)
+  removed a dangling `Learning #34` citation from this row but kept the claim it was
+  attributing — "the methodology's own handoff length discipline" — which has no referent
+  anywhere in this distributed corpus, and runs opposite to `SESSION_RUNNER.md`'s own failure
+  mode #15 (the *thin* handoff is the failure, not the long one) and its Minimum Handoff
+  Requirements, which gate on content, not length.
+- **Fix:** re-grounded the row on those two verified, reachable sources instead — no length rule
+  is stated because none exists to state.
+- **Distribution:** `RECOMMENDED_SKILLS.md` is `bin/_manifest.py`-TRACKED, so adopters receive the
+  fix via `bin/sync`.
+
 ### 2026-08-10 · [ad hoc] Resolved both review findings on [PR #66](https://github.com/KJ5HST/methodology/pull/66) — in the PR, not a follow-up
 
 - **Origin:** rmsharp reviewed PR #66 and filed two findings, each reproduced against real repo
