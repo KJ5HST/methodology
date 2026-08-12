@@ -82,7 +82,7 @@ from collections import defaultdict
 # Every other copy (portfolio root + per-project) is a synced copy of the canonical and must
 # carry the same value. A copy whose DASHBOARD_VERSION is older than the canonical is stale —
 # re-sync from the canonical. Bump on any change to the canonical script.
-DASHBOARD_VERSION = "2.10.2"
+DASHBOARD_VERSION = "2.10.3"
 
 ROOT = Path(__file__).parent
 EXCLUDE_DIRS = {"methodology", "BrogueCE-iOS", ".git", "__pycache__", "node_modules", ".venv", "venv"}
@@ -341,7 +341,11 @@ _VERSION_RE = re.compile(r'''^DASHBOARD_VERSION\s*=\s*["']([^"']+)["']''', re.MU
 # machine-checkable, not re-greppable). Markdown dests are deliberately NOT listed: this tuple
 # exists to correct the source-LOC read, and a general "skip framework files" rule is exactly the
 # laundering hole the exclusion must not become.
-FRAMEWORK_INSTALLED_SOURCE = ("methodology_dashboard.py",)
+# The context-budget gate (context_budget.py, TRACKED; its .context-budget.json seed config)
+# added two more non-markdown dests to bin/_manifest.py without this tuple being extended to
+# match — exactly the silent drift the paragraph above warns about, caught by the
+# machine-checkable cross-reference test below, not by inspection.
+FRAMEWORK_INSTALLED_SOURCE = ("methodology_dashboard.py", "context_budget.py", ".context-budget.json")
 
 # The markdown half of the same problem, and the mirror of the defect above. `bin/sync` also
 # installs 21 markdown files (~6,353 LOC), which on its own satisfies detect_doc_only's corpus
@@ -435,20 +439,60 @@ FRAMEWORK_SEED_DOCS = (
 )
 
 
-# Structural signatures of this scanner, for copies too old to carry DASHBOARD_VERSION. Two must
-# match. Three are ordinary function names, so two hits are suggestive rather than proof — this is
-# a heuristic, and the .methodology-profile marker is the documented override. Measured need: a
-# live adopter (feedback-loop-comparison) still runs a 1,614-line pre-version copy, and a
-# DASHBOARD_VERSION-only gate silently skipped it — the fix quietly not applying is the same class
-# of defect as the fix being wrong.
-_FRAMEWORK_SIGNATURES = (
-    "METHODOLOGY_ITEMS",
-    "def collect_all",
-    "def score_health",
-    "def assess_risks",
-    "https://github.com/KJ5HST/methodology",
-)
-_FRAMEWORK_SIGNATURE_MIN = 2
+# Content verification is PER FILE: a signature set proves an installed file IS the one it
+# claims to be, and methodology_dashboard.py's OWN signatures prove nothing about a DIFFERENT
+# installed file. The gap this closes: context_budget.py and .context-budget.json were added to
+# FRAMEWORK_INSTALLED_SOURCE above, but is_framework_installed checked every name against the
+# scanner's own signatures below — which context_budget.py never matches — so the exclusion
+# silently never fired for it even though the name-list agreement test passed
+# (test_exclusion_list_matches_the_manifest checks the LIST, not the runtime predicate). A
+# canonical test asserts every FRAMEWORK_INSTALLED_SOURCE name has an entry here, so a future
+# addition to that tuple cannot repeat this gap silently. Two signature hits (or a version
+# match) are suggestive rather than proof — a heuristic, same as before — and the
+# .methodology-profile marker remains the documented override for any repo this still gets wrong.
+_FRAMEWORK_FILE_SIGNATURES = {
+    "methodology_dashboard.py": {
+        # Measured need for the signature fallback: a live adopter (feedback-loop-comparison)
+        # still runs a 1,614-line pre-version copy, and a DASHBOARD_VERSION-only gate silently
+        # skipped it — the fix quietly not applying is the same class of defect as the fix being
+        # wrong. Three of these are ordinary function names, hence min_hits=2, not 1.
+        "version_re": _VERSION_RE,
+        "signatures": (
+            "METHODOLOGY_ITEMS",
+            "def collect_all",
+            "def score_health",
+            "def assess_risks",
+            "https://github.com/KJ5HST/methodology",
+        ),
+        "min_hits": 2,
+    },
+    "context_budget.py": {
+        "version_re": re.compile(r'''^VERSION\s*=\s*["']([^"']+)["']''', re.MULTILINE),
+        "signatures": (
+            "context_budget.py — size budgets",
+            "CONFIG_NAME",
+            "HISTORY_NAME",
+            "growth_run",
+        ),
+        "min_hits": 2,
+    },
+    ".context-budget.json": {
+        # Structurally unreachable today: is_framework_installed() is only called when
+        # category == "source" (see its one call site), and categorize_file() always buckets a
+        # .json extension as "config" (CONFIG_EXTS), never "source" — so this entry can never
+        # affect source-LOC either way. Given a real signature anyway so the completeness test
+        # below needs no special case that could hide a future gap if that call-site guard, or
+        # this file's extension, ever changes.
+        "version_re": None,
+        "signatures": (
+            "bytes_per_token",
+            "fixed_harness_tokens",
+            "growth_run",
+            "calibrate_against",
+        ),
+        "min_hits": 2,
+    },
+}
 
 
 def is_framework_installed(rel_path, fpath):
@@ -458,14 +502,16 @@ def is_framework_installed(rel_path, fpath):
     their source, and the canonical repo's `tools/` + `starter-kit/` copies stay ITS source — it
     authors that file, so its own health score must keep paying for it.
 
-    Content-verified: the file must declare `DASHBOARD_VERSION`, or carry at least two structural
-    signatures of this scanner (for copies predating that constant). The **whole file** is read,
-    not a fixed prefix — an earlier version searched only the first 4096 bytes, and the real
-    constant sits close enough to that boundary that ordinary growth of this module header would
-    have crossed it, silently switching the exclusion off and regressing every doc-only adopter
-    to the defect this exists to fix. (Measured at 2.10.1: byte 3,409, only 687 bytes clear of
-    the old window. That margin is a snapshot, not an invariant — it was 1,572 bytes one commit
-    earlier, and a single docstring addition consumed 56% of it, which is exactly the hazard.
+    Content-verified, PER FILE (see _FRAMEWORK_FILE_SIGNATURES): each name in
+    FRAMEWORK_INSTALLED_SOURCE carries its own version pattern and signature set, because a
+    signature set that proves one file's identity proves nothing about a different file merely
+    sharing the same name-list entry. The **whole file** is read, not a fixed prefix — an
+    earlier version searched only the first 4096 bytes, and the real constant sits close enough
+    to that boundary that ordinary growth of this module header would have crossed it, silently
+    switching the exclusion off and regressing every doc-only adopter to the defect this exists
+    to fix. (Measured at 2.10.1: byte 3,409, only 687 bytes clear of the old window. That margin
+    is a snapshot, not an invariant — it was 1,572 bytes one commit earlier, and a single
+    docstring addition consumed 56% of it, which is exactly the hazard.
     test_predicate_reads_the_whole_file_not_a_prefix is what actually holds the line.)
     A silent cliff inside the fix for a silent-signal bug is
     not a tradeoff worth keeping; the read costs nothing, since the file is read for line-counting
@@ -473,20 +519,22 @@ def is_framework_installed(rel_path, fpath):
 
     **The threat model is accidental miscounting, not an adversarial adopter.** These checks make
     it unlikely that the scanner mistakes an adopter's own work for ours. They do NOT stop someone who
-    deliberately pastes `DASHBOARD_VERSION` into their application to dodge a score — nothing
+    deliberately pastes a version marker into their application to dodge a score — nothing
     file-local could, and the only thing they would win is a wrong dashboard for themselves.
     """
-    if str(rel_path).replace("\\", "/") not in FRAMEWORK_INSTALLED_SOURCE:
+    name = str(rel_path).replace("\\", "/")
+    sig = _FRAMEWORK_FILE_SIGNATURES.get(name)
+    if sig is None:
         return False
     try:
         with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
             text = fh.read()
     except OSError:
         return False
-    if _VERSION_RE.search(text):
+    if sig["version_re"] is not None and sig["version_re"].search(text):
         return True
-    hits = sum(1 for sig in _FRAMEWORK_SIGNATURES if sig in text)
-    return hits >= _FRAMEWORK_SIGNATURE_MIN
+    hits = sum(1 for s in sig["signatures"] if s in text)
+    return hits >= sig["min_hits"]
 
 
 def find_canonical(start):

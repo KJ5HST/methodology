@@ -35,6 +35,50 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-08-11 · [BL-31] Dashboard's framework-installed exclusion never learned about the context-budget gate PR #66 itself shipped
+
+- **Origin:** fork backlog item BL-31 (`docs/planning/BACKLOG.md`, fork `main` only — not yet pushed
+  to `origin` as of this entry, so no link is given rather than cite one that would not resolve),
+  found re-verifying PR #66's own review-comment fixes after merge. `bin/_manifest.py` gained two
+  new non-markdown dests in this PR (`context_budget.py`, TRACKED; `.context-budget.json`, SEED),
+  but `tools/methodology_dashboard.py`'s `FRAMEWORK_INSTALLED_SOURCE` tuple and
+  `tools/test_methodology_dashboard.py`'s `CHECKLIST_EXEMPT` test fixture — both purpose-built to
+  stay in sync with this manifest — were never extended to match. Reproduced before the fix, not
+  inferred: a `git worktree` at the merge commit (`a2a7275`) run against
+  `python3 -m unittest tools/test_methodology_dashboard.py` gave 2 failures, both in tests that
+  predate this PR (last touched at `bec4095`) and exist specifically to catch this class of drift.
+- **Effect the drift had:** any adopter running `bin/sync` post-merge would have `context_budget.py`
+  misattributed to their own source LOC — the exact miscount `FRAMEWORK_INSTALLED_SOURCE` exists to
+  prevent for `methodology_dashboard.py` itself — and both new root files would read as neither
+  scored nor exempt on the compliance checklist.
+- **First fix (listing the names) did not actually work — found on review, not shipped as-is.**
+  Adding `context_budget.py` and `.context-budget.json` to `FRAMEWORK_INSTALLED_SOURCE` satisfies
+  the name-list agreement test, but `is_framework_installed()` then verified EVERY listed name
+  against `methodology_dashboard.py`'s own content signatures (`DASHBOARD_VERSION`,
+  `METHODOLOGY_ITEMS`, etc.) — which `context_budget.py` never carries — so the content check
+  silently rejected it and the exclusion never fired. Reproduced directly:
+  `is_framework_installed(Path("context_budget.py"), ...)` returned `False` even with the name
+  listed; a real bin/sync-shaped synced doc repo still flipped `doc_only` `True -> False`.
+- **Real fix:** content verification is now PER FILE. `_FRAMEWORK_FILE_SIGNATURES` gives each name
+  in `FRAMEWORK_INSTALLED_SOURCE` its own version pattern and signature set —
+  `context_budget.py`'s own `VERSION`/`CONFIG_NAME`/`HISTORY_NAME` markers, `.context-budget.json`'s
+  own distinctive keys (though that entry is structurally unreachable today: `is_framework_installed`
+  is only called for `category == "source"`, and a `.json` extension is always `"config"` — given a
+  signature anyway so the completeness test below needs no special case). A new canonical test
+  asserts every `FRAMEWORK_INSTALLED_SOURCE` name has a matching signature entry, so a future
+  addition to the tuple cannot repeat this exact gap silently. A new behavior test reproduces the
+  bug end-to-end with the REAL shipped `context_budget.py` content (not a synthetic stand-in) and
+  asserts a synced doc-only repo stays `doc_only` — RED-confirmed against the name-only fix before
+  landing this one. `CHECKLIST_EXEMPT` (a `tools/test_methodology_dashboard.py` test fixture, not
+  scanner source) gains both names, with the same reasoning already on record for
+  `methodology_dashboard.py` — their presence proves a pre-commit hook was installed, not that the
+  session-operating discipline the checklist measures was followed. `DASHBOARD_VERSION` 2.10.2 →
+  2.10.3.
+- **Verified:** `python3 -m unittest tools/test_methodology_dashboard.py` 200/200 (197 prior + 3
+  new; RED-confirmed against the pre-per-file-signature code first); `bash bin/tests.sh` 114/114;
+  `python3 bin/check-links` OK (83 links / 21 files); twins confirmed
+  byte-identical.
+
 ### 2026-08-10 · [ad hoc] Re-grounded the /caveman row's remaining unsupported claim
 
 - **Change:** `starter-kit/RECOMMENDED_SKILLS.md`'s `/caveman` row.
