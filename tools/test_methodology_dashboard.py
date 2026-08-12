@@ -37,6 +37,7 @@ from pathlib import Path
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOOLS_PY = os.path.join(HERE, "methodology_dashboard.py")
 STARTER_PY = os.path.join(os.path.dirname(HERE), "starter-kit", "methodology_dashboard.py")
+STARTER_CONTEXT_BUDGET = os.path.join(os.path.dirname(HERE), "starter-kit", "context_budget.py")
 
 _spec = importlib.util.spec_from_file_location("methodology_dashboard_under_test", TOOLS_PY)
 md = importlib.util.module_from_spec(_spec)
@@ -2417,6 +2418,60 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
                                 md.FRAMEWORK_AMBIGUOUS_EVIDENCE_MIN,
                                 "a real bin/sync install must be able to satisfy the ambiguous "
                                 "evidence threshold on its own")
+
+    # --- per-file signatures: the BL-31 follow-up gap (a listed name proves nothing about a
+    # DIFFERENT file's content) --------------------------------------------------------------
+
+    def test_every_framework_installed_source_name_has_a_signature(self):
+        """The completeness gate the fix is really about. FRAMEWORK_INSTALLED_SOURCE and
+        _FRAMEWORK_FILE_SIGNATURES must enumerate the SAME names, or a future addition to the
+        tuple repeats the exact gap this test exists to close: listed for exclusion, verified
+        against the WRONG file's signatures (or none at all), never actually excluded."""
+        self.assertEqual(set(md.FRAMEWORK_INSTALLED_SOURCE),
+                         set(md._FRAMEWORK_FILE_SIGNATURES.keys()),
+                         "every FRAMEWORK_INSTALLED_SOURCE name needs its own entry in "
+                         "_FRAMEWORK_FILE_SIGNATURES — a name-list addition with no matching "
+                         "signature silently never excludes anything")
+
+    def test_the_real_context_budget_artifact_is_recognized(self):
+        """Guard-the-guard, mirrors test_the_real_shipped_artifact_is_recognized: uses the REAL
+        starter-kit/context_budget.py content, not a synthetic stand-in, so a future edit to
+        that file that drifts from its own declared signatures is caught here, not only in a
+        fixture that could drift right alongside it."""
+        real = Path(STARTER_CONTEXT_BUDGET).read_text(encoding="utf-8")
+        self.assertTrue(md.is_framework_installed(
+            Path("context_budget.py"), Path(STARTER_CONTEXT_BUDGET)))
+        p = self._repo({"context_budget.py": real, "README.md": "# adopter\n"})
+        m = md.collect_all(p)
+        self.assertEqual(m["files"]["by_category"]["vendor"]["count"], 1)
+        self.assertEqual(m["tests"]["source_loc"], 0)
+
+    def test_a_synced_repo_with_context_budget_installed_is_still_doc_only(self):
+        """THE regression test for the actual bug, reproducing the maintainer's own PR #71
+        review finding: adding context_budget.py's NAME to FRAMEWORK_INSTALLED_SOURCE did not
+        exclude it, because the content check verified every name against
+        methodology_dashboard.py's OWN signatures — which context_budget.py never matches. RED
+        against that version (confirmed by running this test before the per-file fix): a real
+        doc-only repo, after a real bin/sync-shaped install of context_budget.py (674 real
+        lines, read from the actual shipped file) alongside the scanner, flips
+        doc_only True -> False and gains a false HIGH "No test infrastructure" risk — v3.2's
+        exact false penalty, a fourth time."""
+        real_scanner = Path(STARTER_PY).read_text(encoding="utf-8")
+        real_context_budget = Path(STARTER_CONTEXT_BUDGET).read_text(encoding="utf-8")
+        p = self._repo({
+            **self.QUARTO,
+            "methodology_dashboard.py": real_scanner,
+            "context_budget.py": real_context_budget,
+        })
+        m = md.collect_all(p)
+        self.assertTrue(m["doc_only"]["is_doc_only"],
+                        "a real bin/sync-shaped install of context_budget.py must not flip a "
+                        "genuine doc-only repo to code")
+        self.assertEqual(m["tests"]["source_loc"], 0,
+                         "context_budget.py's own 674 LOC must not count as the adopter's source")
+        self.assertNotIn("No test infrastructure",
+                         [r["description"] for r in m["scores"]["risks"]],
+                         "the false HIGH risk this whole fix exists to prevent")
 
     def test_seed_docs_need_evidence_the_framework_was_installed(self):
         """The delta boundary review's confirmed regression, and the plan's RED-first clause (c)
