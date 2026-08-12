@@ -35,6 +35,37 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-08-12 · [issue #67] The stale-copy warning now names a remedy proportionate to the finding, and bare `--dry-run` no longer writes
+
+- **Change:** `tools/methodology_dashboard.py` (+ `starter-kit/` twin, kept byte-identical) and
+  `tools/test_methodology_dashboard.py`. `DASHBOARD_VERSION` 2.10.5 → 2.10.6. Closes
+  [issue #67](https://github.com/KJ5HST/methodology/issues/67).
+- **Defect 1 — a disproportionate remedy.** `check_stale_version()` answered "this one copy is
+  old" with `Re-sync: python3 <canonical> --sync`. But `--sync` is scoped from the **canonical's
+  own location**, not the working directory, so it rewrites every discovered sibling — measured at
+  26 files across 25 repos, including 7 creates in repos that do not gitignore the path and 1
+  where the file is git-tracked. An adopter following a one-line instruction verbatim dirtied
+  eight unrelated repositories. The warning now leads with the safe per-project action
+  (`cp <canonical> <this copy>`) and offers the portfolio path only as `--sync --dry-run`, with
+  its scope stated. **Why it matters beyond tidiness:** a remedy nobody can safely run is one
+  mechanism behind an *ignored* warning — in one adopter this line rode ~28 consecutive handoffs
+  unacted-on. The measurement was never missing; the actionable remedy was.
+- **Defect 2 — a flag named `--dry-run` that writes.** It was consulted only inside the `--sync`
+  branch, so bare `--dry-run` fell through to a full scan and wrote `dashboard.html` *and*
+  appended to `dashboard_history.jsonl`. It is now an error (exit 2) that writes nothing.
+  Refusing rather than silently no-opping is deliberate: a silent no-op leaves the caller unable
+  to distinguish "nothing to do" from "flag ignored" — the same unreadable-signal class as
+  defect 1.
+- **Tests:** new `TestCliRemedyProportionality` (3 cases, unit suite 208 → 211). Both defect
+  tests were driven RED against the pre-fix scanner and the failing run read, not assumed;
+  the third is a presence control (a plain run must still write `dashboard.html`), without which
+  a scanner that refused *every* invocation would pass and look fixed.
+- **Scope deliberately not taken:** the issue also suggests `--sync-self` and a `--yes` gate on
+  `--sync`. Both change the CLI contract rather than fix a defect, so they are left for a
+  separate deliverable; the `cp` line already gives the per-project remedy with no new surface.
+- **Distribution:** the scanner is `bin/_manifest.py`-TRACKED, so adopters receive both fixes via
+  `bin/sync`.
+
 ### 2026-08-11 · [ad hoc] `methodology_dashboard.py`'s `LANG_MAP`/`DOC_EXTS` now recognize R, Quarto, and R Markdown
 
 - **Change:** `tools/methodology_dashboard.py` (+ `starter-kit/` twin, kept byte-identical) and

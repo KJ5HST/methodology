@@ -82,7 +82,7 @@ from collections import defaultdict
 # Every other copy (portfolio root + per-project) is a synced copy of the canonical and must
 # carry the same value. A copy whose DASHBOARD_VERSION is older than the canonical is stale —
 # re-sync from the canonical. Bump on any change to the canonical script.
-DASHBOARD_VERSION = "2.10.5"
+DASHBOARD_VERSION = "2.10.6"
 
 ROOT = Path(__file__).parent
 EXCLUDE_DIRS = {"methodology", "BrogueCE-iOS", ".git", "__pycache__", "node_modules", ".venv", "venv"}
@@ -589,10 +589,23 @@ def check_stale_version():
         return
     canon_ver = parse_version(canonical)
     if canon_ver and version_key(canon_ver) > version_key(DASHBOARD_VERSION):
+        # The remedy must be PROPORTIONATE TO THE FINDING (issue #67). The finding is "this one
+        # copy is old"; the old remedy was `--sync`, which is scoped from the CANONICAL's location
+        # rather than the working directory, so it rewrites every discovered sibling — measured at
+        # 26 files across 25 repos, including 7 creates in repos that do not gitignore the path and
+        # 1 target where the file is git-tracked. An adopter who follows a one-line instruction
+        # verbatim should not dirty eight unrelated repositories.
+        #
+        # A disproportionate remedy is one mechanism behind an IGNORED warning: in one adopter this
+        # staleness line rode ~28 consecutive handoffs unacted-on. The measurement was never the
+        # missing part — the safe per-project action is one `cp`, and the message never printed it.
         sys.stderr.write(
             f"  ⚠ methodology_dashboard.py is stale: this copy is v{DASHBOARD_VERSION}, "
             f"canonical is v{canon_ver}.\n"
-            f"    Re-sync: python3 {canonical} --sync\n"
+            f"    Re-sync THIS project:  cp {canonical} {self_path}\n"
+            f"    Re-sync the PORTFOLIO: python3 {canonical} --sync --dry-run\n"
+            f"                           (rewrites EVERY discovered sibling repo — preview with\n"
+            f"                            --dry-run first, then re-run without it to apply)\n"
         )
 
 
@@ -662,8 +675,11 @@ def print_usage():
     print("  --with-submodules  In single-project mode, also scan git submodules as")
     print("                     separate entries (default: scan the project only).")
     print("  --sync             Copy the canonical dashboard to the portfolio root and")
-    print("                     every discovered project (use --dry-run to preview).")
+    print("                     EVERY discovered project (use --dry-run to preview first).")
+    print("                     Scoped from the canonical's location, not the working")
+    print("                     directory: to update one project, copy the file instead.")
     print("  --dry-run          With --sync, show planned changes without writing.")
+    print("                     On its own it is an error, never a silent full run.")
     print("  -h, --help         Show this help and exit.")
 
 
@@ -3295,6 +3311,21 @@ def main():
     if "--sync" in args:
         sync_dashboards(Path(__file__).resolve().parent, dry_run="--dry-run" in args)
         return
+
+    # A flag named --dry-run must never write (issue #67). It is consulted ONLY inside the --sync
+    # branch above, so bare `--dry-run` used to fall straight through to a full scan that wrote
+    # dashboard.html AND appended to dashboard_history.jsonl — the exact opposite of what the name
+    # promises, and silently, since nothing said the flag had been ignored. Refuse rather than
+    # no-op: a silent no-op leaves the caller unable to tell "nothing to do" from "flag ignored",
+    # which is the same class of unreadable signal as the defect above.
+    if "--dry-run" in args:
+        sys.stderr.write(
+            "  --dry-run applies to --sync only; on its own it would have run a full scan and\n"
+            "  written dashboard.html + dashboard_history.jsonl. Refusing rather than writing.\n"
+            "    Preview a sync:   python3 methodology_dashboard.py --sync --dry-run\n"
+            "    Generate normally: python3 methodology_dashboard.py\n"
+        )
+        sys.exit(2)
 
     # Warn (best-effort) if this copy is older than the canonical.
     check_stale_version()
