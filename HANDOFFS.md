@@ -8,6 +8,17 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S11
+date: 2026-08-12
+status: pending
+active_task: Fix issue #67 — `check_stale_version()` advertises `--sync` as the remedy for a stale copy, but `--sync` is scoped from the script's own location and writes 26 files across 25 sibling repos; and bare `--dry-run` is consulted only inside the `--sync` branch, so it falls through to a full scan and writes `dashboard.html` + `dashboard_history.jsonl`. ONE DELIVERABLE (one issue, two defects in the same CLI surface), not a vertical slice — no prior plan-mode contract, so it does not pass the FM #26 slice test and is not labelled one.
+```
+
+**Claim stub — Phase 1B.** Work in progress on `fix/issue-67-stale-version-remedy`. Ledger: `CHANGELOG: pending`.
+
+---
+
+```handoff
 session: S10
 date: 2026-08-10
 status: complete
