@@ -44,15 +44,17 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   `test_source_cap_boundary` exercises `DOC_ONLY_SOURCE_LOC_MAX` only indirectly, via hardcoded
   200/201 boundary literals, so that coverage would silently vanish if that fixture were ever
   rewritten to derive its boundary from the constant instead. `DOC_ONLY_SOURCE_LOC_MAX` in
-  particular decides which of two scoring regimes a repo gets (the comment a few lines below it
-  already documents a real 148-LOC repo the cap alone misclassified), so an accidental drift here
-  is a user-visible verdict change, not cosmetic.
+  particular decides which of two scoring regimes a repo gets (a real 148-LOC repo the cap alone
+  misclassified is documented near `FRAMEWORK_INSTALLED_DOCS`, ~100 lines below), so an accidental
+  drift here is a user-visible verdict change, not cosmetic.
 - **Fix:** added a comment recording that all three are deliberate, stated heuristics — not
   derived from a measured corpus of adopter repos — and a direct regression test
   (`test_doc_only_thresholds_are_pinned_not_left_to_drift`) asserting all three current values, so
   a future edit to any of them is a visible, deliberate decision.
 - **Verified:** `python3 tools/test_methodology_dashboard.py` 198/198 (197 prior + this one).
-  `DASHBOARD_VERSION` 2.10.2 → 2.10.3 in both twins; `test_dashboard_version` and
+  `DASHBOARD_VERSION` 2.10.2 → 2.10.4 in both twins (2.10.3 was skipped: #71 claimed it
+  independently for an unrelated fix, and the constant's own "bump on any change" rule means two
+  distinct changes cannot ship under one version); `test_dashboard_version` and
   `test_twins_byte_identical` updated/re-confirmed.
 - **Distribution:** `starter-kit/methodology_dashboard.py` is `bin/_manifest.py`-TRACKED, so
   adopters receive the documented, pinned thresholds via `bin/sync`; `tools/` and

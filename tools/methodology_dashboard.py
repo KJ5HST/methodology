@@ -82,7 +82,7 @@ from collections import defaultdict
 # Every other copy (portfolio root + per-project) is a synced copy of the canonical and must
 # carry the same value. A copy whose DASHBOARD_VERSION is older than the canonical is stale —
 # re-sync from the canonical. Bump on any change to the canonical script.
-DASHBOARD_VERSION = "2.10.3"
+DASHBOARD_VERSION = "2.10.4"
 
 ROOT = Path(__file__).parent
 EXCLUDE_DIRS = {"methodology", "BrogueCE-iOS", ".git", "__pycache__", "node_modules", ".venv", "venv"}
@@ -248,7 +248,7 @@ _BACKLOG_LOCATIONS = ("BACKLOG.md", "docs/BACKLOG.md", "docs/planning/BACKLOG.md
 # These three thresholds are deliberate, stated round-number heuristics, not derived from a
 # measured corpus of adopter repos — record that plainly rather than let the round numbers read
 # as calibrated. DOC_ONLY_SOURCE_LOC_MAX in particular decides which of two scoring regimes a
-# repo gets (see the 148-LOC misclassification this comment's neighbor documents below), so a
+# repo gets (see the 148-LOC misclassification documented near FRAMEWORK_INSTALLED_DOCS below), so a
 # regression test pins the current value: change it deliberately, not by accident.
 DOC_ONLY_SOURCE_LOC_MAX = 200            # source LOC at/below this is "essentially no real code"
 DOC_ONLY_DOC_LOC_MIN    = 200            # doc LOC at/above this signals a real doc corpus
