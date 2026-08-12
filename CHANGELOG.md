@@ -35,6 +35,25 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-08-12 · [ad hoc] Released v3.7 — the artifacts Phase 0 mandates reading now have ceilings
+
+- **Change:** release narration commit on `release/v3.7` — `README.md` §What's New in v3.7 (folding
+  in the stale "Since v3.6 (unreleased)" section), `CLAUDE.md` §Versioning entry, and the
+  "Current version" line 3.6 → 3.7. Cite-don't-restate: the full narrative lives in
+  [`CLAUDE.md` §Versioning "v3.7"](CLAUDE.md#versioning); this entry is the action record.
+- **Scope:** 38 commits and 13 ledger entries since `v3.6` (`d7a482a`). **Minor**, not patch,
+  because the framework gained a failure mode (**#28**, count 27 → 28 — the first since v3.1) and a
+  new distributed tool (`starter-kit/context_budget.py`, TRACKED, with a SEED config). **Not major**
+  because no principle, phase, gate, or workstream changed. Learnings 12 → 13; `DASHBOARD_VERSION`
+  2.10.2 → 2.10.6 across four separate fixes; `bin/tests.sh` 84 → 114; unit suite 197 → 211.
+- **The "unreleased" README section was stale and is why this was worth catching.** It still ended
+  *"the failure-mode count stays 27"* — written before PR #66 appended FM #28, and true when
+  written. A section that describes itself as pending release is exactly the text nobody re-reads;
+  it is Learning #7's cross-reference problem applied to the release notes themselves.
+- **Tag and Release are recorded in a follow-up entry, not predicted here.** A tag SHA that does not
+  exist yet is a forward-looking claim, and Learning #13 says to compute those rather than assert
+  them — so the tag/Release facts are appended once the action has actually happened.
+
 ### 2026-08-12 · [issue #67] The stale-copy warning now names a remedy proportionate to the finding, and bare `--dry-run` no longer writes
 
 - **Change:** `tools/methodology_dashboard.py` (+ `starter-kit/` twin, kept byte-identical) and

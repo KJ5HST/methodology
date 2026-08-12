@@ -8,6 +8,17 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S12
+date: 2026-08-12
+status: pending
+active_task: Cut the v3.6 → v3.7 minor release. 38 commits and 13 ledger entries are unreleased, including the first new failure mode since v3.1 (FM #28, count 27 → 28), a new distributed tool (`starter-kit/context_budget.py` TRACKED + `.context-budget.json` SEED), new Learning #13, and `DASHBOARD_VERSION` 2.10.2 → 2.10.6 across four separate fixes. Minor rather than patch because the framework gained a failure mode and a shipped tool; not major because no principle, phase, gate, or workstream changed. ONE DELIVERABLE (the release), not a vertical slice.
+```
+
+**Claim stub — Phase 1B.** Work in progress on `release/v3.7`. Ledger: `CHANGELOG: pending`.
+
+---
+
+```handoff
 session: S11
 date: 2026-08-12
 status: complete
