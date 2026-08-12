@@ -46,7 +46,7 @@ key_files: <each entry carries a path:line token, e.g. SessionManager.java:245>
 gotchas: <traps the next session should watch for>
 runtime_smoke: <a run result, or "n/a — docs-only", or "impossible: <reason>">
 changelog_ref: <PR #N, a short-sha, or CHANGELOG.md "<its ### heading>" — never a bare line number, which decays once the ledger is trimmed>
-commit: <short-sha — or the literal `pending`, legal only for the newest receipt (see below)>
+commit: <short-sha — or the literal `pending`>
 ```
 <free-text prose: the durable proxy for the Phase 3G spoken report, plus the +/- self-score breakdown>
 

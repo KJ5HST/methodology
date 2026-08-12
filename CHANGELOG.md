@@ -47,10 +47,10 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   a legitimate resting value for both fields, not a duty nobody is assigned to discharge.
 - **(2) `changelog_ref`'s spec offered two locator forms neither of which receipts actually use.**
   The placeholder named `PR #N` or a short-sha; in practice, entries locate a `CHANGELOG.md`
-  action by its quoted `### ` heading instead — this repo's own `bin/check-handoff` diagnostic
-  hints already teach that convention in its remediation text, without the spec ever blessing it.
-  Added the quoted-heading form as a third explicit option and noted that a bare line number is
-  not a durable locator once a ledger is ever trimmed or archived.
+  action by its quoted `### ` heading instead — all 8 live receipts in this repo's own
+  `HANDOFFS.md` already use that form, and none use `PR #N` or a bare sha, without the spec ever
+  blessing it. Added the quoted-heading form as a third explicit option and noted that a bare line
+  number is not a durable locator once a ledger is ever trimmed or archived.
 - **Distribution:** `HANDOFFS.md` is `bin/_manifest.py`-SEED (copied once, then adopter-owned), so
   new adopters receive the corrected spec; existing adopters' own copies are unaffected until they
   choose to re-seed.
