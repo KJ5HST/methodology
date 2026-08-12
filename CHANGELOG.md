@@ -50,9 +50,22 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   *"the failure-mode count stays 27"* — written before PR #66 appended FM #28, and true when
   written. A section that describes itself as pending release is exactly the text nobody re-reads;
   it is Learning #7's cross-reference problem applied to the release notes themselves.
-- **Tag and Release are recorded in a follow-up entry, not predicted here.** A tag SHA that does not
-  exist yet is a forward-looking claim, and Learning #13 says to compute those rather than assert
-  them — so the tag/Release facts are appended once the action has actually happened.
+- **Tag and Release — recorded after the action, not predicted before it.** Annotated tag `v3.7`
+  (tag object `0138e095`) cut at **`dcb6fc6`**, the PR [#74](https://github.com/KJ5HST/methodology/pull/74)
+  merge commit, plus GitHub Release *"v3.7 — The artifacts Phase 0 mandates reading now have
+  ceilings"*, published 2026-08-12T04:50:42Z, not a draft and not a prerelease:
+  <https://github.com/KJ5HST/methodology/releases/tag/v3.7>. Written into this entry only once each
+  fact existed and had been read back — a tag SHA asserted in advance is exactly the forward-looking
+  claim Learning #13 says to compute rather than predict.
+- **Unlike v3.6, this release has a narration commit of its own** (`2bddc3e`), so the tag+publish
+  step is recorded here against a real commit rather than reconstructed four days late. That was
+  v3.6's failure: a release is the non-commit action failure mode #27 names, and the one class
+  Phase 0 reconcile-on-read cannot catch by design — reconcile diffs `git log` against the ledger
+  frontier, and a tag plus a Release move neither.
+- **Commit/PR:** narration `2bddc3e` → merge `dcb6fc6` (PR #74); this ledger completion rides the
+  S12 close-out commit.
+- **Session:** S12 · **Verified:** tag confirmed annotated (`git cat-file -t` → `tag`) and pointing
+  at `dcb6fc6`; present on `origin`; Release confirmed published, non-draft, non-prerelease.
 
 ### 2026-08-12 · [issue #67] The stale-copy warning now names a remedy proportionate to the finding, and bare `--dry-run` no longer writes
 
