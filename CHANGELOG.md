@@ -35,6 +35,47 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-08-11 · [ad hoc] `methodology_dashboard.py`'s `LANG_MAP`/`DOC_EXTS` now recognize R, Quarto, and R Markdown
+
+- **Change:** `tools/methodology_dashboard.py` (+ `starter-kit/` twin, kept byte-identical) and
+  `tools/test_methodology_dashboard.py`.
+- **The defect:** `.r` was already in `SOURCE_EXTS` (R source always counted toward Source LOC),
+  but had no `LANG_MAP` entry, so it never got its own "Code by Language" row. `.qmd` (Quarto) and
+  `.rmd` (R Markdown) were in neither `SOURCE_EXTS` nor `DOC_EXTS`, so either extension outside a
+  `docs/` path fell through `categorize_file`'s whole ladder to `"other"` — not source, not docs,
+  not even LOC-counted (LOC is skipped entirely for `"other"`). Found scanning a real R package:
+  603 `.r` files / 77,773 LOC counted as Source but invisible in "Code by Language".
+- **Fix:** `"r": "R"` added to `LANG_MAP`; `.qmd`/`.rmd` added to `DOC_EXTS`.
+- **A real, not just cosmetic, classification consequence — found on review, pinned here.**
+  Quarto's `.qmd` was already a render-toolchain marker (`detect_doc_only`'s fallback arm), so a
+  Quarto repo was already `doc_only` before this fix; what changed for Quarto is only its
+  *reported* metrics (a Quarto book previously showed zero documentation and its files as
+  uncounted `"other"`). Bare `.Rmd` has no toolchain marker at all (`_bookdown.yml` is one; a
+  plain analysis project has neither that nor `*.qmd`), so adding `.rmd` to `DOC_EXTS` is what
+  newly clears the corpus disjunction for that class: a real R-Markdown analysis repo (no
+  toolchain marker, a small `.R` helper alongside several `.Rmd` files) flips `doc_only`
+  `False → True` and its `"No test infrastructure"` risk softens from `HIGH` to a doc-only
+  advisory. Believed correct — an R-Markdown analysis project is exactly the population BL-5/v3.2
+  exists to score fairly, and the has-tests gate still protects a real R package with a `tests/`
+  dir — verified directly against the pre-fix scanner (the identical fixture there reads
+  `doc_only=False` with the `HIGH` risk) and pinned with a new end-to-end regression test,
+  `test_rmd_analysis_repo_flips_doc_only_and_softens_the_test_risk`, so a future `DOC_EXTS` edit
+  cannot silently un-flip the population without a test noticing.
+- **Also fixed:** the existing Quarto fixture's own render-toolchain-arm isolation. Adding
+  `.qmd`/`.rmd` to `DOC_EXTS` meant the pre-existing Quarto test could now clear the corpus
+  disjunction on doc-LOC alone, silently narrowing what it proved (Layer 7's specific
+  toolchain-arm-in-isolation guarantee). A `QUARTO_MINIMAL` fixture + a dedicated isolation test
+  restore that proof; the stale in-code comment claiming a pure-Quarto repo's `.qmd` was "never
+  counted as docs" is corrected to match.
+- **Verified:** `python3 -m unittest tools/test_methodology_dashboard.py` 204/204 (198 prior + 6
+  from the original fix + 1 classification-regression test), the 2 failures on this base
+  (`test_every_distributed_adopter_root_file_is_scored_or_exempt`,
+  `test_exclusion_list_matches_the_manifest`) are pre-existing and unrelated (fixed by a sibling
+  PR, not this one). `DASHBOARD_VERSION` 2.10.2 → 2.10.5 (2.10.3/2.10.4 independently claimed by
+  two sibling PRs open the same day). Twins confirmed byte-identical.
+- **Distribution:** `starter-kit/methodology_dashboard.py` is `bin/_manifest.py`-TRACKED, so
+  adopters receive the fix via `bin/sync`; `tools/` and `tools/test_methodology_dashboard.py` are
+  canonical-only.
 ### 2026-08-11 · [BL-31] Dashboard's framework-installed exclusion never learned about the context-budget gate PR #66 itself shipped
 
 - **Origin:** fork backlog item BL-31 (`docs/planning/BACKLOG.md`, fork `main` only — not yet pushed

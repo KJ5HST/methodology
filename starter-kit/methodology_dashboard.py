@@ -82,7 +82,7 @@ from collections import defaultdict
 # Every other copy (portfolio root + per-project) is a synced copy of the canonical and must
 # carry the same value. A copy whose DASHBOARD_VERSION is older than the canonical is stale —
 # re-sync from the canonical. Bump on any change to the canonical script.
-DASHBOARD_VERSION = "2.10.4"
+DASHBOARD_VERSION = "2.10.5"
 
 ROOT = Path(__file__).parent
 EXCLUDE_DIRS = {"methodology", "BrogueCE-iOS", ".git", "__pycache__", "node_modules", ".venv", "venv"}
@@ -95,7 +95,11 @@ SOURCE_EXTS = {
     ".kt", ".scala", ".lua", ".sh", ".bash", ".zsh", ".pl", ".r",
 }
 TEST_PATTERNS = {"test_", "_test.", ".test.", ".spec.", "tests/", "__tests__/", "test/"}
-DOC_EXTS = {".md", ".txt", ".rst", ".adoc", ".org"}
+# .qmd/.rmd (Quarto / R Markdown) are literate-document formats — prose with embedded code, the
+# same bucket .md already lives in, not source's. Without an entry here, a file with either
+# extension outside a docs/ path fell through categorize_file's whole ladder to "other": not
+# source, not docs, not even LOC-counted (LOC is skipped entirely for "other").
+DOC_EXTS = {".md", ".txt", ".rst", ".adoc", ".org", ".qmd", ".rmd"}
 CONFIG_FILES = {
     "Dockerfile", "Makefile", "CMakeLists.txt", "Rakefile", "Gemfile",
     "Procfile", "fly.toml", "netlify.toml", "vercel.json",
@@ -119,6 +123,9 @@ LANG_MAP = {
     ".kt": "Kotlin", ".scala": "Scala", ".lua": "Lua", ".sh": "Shell",
     ".bash": "Shell", ".zsh": "Shell", ".html": "HTML", ".css": "CSS",
     ".scss": "SCSS", ".less": "LESS", ".sql": "SQL",
+    # .r was already in SOURCE_EXTS (so R LOC always counted toward Source) but had no
+    # LANG_MAP entry, so it never got its own "Code by Language" row.
+    ".r": "R",
 }
 
 METHODOLOGY_ITEMS = [
@@ -1971,8 +1978,11 @@ def detect_doc_only(path, files, render):
         return {"is_doc_only": False, "reason": reason}
 
     # 4. Corpus disjunction (only when source is negligible): a real doc corpus OR a render
-    #    toolchain — the latter catches a pure-LaTeX/Quarto repo whose .tex/.qmd are not counted
-    #    as docs (so its doc_loc is ~0), the exact source_loc≈0 research repo that must not be missed.
+    #    toolchain — the latter catches a pure-LaTeX (or other toolchain-only) repo whose
+    #    .tex files are not counted as docs (so its doc_loc is ~0; .qmd/.rmd ARE counted, so a
+    #    pure Quarto/R-Markdown corpus now clears the doc_loc/doc_files arms directly and no
+    #    longer depends on this fallback), the exact source_loc≈0 research repo that must not
+    #    be missed.
     #    Framework-installed markdown is discounted here and ONLY here: bin/sync ships 21 doc
     #    files, which clears DOC_ONLY_DOC_FILES_MIN by itself, so counting them would let the
     #    installer answer the question "is this a document project?" — the mirror of the very

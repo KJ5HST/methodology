@@ -105,7 +105,9 @@ class TestDetection(unittest.TestCase):
         self.assertEqual(r["reason"], "heuristic")
 
     def test_pure_latex_research_via_toolchain(self):
-        # .tex/.qmd aren't counted as docs, so doc_loc≈0; only toolchain_present rescues it.
+        # .tex isn't counted as docs (.qmd/.rmd now are; .tex stays out), so doc_loc≈0; only
+        # toolchain_present rescues it. Real-scan proof:
+        # TestFrameworkInstalledExclusion.test_a_pure_quarto_repo_below_doc_thresholds_still_doc_only_via_toolchain.
         r = md.detect_doc_only(self.p, files(src=0, docs_loc=0, docs_count=0),
                                {"toolchain_present": True})
         self.assertTrue(r["is_doc_only"])
@@ -159,6 +161,93 @@ class TestDetection(unittest.TestCase):
         self.assertEqual(md.DOC_ONLY_SOURCE_LOC_MAX, 200)
         self.assertEqual(md.DOC_ONLY_DOC_LOC_MIN, 200)
         self.assertEqual(md.DOC_ONLY_DOC_FILES_MIN, 3)
+
+
+class TestLanguageAndDocExtensionCoverage(unittest.TestCase):
+    """Two independent gaps in the same three constants, found scanning a real R package:
+    - `.r` was already in SOURCE_EXTS (R always counted toward Source LOC) but had no LANG_MAP
+      entry, so it never got its own "Code by Language" row.
+    - `.qmd`/`.rmd` (Quarto / R Markdown) were in neither SOURCE_EXTS nor DOC_EXTS, so a file with
+      either extension outside a docs/ path fell through categorize_file's whole ladder to
+      "other" -- not source, not docs, not even LOC-counted (LOC is skipped entirely for "other").
+    """
+
+    def setUp(self):
+        self._td = tempfile.TemporaryDirectory()
+        self.p = Path(self._td.name)
+
+    def tearDown(self):
+        self._td.cleanup()
+
+    def test_r_source_gets_its_own_language_row(self):
+        write_tree(self.p, {"analysis.R": "x <- 1\ny <- 2\n"})
+        m = md.collect_file_metrics(self.p)
+        self.assertIn("R", m["by_language"], "an .R file must appear in Code by Language")
+        self.assertEqual(m["by_language"]["R"]["count"], 1)
+        self.assertEqual(m["by_category"]["source"]["count"], 1,
+                         "R must still count as Source -- this only adds the missing language row")
+
+    def test_r_extension_is_case_insensitive(self):
+        # collect_file_metrics lowercases fpath.suffix, so the conventional uppercase ".R" and a
+        # bare ".r" both resolve to the one LANG_MAP key.
+        write_tree(self.p, {"a.R": "x <- 1\n", "b.r": "y <- 2\n"})
+        m = md.collect_file_metrics(self.p)
+        self.assertEqual(m["by_language"]["R"]["count"], 2)
+
+    def test_qmd_is_docs_not_other(self):
+        write_tree(self.p, {"article.qmd": "# Title\n" + "prose\n" * 10})
+        m = md.collect_file_metrics(self.p)
+        self.assertEqual(m["by_category"]["docs"]["count"], 1)
+        self.assertEqual(m["by_category"]["other"]["count"], 0)
+        self.assertGreater(m["by_category"]["docs"]["loc"], 0,
+                           "LOC is skipped entirely for \"other\" -- must not silently stay 0")
+
+    def test_rmd_is_docs_not_other(self):
+        write_tree(self.p, {"vignette.Rmd": "# Title\n" + "prose\n" * 10})
+        m = md.collect_file_metrics(self.p)
+        self.assertEqual(m["by_category"]["docs"]["count"], 1)
+        self.assertEqual(m["by_category"]["other"]["count"], 0)
+        self.assertGreater(m["by_category"]["docs"]["loc"], 0)
+
+    def test_qmd_and_rmd_are_not_also_a_language_row(self):
+        # Precedent: DOC_EXTS's other members (.md, .txt, .rst, .adoc, .org) have no LANG_MAP
+        # entry either -- "Code by Language" is a programming-language signal, not a doc-format
+        # one, so a doc extension should never double as both.
+        write_tree(self.p, {"article.qmd": "# T\nprose\n", "vignette.Rmd": "# T\nprose\n"})
+        m = md.collect_file_metrics(self.p)
+        self.assertNotIn("Quarto", m["by_language"])
+        self.assertNotIn("R Markdown", m["by_language"])
+
+    def test_rmd_analysis_repo_flips_doc_only_and_softens_the_test_risk(self):
+        """The downstream classification consequence review found this fix under-described.
+        Quarto's own `.qmd` was already a render-toolchain marker (detect_doc_only's fallback
+        arm), so a Quarto repo was already doc_only before this fix -- what changed for Quarto
+        is only its REPORTED metrics. Bare `.Rmd` has no toolchain marker at all (`_bookdown.yml`
+        is one; a plain analysis project has neither that nor `*.qmd`), so adding `.rmd` to
+        DOC_EXTS is what newly clears the corpus disjunction for that class and flips
+        doc_only False -> True -- a real classification change, not a metrics-only one.
+
+        Verified directly against `upstream/main` (pre-fix) before writing this: the identical
+        fixture there reads doc_only=False with "No test infrastructure" (HIGH) in the risk
+        list. Believed correct -- an R-Markdown analysis project is exactly the population
+        BL-5/v3.2 exists to score fairly, and the has-tests gate (test_b_synced_code_repo...
+        analogue) still protects a real R package with a tests/ dir -- but nothing pinned the
+        consequence before this test, so a future DOC_EXTS edit could silently un-flip it.
+        """
+        write_tree(self.p, {
+            "helper.R": "f <- function(x) x + 1\n" * 30,
+            **{f"analysis{i}.Rmd": "---\ntitle: a\n---\n\n" + "prose text here\n" * 30
+               for i in range(5)},
+            "README.md": "# Analysis\n",
+        })
+        m = md.collect_all(self.p)
+        self.assertTrue(m["doc_only"]["is_doc_only"],
+                        "a bare .Rmd analysis project (no toolchain marker) must read doc-only")
+        self.assertEqual(m["tests"]["source_loc"], 30,
+                         "the helper's own LOC is still counted, just not against the doc-only cap")
+        self.assertNotIn("No test infrastructure",
+                         [r["description"] for r in m["scores"]["risks"]],
+                         "the HIGH risk must be softened once the repo reads as doc-only")
 
 
 class TestRenderMetrics(unittest.TestCase):
@@ -2043,10 +2132,10 @@ class TestFmtRatioAndTwins(unittest.TestCase):
                         "tools/ and starter-kit/ dashboards must be byte-identical")
 
     def test_dashboard_version(self):
-        self.assertEqual(md.DASHBOARD_VERSION, "2.10.4")
+        self.assertEqual(md.DASHBOARD_VERSION, "2.10.5")
         starter_src = Path(STARTER_PY).read_text(encoding="utf-8")
-        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.10\.4"', starter_src, re.MULTILINE),
-                        "starter-kit twin must also declare DASHBOARD_VERSION 2.10.4")
+        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.10\.5"', starter_src, re.MULTILINE),
+                        "starter-kit twin must also declare DASHBOARD_VERSION 2.10.5")
 
 
 class TestEndToEnd(unittest.TestCase):
@@ -2184,14 +2273,25 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
                         "commit", "-q", "-m", "init"], check=True)
         return p
 
-    # The synced doc corpus: a Quarto book, whose .qmd files are NOT doc-extensions, so the
-    # render-toolchain arm of the disjunction is what has to carry it — the exact source_loc≈0
-    # research repo BL-5 exists for.
+    # The synced doc corpus: a Quarto book. .qmd files are now doc-extensions, so this two-chapter
+    # fixture's own doc_loc (~400) clears DOC_ONLY_DOC_LOC_MIN on its own -- it still proves
+    # is_doc_only stays True, just no longer in isolation from the corpus arm. See
+    # QUARTO_MINIMAL + test_a_pure_quarto_repo_below_doc_thresholds_still_doc_only_via_toolchain
+    # below for the fixture that isolates the render-toolchain arm of the disjunction — the exact
+    # source_loc≈0 research repo BL-5 exists for.
     QUARTO = {
         "_quarto.yml": "project:\n  type: book\n",
         "ch1.qmd": "# Ch1\n" + "prose\n" * 200,
         "ch2.qmd": "# Ch2\n" + "prose\n" * 200,
         "README.md": "# Monograph\n\nA Quarto book.\n" * 4,
+    }
+
+    # A single short chapter -- doc_loc and doc_files both stay under the corpus-disjunction
+    # thresholds even with .qmd counted as docs, so is_doc_only can ONLY be reached via
+    # render.toolchain_present.
+    QUARTO_MINIMAL = {
+        "_quarto.yml": "project:\n  type: book\n",
+        "index.qmd": "# Index\none line of prose\n",
     }
 
     def test_a_synced_doc_repo_is_still_doc_only(self):
@@ -2204,6 +2304,22 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
                          "the adopter wrote no source; only the installed scanner was present")
         self.assertGreater(m["files"]["by_category"]["vendor"]["loc"], 2000,
                            "the excluded LOC must remain visible, not vanish from the inventory")
+
+    def test_a_pure_quarto_repo_below_doc_thresholds_still_doc_only_via_toolchain(self):
+        """Guard-the-guard: adding .qmd to DOC_EXTS must not make the toolchain arm of the corpus
+        disjunction unreachable through real scanning. QUARTO_MINIMAL's own doc_loc/doc_files are
+        asserted BELOW both thresholds, so is_doc_only=True here can only be explained by
+        render.toolchain_present -- the same real-scan proof QUARTO used to carry alone."""
+        p = self._repo(dict(self.QUARTO_MINIMAL))
+        m = md.collect_all(p)
+        docs = m["files"]["by_category"]["docs"]
+        self.assertLess(docs["loc"], md.DOC_ONLY_DOC_LOC_MIN,
+                         "fixture must stay under the doc-LOC threshold to isolate the toolchain arm")
+        self.assertLess(docs["count"], md.DOC_ONLY_DOC_FILES_MIN,
+                         "fixture must stay under the doc-files threshold to isolate the toolchain arm")
+        self.assertTrue(m["render"]["toolchain_present"], "_quarto.yml must be detected")
+        self.assertTrue(m["doc_only"]["is_doc_only"],
+                         "a real Quarto repo too small for the doc-corpus arms must still be caught")
 
     def test_d_no_test_risk_absent_when_synced_doc_repo_present_when_real(self):
         """RED: the HIGH risk was present on the synced doc repo before the exclusion."""
