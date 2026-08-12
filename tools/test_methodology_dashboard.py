@@ -218,6 +218,37 @@ class TestLanguageAndDocExtensionCoverage(unittest.TestCase):
         self.assertNotIn("Quarto", m["by_language"])
         self.assertNotIn("R Markdown", m["by_language"])
 
+    def test_rmd_analysis_repo_flips_doc_only_and_softens_the_test_risk(self):
+        """The downstream classification consequence review found this fix under-described.
+        Quarto's own `.qmd` was already a render-toolchain marker (detect_doc_only's fallback
+        arm), so a Quarto repo was already doc_only before this fix -- what changed for Quarto
+        is only its REPORTED metrics. Bare `.Rmd` has no toolchain marker at all (`_bookdown.yml`
+        is one; a plain analysis project has neither that nor `*.qmd`), so adding `.rmd` to
+        DOC_EXTS is what newly clears the corpus disjunction for that class and flips
+        doc_only False -> True -- a real classification change, not a metrics-only one.
+
+        Verified directly against `upstream/main` (pre-fix) before writing this: the identical
+        fixture there reads doc_only=False with "No test infrastructure" (HIGH) in the risk
+        list. Believed correct -- an R-Markdown analysis project is exactly the population
+        BL-5/v3.2 exists to score fairly, and the has-tests gate (test_b_synced_code_repo...
+        analogue) still protects a real R package with a tests/ dir -- but nothing pinned the
+        consequence before this test, so a future DOC_EXTS edit could silently un-flip it.
+        """
+        write_tree(self.p, {
+            "helper.R": "f <- function(x) x + 1\n" * 30,
+            **{f"analysis{i}.Rmd": "---\ntitle: a\n---\n\n" + "prose text here\n" * 30
+               for i in range(5)},
+            "README.md": "# Analysis\n",
+        })
+        m = md.collect_all(self.p)
+        self.assertTrue(m["doc_only"]["is_doc_only"],
+                        "a bare .Rmd analysis project (no toolchain marker) must read doc-only")
+        self.assertEqual(m["tests"]["source_loc"], 30,
+                         "the helper's own LOC is still counted, just not against the doc-only cap")
+        self.assertNotIn("No test infrastructure",
+                         [r["description"] for r in m["scores"]["risks"]],
+                         "the HIGH risk must be softened once the repo reads as doc-only")
+
 
 class TestRenderMetrics(unittest.TestCase):
     def setUp(self):
@@ -2101,10 +2132,10 @@ class TestFmtRatioAndTwins(unittest.TestCase):
                         "tools/ and starter-kit/ dashboards must be byte-identical")
 
     def test_dashboard_version(self):
-        self.assertEqual(md.DASHBOARD_VERSION, "2.10.4")
+        self.assertEqual(md.DASHBOARD_VERSION, "2.10.5")
         starter_src = Path(STARTER_PY).read_text(encoding="utf-8")
-        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.10\.4"', starter_src, re.MULTILINE),
-                        "starter-kit twin must also declare DASHBOARD_VERSION 2.10.4")
+        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.10\.5"', starter_src, re.MULTILINE),
+                        "starter-kit twin must also declare DASHBOARD_VERSION 2.10.5")
 
 
 class TestEndToEnd(unittest.TestCase):
