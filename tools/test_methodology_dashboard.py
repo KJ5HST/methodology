@@ -29,6 +29,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -2132,10 +2133,85 @@ class TestFmtRatioAndTwins(unittest.TestCase):
                         "tools/ and starter-kit/ dashboards must be byte-identical")
 
     def test_dashboard_version(self):
-        self.assertEqual(md.DASHBOARD_VERSION, "2.10.5")
+        self.assertEqual(md.DASHBOARD_VERSION, "2.10.6")
         starter_src = Path(STARTER_PY).read_text(encoding="utf-8")
-        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.10\.5"', starter_src, re.MULTILINE),
-                        "starter-kit twin must also declare DASHBOARD_VERSION 2.10.5")
+        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.10\.6"', starter_src, re.MULTILINE),
+                        "starter-kit twin must also declare DASHBOARD_VERSION 2.10.6")
+
+
+class TestCliRemedyProportionality(unittest.TestCase):
+    """Issue #67 — the CLI must not answer a small finding with a portfolio-wide write, and a
+    flag named --dry-run must never write. Both are CLI-surface behaviors, so both are driven
+    through a real subprocess: importing the module cannot observe main()'s argument handling.
+    """
+
+    def setUp(self):
+        self._td = tempfile.TemporaryDirectory()
+        self.p = Path(self._td.name)
+
+    def tearDown(self):
+        self._td.cleanup()
+
+    def _project(self, name="proj"):
+        """A minimal git project with its own copy of the scanner, ready to run."""
+        proj = self.p / name
+        proj.mkdir(parents=True)
+        write_tree(proj, {"README.md": "# p\n"})
+        subprocess.run(["git", "init", "-q", str(proj)], check=True)
+        subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(proj), "-c", "user.email=t@t", "-c", "user.name=t",
+                        "commit", "-qm", "i"], check=True)
+        shutil.copy(TOOLS_PY, proj / "methodology_dashboard.py")
+        return proj
+
+    def test_bare_dry_run_refuses_instead_of_writing(self):
+        # The defect: --dry-run was consulted ONLY inside the --sync branch, so on its own it
+        # fell through to a full scan and wrote both artifacts. Assert the artifacts, not just
+        # the exit code — "it exits non-zero" would still pass if it wrote and then failed.
+        proj = self._project()
+        r = subprocess.run([sys.executable, "methodology_dashboard.py", "--dry-run"],
+                           cwd=proj, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 2, "bare --dry-run must be an error, not a silent full run")
+        self.assertFalse((proj / "dashboard.html").exists(),
+                         "--dry-run must not write dashboard.html")
+        self.assertFalse((proj / "dashboard_history.jsonl").exists(),
+                         "--dry-run must not append to dashboard_history.jsonl")
+        self.assertIn("--sync", r.stderr, "the refusal must say what the flag is actually for")
+
+    def test_a_normal_run_still_writes(self):
+        # Presence control: without it, a scanner that refused EVERY invocation would pass the
+        # test above and look fixed.
+        proj = self._project()
+        r = subprocess.run([sys.executable, "methodology_dashboard.py", "--no-open"],
+                           cwd=proj, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0)
+        self.assertTrue((proj / "dashboard.html").exists(),
+                        "a plain run must still generate the dashboard")
+
+    def test_stale_warning_leads_with_the_project_scoped_remedy(self):
+        # A <portfolio>/methodology/starter-kit/ canonical, plus a project holding a copy old
+        # enough to trip the staleness check.
+        canon_dir = self.p / "methodology" / "starter-kit"
+        canon_dir.mkdir(parents=True)
+        shutil.copy(TOOLS_PY, canon_dir / "methodology_dashboard.py")
+        proj = self._project()
+        stale = (canon_dir / "methodology_dashboard.py").read_text(encoding="utf-8")
+        stale = re.sub(r'^DASHBOARD_VERSION = .*$', 'DASHBOARD_VERSION = "2.6.1"',
+                       stale, count=1, flags=re.MULTILINE)
+        (proj / "methodology_dashboard.py").write_text(stale, encoding="utf-8")
+
+        r = subprocess.run([sys.executable, "methodology_dashboard.py", "--no-open"],
+                           cwd=proj, capture_output=True, text=True)
+        err = r.stderr
+        self.assertIn("is stale", err, "the staleness finding itself must still be reported")
+        self.assertIn("cp ", err,
+                      "the per-project remedy (a copy) must be offered — it is the safe action")
+        # The portfolio remedy may still be offered, but never as a bare --sync: that is the
+        # 26-file/25-repo write this issue is about. If --sync appears, --dry-run must too.
+        for line in err.splitlines():
+            if "--sync" in line:
+                self.assertIn("--dry-run", line,
+                              "--sync must never be advertised without --dry-run first: %r" % line)
 
 
 class TestEndToEnd(unittest.TestCase):
