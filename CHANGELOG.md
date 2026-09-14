@@ -55,6 +55,331 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   the agent's credit; the maintainer corrected it before anything was pushed.
 - **Deferred, deliberately:** wiring `--selftest` into `bin/tests.sh` and the `BOOTSTRAP.md` Step 10
   mention wait for PR #80, which edits both files (S15 just un-conflicted it).
+- **Incident, same session:** the script that reframed this entry sliced the file to the next `---`
+  line — which is not the next entry boundary but a separator 316 lines down — and **deleted the ten
+  entries between here and 2026-08-10** (S15, S14, S13, the v3.7 release, issue #67, and five more) in
+  the amended claim `356556f`, carried by `ad7bd37` and `ed9ab7e`, all pushed. Found by the S15
+  merge-tree check re-conflicting where it should not have; restored from `f8fc3ca` by the commit
+  after `ed9ab7e` — `diff` against `f8fc3ca` shows 0 lines removed, 21 added (this entry), 41 headings,
+  55 source tags. The co-staging hook cannot see this: it checks that the ledger was *touched*, not
+  that it did not shrink. A ledger-count ratchet (staged `### ` headings ≥ HEAD's) is the mechanical
+  fix and is proposed, not shipped, in the S16 receipt.
+
+### 2026-09-14 · [ad hoc] Resolved the CHANGELOG.md conflict S13/S14 created for PR #80
+
+- **Change:** `main` merged into the PR #80 head branch `read-set-budgets` (which lives in this repo) with
+  the one conflicting file, `CHANGELOG.md`, resolved as a union in ledger order — today's S13–S15 entries
+  on top, #80's four entries (2026-09-02..04) below them, everything else common. No other file conflicted
+  (`git merge-tree --write-tree --name-only origin/main origin/read-set-budgets` → `CHANGELOG.md` only).
+  Session S15: claim `8fdc50f` (main) → resolution merge `b82dcff` (pushed to `origin/read-set-budgets`)
+  → close-out commit on main. Union verified: 57 source-tagged entries = the branch's 54 + today's 3.
+  `git merge-tree` empty after the push and again after the close-out prepend.
+- **Why:** #80 was MERGEABLE/CLEAN at `512c2ed` this morning; S13/S14's ledger and receipt commits
+  prepended at the same anchor #80 prepends at, so the first session to record anything on `main` after
+  #80 opened made it conflict — S13 should have computed that before merging PR #81 (Learning #13) and did
+  not. Ordering #80's entries below today's, rather than above, is what stops the next `main` prepend
+  from re-conflicting: the two hunks are no longer adjacent.
+
+### 2026-09-14 · [ad hoc] Redacted the quality-ratchet plan to its published source only
+
+- **Change:** `docs/planning/quality-ratchet-plan.md` — every statement derived from the maintainer's
+  private correspondence with the article's author removed (the S13 version had paraphrased it, never
+  quoted it). The article <https://campusiq.com/blogs/everybody-ships> is now the plan's only source for
+  CampusIQ's practice. 15 edits, 425 → 410 lines; residue grep for correspondence-derived phrasing: 0 hits.
+  Session S14, committed directly on `main` (the S12 close-out precedent): `4a5aab0` (claim), `762e7bc`
+  (redaction), plus the close-out commit completing this entry and the S14 receipt. PR #81's body was
+  edited to match. Hook ran clean on every commit.
+- **Why:** the maintainer was no longer sure the exchange was not in confidence. Removing it from the live
+  record is cheap and reversible; publishing it is neither. Git history (`993aa89`, PR #81) retains the
+  S13 text — stated in the receipt, not hidden.
+
+### 2026-09-14 · [ad hoc] Published the quality-ratchet plan — what the methodology should take from CampusIQ's Forseti layer
+
+- **Change:** new `docs/planning/quality-ratchet-plan.md` (canonical-only planning record; not in
+  `bin/_manifest.py`, so adopters receive nothing via `bin/sync`). No framework file changed; nothing
+  implemented. Session S13; branch `docs/quality-ratchet-plan` → [PR #81](https://github.com/KJ5HST/methodology/pull/81)
+  → merge `db121ce` (2026-09-14). Commits: `f62699a` (claim), `993aa89` (plan), `db121ce` (merge), plus the
+  close-out commit completing this entry and the S13 receipt. All three session commits ran the ledger
+  co-staging hook clean — no `--no-verify` (the first session since S8 to do so; the entry was written
+  at claim and completed here).
+- **Source:** Aaron Benz, *"Everybody Ships: How CampusIQ Built an AI-Native Company"*,
+  <https://campusiq.com/blogs/everybody-ships> — quoted verbatim; the maintainer's correspondence with
+  the author is paraphrased as personal communication, never quoted.
+- **The finding the plan records:** CampusIQ enforces quality on the *artifact* — the same 130+ checks
+  for every actor, thresholds that only tighten, checks that never pass by default — while this
+  methodology enforces it on the *actor*: 10 of its 12 quality gates are self-certifications and 26 of
+  28 failure modes bind by text alone (only #27 → `.githooks/pre-commit` and #28 → `context_budget.py`
+  have a distributed mechanical gate). Self-certification multiplies under N agents rather than scaling;
+  a stronger reviewer changes the judge, not the class of gate. Corpus grep for any code-quality
+  threshold: 0 hits; the one ratchet that exists (`starter-kit/context_budget.py:504`) guards document size.
+- **What it proposes** (D1–D10, six one-session phases): ship the ratchet, not the ruler —
+  `.quality-gates.json` SEED + `quality_ratchet.py` TRACKED (refuses a commit that loosens a declared
+  threshold), a `SAFEGUARDS.md` hard rule, a flight-manual section generalizing the capability-tiered
+  clause from elective to universal, Phase 3C routing "a mechanical learning is a gate, not a row",
+  advisory dashboard scoring of gate outcomes, receipt citation of the gate run. Not adopted: two-day
+  default approval, PR-throughput floors, coverage floors without a faithfulness check. No new FM.
+- **Blocked on:** PR #80 (relocates the Learnings table every prose phase touches). Nothing executes
+  until #80 is decided.
+- **Verification:** 425 lines; 26 `file:line` anchors on `main @ 512c2ed` re-checked by script (26/26);
+  leak check for private-correspondence phrasing, internal-only paths, project names and brand names: 0 hits;
+  `bin/check-links` OK (83/21), `bin/check-handoff --allow-pending` OK.
+
+### 2026-08-12 · [ad hoc] Released v3.7 — the artifacts Phase 0 mandates reading now have ceilings
+
+- **Change:** release narration commit on `release/v3.7` — `README.md` §What's New in v3.7 (folding
+  in the stale "Since v3.6 (unreleased)" section), `CLAUDE.md` §Versioning entry, and the
+  "Current version" line 3.6 → 3.7. Cite-don't-restate: the full narrative lives in
+  [`CLAUDE.md` §Versioning "v3.7"](CLAUDE.md#versioning); this entry is the action record.
+- **Scope:** 38 commits and 13 ledger entries since `v3.6` (`d7a482a`). **Minor**, not patch,
+  because the framework gained a failure mode (**#28**, count 27 → 28 — the first since v3.1) and a
+  new distributed tool (`starter-kit/context_budget.py`, TRACKED, with a SEED config). **Not major**
+  because no principle, phase, gate, or workstream changed. Learnings 12 → 13; `DASHBOARD_VERSION`
+  2.10.2 → 2.10.6 across four separate fixes; `bin/tests.sh` 84 → 114; unit suite 197 → 211.
+- **The "unreleased" README section was stale and is why this was worth catching.** It still ended
+  *"the failure-mode count stays 27"* — written before PR #66 appended FM #28, and true when
+  written. A section that describes itself as pending release is exactly the text nobody re-reads;
+  it is Learning #7's cross-reference problem applied to the release notes themselves.
+- **Tag and Release — recorded after the action, not predicted before it.** Annotated tag `v3.7`
+  (tag object `0138e095`) cut at **`dcb6fc6`**, the PR [#74](https://github.com/KJ5HST/methodology/pull/74)
+  merge commit, plus GitHub Release *"v3.7 — The artifacts Phase 0 mandates reading now have
+  ceilings"*, published 2026-08-12T04:50:42Z, not a draft and not a prerelease:
+  <https://github.com/KJ5HST/methodology/releases/tag/v3.7>. Written into this entry only once each
+  fact existed and had been read back — a tag SHA asserted in advance is exactly the forward-looking
+  claim Learning #13 says to compute rather than predict.
+- **Unlike v3.6, this release has a narration commit of its own** (`2bddc3e`), so the tag+publish
+  step is recorded here against a real commit rather than reconstructed four days late. That was
+  v3.6's failure: a release is the non-commit action failure mode #27 names, and the one class
+  Phase 0 reconcile-on-read cannot catch by design — reconcile diffs `git log` against the ledger
+  frontier, and a tag plus a Release move neither.
+- **Commit/PR:** narration `2bddc3e` → merge `dcb6fc6` (PR #74); this ledger completion rides the
+  S12 close-out commit.
+- **Session:** S12 · **Verified:** tag confirmed annotated (`git cat-file -t` → `tag`) and pointing
+  at `dcb6fc6`; present on `origin`; Release confirmed published, non-draft, non-prerelease.
+
+### 2026-08-12 · [issue #67] The stale-copy warning now names a remedy proportionate to the finding, and bare `--dry-run` no longer writes
+
+- **Change:** `tools/methodology_dashboard.py` (+ `starter-kit/` twin, kept byte-identical) and
+  `tools/test_methodology_dashboard.py`. `DASHBOARD_VERSION` 2.10.5 → 2.10.6. Closes
+  [issue #67](https://github.com/KJ5HST/methodology/issues/67).
+- **Defect 1 — a disproportionate remedy.** `check_stale_version()` answered "this one copy is
+  old" with `Re-sync: python3 <canonical> --sync`. But `--sync` is scoped from the **canonical's
+  own location**, not the working directory, so it rewrites every discovered sibling — measured at
+  26 files across 25 repos, including 7 creates in repos that do not gitignore the path and 1
+  where the file is git-tracked. An adopter following a one-line instruction verbatim dirtied
+  eight unrelated repositories. The warning now leads with the safe per-project action
+  (`cp <canonical> <this copy>`) and offers the portfolio path only as `--sync --dry-run`, with
+  its scope stated. **Why it matters beyond tidiness:** a remedy nobody can safely run is one
+  mechanism behind an *ignored* warning — in one adopter this line rode ~28 consecutive handoffs
+  unacted-on. The measurement was never missing; the actionable remedy was.
+- **Defect 2 — a flag named `--dry-run` that writes.** It was consulted only inside the `--sync`
+  branch, so bare `--dry-run` fell through to a full scan and wrote `dashboard.html` *and*
+  appended to `dashboard_history.jsonl`. It is now an error (exit 2) that writes nothing.
+  Refusing rather than silently no-opping is deliberate: a silent no-op leaves the caller unable
+  to distinguish "nothing to do" from "flag ignored" — the same unreadable-signal class as
+  defect 1.
+- **Tests:** new `TestCliRemedyProportionality` (3 cases, unit suite 208 → 211). Both defect
+  tests were driven RED against the pre-fix scanner and the failing run read, not assumed;
+  the third is a presence control (a plain run must still write `dashboard.html`), without which
+  a scanner that refused *every* invocation would pass and look fixed.
+- **Scope deliberately not taken:** the issue also suggests `--sync-self` and a `--yes` gate on
+  `--sync`. Both change the CLI contract rather than fix a defect, so they are left for a
+  separate deliverable; the `cp` line already gives the per-project remedy with no new surface.
+- **Distribution:** the scanner is `bin/_manifest.py`-TRACKED, so adopters receive both fixes via
+  `bin/sync`.
+
+### 2026-08-11 · [ad hoc] `methodology_dashboard.py`'s `LANG_MAP`/`DOC_EXTS` now recognize R, Quarto, and R Markdown
+
+- **Change:** `tools/methodology_dashboard.py` (+ `starter-kit/` twin, kept byte-identical) and
+  `tools/test_methodology_dashboard.py`.
+- **The defect:** `.r` was already in `SOURCE_EXTS` (R source always counted toward Source LOC),
+  but had no `LANG_MAP` entry, so it never got its own "Code by Language" row. `.qmd` (Quarto) and
+  `.rmd` (R Markdown) were in neither `SOURCE_EXTS` nor `DOC_EXTS`, so either extension outside a
+  `docs/` path fell through `categorize_file`'s whole ladder to `"other"` — not source, not docs,
+  not even LOC-counted (LOC is skipped entirely for `"other"`). Found scanning a real R package:
+  603 `.r` files / 77,773 LOC counted as Source but invisible in "Code by Language".
+- **Fix:** `"r": "R"` added to `LANG_MAP`; `.qmd`/`.rmd` added to `DOC_EXTS`.
+- **A real, not just cosmetic, classification consequence — found on review, pinned here.**
+  Quarto's `.qmd` was already a render-toolchain marker (`detect_doc_only`'s fallback arm), so a
+  Quarto repo was already `doc_only` before this fix; what changed for Quarto is only its
+  *reported* metrics (a Quarto book previously showed zero documentation and its files as
+  uncounted `"other"`). Bare `.Rmd` has no toolchain marker at all (`_bookdown.yml` is one; a
+  plain analysis project has neither that nor `*.qmd`), so adding `.rmd` to `DOC_EXTS` is what
+  newly clears the corpus disjunction for that class: a real R-Markdown analysis repo (no
+  toolchain marker, a small `.R` helper alongside several `.Rmd` files) flips `doc_only`
+  `False → True` and its `"No test infrastructure"` risk softens from `HIGH` to a doc-only
+  advisory. Believed correct — an R-Markdown analysis project is exactly the population BL-5/v3.2
+  exists to score fairly, and the has-tests gate still protects a real R package with a `tests/`
+  dir — verified directly against the pre-fix scanner (the identical fixture there reads
+  `doc_only=False` with the `HIGH` risk) and pinned with a new end-to-end regression test,
+  `test_rmd_analysis_repo_flips_doc_only_and_softens_the_test_risk`, so a future `DOC_EXTS` edit
+  cannot silently un-flip the population without a test noticing.
+- **Also fixed:** the existing Quarto fixture's own render-toolchain-arm isolation. Adding
+  `.qmd`/`.rmd` to `DOC_EXTS` meant the pre-existing Quarto test could now clear the corpus
+  disjunction on doc-LOC alone, silently narrowing what it proved (Layer 7's specific
+  toolchain-arm-in-isolation guarantee). A `QUARTO_MINIMAL` fixture + a dedicated isolation test
+  restore that proof; the stale in-code comment claiming a pure-Quarto repo's `.qmd` was "never
+  counted as docs" is corrected to match.
+- **Verified:** `python3 -m unittest tools/test_methodology_dashboard.py` 204/204 (198 prior + 6
+  from the original fix + 1 classification-regression test), the 2 failures on this base
+  (`test_every_distributed_adopter_root_file_is_scored_or_exempt`,
+  `test_exclusion_list_matches_the_manifest`) are pre-existing and unrelated (fixed by a sibling
+  PR, not this one). `DASHBOARD_VERSION` 2.10.2 → 2.10.5 (2.10.3/2.10.4 independently claimed by
+  two sibling PRs open the same day). Twins confirmed byte-identical.
+- **Distribution:** `starter-kit/methodology_dashboard.py` is `bin/_manifest.py`-TRACKED, so
+  adopters receive the fix via `bin/sync`; `tools/` and `tools/test_methodology_dashboard.py` are
+  canonical-only.
+### 2026-08-11 · [BL-31] Dashboard's framework-installed exclusion never learned about the context-budget gate PR #66 itself shipped
+
+- **Origin:** fork backlog item BL-31 (`docs/planning/BACKLOG.md`, fork `main` only — not yet pushed
+  to `origin` as of this entry, so no link is given rather than cite one that would not resolve),
+  found re-verifying PR #66's own review-comment fixes after merge. `bin/_manifest.py` gained two
+  new non-markdown dests in this PR (`context_budget.py`, TRACKED; `.context-budget.json`, SEED),
+  but `tools/methodology_dashboard.py`'s `FRAMEWORK_INSTALLED_SOURCE` tuple and
+  `tools/test_methodology_dashboard.py`'s `CHECKLIST_EXEMPT` test fixture — both purpose-built to
+  stay in sync with this manifest — were never extended to match. Reproduced before the fix, not
+  inferred: a `git worktree` at the merge commit (`a2a7275`) run against
+  `python3 -m unittest tools/test_methodology_dashboard.py` gave 2 failures, both in tests that
+  predate this PR (last touched at `bec4095`) and exist specifically to catch this class of drift.
+- **Effect the drift had:** any adopter running `bin/sync` post-merge would have `context_budget.py`
+  misattributed to their own source LOC — the exact miscount `FRAMEWORK_INSTALLED_SOURCE` exists to
+  prevent for `methodology_dashboard.py` itself — and both new root files would read as neither
+  scored nor exempt on the compliance checklist.
+- **First fix (listing the names) did not actually work — found on review, not shipped as-is.**
+  Adding `context_budget.py` and `.context-budget.json` to `FRAMEWORK_INSTALLED_SOURCE` satisfies
+  the name-list agreement test, but `is_framework_installed()` then verified EVERY listed name
+  against `methodology_dashboard.py`'s own content signatures (`DASHBOARD_VERSION`,
+  `METHODOLOGY_ITEMS`, etc.) — which `context_budget.py` never carries — so the content check
+  silently rejected it and the exclusion never fired. Reproduced directly:
+  `is_framework_installed(Path("context_budget.py"), ...)` returned `False` even with the name
+  listed; a real bin/sync-shaped synced doc repo still flipped `doc_only` `True -> False`.
+- **Real fix:** content verification is now PER FILE. `_FRAMEWORK_FILE_SIGNATURES` gives each name
+  in `FRAMEWORK_INSTALLED_SOURCE` its own version pattern and signature set —
+  `context_budget.py`'s own `VERSION`/`CONFIG_NAME`/`HISTORY_NAME` markers, `.context-budget.json`'s
+  own distinctive keys (though that entry is structurally unreachable today: `is_framework_installed`
+  is only called for `category == "source"`, and a `.json` extension is always `"config"` — given a
+  signature anyway so the completeness test below needs no special case). A new canonical test
+  asserts every `FRAMEWORK_INSTALLED_SOURCE` name has a matching signature entry, so a future
+  addition to the tuple cannot repeat this exact gap silently. A new behavior test reproduces the
+  bug end-to-end with the REAL shipped `context_budget.py` content (not a synthetic stand-in) and
+  asserts a synced doc-only repo stays `doc_only` — RED-confirmed against the name-only fix before
+  landing this one. `CHECKLIST_EXEMPT` (a `tools/test_methodology_dashboard.py` test fixture, not
+  scanner source) gains both names, with the same reasoning already on record for
+  `methodology_dashboard.py` — their presence proves a pre-commit hook was installed, not that the
+  session-operating discipline the checklist measures was followed. `DASHBOARD_VERSION` 2.10.2 →
+  2.10.3.
+- **Verified:** `python3 -m unittest tools/test_methodology_dashboard.py` 200/200 (197 prior + 3
+  new; RED-confirmed against the pre-per-file-signature code first); `bash bin/tests.sh` 114/114;
+  `python3 bin/check-links` OK (83 links / 21 files); twins confirmed
+  byte-identical.
+### 2026-08-10 · [ad hoc] Two defects in the HANDOFFS.md receipt spec: an unassigned reconcile promise, an unoffered locator form
+
+- **Change:** `starter-kit/HANDOFFS.md`'s fenced receipt-format spec, two independent fixes in one
+  pass since both sit in the same few lines.
+- **(1) The spec promised a reconcile no procedure ever assigns.** It said `commit: pending` and
+  `what_was_done: pending` are legal at write time because "the next session reconciles them to
+  real shas" — but `SESSION_RUNNER.md` Phase 0 step 6 only reconciles a *missing or still-
+  `status: pending`* receipt, never a `status: complete` receipt whose `commit:` field alone is
+  `pending`. No procedure anywhere performs the promise as written. Reworded to state `pending` as
+  a legitimate resting value for both fields, not a duty nobody is assigned to discharge.
+- **(2) `changelog_ref`'s spec offered two locator forms neither of which receipts actually use.**
+  The placeholder named `PR #N` or a short-sha; in practice, entries locate a `CHANGELOG.md`
+  action by its quoted `### ` heading instead — all 8 live receipts in this repo's own
+  `HANDOFFS.md` already use that form, and none use `PR #N` or a bare sha, without the spec ever
+  blessing it. Added the quoted-heading form as a third explicit option and noted that a bare line
+  number is not a durable locator once a ledger is ever trimmed or archived.
+- **Distribution:** `HANDOFFS.md` is `bin/_manifest.py`-SEED (copied once, then adopter-owned), so
+  new adopters receive the corrected spec; existing adopters' own copies are unaffected until they
+  choose to re-seed.
+### 2026-08-10 · [ad hoc] Documented and pinned the doc-only detection thresholds
+
+- **Change:** `tools/methodology_dashboard.py` (+ `starter-kit/` twin, kept byte-identical) and
+  `tools/test_methodology_dashboard.py`.
+- **The defect:** `DOC_ONLY_SOURCE_LOC_MAX`, `DOC_ONLY_DOC_LOC_MIN` and `DOC_ONLY_DOC_FILES_MIN`
+  are round numbers with no recorded derivation, and nothing asserted their values directly —
+  `test_source_cap_boundary` exercises `DOC_ONLY_SOURCE_LOC_MAX` only indirectly, via hardcoded
+  200/201 boundary literals, so that coverage would silently vanish if that fixture were ever
+  rewritten to derive its boundary from the constant instead. `DOC_ONLY_SOURCE_LOC_MAX` in
+  particular decides which of two scoring regimes a repo gets (a real 148-LOC repo the cap alone
+  misclassified is documented near `FRAMEWORK_INSTALLED_DOCS`, ~100 lines below), so an accidental
+  drift here is a user-visible verdict change, not cosmetic.
+- **Fix:** added a comment recording that all three are deliberate, stated heuristics — not
+  derived from a measured corpus of adopter repos — and a direct regression test
+  (`test_doc_only_thresholds_are_pinned_not_left_to_drift`) asserting all three current values, so
+  a future edit to any of them is a visible, deliberate decision.
+- **Verified:** `python3 tools/test_methodology_dashboard.py` 198/198 (197 prior + this one).
+  `DASHBOARD_VERSION` 2.10.2 → 2.10.4 in both twins (2.10.3 was skipped: #71 claimed it
+  independently for an unrelated fix, and the constant's own "bump on any change" rule means two
+  distinct changes cannot ship under one version); `test_dashboard_version` and
+  `test_twins_byte_identical` updated/re-confirmed.
+- **Distribution:** `starter-kit/methodology_dashboard.py` is `bin/_manifest.py`-TRACKED, so
+  adopters receive the documented, pinned thresholds via `bin/sync`; `tools/` and
+  `tools/test_methodology_dashboard.py` are canonical-only.
+
+### 2026-08-10 · [ad hoc] Re-grounded the /caveman row's remaining unsupported claim
+
+- **Change:** `starter-kit/RECOMMENDED_SKILLS.md`'s `/caveman` row.
+- **The defect:** `15ccb38` (the "Discharged the three documentation follow-ons" entry below)
+  removed a dangling `Learning #34` citation from this row but kept the claim it was
+  attributing — "the methodology's own handoff length discipline" — which has no referent
+  anywhere in this distributed corpus, and runs opposite to `SESSION_RUNNER.md`'s own failure
+  mode #15 (the *thin* handoff is the failure, not the long one) and its Minimum Handoff
+  Requirements, which gate on content, not length.
+- **Fix:** re-grounded the row on those two verified, reachable sources instead — no length rule
+  is stated because none exists to state.
+- **Distribution:** `RECOMMENDED_SKILLS.md` is `bin/_manifest.py`-TRACKED, so adopters receive the
+  fix via `bin/sync`.
+
+### 2026-08-10 · [ad hoc] Resolved both review findings on [PR #66](https://github.com/KJ5HST/methodology/pull/66) — in the PR, not a follow-up
+
+- **Origin:** rmsharp reviewed PR #66 and filed two findings, each reproduced against real repo
+  state rather than theorised, with inline suggestions and an offer to take them to a follow-up PR.
+  Fixed here instead, because finding 1 is a defect in code *this PR introduces* — shipping it
+  would mean the failure-mode-#28 release note describes a gate that silently does nothing on the
+  adopters most likely to want it. The v3.6 precedent is explicit: Layer 7 ran before Layer 6 so no
+  release shipped with a known live defect in its own subsystem.
+- **Finding 1 — `install_hook()` ignored `core.hooksPath`** (`starter-kit/context_budget.py`).
+  It always wrote `<git-dir>/hooks/pre-commit` and printed "installed". `core.hooksPath` redirects
+  git away from that directory entirely, and **this methodology's own `BOOTSTRAP.md` Step 10 tells
+  adopters to set it** (`.githooks`) to enable the v3.1 ledger co-staging gate — so the population
+  following our own setup instructions got a silent no-op with a success message. Reproduced end to
+  end before the fix: a commit growing `CLAUDE.md` to 40,000 B against a 28,000 B ceiling was
+  *created* rather than refused; after, the same commit is refused and `git rev-list --count`
+  confirms none was created. A relative value now resolves against the worktree top level (what git
+  itself does when running the hook), an absolute value is used as given, and the pre-existing
+  "a hook is already here and is not ours" branch now fires correctly on a repo whose `.githooks/`
+  already holds the ledger hook — reporting and refusing to clobber instead of shadowing it.
+- **Finding 2 — receipt identity is `session` + `date`, not `session` alone** (`bin/check-handoff`).
+  `validate_ledger()` asserted an invariant the format in `starter-kit/HANDOFFS.md` never states.
+  `S<N>` is a per-sequence counter and one ledger may merge more than one sequence — a fork and its
+  upstream each running their own — so two distinct sessions share an `S<N>` by construction;
+  rmsharp reproduced four false positives on a real ledger. **The argument is not the false positive
+  itself but what one does to a gate:** this very PR's thesis is that the dashboard printed
+  `Large files detected` at every Phase 0 and 15+ sessions read past it. A checker that fires on a
+  structurally valid file trains that same blindness on the checker we most need believed. Coverage
+  lost is narrow — a block copied and not edited duplicates *both* keys and is still caught — and
+  the cross-branch collision it appeared to guard was never guarded, since the checker sees one tree
+  and could only ever fire after the merge landed. Code and spec now agree rather than the code
+  being stricter: `starter-kit/HANDOFFS.md` states the rule, including that keeping `S<N>` unique
+  within a sequence must never mean renumbering an already-written receipt.
+- **Verification:** suite **107 → 112**. Both fixes were driven **RED first and observed failing**
+  (Learning #12): 2 of the 4 new `install-hook` assertions fail against the unpatched tool (the
+  other 2 are deliberate presence controls that must pass either way), and finding 2's new negative
+  assertion fails with exactly the reported error, `duplicate session id 'S8'`, before passing. The
+  duplicate-identity mutation was also strengthened to copy the S8 header wholesale, so it cannot
+  quietly degrade into a session-only collision if a date later changes. The 2 remaining suite
+  failures are pre-existing and reproduce on `main` with this branch's changes stashed
+  (`tools/test_methodology_dashboard.py`, untouched here; and the GitHub-source dry-run, which needs
+  network). `bin/check-links` OK (83 links / 21 files); live ledger green under `--all`.
+- **Learning #10 caught one thing the diff could not:** `README.md`'s unreleased #65 bullet still
+  claimed "unique session ids". Dated `CHANGELOG.md` entries describing what #65 shipped are left
+  verbatim per the v2.7.1 frozen-record precedent; the unreleased What's New bullet describes
+  current behaviour and was corrected.
+- **Not recorded as a Learning row by design.** The candidate — *a checker's invariant must not be
+  stricter than the format it validates; the adopter who trips it is the one who finds out* — is
+  real, but `#14` is reserved by `docs/operator-gated-review-plan`'s decision D3. Appending it here
+  would create exactly the collision D3 exists to prevent. It is carried in the S10 receipt instead,
+  to be appended at the first free number after that branch merges.
+- **Commits:** `eacb516` (1B claim) · `14bd88a` (finding 1) · `63e1dcf` (finding 2).
 
 ---
 
