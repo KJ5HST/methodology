@@ -44,7 +44,9 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   `Co-Authored-By: <name> <email>` trailer outside comment lines; otherwise the hook is silent, so a
   human committing by hand is never asked to disclose an agent that was not there. `--no-verify`
   bypasses once; `METHODOLOGY_REQUIRE_COAUTHOR=0` disables. Built-in `--selftest` (7 checks).
-  Session S16; commits completed at close-out.
+  Session S16: claim `356556f`, hook + SAFEGUARDS commit, close-out commit — SHAs completed at close-out.
+  SAFEGUARDS.md grows by the one paragraph; the Phase 0 pair PR #80 measures stays under its cap
+  (checked at close-out against the branch's own figure).
 - **What the trailer is, and is not:** the agent never takes credit. The human is the author of every
   commit and owns it. The trailer is *disclosure* — so that no reader of the history is misled about
   how the work was produced. Disclosure was an instruction every session had to remember on every

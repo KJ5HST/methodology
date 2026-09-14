@@ -181,6 +181,10 @@ The `HANDOFFS.md` receipt and Phase 0 reconcile catch a skipped close-out report
 - **Soft-remind, not hard-block** by default — surface the incomplete receipt and let the agent finish it, rather than refusing to stop (which risks a livelock).
 - The methodology ships no such hook — it is external harness configuration, in the same class as agent-level memory. See [`BOOTSTRAP.md`](BOOTSTRAP.md) Step 10.
 
+### Disclosure Hook (failure mode #16 — the agent never takes credit)
+
+The human is the author of every commit and owns it. When an AI agent drove the commit, the message must say so — a `Co-Authored-By: <agent name> <agent email>` trailer — so no reader of the history is misled about how the work was produced. That is **disclosure, never credit.** It is also an instruction a session must remember on every commit, so the canonical repo makes it a gate: [`.githooks/commit-msg`](https://github.com/KJ5HST/methodology/blob/main/.githooks/commit-msg) refuses an undisclosed commit **only when an agent harness is detectable in the environment** (`AI_AGENT`, `CLAUDECODE`, `CLAUDE_CODE_SESSION_ID`; `METHODOLOGY_REQUIRE_COAUTHOR=1` forces it, `=0` disables) — a human committing by hand is never asked to disclose an agent that was not there. Canonical-only, like the ledger hook: copy it if you want it; `--selftest` checks it; `--no-verify` bypasses once.
+
 ---
 
 ## What the User Should Do

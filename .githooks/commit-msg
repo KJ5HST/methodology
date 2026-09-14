@@ -1,0 +1,78 @@
+#!/bin/sh
+# Methodology disclosure gate — the honesty counterpart of failure mode #16.
+#
+# The agent NEVER takes credit. The human is the author of every commit and owns it.
+# When an AI agent harness is driving the commit, the message must carry a
+# `Co-Authored-By: <name> <email>` trailer DISCLOSING the agent's involvement, so no
+# reader of the history is misled about how the work was produced. Disclosure was an
+# instruction every session had to remember on every commit; this hook makes it a gate.
+#
+# Detection is by environment, so a human committing by hand is never asked to
+# disclose an agent that was not there:
+#   fires when   AI_AGENT, CLAUDECODE, or CLAUDE_CODE_SESSION_ID is set in the
+#                environment (an agent harness is present), or
+#                METHODOLOGY_REQUIRE_COAUTHOR=1 (force it under any harness)
+#   silent when  none of those is set, or METHODOLOGY_REQUIRE_COAUTHOR=0
+#
+#   Enable:      git config core.hooksPath .githooks
+#   Bypass once: git commit --no-verify   (the receipt and ledger still record the session)
+#   Self-test:   .githooks/commit-msg --selftest
+#
+# Fast path, not the guarantee — same status as the ledger co-staging hook beside it.
+set -u
+
+check_message() {
+	# $1 = message file. Comment lines (#) are not part of the message.
+	grep -v '^#' "$1" | grep -qiE '^Co-Authored-By:[[:space:]]*[^<]+<[^>]+>[[:space:]]*$'
+}
+
+required() {
+	case "${METHODOLOGY_REQUIRE_COAUTHOR:-}" in
+		1) return 0 ;;
+		0) return 1 ;;
+	esac
+	[ -n "${AI_AGENT:-}${CLAUDECODE:-}${CLAUDE_CODE_SESSION_ID:-}" ]
+}
+
+if [ "${1:-}" = "--selftest" ]; then
+	self=$0; t=$(mktemp -d); fails=0
+	printf 'feat: x\n\nCo-Authored-By: Some Agent <agent@example.com>\n' > "$t/with"
+	printf 'feat: x\n\nno trailer here\n' > "$t/without"
+	printf 'feat: x\n# Co-Authored-By: Some Agent <agent@example.com>\n' > "$t/commented"
+	printf 'feat: x\n\nCo-Authored-By: nameless\n' > "$t/malformed"
+	expect() { # $1 label, $2 expected exit, then the command
+		label=$1; want=$2; shift 2
+		"$@" >/dev/null 2>&1; got=$?
+		if [ "$got" -eq "$want" ]; then echo "  PASS: $label"; else echo "  FAIL: $label (exit $got, wanted $want)"; fails=$((fails+1)); fi
+	}
+	expect "harness present + trailer -> pass"            0 env -i AI_AGENT=1 PATH="$PATH" sh "$self" "$t/with"
+	expect "harness present + no trailer -> refused"      1 env -i AI_AGENT=1 PATH="$PATH" sh "$self" "$t/without"
+	expect "harness present + trailer only in comment -> refused" 1 env -i CLAUDECODE=1 PATH="$PATH" sh "$self" "$t/commented"
+	expect "harness present + malformed trailer -> refused" 1 env -i CLAUDE_CODE_SESSION_ID=x PATH="$PATH" sh "$self" "$t/malformed"
+	expect "no harness + no trailer -> pass (human commit)" 0 env -i PATH="$PATH" sh "$self" "$t/without"
+	expect "forced on (=1), no harness, no trailer -> refused" 1 env -i METHODOLOGY_REQUIRE_COAUTHOR=1 PATH="$PATH" sh "$self" "$t/without"
+	expect "forced off (=0) under harness, no trailer -> pass" 0 env -i METHODOLOGY_REQUIRE_COAUTHOR=0 AI_AGENT=1 PATH="$PATH" sh "$self" "$t/without"
+	rm -rf "$t"
+	[ "$fails" -eq 0 ] && echo "commit-msg selftest: OK (7 checks)" || { echo "commit-msg selftest: $fails FAILED"; exit 1; }
+	exit 0
+fi
+
+msg_file=${1:?commit-msg hook: no message file given}
+
+required || exit 0
+check_message "$msg_file" && exit 0
+
+cat >&2 <<MSG
+
+✗ commit refused — an AI agent harness is present and the message does not
+  disclose it (no Co-Authored-By trailer). The author line stays yours; the
+  trailer is disclosure, never credit (failure mode #16).
+
+  Add, as the last lines of the message:
+
+    Co-Authored-By: <agent name> <agent email>
+
+  * Bypass this once:  git commit --no-verify
+  * Not an agent commit? METHODOLOGY_REQUIRE_COAUTHOR=0 git commit ...
+MSG
+exit 1
