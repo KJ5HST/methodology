@@ -40,8 +40,8 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 - **Change:** `docs/planning/quality-ratchet-plan.md` — every statement derived from the maintainer's
   private correspondence with the article's author removed (the S13 version had paraphrased it, never
   quoted it). The article <https://campusiq.com/blogs/everybody-ships> is now the plan's only source for
-  CampusIQ's practice. Session S14, committed directly on `main` (the S12 close-out precedent); commits
-  completed at close-out.
+  CampusIQ's practice. 15 edits, 425 → 410 lines; residue grep for correspondence-derived phrasing: 0 hits.
+  Session S14, committed directly on `main` (the S12 close-out precedent); commits completed at close-out.
 - **Why:** the maintainer was no longer sure the exchange was not in confidence. Removing it from the live
   record is cheap and reversible; publishing it is neither. Git history (`993aa89`, PR #81) retains the
   S13 text — stated in the receipt, not hidden.

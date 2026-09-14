@@ -6,13 +6,13 @@
 **Source under study:** Aaron Benz, *"Everybody Ships: How CampusIQ Built an AI-Native Company"*,
 <https://campusiq.com/blogs/everybody-ships> (announced on LinkedIn:
 <https://www.linkedin.com/posts/aaron-benz_everybody-ships-how-campusiq-built-an-ai-native-activity-7503578276444119041-yPZM>).
-**Trigger:** the maintainer sent the methodology to the article's author for critique, and asked how CampusIQ
-keeps quality and honesty high *and measurable* while scaling to many actors — the problem this methodology,
-derived from individual high-performance disciplines (competitive pistol coaching, flight training), has not
-solved for teams of agents. The author's answer, and the article, are the material here.
+**Trigger:** the maintainer's question, on reading the article, of how a methodology derived from individual
+high-performance disciplines (competitive pistol coaching, flight training) — which has not transferred to
+teams of agents — could keep quality and honesty high *and measurable* while scaling to many actors. The
+article is the material here; nothing below rests on any other account of CampusIQ's practice.
 **Evidence discipline:** every claim about the methodology carries a `file:line` on `main @ 512c2ed`
 (post-v3.7) or the command that produced it (§9); every claim about CampusIQ is a verbatim quote from the
-article or is labelled as personal communication (paraphrased, never quoted).
+article, which is the sole source.
 **Sequencing constraint:** PR #80 (`read-set-budgets`, open since 2026-09-10) relocates the Learnings table
 and the flight manual's apparatus. Anchors are given for both states; **no phase of this plan executes until
 #80 is merged or declined** (§4 D10, §6 Phase 0).
@@ -36,9 +36,7 @@ not the *ruler*.
 
 ---
 
-## 1. Sources
-
-### 1A. Primary — the article
+## 1. Source
 
 Aaron Benz, *"Everybody Ships: How CampusIQ Built an AI-Native Company"*, campusiq.com
 (<https://campusiq.com/blogs/everybody-ships>; team figures stated as of 2026-06-04). Facts and verbatim
@@ -70,19 +68,6 @@ quotes used below:
 - Adoption: a ~2-month lag between the first adopter and the rest of the team; "the valley" (early win,
   then a plateau when the tool's limits and the learning curve coincide).
 
-### 1B. Personal communication (September 2026, paraphrased)
-
-In correspondence with the maintainer, the author described the Forseti layer as *enforcing via CI and
-measuring code quality*: the check set holds thresholds set at what is *ideal* rather than merely
-best-practice — a file-length cap, a cyclomatic-complexity ceiling, a coverage floor higher than the
-article's published 90% — and the CI permits those thresholds to move in only one direction. He described
-the effect on agents as a marked gain in consistency, summarized the operating rule as treating every
-wrong answer as a bug, and noted that a full evaluation system for skills is still ahead of them.
-
-**Discrepancy to carry, not resolve:** the article (June) documents a 90% coverage floor; the September
-correspondence describes a higher one. Consistent with a ratchet that moved in three months — which is
-the claim — or with an aspirational figure. This plan treats 90% as the documented floor.
-
 **Unverified claim to carry:** *"We have data showing quality holds as volume grows. We just haven't
 published it yet."* Nothing below rests on that data; §6 Phase 5 has the methodology measure its own.
 
@@ -98,14 +83,14 @@ Ten mechanisms. For each: the nearest thing the methodology already has, with ev
 |---|---|---|---|
 | 1 | **Same gates for every actor** — *"the same engineering gates in place for everyone"* (article) | Capability-tiered review, `starter-kit/SESSION_RUNNER.md:177`: *"delegate a layer to a lighter/faster tier only when its correctness rests on an objective, checkable gate … the gate proves correctness, not the tier's judgment"*; Learning #11 (`:383`). But it is **elective**, scoped to pre-declared vertical slices, and keeps *review itself* on the strongest tier. | Partial — the principle exists as an exception, not a rule |
 | 2 | **Enforce via CI; checks never pass by default** (article) | Two shipped gates, both for records: `.githooks/pre-commit` (67 lines; refuses a commit without `CHANGELOG.md` co-staged, FM #27) and `starter-kit/context_budget.py --precommit` (`:504–535`). Code checks are `BOOTSTRAP.md` **Step 10 "(Optional)"** (`:310`): *"The methodology works without hooks"*; *"what matters is that some check runs before the commit, not which one"* (`:318`). | Present-for-records; optional and threshold-free for code |
-| 3 | **Ideal thresholds** — a file-length cap, a complexity ceiling, a coverage floor (personal communication; article for the 90% floor) | `grep -rn -i 'cyclomatic\|coverage floor\|LOC cap' --include='*.md' --include='*.py' .` → **0 hits** as a rule for governed code. The only numeric caps are the scanner's doc-only heuristic (`tools/methodology_dashboard.py:260`, `DOC_ONLY_SOURCE_LOC_MAX = 200`) and context-budget ceilings. `workstreams/DEVELOPMENT_WORKSTREAM.md:217` has a hand-filled "Code Health Metrics — File / Test Coverage / Complexity" table template; `:105` asks *"What's the current standard? (Test coverage target …)"* as a question with no answer. | **Absent** |
-| 4 | **Ratchet** — thresholds move in one direction (personal communication); *"some of the work we were comfortable shipping a year ago wouldn't make it through today"* (article) | `context_budget.py:504` — *"Relative rule: refuse only when the staged file is over ceiling AND larger than HEAD. A commit that reduces an over-budget file must never be blocked, or the tool prevents its own remedy."* `growth_run` (`:249`) *"survives someone raising a ceiling to silence a warning."* "Raise the ceiling" is deliberately the **last** remedy (`:275`). The nearest general rule is `starter-kit/SAFEGUARDS.md:53`, *"'Refactoring' always requires plan mode approval"* — nothing says the same of loosening a threshold. | Present for **one** dimension (document size); absent as a rule |
-| 5 | **Every wrong answer is a bug** (personal communication) — the fix to an error is a new check | Learning #12 (`SESSION_RUNNER.md:384`): *"When an invariant is mechanical, encode it as a test — a review-time grep is a human step that silently stops happening."* But the failure-mode catalogue is the opposite pattern: 28 wrong answers turned into **instructions**. Distributed mechanical enforcement exists for **2 of 28** (#27 → the hook; #28 → `context_budget.py`); `bin/check-handoff` structurally checks the receipt (the artifact of #6/#14/#15) but is canonical-only; the other 23 bind by text alone. | Partial — stated as a Learning, practised for 2/28 |
+| 3 | **A numeric quality threshold, published** — *"Our coverage floor is now 90%"* (article) | `grep -rn -i 'cyclomatic\|coverage floor\|LOC cap' --include='*.md' --include='*.py' .` → **0 hits** as a rule for governed code. The only numeric caps are the scanner's doc-only heuristic (`tools/methodology_dashboard.py:260`, `DOC_ONLY_SOURCE_LOC_MAX = 200`) and context-budget ceilings. `workstreams/DEVELOPMENT_WORKSTREAM.md:217` has a hand-filled "Code Health Metrics — File / Test Coverage / Complexity" table template; `:105` asks *"What's the current standard? (Test coverage target …)"* as a question with no answer. | **Absent** |
+| 4 | **Ratchet** — *"some of the work we were comfortable shipping a year ago wouldn't make it through today"* (article): the floor has moved up, not down | `context_budget.py:504` — *"Relative rule: refuse only when the staged file is over ceiling AND larger than HEAD. A commit that reduces an over-budget file must never be blocked, or the tool prevents its own remedy."* `growth_run` (`:249`) *"survives someone raising a ceiling to silence a warning."* "Raise the ceiling" is deliberately the **last** remedy (`:275`). The nearest general rule is `starter-kit/SAFEGUARDS.md:53`, *"'Refactoring' always requires plan mode approval"* — nothing says the same of loosening a threshold. | Present for **one** dimension (document size); absent as a rule |
+| 5 | **A check set that grows** — *"more than 130 checks"* (article); the question for the methodology is what a wrong answer becomes: a new check, or a new instruction | Learning #12 (`SESSION_RUNNER.md:384`): *"When an invariant is mechanical, encode it as a test — a review-time grep is a human step that silently stops happening."* But the failure-mode catalogue is the opposite pattern: 28 wrong answers turned into **instructions**. Distributed mechanical enforcement exists for **2 of 28** (#27 → the hook; #28 → `context_budget.py`); `bin/check-handoff` structurally checks the receipt (the artifact of #6/#14/#15) but is canonical-only; the other 23 bind by text alone. | Partial — stated as a Learning, practised for 2/28 |
 | 6 | **Measure quality over time** — Heimdall telemetry; a coverage floor with a number; *"data showing quality holds as volume grows"* (article) | `methodology_dashboard.py` scores `test_to_source_ratio` (`:2055`) and **coverage-config presence** (`collect_coverage_config`, `:1679`; `:2067`) — never a coverage number, complexity, or lint result; `README.md:310`: *"presence is still not use."* The Performance Comparison Table (`ITERATIVE_METHODOLOGY.md`; moving to `FRAMEWORK_APPARATUS.md` §Performance Tracking on #80) is **self-reported**. | Partial — proxies for presence, self-reported for quality |
 | 7 | **Human decides ship/no-ship on what / why / risk** (article) | Gate 6 "Stakeholder Approval" sits **before** implementation (`ITERATIVE_METHODOLOGY.md:421–436`); there is no symmetric acceptance gate after it. The receipt (`starter-kit/HANDOFFS.md` spec) has no `risk` field. | Partial — pre-work only |
 | 8 | **Two-day default approval for humans** (article) | No equivalent. FM #17 (protocol erosion) and FM #24 (build-passes-ship-it) describe why the methodology would refuse it. | **Do not adopt** (§4 D7) |
 | 9 | **Sandboxed runs for agents** (article) | `starter-kit/SAFEGUARDS.md` Blast Radius rules (`:42–53`) are textual; `/git-guardrails-claude-code` is a *recommended* mechanical form (`starter-kit/RECOMMENDED_SKILLS.md:27`). | Partial — textual |
-| 10 | **Skills → a full eval system** (personal communication: still ahead) and a **PR-throughput floor** (article) | No eval system on either side — nothing to learn yet. Throughput: v3.7's own finding is *"throughput is the wrong tell … what degrades is task selection, not volume"*; an adopter of this methodology ran green on velocity for thirteen sessions while nothing reached a user. | Evals: not yet. Throughput floor: **do not adopt** |
+| 10 | **565 skills with no published evaluation mechanism**, and a **PR-throughput floor** (article) | No eval system on either side — nothing to learn yet. Throughput: v3.7's own finding is *"throughput is the wrong tell … what degrades is task selection, not volume"*; an adopter of this methodology ran green on velocity for thirteen sessions while nothing reached a user. | Evals: not yet. Throughput floor: **do not adopt** |
 
 **Read across the table:** every row where the methodology is "present" is a row about the methodology's
 *own* artifacts. Rows 3–6 — the ones about the *governed code* — are absent or self-reported. That is the
@@ -138,8 +123,8 @@ without adding a single measurement.
 
 ### 3B. CampusIQ's gates are properties of the artifact, and that is what transfers
 
-A check that a file is under a length cap, that complexity is under a ceiling, that coverage is at or
-above a floor, is true or false of the *change* regardless of who or what produced it. It cannot be argued
+A check that the build passes, that coverage is at or above a floor, that a lint rule holds, is true or
+false of the *change* regardless of who or what produced it. It cannot be argued
 with, it costs the same at N = 1 and N = 40, and it runs without consuming any actor's context or
 discipline. **The gate set is the only part of a methodology that transfers to N actors unchanged.** The
 methodology already knows this in one place — *"the gate proves correctness, not the tier's judgment"* —
@@ -153,9 +138,9 @@ never missing, nothing gated on it."* And FM #28: the artifacts a session must r
 because every phase tells a session to *write* and none tells it to *reduce*. The consequence for this
 plan is structural, not stylistic: **an instruction is paid for on every session; a gate is paid for only
 when it fires.** Each failure mode that can be converted into a check removes a mandatory-read line —
-which is exactly the pressure PR #80 is relieving by hand today. That is the plausible mechanism behind
-the consistency gain the author reports in agents under Forseti: a fast, specific, unarguable failure
-signal outperforms a long description of what to avoid.
+which is exactly the pressure PR #80 is relieving by hand today. That is a plausible mechanism for why a
+check set of this kind works on agents at all: a fast, specific, unarguable failure signal outperforms a
+long description of what to avoid.
 
 ### 3D. Honesty, made measurable
 
@@ -216,7 +201,7 @@ already ships.
 **D3 — The ratchet is a SAFEGUARDS hard rule.** Add one row to the Blast Radius table
 (`starter-kit/SAFEGUARDS.md:46–53`): **"Never loosen a declared quality threshold to make a change pass —
 loosening requires plan-mode approval"**, with the why: *a threshold that can be lowered under pressure is
-a suggestion; the ratchet is what makes "ideal, and enforce it" true a year later.* Parallel in form to
+a suggestion; the ratchet is what makes "wouldn't make it through today" true a year later.* Parallel in form to
 `:53` ("Refactoring always requires plan mode approval"). Tightening needs no approval.
 
 **D4 — "Same gates for every actor" becomes a principle-level statement, not a slice-only clause.**
@@ -229,7 +214,7 @@ thresholds only tighten (D3). Cross-reference the existing capability-tiered par
 duplicating it. **No principle is renumbered; no phase or gate is added** — the same class of change as
 v2.9's reasoning-tier section.
 
-**D5 — "Every wrong answer is a bug" becomes a close-out routing rule.** Phase 3C already routes learnings
+**D5 — "A wrong answer becomes a check" becomes a close-out routing rule.** Phase 3C already routes learnings
 (adopter → `CLAUDE.md` Adaptations; canonical → the table). Add the mechanical branch: *if the learning
 is a mechanical invariant, it is a gate — declare it in `.quality-gates.json` (or a test) and write the
 row as a one-line pointer to the gate.* This is Learning #12 generalized from "test" to "gate", and it is
@@ -373,9 +358,10 @@ Recorded so that a later session can ask them rather than re-derive them:
 1. **How is the coverage floor guarded against vacuous tests?** A floor an agent must clear is a floor an
    agent can clear with assertions that assert nothing. Is there a mutation score, an assertion-density
    check, or a review-time mutation spot-check beside the floor?
-2. **When "every wrong answer is a bug", what is the artifact?** A new Forseti check, a test, or an eval
-   case — and who files it, the reviewer or the agent that produced the wrong answer? The answer decides
-   whether the check set grows by review or by self-report, which is the same distinction §3 turns on.
+2. **What makes the check set grow past 130?** When a defect is found in review, does it become a new
+   Forseti check, a test, or an eval case — and who files it, the reviewer or the agent that produced it?
+   The answer decides whether the check set grows by review or by self-report, which is the same
+   distinction §3 turns on.
 
 ---
 
@@ -390,7 +376,7 @@ Recorded so that a later session can ask them rather than re-derive them:
 3. **FM #29 or FM #17 amendment** (D8). Recommendation: amend #17; promote to #29 only if Phase 5 shows
    loosening attempts are frequent.
 4. **Where the seed's initial thresholds come from.** Empty manifest (adopter declares from measurement —
-   recommended, mirrors Phase 5) vs. published-style defaults (a length cap, a complexity ceiling, a 90%
+   recommended, mirrors Phase 5) vs. a default copied from the article (a 90% coverage
    floor) — the latter would be false at install for most existing adopters and would immediately fail
    every pre-commit, which teaches bypass.
 5. **Manifest name and schema owner** — `.quality-gates.json` on the `.context-budget.json` precedent, or
@@ -421,5 +407,4 @@ git show origin/read-set-budgets:bin/check-learnings | grep -n ROW_BUDGET_BYTES 
 gh pr view 80 --json mergeable,mergeStateStatus,commits,changedFiles,additions,deletions     # MERGEABLE/CLEAN, 11 commits, 28 files
 ```
 
-Primary source: <https://campusiq.com/blogs/everybody-ships> (fetched 2026-09-14). Personal communication
-with the author is paraphrased in §1B and nowhere quoted.
+Primary and sole source: <https://campusiq.com/blogs/everybody-ships> (fetched 2026-09-14).
