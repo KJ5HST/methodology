@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S16
+date: 2026-09-14
+status: pending
+active_task: Add `.githooks/commit-msg` — a disclosure gate that refuses a commit made under an AI agent harness whose message lacks a `Co-Authored-By: <name> <email>` trailer. THE AGENT NEVER TAKES CREDIT: the human is the author and owns every commit; the trailer discloses the agent's involvement so no reader of the history is misled about how the work was produced (the honesty counterpart of FM #16). Fires only when a harness marker is in the environment (or METHODOLOGY_REQUIRE_COAUTHOR=1); silent for hand-made commits. Ships with `--selftest`; documented in SAFEGUARDS.md. Operator trigger after reviewing PR #80's timeline: "There are specific rules about taking credit" → "Add the commit-msg hook" → "you will NEVER TAKE credit" (which corrected the first draft's framing). ONE DELIVERABLE (the hook + its SAFEGUARDS pointer).
+```
+
+```handoff
 session: S15
 date: 2026-09-14
 status: complete
