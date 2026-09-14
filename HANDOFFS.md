@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S13
+date: 2026-09-14
+status: pending
+active_task: Publish the quality-ratchet plan — what the methodology should take from CampusIQ's Forseti layer (Aaron Benz, "Everybody Ships", campusiq.com) and what it should not — as a public planning record at docs/planning/quality-ratchet-plan.md. A public-safe recomposition of an internal oversight planning document written earlier today: the public article is quoted verbatim, private correspondence is paraphrased as personal communication, internal-only pointers are removed. ONE DELIVERABLE (the document); no framework file changes; nothing implemented.
+```
+
+```handoff
 session: S12
 date: 2026-08-12
 status: complete

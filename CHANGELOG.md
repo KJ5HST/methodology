@@ -35,6 +35,31 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-09-14 · [ad hoc] Published the quality-ratchet plan — what the methodology should take from CampusIQ's Forseti layer
+
+- **Change:** new `docs/planning/quality-ratchet-plan.md` (canonical-only planning record; not in
+  `bin/_manifest.py`, so adopters receive nothing via `bin/sync`). No framework file changed; nothing
+  implemented. Session S13; branch `docs/quality-ratchet-plan` → PR (number and merge commit completed
+  at close-out).
+- **Source:** Aaron Benz, *"Everybody Ships: How CampusIQ Built an AI-Native Company"*,
+  <https://campusiq.com/blogs/everybody-ships> — quoted verbatim; the maintainer's correspondence with
+  the author is paraphrased as personal communication, never quoted.
+- **The finding the plan records:** CampusIQ enforces quality on the *artifact* — the same 130+ checks
+  for every actor, thresholds that only tighten, checks that never pass by default — while this
+  methodology enforces it on the *actor*: 10 of its 12 quality gates are self-certifications and 26 of
+  28 failure modes bind by text alone (only #27 → `.githooks/pre-commit` and #28 → `context_budget.py`
+  have a distributed mechanical gate). Self-certification multiplies under N agents rather than scaling;
+  a stronger reviewer changes the judge, not the class of gate. Corpus grep for any code-quality
+  threshold: 0 hits; the one ratchet that exists (`starter-kit/context_budget.py:504`) guards document size.
+- **What it proposes** (D1–D10, six one-session phases): ship the ratchet, not the ruler —
+  `.quality-gates.json` SEED + `quality_ratchet.py` TRACKED (refuses a commit that loosens a declared
+  threshold), a `SAFEGUARDS.md` hard rule, a flight-manual section generalizing the capability-tiered
+  clause from elective to universal, Phase 3C routing "a mechanical learning is a gate, not a row",
+  advisory dashboard scoring of gate outcomes, receipt citation of the gate run. Not adopted: two-day
+  default approval, PR-throughput floors, coverage floors without a faithfulness check. No new FM.
+- **Blocked on:** PR #80 (relocates the Learnings table every prose phase touches). Nothing executes
+  until #80 is decided.
+
 ### 2026-08-12 · [ad hoc] Released v3.7 — the artifacts Phase 0 mandates reading now have ceilings
 
 - **Change:** release narration commit on `release/v3.7` — `README.md` §What's New in v3.7 (folding
