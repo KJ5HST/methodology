@@ -39,8 +39,11 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 - **Change:** new `docs/planning/quality-ratchet-plan.md` (canonical-only planning record; not in
   `bin/_manifest.py`, so adopters receive nothing via `bin/sync`). No framework file changed; nothing
-  implemented. Session S13; branch `docs/quality-ratchet-plan` → PR (number and merge commit completed
-  at close-out).
+  implemented. Session S13; branch `docs/quality-ratchet-plan` → [PR #81](https://github.com/KJ5HST/methodology/pull/81)
+  → merge `db121ce` (2026-09-14). Commits: `f62699a` (claim), `993aa89` (plan), `db121ce` (merge), plus the
+  close-out commit completing this entry and the S13 receipt. All three session commits ran the ledger
+  co-staging hook clean — no `--no-verify` (the first session since S8 to do so; the entry was written
+  at claim and completed here).
 - **Source:** Aaron Benz, *"Everybody Ships: How CampusIQ Built an AI-Native Company"*,
   <https://campusiq.com/blogs/everybody-ships> — quoted verbatim; the maintainer's correspondence with
   the author is paraphrased as personal communication, never quoted.
