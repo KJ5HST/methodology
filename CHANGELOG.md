@@ -35,6 +35,19 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-09-14 · [ad hoc] Resolved the CHANGELOG.md conflict S13/S14 created for PR #80
+
+- **Change:** `main` merged into the PR #80 head branch `read-set-budgets` (which lives in this repo) with
+  the one conflicting file, `CHANGELOG.md`, resolved as a union in ledger order — today's S13–S15 entries
+  on top, #80's four entries (2026-09-02..04) below them, everything else common. No other file conflicted
+  (`git merge-tree --write-tree --name-only origin/main origin/read-set-budgets` → `CHANGELOG.md` only).
+  Session S15; the merge commit is completed at close-out from real command output.
+- **Why:** #80 was MERGEABLE/CLEAN at `512c2ed` this morning; S13/S14's ledger and receipt commits
+  prepended at the same anchor #80 prepends at, so the first session to record anything on `main` after
+  #80 opened made it conflict — S13 should have computed that before merging PR #81 (Learning #13) and did
+  not. Ordering #80's entries below today's, rather than above, is what stops the next `main` prepend
+  from re-conflicting: the two hunks are no longer adjacent.
+
 ### 2026-09-14 · [ad hoc] Redacted the quality-ratchet plan to its published source only
 
 - **Change:** `docs/planning/quality-ratchet-plan.md` — every statement derived from the maintainer's

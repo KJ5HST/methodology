@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S15
+date: 2026-09-14
+status: pending
+active_task: Resolve the CHANGELOG.md merge conflict that S13/S14's ledger prepends created for PR #80 (read-set-budgets): merge main into the PR branch with the ledger union ordered newest-on-top (today's S13–S15 entries above #80's 09-02..09-04 entries), so #80 returns to MERGEABLE/CLEAN and later prepends on main no longer touch the same hunk. ONE DELIVERABLE (the resolution merge on the PR branch); no framework file changes.
+```
+
+```handoff
 session: S14
 date: 2026-09-14
 status: complete
