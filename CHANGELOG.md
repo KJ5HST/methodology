@@ -41,7 +41,9 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   private correspondence with the article's author removed (the S13 version had paraphrased it, never
   quoted it). The article <https://campusiq.com/blogs/everybody-ships> is now the plan's only source for
   CampusIQ's practice. 15 edits, 425 → 410 lines; residue grep for correspondence-derived phrasing: 0 hits.
-  Session S14, committed directly on `main` (the S12 close-out precedent); commits completed at close-out.
+  Session S14, committed directly on `main` (the S12 close-out precedent): `4a5aab0` (claim), `762e7bc`
+  (redaction), plus the close-out commit completing this entry and the S14 receipt. PR #81's body was
+  edited to match. Hook ran clean on every commit.
 - **Why:** the maintainer was no longer sure the exchange was not in confidence. Removing it from the live
   record is cheap and reversible; publishing it is neither. Git history (`993aa89`, PR #81) retains the
   S13 text — stated in the receipt, not hidden.
