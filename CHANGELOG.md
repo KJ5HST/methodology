@@ -41,7 +41,9 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   the one conflicting file, `CHANGELOG.md`, resolved as a union in ledger order — today's S13–S15 entries
   on top, #80's four entries (2026-09-02..04) below them, everything else common. No other file conflicted
   (`git merge-tree --write-tree --name-only origin/main origin/read-set-budgets` → `CHANGELOG.md` only).
-  Session S15; the merge commit is completed at close-out from real command output.
+  Session S15: claim `8fdc50f` (main) → resolution merge `b82dcff` (pushed to `origin/read-set-budgets`)
+  → close-out commit on main. Union verified: 57 source-tagged entries = the branch's 54 + today's 3.
+  `git merge-tree` empty after the push and again after the close-out prepend.
 - **Why:** #80 was MERGEABLE/CLEAN at `512c2ed` this morning; S13/S14's ledger and receipt commits
   prepended at the same anchor #80 prepends at, so the first session to record anything on `main` after
   #80 opened made it conflict — S13 should have computed that before merging PR #81 (Learning #13) and did
