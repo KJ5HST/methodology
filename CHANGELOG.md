@@ -59,6 +59,9 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   default approval, PR-throughput floors, coverage floors without a faithfulness check. No new FM.
 - **Blocked on:** PR #80 (relocates the Learnings table every prose phase touches). Nothing executes
   until #80 is decided.
+- **Verification:** 425 lines; 26 `file:line` anchors on `main @ 512c2ed` re-checked by script (26/26);
+  leak check for private-correspondence phrasing, internal-only paths, project names and brand names: 0 hits;
+  `bin/check-links` OK (83/21), `bin/check-handoff --allow-pending` OK.
 
 ### 2026-08-12 · [ad hoc] Released v3.7 — the artifacts Phase 0 mandates reading now have ceilings
 
