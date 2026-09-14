@@ -35,6 +35,63 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-09-14 · [ad hoc] Resolved the CHANGELOG.md conflict S13/S14 created for PR #80
+
+- **Change:** `main` merged into the PR #80 head branch `read-set-budgets` (which lives in this repo) with
+  the one conflicting file, `CHANGELOG.md`, resolved as a union in ledger order — today's S13–S15 entries
+  on top, #80's four entries (2026-09-02..04) below them, everything else common. No other file conflicted
+  (`git merge-tree --write-tree --name-only origin/main origin/read-set-budgets` → `CHANGELOG.md` only).
+  Session S15; the merge commit is completed at close-out from real command output.
+- **Why:** #80 was MERGEABLE/CLEAN at `512c2ed` this morning; S13/S14's ledger and receipt commits
+  prepended at the same anchor #80 prepends at, so the first session to record anything on `main` after
+  #80 opened made it conflict — S13 should have computed that before merging PR #81 (Learning #13) and did
+  not. Ordering #80's entries below today's, rather than above, is what stops the next `main` prepend
+  from re-conflicting: the two hunks are no longer adjacent.
+
+### 2026-09-14 · [ad hoc] Redacted the quality-ratchet plan to its published source only
+
+- **Change:** `docs/planning/quality-ratchet-plan.md` — every statement derived from the maintainer's
+  private correspondence with the article's author removed (the S13 version had paraphrased it, never
+  quoted it). The article <https://campusiq.com/blogs/everybody-ships> is now the plan's only source for
+  CampusIQ's practice. 15 edits, 425 → 410 lines; residue grep for correspondence-derived phrasing: 0 hits.
+  Session S14, committed directly on `main` (the S12 close-out precedent): `4a5aab0` (claim), `762e7bc`
+  (redaction), plus the close-out commit completing this entry and the S14 receipt. PR #81's body was
+  edited to match. Hook ran clean on every commit.
+- **Why:** the maintainer was no longer sure the exchange was not in confidence. Removing it from the live
+  record is cheap and reversible; publishing it is neither. Git history (`993aa89`, PR #81) retains the
+  S13 text — stated in the receipt, not hidden.
+
+### 2026-09-14 · [ad hoc] Published the quality-ratchet plan — what the methodology should take from CampusIQ's Forseti layer
+
+- **Change:** new `docs/planning/quality-ratchet-plan.md` (canonical-only planning record; not in
+  `bin/_manifest.py`, so adopters receive nothing via `bin/sync`). No framework file changed; nothing
+  implemented. Session S13; branch `docs/quality-ratchet-plan` → [PR #81](https://github.com/KJ5HST/methodology/pull/81)
+  → merge `db121ce` (2026-09-14). Commits: `f62699a` (claim), `993aa89` (plan), `db121ce` (merge), plus the
+  close-out commit completing this entry and the S13 receipt. All three session commits ran the ledger
+  co-staging hook clean — no `--no-verify` (the first session since S8 to do so; the entry was written
+  at claim and completed here).
+- **Source:** Aaron Benz, *"Everybody Ships: How CampusIQ Built an AI-Native Company"*,
+  <https://campusiq.com/blogs/everybody-ships> — quoted verbatim; the maintainer's correspondence with
+  the author is paraphrased as personal communication, never quoted.
+- **The finding the plan records:** CampusIQ enforces quality on the *artifact* — the same 130+ checks
+  for every actor, thresholds that only tighten, checks that never pass by default — while this
+  methodology enforces it on the *actor*: 10 of its 12 quality gates are self-certifications and 26 of
+  28 failure modes bind by text alone (only #27 → `.githooks/pre-commit` and #28 → `context_budget.py`
+  have a distributed mechanical gate). Self-certification multiplies under N agents rather than scaling;
+  a stronger reviewer changes the judge, not the class of gate. Corpus grep for any code-quality
+  threshold: 0 hits; the one ratchet that exists (`starter-kit/context_budget.py:504`) guards document size.
+- **What it proposes** (D1–D10, six one-session phases): ship the ratchet, not the ruler —
+  `.quality-gates.json` SEED + `quality_ratchet.py` TRACKED (refuses a commit that loosens a declared
+  threshold), a `SAFEGUARDS.md` hard rule, a flight-manual section generalizing the capability-tiered
+  clause from elective to universal, Phase 3C routing "a mechanical learning is a gate, not a row",
+  advisory dashboard scoring of gate outcomes, receipt citation of the gate run. Not adopted: two-day
+  default approval, PR-throughput floors, coverage floors without a faithfulness check. No new FM.
+- **Blocked on:** PR #80 (relocates the Learnings table every prose phase touches). Nothing executes
+  until #80 is decided.
+- **Verification:** 425 lines; 26 `file:line` anchors on `main @ 512c2ed` re-checked by script (26/26);
+  leak check for private-correspondence phrasing, internal-only paths, project names and brand names: 0 hits;
+  `bin/check-links` OK (83/21), `bin/check-handoff --allow-pending` OK.
+
 ### 2026-09-03 · [ad hoc] The context-budget gate ships — ceilings in tokens, class totals, and the repairs beneath them
 
 - **Change:** `starter-kit/context_budget.py` `1.0.0` → `1.2.0` (29,549 → 73,040 B), shipped as the
@@ -206,6 +263,7 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   and checker repairs that followed it. The fork's own ledgers, `docs/planning/`, and the two
   unrelated `SESSION_RUNNER.md` changes it also carries (issue #75's *name the surface* additions
   and the Phase 3F `Model:` bullet) are **deliberately excluded**.
+
 
 ### 2026-08-12 · [ad hoc] Released v3.7 — the artifacts Phase 0 mandates reading now have ceilings
 
