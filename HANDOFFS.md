@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S14
+date: 2026-09-14
+status: pending
+active_task: Redact docs/planning/quality-ratchet-plan.md so the published article is its ONLY source — remove every statement derived from the maintainer's private correspondence with the article's author (the S13 version paraphrased it as "personal communication"), because the maintainer is no longer sure the exchange was not in confidence. ONE DELIVERABLE (the redaction); no framework file changes.
+```
+
+```handoff
 session: S13
 date: 2026-09-14
 status: complete
