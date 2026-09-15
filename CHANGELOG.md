@@ -35,13 +35,18 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
-### 2026-09-15 · [ad hoc] Quality ratchet — the plan's Phases 1–4 built as one pre-declared vertical slice — CHANGELOG: pending
+### 2026-09-15 · [ad hoc] Quality ratchet — the plan's Phases 1–4 built as one pre-declared vertical slice (PR opened, not merged)
 
 - **Action:** implement [`docs/planning/quality-ratchet-plan.md`](docs/planning/quality-ratchet-plan.md)
   (PR #81, the plan; D1–D10) through its four buildable layers on branch `feat/quality-ratchet`, one
   checkpoint commit per layer with the full matrix at each boundary, and open a PR for review. Phases 5
-  (adopter dogfood) and 6 (release) are separate sessions by the plan's own text. Session S20; the
-  checkpoint list and the PR number are completed at close-out.
+  (adopter dogfood) and 6 (release) are separate sessions by the plan's own text. Session S20. **Checkpoints:**
+  claim `5cd300e` · P0 `008d656` · P1 `628d218` · P2a `9d34485` · P2b `727d9ff` · P2c `d433739` · P3 `cca7941` ·
+  P4a `bae6b05` · P4b `58babe6` · P4c `04044f1` · self-review `b4226d3` + `d24fb2c` · close-out (this commit).
+  **Gate run cited in the receipt:** `quality_ratchet: 9/9 pass · results 74c773523dab · manifest 2424c429b2c6`.
+  **§8 decisions** taken at the plan's recommendations (1 yes; 2 gitignored; 3 amend #17; 4 empty seed; 5 separate
+  file; 7 separate plan) and listed in the PR body for the operator to reverse. PR number: see the PR-open
+  line appended below this entry at close-out.
 - **P0 — preconditions (checkpoint 1).** `tools/test_context_budget.py`: `TestFitGateEndToEnd` skipped only
   when NO transcript existed, but `calibrate()` refuses to fit below 4 usable sessions — on this machine (2
   transcripts for the repo path) both tests ran and failed against *"not enough to fit"*, so `bin/tests.sh`
