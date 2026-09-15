@@ -92,6 +92,30 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   leak check for private-correspondence phrasing, internal-only paths, project names and brand names: 0 hits;
   `bin/check-links` OK (83/21), `bin/check-handoff --allow-pending` OK.
 
+### 2026-09-15 · [ad hoc] PR #80 review F3: the root `.context-budget.json` holds the Phase 0 pair to the read cap in tokens at its measured density, and drops the two ledgers it could only report as over
+
+- **Change:** `.context-budget.json` only — this repository's own config, which `bin/_manifest.py` does not
+  distribute (adopters receive the seed, `starter-kit/context-budget.json`, unchanged).
+  `starter-kit/SESSION_RUNNER.md` and `starter-kit/SAFEGUARDS.md` trade their byte ceilings for token
+  ceilings at densities measured by the doubled-file method — 19,200 + 5,800 tokens, which partition the
+  25,000-token read cap — and the `read-set` class keeps its total as a measurement but declares no byte
+  ceiling, because `class_ceiling()` can only take a typed byte total or derive one at the 2.27 B/token
+  floor. `CHANGELOG.md` and `HANDOFFS.md` leave `files[]` for `_deliberate_exclusions`, with the reason
+  and the command that recovers their entries.
+- **Why:** F3 of the review ([comment](https://github.com/KJ5HST/methodology/pull/80#issuecomment-5674670153)):
+  `context_budget.py --status` printed OVER at the head — for the pair the headline says fits, and for
+  both ledgers — and wired as a gate it would have refused every ledger append. The operator chose the
+  review's answer (i) for the pair, and for the ledgers a fourth: a ledger is read in part, and in a
+  whole-read class `token_ceiling()` clamps every file to the 25,000-token cap, so answer (ii) left both
+  ledgers over and its pin refused the next append (measured).
+- **Measured on both trees** — this branch, and its merge into `main` at `9fa3141`: `--status` exits
+  **0 (OK)** on each, where it exited 2. `--precommit`: a 300 B append to either ledger passes; the
+  runner passes +100 B and is refused at +2,100 B (19,220 tokens against 19,200); `SAFEGUARDS.md` is
+  pinned at its size in the merge; a shrink passes. The merged pair is 68,548 B and 24,278 tokens,
+  967 B more than this branch's 67,581 B — `main`'s own S16 paragraph in `SAFEGUARDS.md`.
+- **Placed** with this PR's own entries, above F2's, below `main`'s.
+- **Commit:** this commit, on `read-set-budgets` (PR #80)
+
 ### 2026-09-15 · [ad hoc] PR #80 review F2: the doc-only exclusion is tested for every non-markdown file `bin/sync` installs, from its real `starter-kit/` source
 
 - **Change:** `tools/test_methodology_dashboard.py` only — canonical-only, so adopters receive nothing,
