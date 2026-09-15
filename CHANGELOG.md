@@ -134,6 +134,16 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   complete receipt must carry the token (newest-only, so receipts written before the manifest are not
   re-judged and `--all` stays green on history). Observed in a scratch ledger: silent with no manifest and
   with the empty seed; FAIL with one gate and no citation (both modes); OK once cited.
+- **P4b — this repo dogfoods the ratchet (checkpoint 8).** Root `.quality-gates.json` declares **9 gates at
+  their current measured values** — `tests-sh-passed ≥ 134`, the four unit-suite counts (dashboard ≥ 222,
+  budget ≥ 118, trimmer ≥ 123, ratchet ≥ 33), and five exit-code gates (`check-links`, `check-learnings`,
+  `check-handoff --all --allow-pending`, `commit-msg --selftest`) — with `tests-sh-failed ≤ 0` recorded as the
+  **first tightening owed after merge** (Test 9 is red by construction on the branch, and a gate declared
+  red teaches bypass). First `--run`: **9/9 pass**. `.githooks/pre-commit` chains `--precommit` before the
+  ledger gate — **observed live in this repo**: a staged floor 127 → 100 was refused with the bypass cost
+  printed, then reverted. `bin/tests.sh` 128 → **135** checks: the manifest parses with no defects and
+  declares gates; the hook chains the ratchet; the D9 lint observed silent (no manifest; empty seed),
+  failing (one gate, no citation — both modes) and passing (cited).
 
 ### 2026-09-15 · [ad hoc] Merged PR #80 — the read-set budgets series (#76–#79)
 

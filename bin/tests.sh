@@ -738,6 +738,62 @@ AFTER="$(md5 -q "$P/.quality-gates.json" 2>/dev/null || md5sum "$P/.quality-gate
     || fail "re-sync overwrote the adopter's .quality-gates.json"
 rm -rf "$P"
 
+# This repo dogfoods the ratchet: its own manifest must parse with no defects and declare gates,
+# and its ledger hook must chain the ratchet. (--run is NOT invoked here — it runs this script.)
+python3 - "$METHODOLOGY" <<'PY' >/dev/null 2>&1 && pass "this repo's .quality-gates.json declares gates with no defects" \
+    || fail "this repo's .quality-gates.json is missing, empty, or defective"
+import importlib.util, json, sys
+root = sys.argv[1]
+spec = importlib.util.spec_from_file_location("qr", root + "/starter-kit/quality_ratchet.py")
+qr = importlib.util.module_from_spec(spec); spec.loader.exec_module(qr)
+cfg = json.load(open(root + "/.quality-gates.json"))
+sys.exit(0 if cfg["gates"] and not qr.config_defects(cfg) else 1)
+PY
+grep -q 'quality_ratchet.py" --precommit' "$METHODOLOGY/.githooks/pre-commit" \
+    && pass ".githooks/pre-commit chains the quality ratchet before the ledger gate" \
+    || fail ".githooks/pre-commit does not run quality_ratchet.py --precommit"
+
+# D9: check-handoff's gate-run citation lint, observed silent / failing / passing.
+P="$(mktemp -d)"
+cat > "$P/HANDOFFS.md" <<'EOF2'
+# Handoff Receipts
+
+```handoff
+session: S2
+date: 2026-09-15
+status: complete
+self_score: 8
+predecessor_score: 7
+active_task: did a thing
+what_was_done: did it, commit a1b2c3d
+next_steps: run bin/x at src/x.py:10 next
+key_files: src/x.py:10
+gotchas: none known
+runtime_smoke: n/a — docs-only
+changelog_ref: PR #1
+commit: a1b2c3d
+```
+EOF2
+"$BIN/check-handoff" --file "$P/HANDOFFS.md" >/dev/null 2>&1 \
+    && pass "check-handoff: no manifest, no citation demanded" \
+    || fail "check-handoff demanded a gate citation with no manifest present"
+printf '{"version":1,"gates":[]}\n' > "$P/.quality-gates.json"
+"$BIN/check-handoff" --file "$P/HANDOFFS.md" >/dev/null 2>&1 \
+    && pass "check-handoff: the empty seed demands no citation" \
+    || fail "check-handoff demanded a gate citation for an empty seed"
+printf '{"version":1,"gates":[{"name":"t","direction":"max","threshold":0}]}\n' > "$P/.quality-gates.json"
+"$BIN/check-handoff" --file "$P/HANDOFFS.md" >/dev/null 2>&1 \
+    && fail "check-handoff passed a complete receipt that cites no gate run while a gate is declared" \
+    || pass "check-handoff: a declared gate with no citation in the newest receipt is a finding"
+"$BIN/check-handoff" --all --file "$P/HANDOFFS.md" >/dev/null 2>&1 \
+    && fail "check-handoff --all missed the uncited gate run" \
+    || pass "check-handoff --all: the same finding, on the newest receipt only"
+sed -i.bak 's|runtime_smoke: n/a — docs-only|runtime_smoke: quality_ratchet: 1/1 pass · 0 fail · 0 unmeasured · results abc123def456 · manifest 0123456789ab|' "$P/HANDOFFS.md"
+"$BIN/check-handoff" --file "$P/HANDOFFS.md" >/dev/null 2>&1 \
+    && pass "check-handoff: a cited gate run satisfies the lint" \
+    || fail "check-handoff rejected a receipt that cites its gate run"
+rm -rf "$P"
+
 echo ""
 echo "== Summary: $PASS passed, $FAIL failed =="
 [ "$FAIL" = "0" ]
