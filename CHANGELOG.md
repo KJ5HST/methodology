@@ -107,6 +107,21 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   the receipt citation) plus a tool-agnostic per-stack table (Python/Node/Rust/JVM/Docs — the methodology
   ships the ratchet, not the ruler). `.gitignore` gains `.quality-gates-results.json` (**§8.2**: gitignored
   by default, with the reason). `bin/check-links` 105 → **107** (both new adopter-layout links resolve).
+- **P3 — dashboard (checkpoint 6), `DASHBOARD_VERSION` 2.10.7 → 2.11.0, both twins byte-identical.** New
+  `collect_gate_metrics` (**D6**): reads `.quality-gates.json` (declared count), the results file where it
+  exists (pass/fail/unmeasured, a `manifest`-hash staleness check, a passing gate named *coverage*), and a
+  **git-only** loosening history (`git log -- .quality-gates.json`, capped at 50, each pair diffed for a
+  lowered floor / raised ceiling / removed gate — the scanner never executes a project command, and a test
+  proves it with a `touch`-marker gate). Advisory risks: *N declared, never run here* (medium); *results
+  predate the manifest* (low); *K of N measured outside their threshold: names* (high); *unmeasured (no
+  command)* (low); *threshold `x` floor lowered a → b in `sha` (date) (+k earlier) — thresholds only tighten*
+  (medium). `score_health`: a **measured** passing coverage gate earns +2 on top of configured coverage's
+  +2, cap unchanged — the first number, not file-existence, the scanner scores; doc-only repos keep their
+  render slot. Card: a *Quality Gates* row beside *Coverage Config*. **Silence is deliberate**: no manifest,
+  and the **empty seed** every synced adopter receives, produce no risk. 11 new tests
+  (`TestQualityGateSignals`), **RED first against the 2.10.7 scanner: 11 ran, 2 failures + 7 errors**; unit
+  suite **211 → 222** OK. **Fleet delta: 27 repos re-scanned under 2.10.7 and 2.11.0 — 0 changed class,
+  score, or risk set** (none has a manifest). `bin/tests.sh` 127/1 (Test 9 by construction).
 
 ### 2026-09-15 · [ad hoc] Merged PR #80 — the read-set budgets series (#76–#79)
 
