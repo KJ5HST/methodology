@@ -51,6 +51,7 @@ If there are uncommitted changes from a previous session, **do not touch them**.
 | **Never delete a file without verifying it's committed** | `git log --oneline -- <file>` before `rm`. No shortcuts. |
 | **Never rename/move files as part of a "quick fix"** | Renames cascade. They are never quick. |
 | **"Refactoring" always requires plan mode approval** | Refactoring is not a "just do it" activity. Ever. |
+| **Never loosen a declared quality threshold to make a change pass** — loosening requires plan mode approval; tightening never does | A threshold that can be lowered under pressure is a suggestion. The ratchet is what makes "wouldn't make it through today" true a year later. Declared in `.quality-gates.json`, held by `quality_ratchet.py --precommit`; `--no-verify` is a recorded bypass, not an exemption. |
 
 ### Scope Creep Red Flags
 

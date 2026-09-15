@@ -1,0 +1,73 @@
+{
+  "_": "This repository's own declared quality gates — the checks it already runs, declared at their CURRENT measured values on 2026-09-15 (S20, the quality-ratchet slice) so the ratchet starts where the repo is. Held by starter-kit/quality_ratchet.py --precommit, chained into .githooks/pre-commit: a commit that lowers any `min` below, raises any `max`, or removes a gate is refused; tightening and adding pass. Loosening is a plan-mode decision in its own commit with the reason in CHANGELOG.md, committed with --no-verify (SAFEGUARDS.md Blast Radius Limits). Measure with `python3 starter-kit/quality_ratchet.py --run` (about three minutes: it runs bin/tests.sh) and cite the summary line in the close-out receipt (HANDOFFS.md, runtime_smoke); bin/check-handoff lints for it.",
+  "_first_tightening_owed": "`tests-sh-failed` (max 0) is deliberately NOT declared yet: on the feature branch Test 9 fails by construction (`--source=github` reads main, which lacks the new starter-kit files) and a gate that is red at declaration teaches bypass on day one. Add it in the first commit after this branch merges, when bin/tests.sh reads 128/0 on main.",
+  "version": 1,
+  "results_file": ".quality-gates-results.json",
+  "gates": [
+    {
+      "name": "tests-sh-passed",
+      "direction": "min",
+      "threshold": 134,
+      "command": "bash bin/tests.sh",
+      "extract": "== Summary: (\\d+) passed",
+      "why": "the framework's build equivalent; the passed count is a ratchet — every suite it wires in (dashboard, trim, budget, ratchet units) reports through it"
+    },
+    {
+      "name": "dashboard-unit-tests",
+      "direction": "min",
+      "threshold": 222,
+      "command": "python3 tools/test_methodology_dashboard.py",
+      "extract": "Ran (\\d+) tests",
+      "why": "test count never drops; green/red is carried by tests-sh-passed"
+    },
+    {
+      "name": "context-budget-unit-tests",
+      "direction": "min",
+      "threshold": 118,
+      "command": "python3 tools/test_context_budget.py",
+      "extract": "Ran (\\d+) tests"
+    },
+    {
+      "name": "trimmer-unit-tests",
+      "direction": "min",
+      "threshold": 123,
+      "command": "python3 tools/test_methodology_trim.py",
+      "extract": "Ran (\\d+) tests"
+    },
+    {
+      "name": "ratchet-unit-tests",
+      "direction": "min",
+      "threshold": 33,
+      "command": "python3 tools/test_quality_ratchet.py",
+      "extract": "Ran (\\d+) tests"
+    },
+    {
+      "name": "check-links",
+      "direction": "max",
+      "threshold": 0,
+      "command": "bin/check-links",
+      "why": "exit code: every distributed relative link resolves in the simulated adopter tree"
+    },
+    {
+      "name": "check-learnings",
+      "direction": "max",
+      "threshold": 0,
+      "command": "bin/check-learnings",
+      "why": "exit code: the Learnings table is contiguous (reserved #14 honoured), 4 columns, every row within ROW_BUDGET_BYTES, every citation resolves"
+    },
+    {
+      "name": "check-handoff-all",
+      "direction": "max",
+      "threshold": 0,
+      "command": "bin/check-handoff --all --allow-pending",
+      "why": "exit code: every receipt structurally complete (the newest may be a Phase 1B stub mid-session); with a manifest present the newest complete receipt must cite its gate run"
+    },
+    {
+      "name": "commit-msg-selftest",
+      "direction": "max",
+      "threshold": 0,
+      "command": ".githooks/commit-msg --selftest",
+      "why": "exit code: the disclosure gate's own checks"
+    }
+  ]
+}

@@ -10,3 +10,7 @@ dashboard.html
 tools/__pycache__/
 starter-kit/__pycache__/
 bin/__pycache__/
+# quality_ratchet.py --run writes this; gitignored by default (quality-ratchet plan §8.2): the
+# receipt cites the summary line, the dashboard reads the file where it exists. Track it instead
+# if every clone should score the last run.
+.quality-gates-results.json

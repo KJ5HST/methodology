@@ -26,6 +26,16 @@ for marker in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD rebase-merge rebase-apply;
 	fi
 done
 
+# Quality ratchet (quality-ratchet plan, D2; SAFEGUARDS.md Blast Radius Limits): refuse a
+# commit that LOOSENS a declared threshold in .quality-gates.json. Runs before the ledger
+# gate so a loosening is refused even when the ledger is co-staged. Same bypass, same
+# guarantee: `git commit --no-verify` is recorded in the manifest's history, which the
+# dashboard reads. The tool lives under starter-kit/ in this repo (adopters get it at root).
+top=$(git rev-parse --show-toplevel)
+if [ -f "$top/.quality-gates.json" ] && [ -f "$top/starter-kit/quality_ratchet.py" ]; then
+	python3 "$top/starter-kit/quality_ratchet.py" --precommit || exit $?
+fi
+
 staged=$(git diff --cached --name-only)
 
 # Empty index (e.g. `--allow-empty`, or an all-unstaged tree): nothing to gate.

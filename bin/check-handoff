@@ -52,6 +52,7 @@ Exit: 0 = a receipt is present and structurally complete, or legitimately absent
 Python 3 stdlib only; cross-platform.
 """
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -90,6 +91,14 @@ SHA_RE = re.compile(r"\b(?=[0-9a-f]{7,40}\b)[0-9a-f]*[a-f][0-9a-f]*\b")
 PICK_BACKLOG_RE = re.compile(r"pick next(\s+from)?(\s+the)?\s+backlog", re.IGNORECASE)
 NEED_TO_VERIFY_RE = re.compile(r"need to verify", re.IGNORECASE)
 BARE_PLACEHOLDERS = {"todo", "tbd", "done.", "fixed stuff", "..."}
+
+# Quality-ratchet plan D9: where the repo declares quality gates, the NEWEST complete receipt
+# must cite the session's gate run — the summary line `quality_ratchet.py --run` prints. Checked
+# for structure only (the token and its N/M shape), never for truth: whether the counts match the
+# results file is the next Phase 0 reconcile's comparison, not this lint's. Newest-only on purpose:
+# receipts written before the manifest existed are not re-judged, so --all stays green on history.
+GATES_MANIFEST = ".quality-gates.json"
+GATE_CITATION_RE = re.compile(r"quality_ratchet:\s*\d+/\d+\s+pass")
 
 
 def scan(text: str):
@@ -316,6 +325,31 @@ def validate(fields: dict, allow_pending: bool) -> list:
     return findings
 
 
+def declared_gate_count(handoffs_path: Path) -> int:
+    """Gates declared beside this ledger (0 when no manifest, an empty seed, or unreadable JSON)."""
+    mp = handoffs_path.resolve().parent / GATES_MANIFEST
+    if not mp.is_file():
+        return 0
+    try:
+        cfg = json.loads(mp.read_text(encoding="utf-8-sig", errors="replace"))
+    except ValueError:
+        return 0
+    gates = cfg.get("gates") if isinstance(cfg, dict) else None
+    return len(gates) if isinstance(gates, list) else 0
+
+
+def validate_gate_citation(fields: dict, declared: int) -> list:
+    """D9 lint for the newest receipt: complete + gates declared => a citation must be present."""
+    if declared <= 0 or fields.get("status", "").strip() != "complete":
+        return []
+    haystack = fields.get("runtime_smoke", "") + "\n" + fields.get("what_was_done", "")
+    if GATE_CITATION_RE.search(haystack):
+        return []
+    return ["%d quality gate(s) are declared in %s but the receipt cites no gate run — paste the "
+            "`quality_ratchet: N/M pass …` summary line of `quality_ratchet.py --run` into "
+            "runtime_smoke" % (declared, GATES_MANIFEST)]
+
+
 def repo_root() -> Path:
     try:
         out = subprocess.run(
@@ -371,8 +405,13 @@ def main() -> int:
         print("error: no ```handoff``` receipt block found in %s" % path)
         return 1
 
+    declared = declared_gate_count(path)
     if args.all:
         findings = validate_ledger(blocks_meta, list(struct_findings), args.allow_pending)
+        newest = parse_block(blocks[0])
+        findings += ["block at line %d (%s): %s"
+                     % (blocks_meta[0]["line"], newest.get("session", "").strip() or "<no session>", m)
+                     for m in validate_gate_citation(newest, declared)]
         if findings:
             print("check-handoff --all: FAIL — %d issue(s) across %d receipt(s) in %s:"
                   % (len(findings), len(blocks), path))
@@ -384,7 +423,7 @@ def main() -> int:
         return 0
 
     fields = parse_block(blocks[0])  # newest = first block in the file
-    findings = validate(fields, args.allow_pending)
+    findings = validate(fields, args.allow_pending) + validate_gate_citation(fields, declared)
 
     if findings:
         print("check-handoff: FAIL — %d issue(s) in the newest receipt in %s:" % (len(findings), path))

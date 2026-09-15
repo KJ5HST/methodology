@@ -65,6 +65,7 @@ CUSTOMIZATION
   is exact where detection is a guess.
 """
 
+import hashlib
 import json
 import os
 import platform
@@ -82,7 +83,7 @@ from collections import defaultdict
 # Every other copy (portfolio root + per-project) is a synced copy of the canonical and must
 # carry the same value. A copy whose DASHBOARD_VERSION is older than the canonical is stale —
 # re-sync from the canonical. Bump on any change to the canonical script.
-DASHBOARD_VERSION = "2.10.7"
+DASHBOARD_VERSION = "2.11.0"
 
 ROOT = Path(__file__).parent
 EXCLUDE_DIRS = {"methodology", "BrogueCE-iOS", ".git", "__pycache__", "node_modules", ".venv", "venv"}
@@ -358,7 +359,8 @@ _VERSION_RE = re.compile(r'''^DASHBOARD_VERSION\s*=\s*["']([^"']+)["']''', re.MU
 # match — exactly the silent drift the paragraph above warns about, caught by the
 # machine-checkable cross-reference test below, not by inspection.
 FRAMEWORK_INSTALLED_SOURCE = ("methodology_dashboard.py", "methodology_trim.py",
-                              "context_budget.py", ".context-budget.json")
+                              "context_budget.py", "quality_ratchet.py",
+                              ".context-budget.json", ".quality-gates.json")
 
 # The markdown half of the same problem, and the mirror of the defect above. `bin/sync` also
 # installs 23 markdown files, which on its own satisfies detect_doc_only's corpus
@@ -518,6 +520,34 @@ _FRAMEWORK_FILE_SIGNATURES = {
             "fixed_harness_tokens",
             "growth_run",
             "calibrate_against",
+        ),
+        "min_hits": 2,
+    },
+    "quality_ratchet.py": {
+        # The quality-ratchet gate (quality-ratchet plan D2): 494 LOC of python installed at the
+        # adopter root by bin/sync — the same class as context_budget.py above, and the same
+        # per-file signature discipline (PR #71: a name in the tuple whose content is checked
+        # against the SCANNER's signatures is never excluded). Its own version constant is
+        # VERSION, like context_budget.py's.
+        "version_re": re.compile(r'''^VERSION\s*=\s*["']([^"']+)["']''', re.MULTILINE),
+        "signatures": (
+            "quality_ratchet.py — declared quality thresholds",
+            "CONFIG_NAME",
+            "def precommit",
+            "def run_gates",
+        ),
+        "min_hits": 2,
+    },
+    ".quality-gates.json": {
+        # Config, like .context-budget.json above — same structural unreachability, same reason
+        # for carrying a real signature set anyway. The seed's `_example` gate carries these keys
+        # even while `gates` is empty, so a freshly seeded file matches.
+        "version_re": None,
+        "signatures": (
+            "results_file",
+            "\"direction\"",
+            "\"threshold\"",
+            "quality_ratchet.py",
         ),
         "min_hits": 2,
     },
@@ -1882,6 +1912,116 @@ def collect_render_metrics(path, files, ci, meth):
     return result
 
 
+# === QUALITY GATES (quality-ratchet plan, D6) ===
+#
+# Reads what the ratchet declares (.quality-gates.json) and, where present, what it last measured
+# (its results file). Git-only for history: a loosened threshold is derived from the manifest's
+# own commits — the scanner never executes a project command. ADVISORY, like every other signal
+# here: the gate is the pre-commit ratchet, where it belongs; this reports its outcomes.
+#
+# An absent manifest is silent. So is a present-but-EMPTY one: bin/sync seeds it empty by decision
+# (plan §8.4), so its bare presence proves sync ran, not that anything was declared — flagging it
+# would fire on every synced adopter for a change they did not make (the CHECKLIST_EXEMPT rule).
+GATES_MANIFEST = ".quality-gates.json"
+GATES_RESULTS_DEFAULT = ".quality-gates-results.json"
+GATES_HISTORY_MAX = 50          # manifest commits scanned for loosenings, newest first
+_COVERAGE_GATE_RE = re.compile(r"coverage", re.IGNORECASE)
+
+
+def _gate_map(cfg):
+    gates = cfg.get("gates") if isinstance(cfg, dict) else None
+    if not isinstance(gates, list):
+        return {}
+    return {g["name"]: g for g in gates if isinstance(g, dict) and isinstance(g.get("name"), str)}
+
+
+def _gate_loosenings(old_cfg, new_cfg):
+    """Loosenings in old -> new: a `min` lowered, a `max` raised, a gate removed. Mirrors
+    quality_ratchet.compare() deliberately (the scanner cannot import an adopter-root tool)."""
+    out = []
+    old, new = _gate_map(old_cfg), _gate_map(new_cfg)
+    for name, og in old.items():
+        ng = new.get(name)
+        if ng is None:
+            out.append({"name": name, "from": og.get("threshold"), "to": None, "kind": "removed"})
+            continue
+        try:
+            ot, nt = float(og.get("threshold")), float(ng.get("threshold"))
+        except (TypeError, ValueError):
+            continue
+        if og.get("direction") == "min" and ng.get("direction") == "min" and nt < ot:
+            out.append({"name": name, "from": ot, "to": nt, "kind": "floor lowered"})
+        elif og.get("direction") == "max" and ng.get("direction") == "max" and nt > ot:
+            out.append({"name": name, "from": ot, "to": nt, "kind": "ceiling raised"})
+    return out
+
+
+def _gate_manifest_history(path):
+    """[(sha, date, cfg)] newest first, capped, from the manifest's own git history."""
+    log = git_cmd(path, "log", f"--max-count={GATES_HISTORY_MAX}", "--format=%h|%ad",
+                  "--date=short", "--", GATES_MANIFEST)
+    hist = []
+    for line in log.splitlines():
+        sha, _, date = line.partition("|")
+        raw = git_cmd(path, "show", f"{sha}:{GATES_MANIFEST}")
+        try:
+            hist.append((sha, date, json.loads(raw)))
+        except ValueError:
+            hist.append((sha, date, None))
+    return hist
+
+
+def collect_gate_metrics(path):
+    m = {"manifest_present": False, "declared": 0, "results_present": False,
+         "results_stale": False, "summary": None, "failing": [], "unmeasured": [],
+         "coverage_measured_pass": False, "loosened": [], "ran_at": None,
+         "convention": "quality-gates.json v1"}
+    mp = path / GATES_MANIFEST
+    if not mp.is_file():
+        return m
+    m["manifest_present"] = True
+    try:
+        cfg = json.loads(mp.read_text(encoding="utf-8-sig", errors="ignore"))
+    except (ValueError, OSError):
+        m["convention"] = "unreadable manifest"
+        return m
+    gates = _gate_map(cfg)
+    m["declared"] = len(gates)
+    if not gates:
+        return m
+
+    rp = path / (cfg.get("results_file") or GATES_RESULTS_DEFAULT) if isinstance(cfg, dict) else None
+    if rp is not None and rp.is_file():
+        try:
+            snap = json.loads(rp.read_text(encoding="utf-8", errors="ignore"))
+        except (ValueError, OSError):
+            snap = None
+        if isinstance(snap, dict) and isinstance(snap.get("gates"), list):
+            m["results_present"] = True
+            m["ran_at"] = snap.get("ran_at")
+            # Stale = the manifest changed since that run (the tool stamps a hash of `gates`).
+            digest = hashlib.sha256(json.dumps(cfg.get("gates", []), sort_keys=True).encode()
+                                    ).hexdigest()[:12]
+            m["results_stale"] = snap.get("manifest") != digest
+            results = [r for r in snap["gates"] if isinstance(r, dict)]
+            m["summary"] = {k: sum(1 for r in results if r.get("status") == k)
+                            for k in ("pass", "fail", "unmeasured")}
+            m["failing"] = [r.get("name") for r in results if r.get("status") == "fail"]
+            m["unmeasured"] = [r.get("name") for r in results if r.get("status") == "unmeasured"]
+            m["coverage_measured_pass"] = (not m["results_stale"]) and any(
+                r.get("status") == "pass" and _COVERAGE_GATE_RE.search(str(r.get("name")))
+                for r in results)
+
+    hist = _gate_manifest_history(path)
+    for (sha, date, newer), (_osha, _odate, older) in zip(hist, hist[1:]):
+        if newer is None or older is None:
+            continue
+        for l in _gate_loosenings(older, newer):
+            l.update({"sha": sha, "date": date})
+            m["loosened"].append(l)
+    return m
+
+
 def _profile_tokens(path):
     """Read .methodology-profile into a set of lowercase declaration tokens.
 
@@ -2032,6 +2172,27 @@ def detect_doc_only(path, files, render):
     return {"is_doc_only": bool(corpus), "reason": reason}
 
 
+def gates_summary_html(g):
+    """One line: 'none declared' | 'N declared, never run' | 'P pass / F fail / U unmeasured
+    (stale)' · 'k loosened'. Advisory text only; the numbers are the ratchet's, not the scanner's."""
+    if not g or not g.get("manifest_present"):
+        return "None"
+    n = g.get("declared", 0)
+    if not n:
+        return "manifest seeded, none declared"
+    if not g.get("results_present"):
+        text = f"{n} declared, never run"
+    else:
+        sm = g.get("summary") or {}
+        text = (f"{n} declared &bull; {sm.get('pass', 0)} pass / {sm.get('fail', 0)} fail / "
+                f"{sm.get('unmeasured', 0)} unmeasured")
+        if g.get("results_stale"):
+            text += " (stale)"
+    if g.get("loosened"):
+        text += f" &bull; {len(g['loosened'])} loosened"
+    return text
+
+
 def fmt_ratio(value, source_loc, doc_only=False):
     """Format a *-to-source ratio for display. A bare 0.000 misreads as 'no docs', so a repo with
     ~no source shows 'n/a' — qualified '(doc-only)' only when the repo was actually classified
@@ -2082,6 +2243,11 @@ def score_health(metrics):
         else:
             scores["testing"] = 0
         if metrics.get("coverage_configs"):
+            scores["testing"] = min(20, scores["testing"] + 2)
+        # D6: MEASURED coverage over CONFIGURED coverage — the first number (not file-existence)
+        # the scanner scores. A passing gate named *coverage* in a current results file earns +2
+        # on top of the configured +2; the cap is unchanged, so a saturated repo moves nothing.
+        if metrics.get("gates", {}).get("coverage_measured_pass"):
             scores["testing"] = min(20, scores["testing"] + 2)
 
     # 3. Documentation (0-20)
@@ -2158,6 +2324,40 @@ def assess_risks(metrics):
 
     if not metrics["docs"]["has_readme"] or metrics["docs"]["readme_quality"] == "stub":
         risks.append({"severity": "medium", "description": "README is missing or insufficient"})
+
+    # Quality gates (D6) — advisory outcomes of the ratchet; a repo with no manifest, or the
+    # empty seed, says nothing here (see collect_gate_metrics).
+    g = metrics.get("gates", {})
+    if g.get("declared"):
+        n = g["declared"]
+        if not g.get("results_present"):
+            risks.append({"severity": "medium",
+                          "description": f"{n} declared quality gate(s), never run here "
+                                         f"(`quality_ratchet.py --run`)"})
+        else:
+            if g.get("results_stale"):
+                risks.append({"severity": "low",
+                              "description": "Quality-gate results predate the current manifest — "
+                                             "re-run before citing them"})
+            if g.get("failing"):
+                names = ", ".join(str(x) for x in g["failing"][:4])
+                risks.append({"severity": "high",
+                              "description": f"{len(g['failing'])} of {n} declared quality gate(s) "
+                                             f"measured outside their threshold: {names}"})
+            if g.get("unmeasured"):
+                risks.append({"severity": "low",
+                              "description": f"{len(g['unmeasured'])} declared quality gate(s) "
+                                             f"unmeasured (no command) — a threshold nothing "
+                                             f"measures is a suggestion"})
+        if g.get("loosened"):
+            last = g["loosened"][0]
+            what = ("removed" if last["kind"] == "removed"
+                    else f"{last['kind']} {last['from']:g} → {last['to']:g}")
+            more = f" (+{len(g['loosened']) - 1} earlier)" if len(g["loosened"]) > 1 else ""
+            risks.append({"severity": "medium",
+                          "description": f"Quality threshold `{last['name']}` {what} in "
+                                         f"{last['sha']} ({last['date']}){more} — thresholds only "
+                                         f"tighten (SAFEGUARDS Blast Radius; FM #17)"})
 
     # Both thresholds are stated in percent, so the partial-adoption test reads the normalized
     # percentage. The "none at all" test deliberately stays on the RAW sum: it is scale-
@@ -2360,6 +2560,8 @@ def collect_all(path):
     # (which consumes doc_only + render). Order matters: render feeds detect_doc_only.
     metrics["render"] = collect_render_metrics(path, files, ci, meth)
     metrics["doc_only"] = detect_doc_only(path, files, metrics["render"])
+    # Quality gates (D6): declared thresholds, last measured outcomes, git-only loosening history.
+    metrics["gates"] = collect_gate_metrics(path)
 
     metrics["scores"] = {
         "health": score_health(metrics),
@@ -2620,6 +2822,10 @@ def render_project_card(p):
     # Coverage configs
     cov_html = ", ".join(p["coverage_configs"]) if p["coverage_configs"] else "None"
 
+    # Quality gates (D6): declared · measured · loosened. Rendered for code repos beside the
+    # coverage config; a doc-only card keeps its render proxy section.
+    gates_html = gates_summary_html(p.get("gates", {}))
+
     # Dependencies
     dep_html = ""
     if p["dependencies"]["dependency_files"]:
@@ -2733,6 +2939,7 @@ def render_project_card(p):
                         {vendor_note}
                         <div class="kv">Test:Source Ratio: <b>{fmt_ratio(p["tests"]["test_to_source_ratio"], src_loc)}</b></div>
                         <div class="kv">Coverage Config: <b>{cov_html}</b></div>
+                        <div class="kv">Quality Gates: <b>{gates_html}</b></div>
                     </div>'''
         doc_ratio_kv = f'Doc:Source Ratio: <b>{fmt_ratio(doc["doc_to_source_ratio"], src_loc)}</b>'
 
