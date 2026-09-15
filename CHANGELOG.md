@@ -43,7 +43,8 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   rows #1–#13; **F2** the `methodology_trim.py` doc-only exclusion is unguarded at the predicate level (RED-shown);
   **F3** the shipped root `.context-budget.json` reports the PR's own headline OVER; **F4–F6** optional
   (two limits on one file; a docstring describing the fork; the `--source=github` wording). Reproduction
-  commands included; nothing merged, nothing changed on the branch. Session S18; comment URL completed at close-out.
+  commands included; nothing merged, nothing changed on the branch. Session S18: claim `75405be` + the
+  close-out commit. Comment: <https://github.com/KJ5HST/methodology/pull/80#issuecomment-5674670153> (read back via the API).
 
 ### 2026-09-14 · [ad hoc] Housekeeping — merged branches and stray refs deleted (non-commit actions)
 
