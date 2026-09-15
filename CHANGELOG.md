@@ -35,6 +35,15 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-09-15 · [ad hoc] Merged PR #80 — the read-set budgets series (#76–#79) — CHANGELOG: pending
+
+- **Action:** merge [PR #80](https://github.com/KJ5HST/methodology/pull/80) (rmsharp) at head `aa36fd8` into
+  `main` with a merge commit, the repo's convention. Preceded by the internal review of 2026-09-14 (F1–F6,
+  posted as one comment by S18) and the internal re-review of 2026-09-15 of the four answering commits
+  (`5c9f0f3`/`d4e1570` F1 (a), `3774076` F2, `aa36fd8` F3), which returned **merge** with one new
+  non-blocking finding (G1: the read-set token partition is prose-only since the byte class ceiling left).
+  Session S19; merge SHA and post-merge verification completed at close-out.
+
 ### 2026-09-15 · [ad hoc] Posted the PR #80 review findings to the PR (non-commit action)
 
 - **Action:** one maintainer comment on [PR #80](https://github.com/KJ5HST/methodology/pull/80) carrying the

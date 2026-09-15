@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S19
+date: 2026-09-15
+status: pending
+active_task: Merge PR #80 (rmsharp, "Merge the read-set budgets series (#76–#79)") at head aa36fd8 into main, after the internal re-review of 2026-09-15 (oversight S527) returned "merge" on the four commits answering F1–F3. Operator trigger: "merge it". ONE DELIVERABLE (the merge + post-merge verification on main). Reconciliation of the 11 non-merge commits' receipts and the one-time ledger reorder belong to the NEXT Orient, not this session.
+```
+
+```handoff
 session: S18
 date: 2026-09-15
 status: complete
