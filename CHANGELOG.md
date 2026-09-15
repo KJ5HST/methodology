@@ -35,14 +35,23 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
-### 2026-09-15 · [ad hoc] Merged PR #80 — the read-set budgets series (#76–#79) — CHANGELOG: pending
+### 2026-09-15 · [ad hoc] Merged PR #80 — the read-set budgets series (#76–#79)
 
 - **Action:** merge [PR #80](https://github.com/KJ5HST/methodology/pull/80) (rmsharp) at head `aa36fd8` into
   `main` with a merge commit, the repo's convention. Preceded by the internal review of 2026-09-14 (F1–F6,
   posted as one comment by S18) and the internal re-review of 2026-09-15 of the four answering commits
   (`5c9f0f3`/`d4e1570` F1 (a), `3774076` F2, `aa36fd8` F3), which returned **merge** with one new
   non-blocking finding (G1: the read-set token partition is prose-only since the byte class ceiling left).
-  Session S19; merge SHA and post-merge verification completed at close-out.
+  Session S19. **Merge commit `4d9e271`** (parents `e5e2661` + `aa36fd8`), read back from the API.
+- **Verified on the merged `main`:** `bin/tests.sh` 115 / 1 — Test 9 now **passes** (main has the three new files);
+  the one failure is `tools/test_context_budget.py` `TestFitGateEndToEnd`, **environmental** (this machine has exactly
+  2 transcripts for the repo path: enough for the test to run, too few for `calibrate()` to fit; the test file and tool
+  are identical at `aa36fd8` and here, and a worktree path skips it) — fix queued as the next session's first step.
+  Dashboard unit 211 OK; trim unit 123 OK; `check-links` OK; `check-learnings` OK (13 rows); `commit-msg --selftest`
+  OK; twins byte-identical at `DASHBOARD_VERSION` 2.10.7; `context_budget.py --status` OK, exit 0. Adopters now
+  receive 27 manifest rows on their next `bin/sync` (24 → 27; corpus 659,755 → 839,383 B).
+- **Deferred to the next Orient by design:** 11 `status: reconciled` receipts for #80's non-merge commits, the
+  one-time ledger reorder S15's below-`main` placement made necessary, and the v3.8 release PR.
 
 ### 2026-09-15 · [ad hoc] Posted the PR #80 review findings to the PR (non-commit action)
 
