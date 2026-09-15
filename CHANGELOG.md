@@ -35,6 +35,14 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-09-15 · [ad hoc] Quality ratchet — the plan's Phases 1–4 built as one pre-declared vertical slice — CHANGELOG: pending
+
+- **Action:** implement [`docs/planning/quality-ratchet-plan.md`](docs/planning/quality-ratchet-plan.md)
+  (PR #81, the plan; D1–D10) through its four buildable layers on branch `feat/quality-ratchet`, one
+  checkpoint commit per layer with the full matrix at each boundary, and open a PR for review. Phases 5
+  (adopter dogfood) and 6 (release) are separate sessions by the plan's own text. Session S20; the
+  checkpoint list and the PR number are completed at close-out.
+
 ### 2026-09-15 · [ad hoc] Merged PR #80 — the read-set budgets series (#76–#79)
 
 - **Action:** merge [PR #80](https://github.com/KJ5HST/methodology/pull/80) (rmsharp) at head `aa36fd8` into

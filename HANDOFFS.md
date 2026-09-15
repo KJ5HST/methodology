@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S20
+date: 2026-09-15
+status: pending
+active_task: Make the quality-ratchet plan real (docs/planning/quality-ratchet-plan.md, PR #81) and open a PR for review. Operator trigger: "back to 81. Make it a reality and post a PR for review." ONE DELIVERABLE, declared as a PRE-DECLARED VERTICAL SLICE under §Vertical Slice Sessions: one capability — declared quality thresholds that bind every actor and only tighten — through the plan's four buildable layers, each a checkpoint commit with the full matrix run at its boundary: P0 preconditions (env-dependent calibrate test skips honestly; read-set partition re-split + G1 sum test), P1 prose (D3 SAFEGUARDS row, D4 §Mechanical Gates Bind Every Actor, D5 Phase 3C mechanical branch, D8 FM #17 clause + Degradation row, Learning #15), P2 tool (starter-kit/quality_ratchet.py TRACKED + quality-gates.json SEED, manifest 27 → 29, tests, BOOTSTRAP Step 10), P3 dashboard (gate metrics, advisory risks, measured-coverage points, DASHBOARD_VERSION bump, RED-first tests, fleet delta), P4 workstreams + receipt citation + check-handoff lint + this repo's own .quality-gates.json chained into .githooks/pre-commit, + completeness sweep. Gate (a): the plan's §6 enumerates exactly these layers; the operator's instruction converts its one-phase-per-session pacing into one slice, and every phase's DONE/Verify is kept as a checkpoint boundary. Plan Phases 5 (adopter dogfood, N sessions) and 6 (release) are OUT — they are separate sessions by the plan's own text. §8 decisions taken at the plan's recommendations (1 principle-level yes; 2 results file gitignored; 3 amend FM #17, no FM #29; 4 empty seed; 5 separate .quality-gates.json; 7 delivery stays a separate plan; 6 not a PR matter) — stated in the PR body for the operator to reverse. Branch feat/quality-ratchet.
+```
+
+```handoff
 session: S19
 date: 2026-09-15
 status: complete
