@@ -92,6 +92,37 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   leak check for private-correspondence phrasing, internal-only paths, project names and brand names: 0 hits;
   `bin/check-links` OK (83/21), `bin/check-handoff --allow-pending` OK.
 
+### 2026-09-15 · [ad hoc] PR #80 review F2: the doc-only exclusion is tested for every non-markdown file `bin/sync` installs, from its real `starter-kit/` source
+
+- **Change:** `tools/test_methodology_dashboard.py` only — canonical-only, so adopters receive nothing,
+  and neither scanner twin changes. `test_a_synced_repo_with_context_budget_installed_is_still_doc_only`
+  is generalized in place as `test_a_synced_repo_with_each_installed_source_file_is_still_doc_only`.
+  Every non-markdown dest in `bin/_manifest.py`'s `DISTRIBUTION` (today `methodology_dashboard.py`,
+  `methodology_trim.py`, `context_budget.py`, `.context-budget.json`) is written from its real
+  `starter-kit/` source into the Quarto doc-only fixture, one at a time and then all together, and must
+  leave `source_loc` 0, `doc_only` true and no "No test infrastructure" risk; each must also pass
+  `is_framework_installed` directly. The names come from the manifest, not `FRAMEWORK_INSTALLED_SOURCE`,
+  so a file the manifest installs and the scanner does not list fails here by name; a last assertion
+  checks the test covered exactly the scanner's list. Still 211 tests — the names are subtests.
+- **Why:** F2 of the review ([comment](https://github.com/KJ5HST/methodology/pull/80#issuecomment-5674670153)):
+  with `methodology_trim.py`'s `version_re` and four signatures neutralized in both twins, the suite
+  stayed OK (211) while a synced doc-only fixture read `code` with the false HIGH.
+- **RED first.** Six mutants, each planted in both twins of a clone, the old and the new suite run
+  against each; controls 211 OK on both sides, the clone verified clean after every mutant:
+  - M1, the review's mutant: old **OK (211)**; new FAILS — `2181 != 0` source LOC, alone and all together.
+  - M2, the same neutralization of `context_budget.py`: old fails 2; new fails 3.
+  - M3, the same of `methodology_dashboard.py`: old and new fail the same 12. **Not this test:** the
+    neutralized strings sit in the scanner's own signature table, so the real file still matches itself;
+    the stand-in fixtures catch it. The docstring says so.
+  - M4, `.context-budget.json`'s signatures neutralized: old **OK (211)**; new FAILS on the direct
+    predicate call — the file is `config`, so end to end it cannot fail.
+  - M5, `methodology_trim.py` dropped from the tuple and the table: old fails 1; new fails 4, this test
+    by name.
+  - M6, the one `collect_all` call site skipping `methodology_trim.py`, predicate untouched: old **OK
+    (211)**; new FAILS end to end.
+- **Placed** with this PR's own entries, above F1's, below `main`'s.
+- **Commit:** this commit, on `read-set-budgets` (PR #80)
+
 ### 2026-09-15 · [ad hoc] PR #80 review F1 (a), step 2: `FRAMEWORK_LEARNINGS.md` ships rows 1–13 and the reserved `#14`, as this PR's description says
 
 - **Change:** rows #15–#47 — 33 learnings from the contributor's fork, 32 of them citing fork sessions —

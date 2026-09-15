@@ -2663,32 +2663,71 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
         self.assertEqual(m["files"]["by_category"]["vendor"]["count"], 1)
         self.assertEqual(m["tests"]["source_loc"], 0)
 
-    def test_a_synced_repo_with_context_budget_installed_is_still_doc_only(self):
-        """THE regression test for the actual bug, reproducing the maintainer's own PR #71
-        review finding: adding context_budget.py's NAME to FRAMEWORK_INSTALLED_SOURCE did not
-        exclude it, because the content check verified every name against
-        methodology_dashboard.py's OWN signatures — which context_budget.py never matches. RED
-        against that version (confirmed by running this test before the per-file fix): a real
-        doc-only repo, after a real bin/sync-shaped install of context_budget.py (674 real
-        lines, read from the actual shipped file) alongside the scanner, flips
-        doc_only True -> False and gains a false HIGH "No test infrastructure" risk — v3.2's
-        exact false penalty, a fourth time."""
-        real_scanner = Path(STARTER_PY).read_text(encoding="utf-8")
-        real_context_budget = Path(STARTER_CONTEXT_BUDGET).read_text(encoding="utf-8")
-        p = self._repo({
-            **self.QUARTO,
-            "methodology_dashboard.py": real_scanner,
-            "context_budget.py": real_context_budget,
-        })
-        m = md.collect_all(p)
-        self.assertTrue(m["doc_only"]["is_doc_only"],
-                        "a real bin/sync-shaped install of context_budget.py must not flip a "
-                        "genuine doc-only repo to code")
-        self.assertEqual(m["tests"]["source_loc"], 0,
-                         "context_budget.py's own 674 LOC must not count as the adopter's source")
-        self.assertNotIn("No test infrastructure",
-                         [r["description"] for r in m["scores"]["risks"]],
-                         "the false HIGH risk this whole fix exists to prevent")
+    def test_a_synced_repo_with_each_installed_source_file_is_still_doc_only(self):
+        """THE regression test for the exclusion, over every non-markdown file `bin/sync`
+        installs. Each is written from its REAL starter-kit/ source into a genuine doc-only repo,
+        alone and then all together as a real install writes them, and none may count as the
+        adopter's source, flip doc_only True -> False, or raise the false HIGH "No test
+        infrastructure" — v3.2's exact false penalty.
+
+        It began as context_budget.py's test, reproducing the maintainer's PR #71 finding: the
+        NAME was listed, but its content was checked against methodology_dashboard.py's
+        signatures, so it was never excluded (RED against that version). The PR #80 review, F2,
+        found the same gap one name over: with methodology_trim.py's version_re and signatures
+        neutralized in both twins, the suite stayed green while a synced fixture read `code`. RED
+        against that mutant, and against the same neutralization of context_budget.py and of
+        `.context-budget.json`. NOT of methodology_dashboard.py: the neutralized strings sit in
+        the scanner's own signature table, so the real file still matches itself — this class's
+        stand-in fixtures (installed_scanner()) are what catch that one.
+
+        The names come from bin/_manifest.py, never from the constant under test, so a file the
+        manifest installs and the scanner does not know about fails here by name.
+        `.context-budget.json` is bucketed `config` before the predicate is consulted (see its
+        _FRAMEWORK_FILE_SIGNATURES entry), so its end-to-end half cannot fail on its signatures:
+        the direct predicate call holds those, and its category is asserted so that reason stays
+        checked."""
+        mod = self._manifest()
+        installed = [(src, dest) for src, dest, _disp in mod.DISTRIBUTION
+                     if not dest.endswith(".md")]
+        real = {dest: (CANONICAL_ROOT / src).read_text(encoding="utf-8")
+                for src, dest in installed}
+
+        def category(dest):
+            return md.categorize_file(Path(dest), Path(dest).suffix.lower(), dest)
+
+        def assert_still_doc_only(installed_files):
+            m = md.collect_all(self._repo({**self.QUARTO, **installed_files}))
+            self.assertEqual(m["tests"]["source_loc"], 0,
+                             "a framework-installed file must not count as the adopter's source")
+            self.assertTrue(m["doc_only"]["is_doc_only"],
+                            "installing the methodology must not flip a doc-only repo to code")
+            self.assertNotIn("No test infrastructure",
+                             [r["description"] for r in m["scores"]["risks"]],
+                             "the false HIGH risk this whole exclusion exists to prevent")
+            vendor = m["files"]["by_category"]["vendor"]
+            self.assertEqual(vendor["count"],
+                             sum(1 for dest in installed_files if category(dest) == "source"),
+                             "each installed file that would read as source must read as vendor")
+            return vendor
+
+        for src, dest in installed:
+            with self.subTest(installed=dest):
+                vendor = assert_still_doc_only({dest: real[dest]})
+                if category(dest) == "source":
+                    self.assertGreater(vendor["loc"], 0,
+                                       "the excluded LOC must stay visible, not vanish")
+                else:
+                    self.assertEqual(category(dest), "config",
+                                     f"{dest} passes end to end only because it is config — if "
+                                     "that changes, its signature entry decides this test")
+                self.assertTrue(md.is_framework_installed(Path(dest), CANONICAL_ROOT / src),
+                                f"the real {src} must match its own _FRAMEWORK_FILE_SIGNATURES "
+                                "entry")
+        with self.subTest(installed="all, as bin/sync writes them"):
+            assert_still_doc_only(real)
+        # Checked last, so a name the scanner lacks still reports its own failure above first.
+        self.assertEqual({dest for _src, dest in installed}, set(md.FRAMEWORK_INSTALLED_SOURCE),
+                         "this test must cover exactly the scanner's own list")
 
     def test_seed_docs_need_evidence_the_framework_was_installed(self):
         """The delta boundary review's confirmed regression, and the plan's RED-first clause (c)
