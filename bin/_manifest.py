@@ -35,12 +35,14 @@ SEED = "seed"
 DISTRIBUTION = [
     # starter-kit root-files -> adopter project root
     ("starter-kit/SESSION_RUNNER.md", "SESSION_RUNNER.md", TRACKED),
+    ("starter-kit/FRAMEWORK_LEARNINGS.md", "FRAMEWORK_LEARNINGS.md", TRACKED),
     ("starter-kit/SAFEGUARDS.md", "SAFEGUARDS.md", TRACKED),
     ("starter-kit/RECOMMENDED_SKILLS.md", "RECOMMENDED_SKILLS.md", TRACKED),
     ("starter-kit/CONTEXT_TEMPLATE.md", "CONTEXT_TEMPLATE.md", TRACKED),
     ("starter-kit/CLAUDE_TEMPLATE.md", "CLAUDE_TEMPLATE.md", TRACKED),
     ("starter-kit/BOOTSTRAP.md", "BOOTSTRAP.md", TRACKED),
     ("starter-kit/methodology_dashboard.py", "methodology_dashboard.py", TRACKED),
+    ("starter-kit/methodology_trim.py", "methodology_trim.py", TRACKED),
     ("starter-kit/context_budget.py", "context_budget.py", TRACKED),
     # seed-once root-files: created if absent, then adopter-owned (never clobbered)
     ("starter-kit/SESSION_NOTES.md", "SESSION_NOTES.md", SEED),
@@ -51,6 +53,7 @@ DISTRIBUTION = [
     # framework docs -> docs/methodology/
     ("ITERATIVE_METHODOLOGY.md", "docs/methodology/ITERATIVE_METHODOLOGY.md", TRACKED),
     ("HOW_TO_USE.md", "docs/methodology/HOW_TO_USE.md", TRACKED),
+    ("FRAMEWORK_APPARATUS.md", "docs/methodology/FRAMEWORK_APPARATUS.md", TRACKED),
     # workstreams + campaigns + templates -> docs/methodology/workstreams/
     ("workstreams/DESIGN_WORKSTREAM.md",
      "docs/methodology/workstreams/DESIGN_WORKSTREAM.md", TRACKED),

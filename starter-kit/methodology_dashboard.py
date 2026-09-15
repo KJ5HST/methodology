@@ -82,7 +82,7 @@ from collections import defaultdict
 # Every other copy (portfolio root + per-project) is a synced copy of the canonical and must
 # carry the same value. A copy whose DASHBOARD_VERSION is older than the canonical is stale —
 # re-sync from the canonical. Bump on any change to the canonical script.
-DASHBOARD_VERSION = "2.10.6"
+DASHBOARD_VERSION = "2.10.7"
 
 ROOT = Path(__file__).parent
 EXCLUDE_DIRS = {"methodology", "BrogueCE-iOS", ".git", "__pycache__", "node_modules", ".venv", "venv"}
@@ -182,7 +182,7 @@ METHODOLOGY_MAX = sum(weight for _, weight, _ in METHODOLOGY_ITEMS)
 FRAMEWORK_ITEMS = [
     ("ITERATIVE_METHODOLOGY.md", 15, "file"),      # the theory layer the runner cross-references
     ("starter-kit/SAFEGUARDS.md", 15, "file"),     # the enforcement half of the runner
-    ("workstreams", 15, "dir"),                    # 9 of the 22 distributed sources live here
+    ("workstreams", 15, "dir"),                    # 9 of the 25 distributed sources live here
     ("bin/sync", 15, "file"),                      # what separates HAVING a methodology from PUBLISHING one
     ("bin/tests.sh", 10, "file"),                  # the framework's build equivalent
     ("CHANGELOG.md", 10, "file"),                  # its OWN action ledger (FM #27)
@@ -357,16 +357,17 @@ _VERSION_RE = re.compile(r'''^DASHBOARD_VERSION\s*=\s*["']([^"']+)["']''', re.MU
 # added two more non-markdown dests to bin/_manifest.py without this tuple being extended to
 # match — exactly the silent drift the paragraph above warns about, caught by the
 # machine-checkable cross-reference test below, not by inspection.
-FRAMEWORK_INSTALLED_SOURCE = ("methodology_dashboard.py", "context_budget.py", ".context-budget.json")
+FRAMEWORK_INSTALLED_SOURCE = ("methodology_dashboard.py", "methodology_trim.py",
+                              "context_budget.py", ".context-budget.json")
 
 # The markdown half of the same problem, and the mirror of the defect above. `bin/sync` also
-# installs 21 markdown files (~6,353 LOC), which on its own satisfies detect_doc_only's corpus
+# installs 23 markdown files, which on its own satisfies detect_doc_only's corpus
 # disjunction (>= 3 doc files). Excluding only the scanner therefore FLIPPED the defect rather
 # than fixing it: a 148-LOC utility repo that correctly read `code` before sync read `doc-only`
 # after it, and lost a TRUE "No test infrastructure" risk. The old source cap had been masking
 # that; removing the cap's grip on synced repos exposes it.
 #
-# ALL 21 markdown dests are listed, TRACKED *and* SEED. Listing only the 17 TRACKED ones was
+# ALL 23 markdown dests are listed, TRACKED *and* SEED. Listing only the 19 TRACKED ones was
 # tried first, on the reasoning that a SEED is adopter-owned from creation (bin/_manifest.py) —
 # and MEASURED AGAINST A REAL `bin/sync` RUN it does not close the hole: the four seeds
 # (SESSION_NOTES/CHANGELOG/HANDOFFS/ROADMAP) plus the adopter's own README are 5 doc files, which
@@ -398,6 +399,7 @@ FRAMEWORK_INSTALLED_SOURCE = ("methodology_dashboard.py", "context_budget.py", "
 # added to protect those four. Found by the pre-PR review; reproduced under both scanners.
 FRAMEWORK_DISTINCTIVE_DOCS = (
     "docs/methodology/ITERATIVE_METHODOLOGY.md",
+    "docs/methodology/FRAMEWORK_APPARATUS.md",
     "docs/methodology/HOW_TO_USE.md",
     "docs/methodology/workstreams/DESIGN_WORKSTREAM.md",
     "docs/methodology/workstreams/ARCHITECTURE_WORKSTREAM.md",
@@ -410,11 +412,12 @@ FRAMEWORK_DISTINCTIVE_DOCS = (
     "docs/methodology/workstreams/TEMPLATE_CAMPAIGN.md",
 )
 
-# The six TRACKED root dests. `bin/sync` installs every one of them, so a real install always
-# carries all six — but any single one can also be a coincidence, so they are discounted only
+# The seven TRACKED root dests. `bin/sync` installs every one of them, so a real install always
+# carries all seven — but any single one can also be a coincidence, so they are discounted only
 # behind the same evidence gate as the seeds (see _framework_docs_are_evidenced).
 FRAMEWORK_AMBIGUOUS_DOCS = (
     "SESSION_RUNNER.md",
+    "FRAMEWORK_LEARNINGS.md",
     "SAFEGUARDS.md",
     "RECOMMENDED_SKILLS.md",
     "CONTEXT_TEMPLATE.md",
@@ -423,7 +426,7 @@ FRAMEWORK_AMBIGUOUS_DOCS = (
 )
 
 # The full markdown dest set, kept as the union so the canonical drift test against
-# bin/_manifest.py keeps checking all 21 names rather than silently narrowing to a subset.
+# bin/_manifest.py keeps checking all 23 names rather than silently narrowing to a subset.
 FRAMEWORK_INSTALLED_DOCS = FRAMEWORK_DISTINCTIVE_DOCS + FRAMEWORK_AMBIGUOUS_DOCS
 
 # How many of the six ambiguous root names must co-occur to stand in for a docs/methodology/ path.
@@ -475,6 +478,20 @@ _FRAMEWORK_FILE_SIGNATURES = {
             "def score_health",
             "def assess_risks",
             "https://github.com/KJ5HST/methodology",
+        ),
+        "min_hits": 2,
+    },
+    "methodology_trim.py": {
+        # Its own constant is TRIM_VERSION, not VERSION or DASHBOARD_VERSION, so it needs its own
+        # pattern rather than the scanner's: a shared _VERSION_RE would never match and the file
+        # would fall through to the signature path on every scan, which is the silent-skip defect
+        # the comment above this table describes.
+        "version_re": re.compile(r'''^TRIM_VERSION\s*=\s*["']([^"']+)["']''', re.MULTILINE),
+        "signatures": (
+            "LEDGERS",
+            "def classify_zones",
+            "def apply_regenerated",
+            "def build_pointer_block",
         ),
         "min_hits": 2,
     },

@@ -234,6 +234,23 @@ if python3 "$METHODOLOGY/tools/test_methodology_dashboard.py" >/dev/null 2>&1; t
 else
     fail "dashboard scoring unit tests failed"
 fi
+# The trimmer's own tests ran in NOTHING until this line. That was tolerable while the tool was
+# canonical-only; it stops being tolerable once `bin/sync` installs it at adopter roots, because
+# `bash bin/tests.sh` would stay green with a shipped executable arbitrarily broken.
+if python3 "$METHODOLOGY/tools/test_methodology_trim.py" >/dev/null 2>&1; then
+    pass "ledger trimmer unit tests green"
+else
+    fail "ledger trimmer unit tests failed"
+fi
+# Same argument as the trimmer's, one tool over. The context_budget.py block below covers the
+# budget gate's install/sync/selftest surface; until this line its calibrate() had no test of
+# its ARITHMETIC at all, and returned noise on any repo that had merged another lineage of
+# its regressor while every row here stayed green.
+if python3 "$METHODOLOGY/tools/test_context_budget.py" >/dev/null 2>&1; then
+    pass "context budget gate unit tests green"
+else
+    fail "context budget gate unit tests failed"
+fi
 
 echo "== Test 19: dashboard twins byte-identical + same DASHBOARD_VERSION =="
 diff -q "$METHODOLOGY/tools/methodology_dashboard.py" "$STARTER/methodology_dashboard.py" >/dev/null \
@@ -437,47 +454,65 @@ PY
 }
 
 echo "== Test 23: check-learnings — Learnings table shape (issue #65 Evidence A) =="
-RUNNER="$STARTER/SESSION_RUNNER.md"
+# The table now lives in its own file (S34, BL-9); check-learnings' default_path follows it,
+# so this test mutates FRAMEWORK_LEARNINGS.md rather than SESSION_RUNNER.md, which no longer
+# carries the table at all.
+RUNNER="$STARTER/FRAMEWORK_LEARNINGS.md"
 F="$(mktemp)"
 
 # Presence control: the real table must pass, or every RED below is meaningless.
-"$BIN/check-learnings" --file "$RUNNER" --no-citations >/dev/null 2>&1 \
-    && pass "canonical Learnings table passes (presence control)" \
-    || fail "canonical Learnings table should pass"
+OUT23="$("$BIN/check-learnings" --file "$RUNNER" --no-citations 2>&1)"
+if echo "$OUT23" | grep -q '^check-learnings: OK'; then
+    pass "canonical Learnings table passes (presence control)"
+else
+    fail "canonical Learnings table presence control: expected clean, got: $OUT23"
+fi
 
 # The canonical table and the citation sweep together, against the live corpus.
-"$BIN/check-learnings" >/dev/null 2>&1 \
-    && pass "canonical table + distributed-corpus citations all resolve" \
-    || fail "canonical citation sweep should pass"
+OUTALL="$("$BIN/check-learnings" 2>&1)"
+if echo "$OUTALL" | grep -q '^check-learnings: OK'; then
+    pass "canonical table + distributed-corpus citations all resolve"
+else
+    fail "canonical citation sweep: expected clean, got: $OUTALL"
+fi
 
-# A malformed 3-column row. Anchored on the LEARNINGS row 13, not the bare string
-# "| 13 |" — SESSION_RUNNER.md has a second numbered table whose row 13 comes first,
-# and anchoring there mutates the wrong set and proves nothing (this happened).
+# The 4 mutation tests below assert on the SPECIFIC finding text each mutation should produce,
+# not merely "any failure". check-learnings' exit code is a UNION over every check it runs, so
+# an exit-code assertion passes against any unrelated finding the corpus happens to carry —
+# and it grew a second arm (the per-row byte budget) that would satisfy every one of them.
+
+# A malformed 3-column row. Anchored on the LEARNINGS row 13's own text, not the bare
+# string "| 13 |". The hazard that forced this is now historical — SESSION_RUNNER.md's
+# failure-mode table also numbered a row 13, and anchoring there mutated the wrong set
+# and proved nothing (this happened) — but the content anchor is kept: it is what makes
+# the mutation provably hit the row named in the assertion.
 if mutate "$RUNNER" "$F" 's.replace("| 13 | **A forward-looking", "| 14 | three | columns |\n| 13 | **A forward-looking", 1)'; then
-    "$BIN/check-learnings" --file "$F" --no-citations >/dev/null 2>&1 \
-        && fail "malformed 3-column row not caught" || pass "malformed 3-column row caught"
+    OUT="$("$BIN/check-learnings" --file "$F" --no-citations 2>&1)"
+    echo "$OUT" | grep -q "has 3 column" \
+        && pass "malformed 3-column row caught" || fail "malformed 3-column row not caught: $OUT"
 else fail "3-column mutation was vacuous"; fi
 
 # Renumbering row 13 to a duplicate 12 — the regression CLAUDE.md forbids outright.
 if mutate "$RUNNER" "$F" 's.replace("| 13 | **A forward-looking", "| 12 | **A forward-looking", 1)'; then
-    "$BIN/check-learnings" --file "$F" --no-citations >/dev/null 2>&1 \
-        && fail "duplicate row number not caught" || pass "duplicate row number caught"
+    OUT="$("$BIN/check-learnings" --file "$F" --no-citations 2>&1)"
+    echo "$OUT" | grep -q "duplicate Learning number #12" \
+        && pass "duplicate row number caught" || fail "duplicate row number not caught: $OUT"
 else fail "duplicate-number mutation was vacuous"; fi
 
-# Deleting a row outright — leaves a gap in the numbering. Anchored on Learning
-# #11's own text: a bare "^| 11 |" matches the OTHER numbered table first (line ~313),
-# which mutates the wrong set. That mutation is not vacuous — it really does change
-# the file — so the vacuity guard cannot catch it. A wrong-target mutation is the
-# second failure mode, and only the RED run exposes it.
+# Deleting a row outright — leaves a gap in the numbering. Anchored on Learning #11's
+# own text for the reason above: a wrong-target mutation is NOT vacuous — it really does
+# change the file — so the vacuity guard cannot catch it, and only the RED run exposes it.
 if mutate "$RUNNER" "$F" 're.sub(r"(?m)^\| 11 \| \*\*Heterogeneous.*\n", "", s, count=1)'; then
-    "$BIN/check-learnings" --file "$F" --no-citations >/dev/null 2>&1 \
-        && fail "deleted row (numbering gap) not caught" || pass "deleted row (numbering gap) caught"
+    OUT="$("$BIN/check-learnings" --file "$F" --no-citations 2>&1)"
+    echo "$OUT" | grep -q "missing #11" \
+        && pass "deleted row (numbering gap) caught" || fail "deleted row (numbering gap) not caught: $OUT"
 else fail "row-deletion mutation was vacuous"; fi
 
 # A row wrapped onto a second physical line.
 if mutate "$RUNNER" "$F" 's.replace("mechanical, encode it as a test", "mechanical,\nencode it as a test", 1)'; then
-    "$BIN/check-learnings" --file "$F" --no-citations >/dev/null 2>&1 \
-        && fail "row split across two physical lines not caught" || pass "row split across two physical lines caught"
+    OUT="$("$BIN/check-learnings" --file "$F" --no-citations 2>&1)"
+    echo "$OUT" | grep -q "non-table line inside the Learnings table" \
+        && pass "row split across two physical lines caught" || fail "row split across two physical lines not caught: $OUT"
 else fail "line-wrap mutation was vacuous"; fi
 rm -f "$F"
 

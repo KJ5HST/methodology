@@ -1,22 +1,35 @@
 #!/usr/bin/env python3
-"""check-learnings — structural invariants for the SESSION_RUNNER Learnings table.
+"""check-learnings — structural invariants for the framework Learnings table.
 
-`starter-kit/SESSION_RUNNER.md` §"Learnings (added by sessions)" is one of this
-repository's own numbered sets: canonical sessions APPEND a row as they dogfood the
-framework (Phase 3C), and `CLAUDE.md` forbids renumbering outright. Until issue #65
-that rule was enforced by human attention alone — a malformed row, a duplicate
-number, or a deleted row all passed `bin/tests.sh` green.
+Arrived via upstream/main's own issue #65 work (S9), written against upstream's
+layout where the table still lives inline in `starter-kit/SESSION_RUNNER.md`
+§"Learnings (added by sessions)". This fork extracted that table to its own file
+(S34, BL-9) — `starter-kit/FRAMEWORK_LEARNINGS.md` — so the table is located by its
+own header row (`TABLE_HEADER_RE`) rather than by a preceding section heading, which
+works against either layout instead of assuming one.
+
+The table is one of this repository's own numbered sets: canonical sessions APPEND
+a row as they dogfood the framework (Phase 3C), and `CLAUDE.md` forbids renumbering
+outright. Until issue #65 that rule was enforced by human attention alone — a
+malformed row, a duplicate number, or a deleted row all passed `bin/tests.sh` green.
 
 This is Learning #12 pointed at the file Learning #12 lives in: when an invariant is
 mechanical, encode it as a test, because a review-time grep is a human step that
 silently stops happening.
 
 Checks STRUCTURE only, never whether a Learning is worth having (that stays the next
-session's Phase 3A judgement). Two families:
+session's Phase 3A judgement). Three families:
 
   Table shape   — the numbered set is well formed: rows contiguous from 1 with no
                   gaps and no duplicates, every row exactly 4 columns, every row on
                   one physical line.
+  Row budget    — EVERY row fits ROW_BUDGET_BYTES. Scoped to the whole table since
+                  S119, when the operator ruled that compacting an existing row is
+                  permitted: the append-only rule forbids RENUMBERING, which is what
+                  would break `Learning #N` citations, and says of size only "say it
+                  shorter rather than raising the budget". With a legal remedy for
+                  every row, the exemption that skipped frozen rows had nothing left
+                  to justify it. There is no skip arm: the check reads no git state.
   Citations     — every `Learning #N` cited in the DISTRIBUTED corpus (the files
                   `bin/_manifest.py` ships to adopters) resolves to a row that
                   exists. This is the defect S8 fixed by hand: five citations to
@@ -45,13 +58,52 @@ import subprocess
 import sys
 from pathlib import Path
 
-HEADING_RE = re.compile(r"^##\s+Learnings \(added by sessions\)\s*$")
+# The table's own header row, matched directly rather than via a preceding section
+# heading — portable across upstream's inline layout and this fork's extracted
+# FRAMEWORK_LEARNINGS.md, which carries the table with no "## Learnings" heading
+# above it at all.
+TABLE_HEADER_RE = re.compile(
+    r"^\s*\|\s*#\s*\|\s*Learning\s*\|\s*Source\s*\|\s*When to Apply\s*\|\s*$"
+)
+
+# A number this file's own prose explicitly reserves — e.g. the Learnings file's
+# `` `#14` is reserved `` callout, held by an unmerged branch's decision so a later
+# append cannot collide with it.
+# A reserved gap is not a defect: it is intentional, and the contiguity check must
+# not flag it as a missing row.
+RESERVED_RE = re.compile(r"`#(\d+)`\s+is reserved")
+
+
+def reserved_numbers(text: str) -> set:
+    return {int(m.group(1)) for m in RESERVED_RE.finditer(text)}
 
 # A citation, including multi-number forms: "Learning #7", "Learnings #7 and #8",
 # "Learnings #7, #8", "Learnings #7/#8". The outer match is captured whole and every
 # `#N` inside it is then extracted, so a connector list never loses its tail.
 CITATION_RE = re.compile(r"Learnings?\s+#\d+(?:\s*(?:,|and|/|&)\s*#\d+)*")
 NUM_RE = re.compile(r"#(\d+)")
+
+# A per-row byte budget for the Learnings table. DERIVED, not chosen for tidiness.
+# (The canonical repo's root `.context-budget.json` carries the long-form derivation;
+# it is canonical-only and not part of the distributed set, so the two bases that
+# settle the value are restated here rather than cited to a file this tree lacks.)
+# Two independent bases agree on ~1,500 B: (a) a substantive learning demonstrably
+# fits -- S96 wrote one deliberately to a 1,432 B budget, and S119 brought all 20
+# then-over-budget rows under it without dropping a mechanism, figure or citation;
+# (b) it is a quarter of the file's headroom against its ceiling when set.
+#
+# Held against EVERY row, not only the row being written. That widening is S119's,
+# and it is a consequence of an operator decision rather than a bug fix: while
+# compacting an existing row was forbidden, a finding against a frozen row named no
+# legal remedy, so exempting them was right. Once compaction was permitted, the
+# exemption became a guard that could not fire on its own population -- it printed
+# `0 unfrozen row(s), 0 over 1,500 B` against 20 violators.
+#
+# Why this is measured PER ROW and not per file: across 80 session transcripts of this
+# repo, `FRAMEWORK_LEARNINGS.md` was read WHOLE once and read in PART 243 times. A
+# partial read returns whole rows, because a row is one physical line -- so row size,
+# not file size, sets what a typical session actually spends on this file.
+ROW_BUDGET_BYTES = 1500
 
 # Split a markdown row on unescaped pipes only, so a row containing an escaped `\|`
 # in its prose is not miscounted as an extra column.
@@ -70,38 +122,30 @@ def repo_root() -> Path:
 
 
 def default_path() -> Path:
-    return repo_root() / "starter-kit" / "SESSION_RUNNER.md"
+    return repo_root() / "starter-kit" / "FRAMEWORK_LEARNINGS.md"
 
 
 def parse_table(text: str):
     """Return (rows, findings).
 
-    `rows` is a list of (number_str, cell_count, line_no) for each data row found
+    `rows` is a list of (number_str, cell_count, line_no, raw_line) for each data row found
     under the Learnings heading. Table region = the contiguous run of lines from the
     header row up to the first blank line after it.
     """
     findings = []
     lines = text.splitlines()
 
-    start = None
-    for i, line in enumerate(lines):
-        if HEADING_RE.match(line):
-            start = i
-            break
-    if start is None:
-        return [], ["Learnings table heading not found "
-                    "('## Learnings (added by sessions)')"]
-
-    # First table line at or after the heading.
+    # Found by the table's OWN header row (see TABLE_HEADER_RE) — portable across
+    # upstream's inline-under-a-heading layout and this fork's extracted file, which
+    # has no preceding "## Learnings" heading at all.
     header = None
-    for i in range(start + 1, len(lines)):
-        if lines[i].lstrip().startswith("|"):
+    for i, line in enumerate(lines):
+        if TABLE_HEADER_RE.match(line):
             header = i
             break
-        if lines[i].startswith("## "):
-            break  # ran into the next section without finding a table
     if header is None:
-        return [], ["Learnings table heading has no table under it"]
+        return [], ["Learnings table header row not found "
+                    "('| # | Learning | Source | When to Apply |')"]
 
     if header + 1 >= len(lines) or not re.match(r"^\s*\|[\s|:-]+\|\s*$", lines[header + 1]):
         findings.append("line %d: Learnings table has no header separator row"
@@ -125,19 +169,20 @@ def parse_table(text: str):
         stripped = raw.strip()
         inner = stripped[1:-1] if stripped.endswith("|") else stripped[1:]
         cells = [c.strip() for c in CELL_SPLIT_RE.split(inner)]
-        rows.append((cells[0] if cells else "", len(cells), i + 1))
+        rows.append((cells[0] if cells else "", len(cells), i + 1, raw))
 
     return rows, findings
 
 
-def check_table(rows: list, findings: list) -> list:
-    """Append shape findings: 4 columns per row, numbers contiguous from 1."""
+def check_table(rows: list, findings: list, reserved: set = frozenset()) -> list:
+    """Append shape findings: 4 columns per row, numbers contiguous from 1 (modulo
+    any explicitly `reserved` numbers, which are not a gap — see RESERVED_RE)."""
     if not rows:
         findings.append("Learnings table has no data rows")
         return findings
 
     numbers = []
-    for num_str, ncells, line_no in rows:
+    for num_str, ncells, line_no, _raw in rows:
         if ncells != 4:
             findings.append(
                 "line %d: row %r has %d column(s), expected exactly 4"
@@ -161,10 +206,10 @@ def check_table(rows: list, findings: list) -> list:
             seen[n] = line_no
 
     if numbers:
-        expected = list(range(1, len(numbers) + 1))
+        expected = list(range(1, len(numbers) + len(reserved) + 1))
         actual = [n for n, _ in numbers]
-        if actual != expected:
-            missing = sorted(set(expected) - set(actual))
+        if sorted(actual + list(reserved)) != expected:
+            missing = sorted(set(expected) - set(actual) - reserved)
             if missing:
                 findings.append(
                     "Learning numbers are not contiguous from 1 — missing %s"
@@ -176,6 +221,35 @@ def check_table(rows: list, findings: list) -> list:
                     % ", ".join("#%d" % n for n in actual)
                 )
     return findings
+
+
+def check_row_budget(rows: list, findings: list) -> str:
+    """Hold EVERY row to ROW_BUDGET_BYTES. Returns a disposition string.
+
+    Scoped to the whole table, and that scope is a design choice worth stating rather
+    than leaving implicit (BL-40). It was once the UNFROZEN rows only -- the table is
+    append-only, so a finding against a row nobody was permitted to edit would have
+    had no legal remedy, which is a gate that cannot be obeyed rather than one that
+    works. S119's operator decision supplied the remedy: compaction of an existing row
+    is permitted, because the append-only rule's stated harm is RENUMBERING (it breaks
+    `Learning #N` citations) and row CONTENT is not row NUMBER.
+
+    The old scope read git HEAD, so it also carried a SKIP arm for files with no
+    frozen counterpart. Both are gone: the budget is a property of the row's own
+    bytes, needs no history to evaluate, and therefore cannot be skipped.
+    """
+    over = [(n, len(raw.encode("utf-8"))) for n, _c, _l, raw in rows
+            if len(raw.encode("utf-8")) > ROW_BUDGET_BYTES]
+    for num, nbytes in over:
+        findings.append(
+            "row #%s is %s B, over the %s B per-row budget by %s — a partial read of "
+            "this table returns whole rows, so row size is what a session actually "
+            "spends here; say it shorter rather than raising the budget"
+            % (num, format(nbytes, ","), format(ROW_BUDGET_BYTES, ","),
+               format(nbytes - ROW_BUDGET_BYTES, ","))
+        )
+    return "row budget: %d row(s), %d over %s B" % (
+        len(rows), len(over), format(ROW_BUDGET_BYTES, ","))
 
 
 def distributed_md_files(root: Path) -> list:
@@ -211,23 +285,24 @@ def check_citations(root: Path, valid: set, findings: list) -> list:
 
 def main() -> int:
     p = argparse.ArgumentParser(
-        description="Validate the SESSION_RUNNER Learnings table's structural invariants."
+        description="Validate the framework Learnings table's structural invariants."
     )
-    p.add_argument("--file", help="explicit SESSION_RUNNER.md path (what bin/tests.sh uses)")
+    p.add_argument("--file", help="explicit Learnings-table file path (what bin/tests.sh uses)")
     p.add_argument("--no-citations", action="store_true",
                    help="skip the distributed-corpus citation sweep (isolated fixtures)")
     args = p.parse_args()
 
     path = Path(args.file) if args.file else default_path()
     if not path.exists():
-        print("error: session runner not found: %s" % path)
+        print("error: Learnings table file not found: %s" % path)
         return 1
 
     text = path.read_text(encoding="utf-8", errors="replace")
     rows, findings = parse_table(text)
-    findings = check_table(rows, findings)
+    findings = check_table(rows, findings, reserved_numbers(text))
 
-    valid = {int(n) for n, _c, _l in rows if n.isdigit()}
+    valid = {int(n) for n, _c, _l, _r in rows if n.isdigit()}
+    budget = check_row_budget(rows, findings)
     if not args.no_citations:
         findings = check_citations(repo_root(), valid, findings)
 
@@ -238,8 +313,8 @@ def main() -> int:
         return 1
 
     scope = "table shape only (--no-citations)" if args.no_citations else "all citations resolve"
-    print("check-learnings: OK — %d Learning row(s), contiguous 1..%d; %s."
-          % (len(rows), len(rows), scope))
+    print("check-learnings: OK — %d Learning row(s), contiguous 1..%d; %s; %s."
+          % (len(rows), len(rows), scope, budget))
     return 0
 
 

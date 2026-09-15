@@ -392,10 +392,23 @@ RAW_MAX = sum(w for _, w, _ in md.METHODOLOGY_ITEMS)
 CHECKLIST_EXEMPT = {
     "RECOMMENDED_SKILLS.md": "index of optional skill recommendations; using them is elective, "
                              "so its presence says nothing about methodology adoption",
+    "FRAMEWORK_LEARNINGS.md": "canonical framework learnings, synced read-only; an adopter never "
+                              "writes it and receives it automatically with SESSION_RUNNER.md, so "
+                              "its presence measures sync, not adoption. Scoring it would also "
+                              "re-cut METHODOLOGY_MAX and move every already-compliant adopter's "
+                              "percentage for a change they did not make",
     "CONTEXT_TEMPLATE.md": "template; the operating artifact is the adopter's CONTEXT.md instance",
     "CLAUDE_TEMPLATE.md": "template; the operating artifact is the adopter's CLAUDE.md instance",
     "BOOTSTRAP.md": "one-time setup guide, not a per-session operating artifact",
     "methodology_dashboard.py": "the scanner itself — scoring its own presence is circular",
+    "methodology_trim.py": "the ledger trimmer (S39'): sync installs it automatically alongside "
+                           "the scanner, so like FRAMEWORK_LEARNINGS.md its presence measures "
+                           "sync, not adoption — an adopter cannot fail to have it and cannot "
+                           "demonstrate anything by having it. Scoring it would also re-cut "
+                           "METHODOLOGY_MAX and move every already-compliant adopter's percentage "
+                           "for a change they did not make. Whether an adopter USES it is a "
+                           "different question, and the dashboard already answers it in the "
+                           "trim-trigger row rather than in the compliance checklist",
     "context_budget.py": "an elective size-governance gate, same class as the scanner above — "
                          "its presence indicates a pre-commit hook was installed, not that the "
                          "session-operating discipline this checklist measures was followed",
@@ -2133,10 +2146,10 @@ class TestFmtRatioAndTwins(unittest.TestCase):
                         "tools/ and starter-kit/ dashboards must be byte-identical")
 
     def test_dashboard_version(self):
-        self.assertEqual(md.DASHBOARD_VERSION, "2.10.6")
+        self.assertEqual(md.DASHBOARD_VERSION, "2.10.7")
         starter_src = Path(STARTER_PY).read_text(encoding="utf-8")
-        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.10\.6"', starter_src, re.MULTILINE),
-                        "starter-kit twin must also declare DASHBOARD_VERSION 2.10.6")
+        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.10\.7"', starter_src, re.MULTILINE),
+                        "starter-kit twin must also declare DASHBOARD_VERSION 2.10.7")
 
 
 class TestCliRemedyProportionality(unittest.TestCase):
@@ -2616,7 +2629,7 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
             self.assertTrue(dest.startswith("docs/methodology/"),
                             f"{dest} is a root-level name and cannot be self-evidencing — a "
                             f"non-adopter can own that filename by coincidence")
-        # bin/sync installs all six ambiguous names, so a genuine install always clears the
+        # bin/sync installs all seven ambiguous names, so a genuine install always clears the
         # threshold. If this ever inverts, real installs silently stop being discounted.
         self.assertGreaterEqual(len(md.FRAMEWORK_AMBIGUOUS_DOCS),
                                 md.FRAMEWORK_AMBIGUOUS_EVIDENCE_MIN,
@@ -2650,32 +2663,71 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
         self.assertEqual(m["files"]["by_category"]["vendor"]["count"], 1)
         self.assertEqual(m["tests"]["source_loc"], 0)
 
-    def test_a_synced_repo_with_context_budget_installed_is_still_doc_only(self):
-        """THE regression test for the actual bug, reproducing the maintainer's own PR #71
-        review finding: adding context_budget.py's NAME to FRAMEWORK_INSTALLED_SOURCE did not
-        exclude it, because the content check verified every name against
-        methodology_dashboard.py's OWN signatures — which context_budget.py never matches. RED
-        against that version (confirmed by running this test before the per-file fix): a real
-        doc-only repo, after a real bin/sync-shaped install of context_budget.py (674 real
-        lines, read from the actual shipped file) alongside the scanner, flips
-        doc_only True -> False and gains a false HIGH "No test infrastructure" risk — v3.2's
-        exact false penalty, a fourth time."""
-        real_scanner = Path(STARTER_PY).read_text(encoding="utf-8")
-        real_context_budget = Path(STARTER_CONTEXT_BUDGET).read_text(encoding="utf-8")
-        p = self._repo({
-            **self.QUARTO,
-            "methodology_dashboard.py": real_scanner,
-            "context_budget.py": real_context_budget,
-        })
-        m = md.collect_all(p)
-        self.assertTrue(m["doc_only"]["is_doc_only"],
-                        "a real bin/sync-shaped install of context_budget.py must not flip a "
-                        "genuine doc-only repo to code")
-        self.assertEqual(m["tests"]["source_loc"], 0,
-                         "context_budget.py's own 674 LOC must not count as the adopter's source")
-        self.assertNotIn("No test infrastructure",
-                         [r["description"] for r in m["scores"]["risks"]],
-                         "the false HIGH risk this whole fix exists to prevent")
+    def test_a_synced_repo_with_each_installed_source_file_is_still_doc_only(self):
+        """THE regression test for the exclusion, over every non-markdown file `bin/sync`
+        installs. Each is written from its REAL starter-kit/ source into a genuine doc-only repo,
+        alone and then all together as a real install writes them, and none may count as the
+        adopter's source, flip doc_only True -> False, or raise the false HIGH "No test
+        infrastructure" — v3.2's exact false penalty.
+
+        It began as context_budget.py's test, reproducing the maintainer's PR #71 finding: the
+        NAME was listed, but its content was checked against methodology_dashboard.py's
+        signatures, so it was never excluded (RED against that version). The PR #80 review, F2,
+        found the same gap one name over: with methodology_trim.py's version_re and signatures
+        neutralized in both twins, the suite stayed green while a synced fixture read `code`. RED
+        against that mutant, and against the same neutralization of context_budget.py and of
+        `.context-budget.json`. NOT of methodology_dashboard.py: the neutralized strings sit in
+        the scanner's own signature table, so the real file still matches itself — this class's
+        stand-in fixtures (installed_scanner()) are what catch that one.
+
+        The names come from bin/_manifest.py, never from the constant under test, so a file the
+        manifest installs and the scanner does not know about fails here by name.
+        `.context-budget.json` is bucketed `config` before the predicate is consulted (see its
+        _FRAMEWORK_FILE_SIGNATURES entry), so its end-to-end half cannot fail on its signatures:
+        the direct predicate call holds those, and its category is asserted so that reason stays
+        checked."""
+        mod = self._manifest()
+        installed = [(src, dest) for src, dest, _disp in mod.DISTRIBUTION
+                     if not dest.endswith(".md")]
+        real = {dest: (CANONICAL_ROOT / src).read_text(encoding="utf-8")
+                for src, dest in installed}
+
+        def category(dest):
+            return md.categorize_file(Path(dest), Path(dest).suffix.lower(), dest)
+
+        def assert_still_doc_only(installed_files):
+            m = md.collect_all(self._repo({**self.QUARTO, **installed_files}))
+            self.assertEqual(m["tests"]["source_loc"], 0,
+                             "a framework-installed file must not count as the adopter's source")
+            self.assertTrue(m["doc_only"]["is_doc_only"],
+                            "installing the methodology must not flip a doc-only repo to code")
+            self.assertNotIn("No test infrastructure",
+                             [r["description"] for r in m["scores"]["risks"]],
+                             "the false HIGH risk this whole exclusion exists to prevent")
+            vendor = m["files"]["by_category"]["vendor"]
+            self.assertEqual(vendor["count"],
+                             sum(1 for dest in installed_files if category(dest) == "source"),
+                             "each installed file that would read as source must read as vendor")
+            return vendor
+
+        for src, dest in installed:
+            with self.subTest(installed=dest):
+                vendor = assert_still_doc_only({dest: real[dest]})
+                if category(dest) == "source":
+                    self.assertGreater(vendor["loc"], 0,
+                                       "the excluded LOC must stay visible, not vanish")
+                else:
+                    self.assertEqual(category(dest), "config",
+                                     f"{dest} passes end to end only because it is config — if "
+                                     "that changes, its signature entry decides this test")
+                self.assertTrue(md.is_framework_installed(Path(dest), CANONICAL_ROOT / src),
+                                f"the real {src} must match its own _FRAMEWORK_FILE_SIGNATURES "
+                                "entry")
+        with self.subTest(installed="all, as bin/sync writes them"):
+            assert_still_doc_only(real)
+        # Checked last, so a name the scanner lacks still reports its own failure above first.
+        self.assertEqual({dest for _src, dest in installed}, set(md.FRAMEWORK_INSTALLED_SOURCE),
+                         "this test must cover exactly the scanner's own list")
 
     def test_seed_docs_need_evidence_the_framework_was_installed(self):
         """The delta boundary review's confirmed regression, and the plan's RED-first clause (c)
@@ -2713,7 +2765,10 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
         for dest in self.installed_markdown():
             tree[dest] = "# framework doc\n" + "prose\n" * 60
         m = md.collect_all(self._repo(tree))
-        self.assertGreaterEqual(m["files"]["framework_docs"]["count"], 21)
+        # Derived from the manifest, never a literal: a hardcoded floor silently stops asserting
+        # the whole set the moment DISTRIBUTION grows (it read 21 while the set was already 22).
+        self.assertGreaterEqual(m["files"]["framework_docs"]["count"],
+                                len(self.installed_markdown()))
         self.assertFalse(m["doc_only"]["is_doc_only"])
         self.assertIn("No test infrastructure",
                       [r["description"] for r in m["scores"]["risks"]])
@@ -2767,6 +2822,7 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
 
     def test_ambiguous_names_are_discounted_once_enough_co_occur(self):
         """The other side of the gate, so the fix cannot silently stop discounting real installs.
+        Seven ambiguous root names as of S34 (FRAMEWORK_LEARNINGS.md joined the set).
         README.md's manual Option B copies the root files as a SET, and `bin/sync` writes all six,
         so a genuine install clears FRAMEWORK_AMBIGUOUS_EVIDENCE_MIN without any
         docs/methodology/ path present. Built from the manifest, not from the scanner constant.
@@ -2833,7 +2889,7 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
         """The MIRROR defect, unmasked by the source exclusion and closed by operator decision.
 
         RED against the source-exclusion-only tree: this repo read doc_only=True and LOST its
-        "No test infrastructure" risk, because bin/sync's 21 installed markdown files clear
+        "No test infrastructure" risk, because bin/sync's 23 installed markdown files clear
         DOC_ONLY_DOC_FILES_MIN (3) on their own. Installing the methodology must not answer the
         question "is this a document project?" in EITHER direction.
         """

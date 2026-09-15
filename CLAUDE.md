@@ -12,12 +12,13 @@ A standalone methodology framework for structured, self-correcting AI agent sess
 
 ## Document Hierarchy
 
-Three layers, each serving a distinct purpose:
+Four layers, each serving a distinct purpose — plus the flight manual's read-on-demand sibling:
 
 | Layer | File | Role |
 |-------|------|------|
 | Cockpit checklist | `starter-kit/SESSION_RUNNER.md` | Step-by-step operating procedure for every session |
 | Flight manual | `ITERATIVE_METHODOLOGY.md` | Theory: 9 principles, 6 phases, 12 quality gates |
+| Reference apparatus | `FRAMEWORK_APPARATUS.md` | The flight manual's read-on-demand sibling: the tables you fill in, the tests you run, the scales you score against. Extracted so the manual fits one read; distributed, so adopters get it too |
 | Mission procedures | `workstreams/*_WORKSTREAM.md` | Domain-specific adaptations (design, architecture, development, audit, research documentation) |
 | Campaign templates | `workstreams/*_CAMPAIGN.md` | Multi-session campaigns extending a workstream |
 
@@ -40,6 +41,7 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 | File | Purpose |
 |------|---------|
 | `starter-kit/SESSION_RUNNER.md` | Operational checklist — users copy this to their project root |
+| `starter-kit/FRAMEWORK_LEARNINGS.md` | The framework's own accumulated learnings — the runner's read-on-demand sibling, synced read-only (adopters never edit it; they record project learnings in their `CLAUDE.md`) |
 | `starter-kit/SAFEGUARDS.md` | Commit discipline, blast radius limits, mode-switching rules |
 | `starter-kit/SESSION_NOTES.md` | Empty template for session continuity between sessions |
 | `starter-kit/BOOTSTRAP.md` | Step-by-step setup guide for new projects |

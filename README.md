@@ -72,11 +72,11 @@ Each phase is gated. You cannot enter the next phase until the current one is co
 ../methodology/bin/sync your-project/ --source=github  # or: pull from GitHub (needs gh CLI)
 ```
 
-This copies the full methodology corpus into the target: the operating files (`SESSION_RUNNER.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`) to the project root, and the framework (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) to `docs/methodology/`. These are kept current on every run. `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, and `ROADMAP.md` are *seeded* at the root only when absent — once they exist they are yours and `bin/sync` never overwrites them. See [`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md) for the difference between committed and ignored modes.
+This copies the full methodology corpus into the target: the operating files (`SESSION_RUNNER.md`, `FRAMEWORK_LEARNINGS.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`) to the project root, and the framework (`ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md`, `workstreams/`) to `docs/methodology/`. These are kept current on every run. `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, and `ROADMAP.md` are *seeded* at the root only when absent — once they exist they are yours and `bin/sync` never overwrites them. See [`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md) for the difference between committed and ignored modes.
 
 **Option B — manual:**
 
-Copy the starter-kit root-files to your project root — `SESSION_RUNNER.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`, plus `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, and `ROADMAP.md` as starting points you then own. Copy the framework files (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`) and `workstreams/` to `docs/methodology/`. (Option A's `bin/sync` does all of this in one command.)
+Copy the starter-kit root-files to your project root — `SESSION_RUNNER.md`, `FRAMEWORK_LEARNINGS.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`, plus `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, and `ROADMAP.md` as starting points you then own. Copy the framework files (`ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md`) and `workstreams/` to `docs/methodology/`. (Option A's `bin/sync` does all of this in one command.)
 
 ### 2. Tell Claude to use it
 
@@ -105,6 +105,7 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 |------|---------|
 | `BOOTSTRAP.md` | Complete setup guide, customization, troubleshooting |
 | `SESSION_RUNNER.md` | Cockpit checklist template (no project-specific history) |
+| `FRAMEWORK_LEARNINGS.md` | The framework's own accumulated learnings — reference, read on demand, synced read-only |
 | `SESSION_NOTES.md` | Empty template for session continuity |
 | `SAFEGUARDS.md` | Safety rails: commit discipline, blast radius limits, mode switching |
 | `CLAUDE_TEMPLATE.md` | Template for project `CLAUDE.md` with SESSION PROTOCOL block and Adaptations section |
@@ -134,7 +135,7 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 
 **Live dashboard:** The generated HTML auto-refreshes every 60 seconds. Run the script once, open `dashboard.html` in your browser, and leave it open — it stays current as you work. Re-run the script whenever you want updated data.
 
-**Declaring what the scanner should infer — `.methodology-profile`:** the two class detections above are heuristics, and a heuristic can be wrong about your repo. Installation no longer breaks them *through your source count* — as of dashboard 2.10.1 the scanner holds its own installed copy out of that count, so a document-only project still reads as `doc-only` after `bin/sync` (before that, the ~3,000-line `methodology_dashboard.py` at your root counted as *your* code and pushed you past the source cap). The exclusion runs **both ways**: the 21 markdown files `bin/sync` installs are likewise discounted when the scanner asks whether yours is a *document* project, so installing the framework cannot push a code repo into `doc-only` either — a one-sided exclusion would simply have mirrored the defect instead of removing it. **One gap remains, and declaring is the fix:** four of those discounted names are *seeds* (`CHANGELOG.md`, `SESSION_NOTES.md`, `HANDOFFS.md`, `ROADMAP.md`), which `bin/sync` leaves alone when you already have your own. The scanner cannot currently tell your 900-line `CHANGELOG.md` from a seed it wrote, so a document project whose corpus is concentrated in those filenames can still read as `code` after installation. **Declaring is still the right move for a document-only project**, and it is the supported way to overrule either detection. Create a `.methodology-profile` file at the repo root; **only its first line that is neither blank nor a comment is read** as the declaration. That one line carries whitespace-separated tokens from two independent axes:
+**Declaring what the scanner should infer — `.methodology-profile`:** the two class detections above are heuristics, and a heuristic can be wrong about your repo. Installation no longer breaks them *through your source count* — as of dashboard 2.10.1 the scanner holds its own installed copy out of that count, so a document-only project still reads as `doc-only` after `bin/sync` (before that, the ~3,000-line `methodology_dashboard.py` at your root counted as *your* code and pushed you past the source cap). The exclusion runs **both ways**: the 23 markdown files `bin/sync` installs are likewise discounted when the scanner asks whether yours is a *document* project, so installing the framework cannot push a code repo into `doc-only` either — a one-sided exclusion would simply have mirrored the defect instead of removing it. **One gap remains, and declaring is the fix:** four of those discounted names are *seeds* (`CHANGELOG.md`, `SESSION_NOTES.md`, `HANDOFFS.md`, `ROADMAP.md`), which `bin/sync` leaves alone when you already have your own. The scanner cannot currently tell your 900-line `CHANGELOG.md` from a seed it wrote, so a document project whose corpus is concentrated in those filenames can still read as `code` after installation. **Declaring is still the right move for a document-only project**, and it is the supported way to overrule either detection. Create a `.methodology-profile` file at the repo root; **only its first line that is neither blank nor a comment is read** as the declaration. That one line carries whitespace-separated tokens from two independent axes:
 
 | Axis | Tokens | Answers |
 |---|---|---|
@@ -173,6 +174,7 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 ```
 ├── README.md                         ← You are here
 ├── ITERATIVE_METHODOLOGY.md          ← Master framework (9 principles, 6 phases, 12 gates)
+├── FRAMEWORK_APPARATUS.md            ← Its reference apparatus, read on demand
 ├── HOW_TO_USE.md                     ← Practical guide with 3 worked examples
 │
 ├── workstreams/                      ← Domain-specific adaptations and campaign templates
@@ -192,6 +194,7 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 │   ├── CONTEXT_TEMPLATE.md           ← Project domain-glossary / CONTEXT.md template
 │   ├── RECOMMENDED_SKILLS.md         ← Index of recommended skills (cited by phase/workstream)
 │   ├── SESSION_RUNNER.md             ← Cockpit checklist template
+│   ├── FRAMEWORK_LEARNINGS.md        ← The framework's own learnings (read on demand)
 │   ├── SESSION_NOTES.md              ← Session continuity template
 │   ├── SAFEGUARDS.md                 ← Safety rails template
 │   ├── CHANGELOG.md                  ← Completed work history template

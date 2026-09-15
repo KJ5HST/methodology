@@ -1,6 +1,9 @@
 {
   "_": "SEED CONFIG — copied to your project root as .context-budget.json on first sync, then yours to own. Every ceiling below is a starting point, not a law. Replace each one with a number you can defend from a measurement of YOUR project, and record the derivation in the neighbouring _ key. Re-derive the calibration with: python3 context_budget.py --calibrate",
 
+  "read_cap_tokens": 25000,
+  "_read_cap_tokens": "The agent read cap, in TOKENS — the unit the limit is actually denominated in. A whole-file read past this is refused or truncated. This is a fact about your harness, not a policy you choose: verify it rather than inheriting it. A `max_tokens` above this is rejected as a config defect, because no file could satisfy it. WHY THIS KEY EXISTS: a ceiling written in BYTES is `tokens x density`, and density is a property of your CONTENT — so every edit that changes how densely a file is written silently moves a byte ceiling, and nothing goes red. On the fork where this tool's 1.2.0 was developed (rmsharp/methodology) a declared byte ceiling certified `ok` a file the read tool REFUSES, and four of five ceilings converted to more than the cap. Declaring the ceiling in tokens makes that unrepresentable.",
+
   "bytes_per_token": 2.93,
   "_bytes_per_token": "How many bytes of dense markdown cost one token. 2.93 was calibrated on one project by a natural experiment: a commit moved 156,574 B out of CLAUDE.md and the next session's opening context fell 53,520 tokens. Run --calibrate to derive your own; do not inherit this number if you can measure it.",
 
@@ -25,6 +28,7 @@
       "path": "CLAUDE.md",
       "class": "resident",
       "max_bytes": 28000,
+      "max_tokens": 12334,
       "warn_bytes": 24000,
       "protected_fence": "budget:protected",
       "protected_min_bytes": 800,
@@ -35,6 +39,7 @@
       "class": "read-mandated",
       "max_lines": 400,
       "max_bytes": 120000,
+      "max_tokens": 25000,
       "max_line_bytes": 280,
       "structure": [
         { "pattern": "^## ACTIVE TASK", "max": 1,
@@ -46,6 +51,7 @@
     },
     {
       "path": "LEARNINGS.md",
+      "_max_tokens": "DELIBERATELY ABSENT. The read cap binds a file read WHOLE; a file read in PART is not bound by it — measured over 80 transcripts, one such file was read whole once and in part 243 times, and a partial read returns whole ROWS. So on-demand files get no token verdict, and their budget belongs on the unit actually read (a row, a record, a section). Giving this file a max_tokens would be a budget on the wrong unit, which is not conservative — it is unmeasured.",
       "class": "on-demand",
       "max_bytes": 60000,
       "_": "Optional — delete this entry if your project keeps learnings in CLAUDE.md per Phase 3C. A file a pointer sends you to open whole still has a budget: on the source project this reached 215,750 B and was measured, across 51 transcripts, to have been opened exactly once."

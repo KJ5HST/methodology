@@ -16,6 +16,7 @@ your-projects/                        <-- parent directory (portfolio level)
 ├── project-a/                        <-- each project gets methodology files:
 │   ├── CLAUDE.md (or equivalent)     ← Your agent instructions (see CLAUDE_TEMPLATE.md)
 │   ├── SESSION_RUNNER.md             ← Cockpit checklist (synced from methodology)
+│   ├── FRAMEWORK_LEARNINGS.md        ← The framework's learnings (synced, read on demand)
 │   ├── SAFEGUARDS.md                 ← Safety rails (synced from methodology)
 │   ├── SESSION_NOTES.md              ← Session continuity (copied from starter kit)
 │   ├── BACKLOG.md                    ← Open work items only (you create this)
@@ -26,6 +27,7 @@ your-projects/                        <-- parent directory (portfolio level)
 │   │
 │   └── docs/methodology/             ← The framework (copied from parent dir)
 │       ├── ITERATIVE_METHODOLOGY.md
+│       ├── FRAMEWORK_APPARATUS.md
 │       ├── HOW_TO_USE.md
 │       ├── README.md
 │       └── workstreams/
@@ -67,7 +69,7 @@ If you have a local `methodology/` checkout (sibling to your projects), use the 
 ../methodology/bin/sync your-project/ --source=github
 ```
 
-`bin/sync` copies the full methodology corpus into the target: the operating files (`SESSION_RUNNER.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`) at the project root and the framework (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) under `docs/methodology/`, creating subdirectories as needed. `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, and `ROADMAP.md` are *seeded* at the root only when absent and are never overwritten afterward — once created they are yours to edit. The complete mapping is defined once in `bin/_manifest.py`. In `--mode=ignore` it also adds `.gitignore` entries for the tracked files (not the seeded ones, which you commit) and warns (non-destructively) if any tracked file is currently tracked by git.
+`bin/sync` copies the full methodology corpus into the target: the operating files (`SESSION_RUNNER.md`, `FRAMEWORK_LEARNINGS.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`) at the project root and the framework (`ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md`, `workstreams/`) under `docs/methodology/`, creating subdirectories as needed. `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, and `ROADMAP.md` are *seeded* at the root only when absent and are never overwritten afterward — once created they are yours to edit. The complete mapping is defined once in `bin/_manifest.py`. In `--mode=ignore` it also adds `.gitignore` entries for the tracked files (not the seeded ones, which you commit) and warns (non-destructively) if any tracked file is currently tracked by git.
 
 **Drift safety:** `bin/sync` refuses to overwrite a file that has local modifications not matching canonical or any historical version. The recommended pattern is to move per-project customizations into your CLAUDE.md's "Project-Specific Methodology Adaptations" section (see Step 5), then run sync. If you really need to discard local edits, pass `--force`.
 
@@ -90,7 +92,7 @@ If you don't have (or don't want) the sync tool, copy files manually:
 
 ### Step 1: Copy the Framework Files
 
-Copy `docs/methodology/` content (`ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md`, `workstreams/`) from the methodology repo into your project's `docs/methodology/` directory. These files are project-independent — you should not need to modify them.
+Copy `docs/methodology/` content (`ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md`, `workstreams/`) from the methodology repo into your project's `docs/methodology/` directory. These files are project-independent — you should not need to modify them.
 
 ### Step 2: Copy the Starter Kit Files to Project Root
 
@@ -99,6 +101,7 @@ From the methodology `starter-kit/` directory:
 | File | Purpose |
 |------|---------|
 | `SESSION_RUNNER.md` | The operating procedure — every session follows this |
+| `FRAMEWORK_LEARNINGS.md` | The framework's own learnings — reference the runner links to, read on demand |
 | `SAFEGUARDS.md` | Safety rails — commit discipline, blast radius limits, mode switching |
 | `SESSION_NOTES.md` | Session continuity — where handoff notes live between sessions |
 | `CHANGELOG.md` | Completed work history — add entries as work is finished |
@@ -188,7 +191,7 @@ for every session. It tells you what to read, when to stop, and how to close out
 
 ## Step 5: Customizations Go in CLAUDE.md, Not in Synced Files
 
-When a project needs to extend the base methodology — add a custom task mapping, an extra Phase 0 step, a project-specific Learning — those additions go in your **CLAUDE.md "Project-Specific Methodology Adaptations" section**, not in edits to `SESSION_RUNNER.md`.
+When a project needs to extend the base methodology — add a custom task mapping, an extra Phase 0 step, a project-specific Learning — those additions go in your **CLAUDE.md "Project-Specific Methodology Adaptations" section**, not in edits to `SESSION_RUNNER.md` or `FRAMEWORK_LEARNINGS.md`.
 
 Why: edits to synced files become drift. When the methodology updates, you either merge conflicts, miss the update, or lose your customization. Keeping synced files byte-identical to canonical means updates are friction-free, and your project's additions remain visible where agents already read them (CLAUDE.md is loaded every session).
 
@@ -196,7 +199,7 @@ Why: edits to synced files become drift. When the methodology updates, you eithe
 
 > *Project Learnings live in [`PROJECT_LEARNINGS.md`](PROJECT_LEARNINGS.md) — read it when a task resembles earlier work (a workstream or problem you've hit before).*
 
-This is the same discipline as the three-file `BACKLOG`/`CHANGELOG`/`ROADMAP` split above: the always-read file stays scannable; the accumulated record moves to a sibling read only when relevant. `PROJECT_LEARNINGS.md` is project-owned (committed, never synced), so it needs no tooling changes. Most projects never need this — extract only when the file actually approaches its budget.
+This is the same discipline as the three-file `BACKLOG`/`CHANGELOG`/`ROADMAP` split above — and as `SESSION_RUNNER.md` → `FRAMEWORK_LEARNINGS.md`, where the framework applies it to itself: the always-read file stays scannable; the accumulated record moves to a sibling read only when relevant. `PROJECT_LEARNINGS.md` is project-owned (committed, never synced), so it needs no tooling changes. Most projects never need this — extract only when the file actually approaches its budget.
 
 Template section (from `CLAUDE_TEMPLATE.md`):
 

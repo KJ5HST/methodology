@@ -49,6 +49,7 @@ Right after a clean Tutorial-1 install, every row is `current` (TRACKED files ma
 source: local (/Users/you/Development/methodology)
 Project  File                                       Disposition  Status
 adopter  SESSION_RUNNER.md                          tracked      current
+adopter  FRAMEWORK_LEARNINGS.md                     tracked      current
 adopter  SAFEGUARDS.md                              tracked      current
 adopter  RECOMMENDED_SKILLS.md                      tracked      current
 …
@@ -179,7 +180,7 @@ Cite the failure mode by number; link the list, don't paste it.
 
 ## You produced
 
-An installed project whose `bin/status` reads `current` / `present` across all 22 distributed files — reached honestly. You ran the read-only audit, manufactured real drift and watched status name it to the file, previewed with `--dry-run` and applied with `bin/sync`, and — the move that matters — handled a file you'd locally modified by relocating the edit into `CLAUDE.md` rather than force-overwriting it. Staying current is no longer a hope; it's a loop you can run on one project or the whole portfolio, and you know the one trap that turns "friction-free forever" into "merge conflict every release."
+An installed project whose `bin/status` reads `current` / `present` across all 25 distributed files — reached honestly. You ran the read-only audit, manufactured real drift and watched status name it to the file, previewed with `--dry-run` and applied with `bin/sync`, and — the move that matters — handled a file you'd locally modified by relocating the edit into `CLAUDE.md` rather than force-overwriting it. Staying current is no longer a hope; it's a loop you can run on one project or the whole portfolio, and you know the one trap that turns "friction-free forever" into "merge conflict every release."
 
 That closes the series. Tutorial 1 installed the framework; Tutorials 2–6 ran it on one project through sessions, a custom workstream, and a campaign; Tutorial 7 zoomed out to the portfolio; and Tutorial 8 keeps all of it current as the canonical methodology itself evolves.
 
