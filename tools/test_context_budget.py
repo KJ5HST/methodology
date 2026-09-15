@@ -486,7 +486,7 @@ class TestTokenCeiling(unittest.TestCase):
     the agent read tool REFUSES at 25,486 tokens, and four of the five configured ceilings
     converted to more than the 25,000-token cap. Nothing went red, because nothing checked.
 
-    THE CLASS GATE IS THE LOAD-BEARING PART, and it is Learning #34's: the read cap binds a
+    THE CLASS GATE IS THE LOAD-BEARING PART: the read cap binds a
     file that is read WHOLE. A file read in PART is not bound by it -- measured over 80
     transcripts, one such file was read whole once and in part 243 times. So an on-demand
     file must NOT be judged against the cap, and test_narrowing_* below shows that dropping
@@ -543,7 +543,7 @@ class TestTokenCeiling(unittest.TestCase):
     # --- the class gate, narrowed rather than merely deleted -----------------------
 
     def test_an_on_demand_file_is_not_judged_against_the_read_cap(self):
-        """Learning #34: the cap binds a WHOLE read. One adopter ships a 1.2 MB on-demand file."""
+        """The cap binds a WHOLE read. One adopter ships a 1.2 MB on-demand file."""
         with tempfile.TemporaryDirectory() as d:
             Path(d, "t.md").write_bytes(b"x" * 900000)
             r = cb.measure_file(d, self._spec(**{"class": "on-demand", "max_tokens": 20000}),
@@ -560,7 +560,7 @@ class TestTokenCeiling(unittest.TestCase):
         # A FROZEN LITERAL, not a set derived from the tuple -- deriving it would make this
         # an identity that no narrowing mutant can falsify. Widened DELIBERATELY on 2026-08-30 to
         # admit "read-set", the Phase 0 mandatory read pair (SESSION_RUNNER.md +
-        # SAFEGUARDS.md). That pair is read WHOLE, which is exactly Learning #34's condition
+        # SAFEGUARDS.md). That pair is read WHOLE, which is exactly the condition
         # for the cap to bind, so gating it in BYTES ONLY would have reintroduced the density
         # drift the token arm exists to remove -- on the two files the read-set PR is about.
         # The assertion above is the one that carries this test's purpose and is unchanged:

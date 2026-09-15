@@ -1241,7 +1241,7 @@ class TestVerifyShAppendTamperEvadesSubstringCheck(unittest.TestCase):
 # L1/L2/L3 keep their exact semantics: the records the COMMIT introduced are those present in
 # `after ∪ shard` and absent from `before`, computed from record text and removed occurrence-wise
 # before the byte-for-byte comparison runs. That is not circular — it is a different function of
-# the same three artifacts, never the difference L1/L3 are about to assert on (Learning #16).
+# the same three artifacts, never the difference L1/L3 are about to assert on.
 #
 # WHAT THIS DELIBERATELY DOES NOT DO: it does not make a record EDITED inside the trim commit
 # pass. Such a record's pre-trim bytes exist nowhere afterwards, so it is genuinely not preserved
@@ -2060,7 +2060,7 @@ class TestPhaseC2ClassAThreshold(unittest.TestCase):
     """
 
     # --- the constants, against FROZEN LITERALS ----------------------------------------------
-    # Learning #43: an assertion whose operands both come from the module under test is an
+    # An assertion whose operands both come from the module under test is an
     # identity. `CLASS_A_STOP_BYTES == int(DEFAULT_BUDGET_BYTES * BYTE_STOP_FRACTION)` is TRUE and
     # is asserted below as an intentional coincidence — but it cannot be the only check, because
     # both sides move together when the budget moves. So each number is also pinned to a literal.

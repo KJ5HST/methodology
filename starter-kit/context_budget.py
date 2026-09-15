@@ -74,12 +74,12 @@ MIN_BYTES_PER_TOKEN = 2.27
 # and is why both constants exist rather than one.
 READ_CAP_BYTES = int(READ_CAP_TOKENS * MIN_BYTES_PER_TOKEN)
 
-# Learning #34: "A file-size ceiling only bites when the file is read WHOLE ... measured
-# over 80 transcripts, one such file was read whole once and in part 243 times, and a
-# partial read returns whole ROWS. The cost was per-row; the guard was per-file. A budget
-# on the wrong unit is not conservative, it is unmeasured." So the read cap is applied ONLY
-# to classes the protocol orders read whole. An on-demand file gets no token verdict at
-# all -- its budget belongs on the unit actually read (a row, a record, a section).
+# A file-size ceiling only bites when the file is read WHOLE. Measured over 80 transcripts,
+# one such file was read whole once and in part 243 times, and a partial read returns whole
+# ROWS: the cost was per-row, the guard was per-file, and a budget on the wrong unit is not
+# conservative, it is unmeasured. So the read cap is applied ONLY to classes the protocol
+# orders read whole. An on-demand file gets no token verdict at all -- its budget belongs
+# on the unit actually read (a row, a record, a section).
 WHOLE_READ_CLASSES = ("resident", "read-mandated", "read-set")
 
 # "read-set" is the Phase 0 MANDATORY READ -- the runner plus the safeguards file, the pair
@@ -375,7 +375,7 @@ def measure_file(root, spec, cfg=None):
                  f"{worst[1]:,} B. A line ceiling alone just creates longer lines.", "line_bytes")
 
     # --- the token arm: the unit the read cap is actually denominated in ---------
-    # Applied ONLY to classes the protocol orders read WHOLE (Learning #34). An
+    # Applied ONLY to classes the protocol orders read WHOLE (WHOLE_READ_CLASSES). An
     # on-demand file is read in part, so its whole-file token count is not the cost
     # it pays and is deliberately not computed -- a verdict on the wrong unit is
     # worse than no verdict, because it reads as though someone measured something.
@@ -406,7 +406,7 @@ def measure_file(root, spec, cfg=None):
                     out["status"] = "warn"
 
     # structure: a declared pattern matching FEWER records than expected is an
-    # instrument failure, not a pass (learning #22 / #26a).
+    # instrument failure, not a pass.
     for s in spec.get("structure", []):
         pat = re.compile(s["pattern"], re.M)
         n = len(pat.findall(text))

@@ -92,6 +92,30 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   leak check for private-correspondence phrasing, internal-only paths, project names and brand names: 0 hits;
   `bin/check-links` OK (83/21), `bin/check-handoff --allow-pending` OK.
 
+### 2026-09-15 · [ad hoc] PR #80 review F1 (a), step 1: citations of Learnings past #13 now state their rule, before the table keeps only rows 1–13
+
+- **Change:** comments and two docstrings, in three files; no behaviour changes. The review of this PR
+  ([comment](https://github.com/KJ5HST/methodology/pull/80#issuecomment-5674670153), F1) asks that
+  `starter-kit/FRAMEWORK_LEARNINGS.md` ship rows 1–13 plus the reserved `#14` rather than 46 rows. Before
+  that cut, every citation it would leave dangling is rewritten to state the rule instead of a number:
+  `starter-kit/context_budget.py:77` and `:378` (Learning #34) and `:409` (*"learning #22 / #26a"* — this
+  table has no `#26a`, and its #22 is about backlog deletion, so the pair cites another numbering);
+  `tools/test_context_budget.py:489`, `:546`, `:563` (#34); `tools/test_methodology_trim.py:1244` (#16)
+  and `:2063` (#43).
+- **Why:** `bin/check-learnings` sweeps only the Markdown files of the distributed corpus
+  (`distributed_md_files`), so the two `context_budget.py` citations — a file every adopter receives —
+  would have dangled with the check green. Repaired first, so no commit carries a dangling citation. The
+  `Learning #N` mentions past 13 that remain are history (the #28/#29/#30/#34 that never existed, in
+  `CLAUDE.md`, `README.md` and `bin/check-learnings:36`), a planted test value (`bin/tests.sh`, #4242),
+  and a dated audit citing another project's numbering (`docs/audits/2026-05-02-mattpocock-skills-evaluation.md`).
+- **Placed** with this PR's own entries, below `main`'s, for the reason the conflict-resolution entry at
+  the top of this ledger gives: an entry prepended at the top re-conflicts with the next `main` prepend.
+- **Verified:** `starter-kit/context_budget.py` and `tools/test_methodology_trim.py` parse to an AST
+  identical to `b82dcff`'s; `tools/test_context_budget.py` differs in exactly the two docstrings.
+  `tools/test_context_budget.py` 116 tests OK, `tools/test_methodology_trim.py` 123 OK,
+  `context_budget.py --selftest` exit 0, `bin/check-learnings` exit 0.
+- **Commit:** this commit, on `read-set-budgets` (PR #80)
+
 ### 2026-09-03 · [ad hoc] The context-budget gate ships — ceilings in tokens, class totals, and the repairs beneath them
 
 - **Change:** `starter-kit/context_budget.py` `1.0.0` → `1.2.0` (29,549 → 73,040 B), shipped as the
