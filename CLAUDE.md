@@ -52,6 +52,9 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 | `starter-kit/HANDOFFS.md` | Durable close-out receipt template — one machine-checkable block per session |
 | `starter-kit/ROADMAP.md` | Feature inventory and future plans template |
 | `starter-kit/methodology_dashboard.py` | Health scanner — copy to project root for per-project dashboard |
+| `starter-kit/methodology_trim.py` | Ledger trimmer — archives cold `CHANGELOG.md` / `HANDOFFS.md` entries to a frozen shard, losslessly (PR #80) |
+| `starter-kit/context_budget.py` + `context-budget.json` | Context-budget gate — token/byte ceilings on the files a session must read, with a pre-commit ratchet (v3.7); the seed becomes the adopter's `.context-budget.json` |
+| `starter-kit/quality_ratchet.py` + `quality-gates.json` | Quality ratchet — declared thresholds that bind every actor and only tighten: `--precommit` refuses a loosening, `--run` measures and prints a citable summary line; the seed becomes the adopter's `.quality-gates.json` (starts empty) |
 
 ### Tools
 
@@ -59,6 +62,7 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 |------|---------|
 | `tools/methodology_dashboard.py` | Portfolio health scanner — scores projects on activity, testing, docs, CI/CD, and methodology, where the 2nd and 5th dimensions adapt to the repo class (testing → render/verification for a doc-only repo; compliance → framework integrity for a repo that publishes the framework, overridable via `.methodology-profile`); generates HTML dashboard. Place in parent directory above project repos. Python 3 stdlib only, cross-platform. |
 | `tools/test_methodology_dashboard.py` | Functional scoring tests for the health scanner (stdlib `unittest`). **Canonical-only** — not in `bin/_manifest.py`, so adopters do not receive it. Wired into `bin/tests.sh`; it imports only the `tools/` module and byte-compares the `starter-kit/` twin, so running it generates no `starter-kit/__pycache__`. |
+| `tools/test_methodology_trim.py`, `tools/test_context_budget.py`, `tools/test_quality_ratchet.py` | Unit suites for the three distributed gates/tools (stdlib `unittest`). **Canonical-only**; each imports the `starter-kit/` module it tests, so what is tested is what ships. All wired into `bin/tests.sh`. |
 
 ### Workstreams (domain-specific adaptations)
 

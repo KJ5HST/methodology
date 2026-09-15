@@ -144,6 +144,13 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   printed, then reverted. `bin/tests.sh` 128 → **135** checks: the manifest parses with no defects and
   declares gates; the hook chains the ratchet; the D9 lint observed silent (no manifest; empty seed),
   failing (one gate, no citation — both modes) and passing (cited).
+- **P4c — completeness sweep (checkpoint 9; Learning #10).** Every site that enumerates the distributed corpus
+  now names the ratchet — and, found by the same sweep, the two tools that v3.7/#80 shipped **without ever
+  reaching these lists**: `README.md` (§Option A/B copy lists, the repo tree — `starter-kit/` gains
+  `methodology_trim.py`, `context_budget.py` + `context-budget.json`, `quality_ratchet.py` +
+  `quality-gates.json`; `tools/` gains the three canonical-only unit suites), `CLAUDE.md` (starter-kit and
+  tools tables), `docs/tutorials/T1_setup.md` (the expected-result file list and the seeds), and
+  `HOW_TO_USE.md`'s Phase 3C line (the mechanical branch). No count claim moved. `bin/check-links` 107 OK.
 
 ### 2026-09-15 · [ad hoc] Merged PR #80 — the read-set budgets series (#76–#79)
 

@@ -72,11 +72,11 @@ Each phase is gated. You cannot enter the next phase until the current one is co
 ../methodology/bin/sync your-project/ --source=github  # or: pull from GitHub (needs gh CLI)
 ```
 
-This copies the full methodology corpus into the target: the operating files (`SESSION_RUNNER.md`, `FRAMEWORK_LEARNINGS.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`) to the project root, and the framework (`ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md`, `workstreams/`) to `docs/methodology/`. These are kept current on every run. `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, and `ROADMAP.md` are *seeded* at the root only when absent — once they exist they are yours and `bin/sync` never overwrites them. See [`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md) for the difference between committed and ignored modes.
+This copies the full methodology corpus into the target: the operating files (`SESSION_RUNNER.md`, `FRAMEWORK_LEARNINGS.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, and the four tools `methodology_dashboard.py`, `methodology_trim.py`, `context_budget.py`, `quality_ratchet.py`) to the project root, and the framework (`ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md`, `workstreams/`) to `docs/methodology/`. These are kept current on every run. `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, `ROADMAP.md`, and the two gate configs `.context-budget.json` and `.quality-gates.json` are *seeded* at the root only when absent — once they exist they are yours and `bin/sync` never overwrites them. See [`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md) for the difference between committed and ignored modes.
 
 **Option B — manual:**
 
-Copy the starter-kit root-files to your project root — `SESSION_RUNNER.md`, `FRAMEWORK_LEARNINGS.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`, plus `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, and `ROADMAP.md` as starting points you then own. Copy the framework files (`ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md`) and `workstreams/` to `docs/methodology/`. (Option A's `bin/sync` does all of this in one command.)
+Copy the starter-kit root-files to your project root — `SESSION_RUNNER.md`, `FRAMEWORK_LEARNINGS.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`, `methodology_trim.py`, `context_budget.py`, `quality_ratchet.py`, plus `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, `ROADMAP.md`, and the seeds `context-budget.json` → `.context-budget.json` and `quality-gates.json` → `.quality-gates.json` as starting points you then own. Copy the framework files (`ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md`) and `workstreams/` to `docs/methodology/`. (Option A's `bin/sync` does all of this in one command.)
 
 ### 2. Tell Claude to use it
 
@@ -200,7 +200,12 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 │   ├── CHANGELOG.md                  ← Completed work history template
 │   ├── HANDOFFS.md                   ← Durable close-out receipts template
 │   ├── ROADMAP.md                    ← Feature inventory & future plans template
-│   └── methodology_dashboard.py      ← Health scanner (also in tools/)
+│   ├── methodology_dashboard.py      ← Health scanner (also in tools/)
+│   ├── methodology_trim.py           ← Ledger trimmer (archives cold CHANGELOG/HANDOFFS entries losslessly)
+│   ├── context_budget.py             ← Context-budget gate (ceilings on the files a session must read)
+│   ├── context-budget.json           ← Its seed config (→ .context-budget.json at the adopter root)
+│   ├── quality_ratchet.py            ← Quality ratchet (declared thresholds that only tighten)
+│   └── quality-gates.json            ← Its seed manifest (→ .quality-gates.json; starts empty)
 │
 ├── docs/                             ← Tutorials and supporting docs
 │   └── tutorials/                    ← Hands-on learning track + sample todo-CLI project
@@ -216,7 +221,10 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 │
 └── tools/                            ← Portfolio-level tooling
     ├── methodology_dashboard.py      ← Health scanner & compliance dashboard
-    └── test_methodology_dashboard.py ← Scoring tests for the scanner (canonical-only)
+    ├── test_methodology_dashboard.py ← Scoring tests for the scanner (canonical-only)
+    ├── test_methodology_trim.py      ← Ledger-trimmer tests (canonical-only)
+    ├── test_context_budget.py        ← Context-budget gate tests (canonical-only)
+    └── test_quality_ratchet.py       ← Quality-ratchet tests (canonical-only)
 ```
 
 ## Key Concepts
