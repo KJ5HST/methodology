@@ -160,7 +160,8 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   class flagged on #80); six existing rows/bullets were tightened and it reads **59,153 B, 15 under**;
   the runner's two new lines were shaved so it sits at 18,878 / 18,900 tokens. Measured pair after the
   trims: doubled Read **49,683 → 24,842 tokens** (99.4 % of the cap; tool estimate 24,824, within 18).
-  `context_budget.py --status` OK, exit 0.
+  `context_budget.py --status` OK, exit 0. (The ledger hook refused the CLAUDE.md commit until this line was
+  co-staged — the fast path working as designed.)
 
 ### 2026-09-15 · [ad hoc] Merged PR #80 — the read-set budgets series (#76–#79)
 

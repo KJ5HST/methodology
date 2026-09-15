@@ -18,7 +18,7 @@ Four layers, each serving a distinct purpose — plus the flight manual's read-o
 |-------|------|------|
 | Cockpit checklist | `starter-kit/SESSION_RUNNER.md` | Step-by-step operating procedure for every session |
 | Flight manual | `ITERATIVE_METHODOLOGY.md` | Theory: 9 principles, 6 phases, 12 quality gates |
-| Reference apparatus | `FRAMEWORK_APPARATUS.md` | The flight manual's read-on-demand sibling: the tables you fill in, the tests you run, the scales you score against. Extracted so the manual fits one read; distributed, so adopters get it too |
+| Reference apparatus | `FRAMEWORK_APPARATUS.md` | The flight manual's read-on-demand sibling — its tables, tests and scoring scales, extracted so the manual fits one read; distributed |
 | Mission procedures | `workstreams/*_WORKSTREAM.md` | Domain-specific adaptations (design, architecture, development, audit, research documentation) |
 | Campaign templates | `workstreams/*_CAMPAIGN.md` | Multi-session campaigns extending a workstream |
 
@@ -41,7 +41,7 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 | File | Purpose |
 |------|---------|
 | `starter-kit/SESSION_RUNNER.md` | Operational checklist — users copy this to their project root |
-| `starter-kit/FRAMEWORK_LEARNINGS.md` | The framework's own accumulated learnings — the runner's read-on-demand sibling, synced read-only (adopters never edit it; they record project learnings in their `CLAUDE.md`) |
+| `starter-kit/FRAMEWORK_LEARNINGS.md` | The framework's own learnings — the runner's read-on-demand sibling, synced read-only (adopters record theirs in `CLAUDE.md`) |
 | `starter-kit/SAFEGUARDS.md` | Commit discipline, blast radius limits, mode-switching rules |
 | `starter-kit/SESSION_NOTES.md` | Empty template for session continuity between sessions |
 | `starter-kit/BOOTSTRAP.md` | Step-by-step setup guide for new projects |
@@ -52,17 +52,17 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 | `starter-kit/HANDOFFS.md` | Durable close-out receipt template — one machine-checkable block per session |
 | `starter-kit/ROADMAP.md` | Feature inventory and future plans template |
 | `starter-kit/methodology_dashboard.py` | Health scanner — copy to project root for per-project dashboard |
-| `starter-kit/methodology_trim.py` | Ledger trimmer — archives cold `CHANGELOG.md` / `HANDOFFS.md` entries to a frozen shard, losslessly (PR #80) |
-| `starter-kit/context_budget.py` + `context-budget.json` | Context-budget gate — token/byte ceilings on the files a session must read, with a pre-commit ratchet (v3.7); the seed becomes the adopter's `.context-budget.json` |
-| `starter-kit/quality_ratchet.py` + `quality-gates.json` | Quality ratchet — declared thresholds that bind every actor and only tighten: `--precommit` refuses a loosening, `--run` measures and prints a citable summary line; the seed becomes the adopter's `.quality-gates.json` (starts empty) |
+| `starter-kit/methodology_trim.py` | Ledger trimmer — archives cold ledger entries losslessly (PR #80) |
+| `starter-kit/context_budget.py` + `context-budget.json` | Context-budget gate — ceilings on the files a session must read (v3.7); seed → `.context-budget.json` |
+| `starter-kit/quality_ratchet.py` + `quality-gates.json` | Quality ratchet — declared thresholds that only tighten; `--precommit` refuses a loosening, `--run` measures; seed → `.quality-gates.json` (empty) |
 
 ### Tools
 
 | File | Purpose |
 |------|---------|
-| `tools/methodology_dashboard.py` | Portfolio health scanner — scores projects on activity, testing, docs, CI/CD, and methodology, where the 2nd and 5th dimensions adapt to the repo class (testing → render/verification for a doc-only repo; compliance → framework integrity for a repo that publishes the framework, overridable via `.methodology-profile`); generates HTML dashboard. Place in parent directory above project repos. Python 3 stdlib only, cross-platform. |
-| `tools/test_methodology_dashboard.py` | Functional scoring tests for the health scanner (stdlib `unittest`). **Canonical-only** — not in `bin/_manifest.py`, so adopters do not receive it. Wired into `bin/tests.sh`; it imports only the `tools/` module and byte-compares the `starter-kit/` twin, so running it generates no `starter-kit/__pycache__`. |
-| `tools/test_methodology_trim.py`, `tools/test_context_budget.py`, `tools/test_quality_ratchet.py` | Unit suites for the three distributed gates/tools (stdlib `unittest`). **Canonical-only**; each imports the `starter-kit/` module it tests, so what is tested is what ships. All wired into `bin/tests.sh`. |
+| `tools/methodology_dashboard.py` | Portfolio health scanner — scores activity, testing, docs, CI/CD, methodology (the 2nd/5th dimensions adapt to repo class; see README §Dashboard). |
+| `tools/test_methodology_dashboard.py` | Scoring tests for the scanner (stdlib `unittest`). **Canonical-only**; byte-compares the `starter-kit/` twin; wired into `bin/tests.sh`. |
+| `tools/test_methodology_trim.py`, `test_context_budget.py`, `test_quality_ratchet.py` | Unit suites for the three distributed tools; canonical-only; wired into `bin/tests.sh`. |
 
 ### Workstreams (domain-specific adaptations)
 
@@ -85,11 +85,11 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 
 ## Key Concepts to Preserve When Editing
 
-- **SESSION_RUNNER.md documents 28 failure modes** with specific countermeasures. These are empirically derived from 1100+ sessions — do not remove or weaken them without strong justification. FMs 1–26 must not be renumbered; new FMs append at the end (e.g., FM #24 was appended in v2.3, FM #25 in v2.6, and FM #26 in v2.7; FM #27 was appended after these, not inserted).
+- **SESSION_RUNNER.md documents 28 failure modes** with specific countermeasures, empirically derived from 1100+ sessions — do not remove or weaken them without strong justification. Never renumber: new FMs append at the end (#24 in v2.3, #25 in v2.6, #26 in v2.7, #27 in v3.1, #28 in v3.7).
 - **Phase 0 (Orient) must remain mandatory and blocking** — the most common failure mode is agents skipping orientation and starting work immediately.
 - **"1 and done" rule** — one deliverable per session, then close out. This is structural, not advisory. Since v2.7 the one deliverable MAY be a pre-declared verified vertical slice (issues #20/#21; `SESSION_RUNNER.md` §Vertical Slice Sessions) — the allowance adds a gate and removes no step; one capability never means a second capability.
-- **Ghost session detection and ledger reconciliation** (Phase 0, step 6) exist because crashed sessions that leave no trace — or commits that never reached the `CHANGELOG.md` ledger — cause the next session to work from stale state.
-- **Phase 1B (Claim the Session)** exists for the same reason — writing a stub before technical work ensures even crashed sessions leave evidence.
+- **Ghost session detection and ledger reconciliation** (Phase 0, step 6) exist because crashed sessions and commits that never reached `CHANGELOG.md` leave the next session working from stale state.
+- **Phase 1B (Claim the Session)** exists for the same reason — a stub written before technical work means even a crashed session leaves evidence.
 - **Minimum handoff requirements** (Phase 3D) are non-negotiable: key files with line numbers, gotchas, specific next steps. "Pick next from backlog" is explicitly insufficient.
 - **Plan Mode exit trap** — Plan Mode auto-generates "Implement the following plan" as a preamble. The SESSION_RUNNER explicitly warns this does NOT mean "start coding."
 
