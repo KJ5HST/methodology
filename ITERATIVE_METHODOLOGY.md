@@ -398,6 +398,23 @@ Methodology owns *when and why* to raise the tier (this rule); your agent owns *
 
 ---
 
+## Mechanical Gates Bind Every Actor
+
+> **Enforce quality on the artifact, not on the actor.**
+>
+> A gate that is a question the actor asks itself ("did I verify this?") does not scale under N agents — it multiplies. Ten of the twelve quality gates below are such questions, and a more capable agent or a sharper adversarial reviewer changes the *judge*, not the *class* of gate. Where a rule can be expressed mechanically — a test suite that must pass, a coverage floor, a complexity ceiling, a size budget, a link check, a count that must not drop — it is expressed mechanically, and the mechanical form binds **every** actor: every tier, every agent, every human, every session.
+
+Four consequences, none of them new principles:
+
+1. **Verification a gate expresses is never re-done by judgment and never waived by tier, agent, or human.** The capability-tiered pattern in `SESSION_RUNNER.md` §Vertical Slice Sessions already says this for one case — a lighter tier may build a layer only where an objective gate proves it. This section generalizes it: the same gates for everyone is the rule, not the elective.
+2. **Judgment is reserved for what no gate expresses** — what changed, why, and the risk — and that decision belongs to the stakeholder after implementation as well as before (Principle 3's Present → Implement gate, and its mirror at delivery).
+3. **Automated checks never pass by default or by timeout.** A gate that cannot run reports *unmeasured*, not *pass* (Principle 5).
+4. **Thresholds only tighten.** A threshold that can be lowered under pressure is a suggestion. Loosening one to make a change pass is failure mode #17 in mechanical form and requires plan-mode approval in its own commit (`SAFEGUARDS.md` §Blast Radius Limits).
+
+The methodology recommends; it does not reimplement: it ships no linter, complexity tool, or coverage runner. It ships the *ratchet* — a declared, machine-readable gate manifest per project (`.quality-gates.json`) and a small checker (`quality_ratchet.py`) that refuses a commit loosening any declared threshold and runs the declared gates on demand — and this rule. Which tools produce the numbers is the project's choice (`BOOTSTRAP.md` Step 10). The dashboard reports gate outcomes and loosening history, advisory as always; the gate is the pre-commit check, where it belongs. Ceiling, stated plainly: a gate proves what it measures and nothing else — a coverage floor can be cleared by assertions that assert nothing, so a floor without a faithfulness check beside it (Learning #12) measures effort, not quality.
+
+---
+
 ## The Session Runner
 
 The 6 phases and 9 principles define WHAT to do and WHY. In practice, they need an **operational wrapper** — a cockpit checklist — that ensures they're actually followed. This is the Session Runner (`SESSION_RUNNER.md` in the project root).

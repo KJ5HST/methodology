@@ -52,6 +52,25 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   19,200 + 5,800 → 18,900 + 6,100**: `SAFEGUARDS.md` was pinned at its exact size (5,800/5,800), which would
   have refused the one Blast Radius row D3 adds; 300 tokens move from the runner's margin. `--status` OK,
   `config_defects []`, budget suite 116 → **118** OK.
+- **P1 — prose (checkpoint 2).** **D3** `starter-kit/SAFEGUARDS.md` Blast Radius gains one row: *never loosen a
+  declared quality threshold to make a change pass — loosening requires plan mode approval; tightening never
+  does*. **D4** `ITERATIVE_METHODOLOGY.md` gains §**Mechanical Gates Bind Every Actor** beside §Matching
+  Reasoning Effort to Stakes — enforce on the artifact, not the actor; four consequences (never re-done by
+  judgment or waived by tier; judgment reserved for what no gate expresses, before and after implementation;
+  checks never pass by default or timeout; thresholds only tighten); cites the capability-tiered paragraph
+  rather than duplicating it; states the ceiling (a floor without a faithfulness check measures effort).
+  No principle, phase, or gate added — "9 principles / 6 phases / 12 quality gates" claims re-grepped, true.
+  **D5** `starter-kit/SESSION_RUNNER.md` Phase 3C gains the mechanical branch: *a mechanical learning is a
+  gate, not a row* (Learning #12 generalized from "test" to "gate"; the decay term FM #28 names).
+  **D8** FM #17 gains one clause (loosening a threshold is erosion in mechanical form; `--no-verify` is a
+  recorded bypass, not an exemption) and Degradation Detection gains one row — **FMs 1–28 byte-unchanged,
+  count stays 28** (28 table rows re-counted). **Learning #15** appended to `starter-kit/FRAMEWORK_LEARNINGS.md`
+  (1,331 B, under the 1,500 B row budget; `#14` stays reserved, callout reworded to "rows continue from
+  #15"). **Cost, measured:** the Phase 0 pair is 70,066 B; doubled-file Read reports 49,643 → **24,822
+  tokens, 99.3 % of the read cap** (the tool estimates 18,868 + 5,946 = 24,814 — within 8 tokens of the
+  measurement); the runner sits 32 tokens under its 18,900 ceiling, so the next runner growth must be paid
+  for by a reduction. `bin/check-links` 105 OK; `bin/check-learnings` OK (14 rows, contiguous with #14
+  reserved); `bin/tests.sh` 116/0; dashboard unit 211 OK.
 
 ### 2026-09-15 · [ad hoc] Merged PR #80 — the read-set budgets series (#76–#79)
 
