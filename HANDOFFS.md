@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S18
+date: 2026-09-15
+status: pending
+active_task: Post the PR #80 review findings F1–F6 (from the internal review of 2026-09-14) to the PR as one maintainer comment addressed to rmsharp — F1 the Learnings-payload decision, F2/F3 the two requested fixes, F4–F6 optional — with reproduction commands; internal sections (limits, merge sequence) stay internal. Operator trigger: "Post them". ONE DELIVERABLE (the comment — a non-commit action, recorded here and in the ledger).
+```
+
+```handoff
 session: S17
 date: 2026-09-14
 status: complete

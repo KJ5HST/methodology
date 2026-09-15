@@ -35,6 +35,16 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-09-15 · [ad hoc] Posted the PR #80 review findings to the PR (non-commit action)
+
+- **Action:** one maintainer comment on [PR #80](https://github.com/KJ5HST/methodology/pull/80) carrying the
+  six findings of the 2026-09-14 review (internal, oversight venue): **F1** the Learnings payload —
+  `starter-kit/FRAMEWORK_LEARNINGS.md` ships 46 rows (13 canonical + the fork's #15–#47) while the PR body says
+  rows #1–#13; **F2** the `methodology_trim.py` doc-only exclusion is unguarded at the predicate level (RED-shown);
+  **F3** the shipped root `.context-budget.json` reports the PR's own headline OVER; **F4–F6** optional
+  (two limits on one file; a docstring describing the fork; the `--source=github` wording). Reproduction
+  commands included; nothing merged, nothing changed on the branch. Session S18; comment URL completed at close-out.
+
 ### 2026-09-14 · [ad hoc] Housekeeping — merged branches and stray refs deleted (non-commit actions)
 
 - **Deleted, all verified merged into `main` by `git branch --merged` first:** local `docs/quality-ratchet-plan`,
