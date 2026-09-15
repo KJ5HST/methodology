@@ -47,7 +47,8 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   `experimental/pocock-audit` (17 unmerged commits, 2026-05-02) — both are the maintainer's to decide.
 - **Not done:** no history rewrite. The S16 truncated commits (`356556f`, `ad7bd37`, `ed9ab7e`) stay in
   `main`'s history with the repair `ed98444` on top; removing them would force-push a public branch with a
-  fork downstream and is not a housekeeping call. Session S17; exact ref list re-verified at close-out.
+  fork downstream and is not a housekeeping call. Session S17: claim `b3c9e9d` + the close-out commit; the
+  ref list above is the post-deletion read-back (`git branch -a`: 3 local, 2 remote; #80 OPEN/MERGEABLE).
 
 ### 2026-09-14 · [ad hoc] Shipped `.githooks/commit-msg` — the disclosure gate (FM #16's honesty counterpart)
 
