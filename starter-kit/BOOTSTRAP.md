@@ -310,7 +310,7 @@ The dashboard requires only Python 3 (stdlib, no pip dependencies) and works on 
 
 ---
 
-## Step 10: Set Up Git Hooks (Optional)
+## Step 10: Set Up Git Hooks (Recommended)
 
 The methodology works without hooks, but a `core.hooksPath` configuration can enforce commit discipline:
 
@@ -321,6 +321,22 @@ git config core.hooksPath .githooks
 **Pre-commit hooks (recommended).** A pre-commit hook that runs the project's formatter, linter, type-checker, and fast tests on staged changes catches the same defects CI catches, but at commit time instead of after the fact — shifting failures left and reducing the ratio of red CI runs to green ones. The dashboard scores CI/CD presence (workflow files exist on the remote side); pre-commit is the complementary local-side lever the dashboard does not measure. Pick a hook runner that fits your stack — `pre-commit` (Python, polyglot), Husky + lint-staged (Node), `lefthook` (Go), `cargo-husky` (Rust), Maven Spotless plugin or Gradle git-hooks plugins (JVM), or a hand-written shell script in `.githooks/pre-commit` for projects that want zero new dependencies. The methodology is intentionally tool-agnostic here; what matters is that *some* check runs before the commit, not which one. Pocock's `/setup-pre-commit` is one option for Node/Husky projects — see [`RECOMMENDED_SKILLS.md`](RECOMMENDED_SKILLS.md).
 
 **Ledger co-staging hook (recommended).** The one hook the methodology *does* ship is narrow and single-purpose: [`.githooks/pre-commit`](https://github.com/KJ5HST/methodology/blob/main/.githooks/pre-commit) refuses a commit that changes tracked content unless `CHANGELOG.md` is co-staged — the mechanical form of the Phase 3F close-out gate (failure mode #27, "unrecorded action"). Enable it with the `core.hooksPath` line above after copying it into your `.githooks/`; bypass a single commit with `git commit --no-verify` (Phase 0 reconcile-on-read backfills anything bypassed, so the ledger stays true on the next Orient); opt out permanently by deleting `CHANGELOG.md` and recording that in `CLAUDE.md`. It never blocks a repo that has no ledger yet, and it skips merges/rebases. Details in [`SAFEGUARDS.md`](SAFEGUARDS.md) → Commit Discipline → "Ledger Co-Staging Hook."
+
+**Quality ratchet (recommended).** The second hook the methodology ships is the same shape — narrow, single-purpose, bypassable on the record. `quality_ratchet.py` (synced to your root) holds the thresholds you declare in `.quality-gates.json` (seeded empty) and refuses a commit that *loosens* one: a floor lowered, a ceiling raised, a gate removed. Tightening and adding never need approval; loosening is a plan-mode decision committed with `--no-verify`, which the hook prints as a recorded bypass ([`SAFEGUARDS.md`](SAFEGUARDS.md) §Blast Radius Limits; [`ITERATIVE_METHODOLOGY.md`](docs/methodology/ITERATIVE_METHODOLOGY.md) §Mechanical Gates Bind Every Actor). **Start where you are:** run each measurement once, declare the gate at the value it reports, then let the ratchet hold it — a floor copied from someone else's project is false at install and teaches bypass on day one. `python3 quality_ratchet.py --run` measures every declared gate, writes `.quality-gates-results.json` (add it to `.gitignore` unless you want every clone to score the last run) and prints a summary line the close-out receipt cites (`HANDOFFS.md`, `runtime_smoke`). Install with `python3 quality_ratchet.py install-hook`; if you already run the ledger hook, chain the ratchet after it — one line before the ledger hook's final `exit`:
+
+```sh
+python3 "$(git rev-parse --show-toplevel)/quality_ratchet.py" --precommit || exit $?
+```
+
+The methodology ships the ratchet, not the ruler: which tool produces each number is yours to choose, and any command whose output carries a number (or whose exit code is the verdict) can be a gate.
+
+| Stack | Coverage floor (`min`) | Complexity / lint ceiling (`max`) | Exit-code gate (`max 0`) |
+|-------|------------------------|-----------------------------------|--------------------------|
+| Python | `coverage report` → extract `TOTAL.*?(\d+)%` | `radon cc -a .` → average; `ruff check` findings | `pytest -q`, `mypy` |
+| Node | `c8` / `nyc report` → `All files.*?(\d+\.?\d*)` | `eslint` with `complexity` rule | `npm test`, `tsc --noEmit` |
+| Rust | `cargo llvm-cov --summary-only` | `cargo clippy -- -D warnings` (exit code) | `cargo test` |
+| JVM | JaCoCo `jacoco.csv` totals | PMD / Checkstyle violation counts | `mvn -q test`, `gradle test` |
+| Docs | link-check pass count | `check-links` broken links | `quarto render`, `pdffonts` (render-dep) |
 
 **Close-out completeness hook (optional, agent-specific).** The ledger hook guards the *action ledger*; the harder-to-see gap is a skipped *handoff report*. The durable fix ships in `SESSION_RUNNER.md` (the Phase 3D `HANDOFFS.md` receipt + Phase 0 reconcile). For an in-session catch — before the agent falls silent — an adopter may wire their agent harness's session-end / "stop" hook to grep `HANDOFFS.md` for a trailing `status: pending` (or run the canonical-only `bin/check-handoff`, copied in) and re-prompt to finish close-out. This is a *recommendation*, not a shipped hook: it is agent-specific harness config, soft-remind not hard-block. Details in [`SAFEGUARDS.md`](SAFEGUARDS.md) → Commit Discipline → "Close-Out Completeness Hook."
 

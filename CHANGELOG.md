@@ -97,6 +97,16 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   `bin/sync` into a scratch tree installs both, `bin/status` reports `tracked current` / `seed present`;
   `bin/tests.sh` 115/1 — **Test 9 by construction** (`--source=github` reads `main`, which lacks the new
   starter-kit file until merge; the #80 shape).
+- **P2c — install path and shell checks (checkpoint 5).** `bin/tests.sh` **116 → 128** checks: the unit suite
+  wired in beside the budget suite, plus a `quality_ratchet.py` block that syncs a scratch adopter tree,
+  declares one gate, installs the hook, and proves through real `git commit` that a loosened threshold is
+  refused, `--no-verify` bypasses it, a tightening passes, removing the gate is refused, and a re-sync
+  leaves the adopter's manifest alone — **RED first**: with `compare()` neutralized, the loosening
+  committed. `starter-kit/BOOTSTRAP.md` Step 10 retitled *(Optional) → (Recommended)* and gains the
+  ratchet paragraph (start where you are; chain after the ledger hook with one line; the results file and
+  the receipt citation) plus a tool-agnostic per-stack table (Python/Node/Rust/JVM/Docs — the methodology
+  ships the ratchet, not the ruler). `.gitignore` gains `.quality-gates-results.json` (**§8.2**: gitignored
+  by default, with the reason). `bin/check-links` 105 → **107** (both new adopter-layout links resolve).
 
 ### 2026-09-15 · [ad hoc] Merged PR #80 — the read-set budgets series (#76–#79)
 

@@ -251,6 +251,13 @@ if python3 "$METHODOLOGY/tools/test_context_budget.py" >/dev/null 2>&1; then
 else
     fail "context budget gate unit tests failed"
 fi
+# The ratchet is the third shipped executable; same argument. Its --selftest below covers the
+# install/hook surface in a scratch repo; the unit suite covers the arithmetic every rule rests on.
+if python3 "$METHODOLOGY/tools/test_quality_ratchet.py" >/dev/null 2>&1; then
+    pass "quality ratchet unit tests green"
+else
+    fail "quality ratchet unit tests failed"
+fi
 
 echo "== Test 19: dashboard twins byte-identical + same DASHBOARD_VERSION =="
 diff -q "$METHODOLOGY/tools/methodology_dashboard.py" "$STARTER/methodology_dashboard.py" >/dev/null \
@@ -678,6 +685,57 @@ BEFORE="$(md5 -q "$P/.context-budget.json" 2>/dev/null || md5sum "$P/.context-bu
 AFTER="$(md5 -q "$P/.context-budget.json" 2>/dev/null || md5sum "$P/.context-budget.json" | cut -d" " -f1)"
 [ "$BEFORE" = "$AFTER" ] && pass "re-sync does not clobber an adopter-owned config" \
     || fail "re-sync overwrote the adopter's .context-budget.json"
+rm -rf "$P"
+
+echo "== Test: quality_ratchet.py =="
+QR="$STARTER/quality_ratchet.py"
+[ -x "$QR" ] && pass "quality_ratchet.py is executable" || fail "quality_ratchet.py not executable"
+python3 "$QR" --selftest >/dev/null 2>&1 \
+    && pass "quality_ratchet --selftest: every gate observed failing and passing" \
+    || fail "quality_ratchet --selftest reported a failing gate"
+python3 -c "import json,sys; d=json.load(open('$STARTER/quality-gates.json')); sys.exit(0 if d['gates']==[] else 1)" 2>/dev/null \
+    && pass "seed .quality-gates.json parses as JSON and starts empty (plan §8.4)" \
+    || fail "seed quality-gates.json is invalid or not empty"
+grep -q '"--force" in args and' "$QR" && fail "quality_ratchet.py honours --force" \
+    || pass "quality_ratchet.py has no --force escape hatch (it refuses the flag by name)"
+
+# The ratchet through a REAL install: sync a scratch adopter tree, declare one gate, install the
+# hook, then try to commit a loosened threshold. Refused without --no-verify; passes with it
+# (recorded, not exempt); a tightening passes without it. The seed must survive a re-sync.
+P="$(mktemp_project)"
+git -C "$P" config user.email t@t; git -C "$P" config user.name t
+"$BIN/sync" "$P" --mode=commit --source=local >/dev/null 2>&1
+[ -f "$P/quality_ratchet.py" ] && pass "sync distributes quality_ratchet.py" \
+    || fail "sync did not distribute quality_ratchet.py"
+[ -f "$P/.quality-gates.json" ] && pass "sync seeds .quality-gates.json" \
+    || fail "sync did not seed .quality-gates.json"
+printf '{"version":1,"gates":[{"name":"floor","direction":"min","threshold":80}]}\n' > "$P/.quality-gates.json"
+git -C "$P" add -A >/dev/null 2>&1 && git -C "$P" commit -q -m "declare" >/dev/null 2>&1
+(cd "$P" && python3 quality_ratchet.py install-hook >/dev/null 2>&1)
+printf '{"version":1,"gates":[{"name":"floor","direction":"min","threshold":70}]}\n' > "$P/.quality-gates.json"
+git -C "$P" add .quality-gates.json
+git -C "$P" commit -q -m "loosen" >/dev/null 2>&1 \
+    && fail "a loosened threshold was committed through the installed hook" \
+    || pass "a loosened threshold cannot be committed without --no-verify"
+git -C "$P" commit -q --no-verify -m "loosen anyway" >/dev/null 2>&1 \
+    && pass "--no-verify bypasses the ratchet (recorded in history, not exempt)" \
+    || fail "--no-verify did not bypass the ratchet"
+printf '{"version":1,"gates":[{"name":"floor","direction":"min","threshold":85}]}\n' > "$P/.quality-gates.json"
+git -C "$P" add .quality-gates.json
+git -C "$P" commit -q -m "tighten" >/dev/null 2>&1 \
+    && pass "a tightened threshold commits without --no-verify" \
+    || fail "a tightened threshold was refused"
+printf '{"version":1,"gates":[]}\n' > "$P/.quality-gates.json"
+git -C "$P" add .quality-gates.json
+git -C "$P" commit -q -m "remove" >/dev/null 2>&1 \
+    && fail "removing a declared gate was committed through the hook" \
+    || pass "removing a declared gate is refused like a loosening"
+git -C "$P" checkout -q -- .quality-gates.json
+BEFORE="$(md5 -q "$P/.quality-gates.json" 2>/dev/null || md5sum "$P/.quality-gates.json" | cut -d" " -f1)"
+"$BIN/sync" "$P" --mode=commit --source=local >/dev/null 2>&1
+AFTER="$(md5 -q "$P/.quality-gates.json" 2>/dev/null || md5sum "$P/.quality-gates.json" | cut -d" " -f1)"
+[ "$BEFORE" = "$AFTER" ] && pass "re-sync does not clobber an adopter-owned gate manifest" \
+    || fail "re-sync overwrote the adopter's .quality-gates.json"
 rm -rf "$P"
 
 echo ""
