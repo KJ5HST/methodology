@@ -85,6 +85,18 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   canonical-only `tools/test_quality_ratchet.py` — **33 tests** (pure ratchet arithmetic; config defects;
   measurement incl. the index-not-worktree rule and a 127 exit for a missing command; results/status;
   precommit through git; stdlib/no-force/selftest/seed invariants).
+- **P2b — distribution (checkpoint 4).** `bin/_manifest.py` **27 → 29** rows (`quality_ratchet.py` TRACKED,
+  `.quality-gates.json` SEED). Adding the rows with nothing else changed turned **6 guard tests RED** — the
+  F2-generalized installed-file test (by name, and end to end for both files), the checklist
+  scored-or-exempt invariant, and the exclusion-matches-manifest cross-reference — exactly the guards
+  v3.6/v3.7/#80 built for this moment. Both scanner twins gain the two names in
+  `FRAMEWORK_INSTALLED_SOURCE` (in manifest order — the cross-reference is order-sensitive) with their own
+  `_FRAMEWORK_FILE_SIGNATURES` entries (the tool's `VERSION` regex + 4 signatures; the seed's `_example`
+  keys), so a 494-LOC install cannot flip a document project to `code` (PR #71's lesson, measured by the
+  real-file test); `CHECKLIST_EXEMPT` records why neither is scored. Twins byte-identical; 211 OK;
+  `bin/sync` into a scratch tree installs both, `bin/status` reports `tracked current` / `seed present`;
+  `bin/tests.sh` 115/1 — **Test 9 by construction** (`--source=github` reads `main`, which lacks the new
+  starter-kit file until merge; the #80 shape).
 
 ### 2026-09-15 · [ad hoc] Merged PR #80 — the read-set budgets series (#76–#79)
 

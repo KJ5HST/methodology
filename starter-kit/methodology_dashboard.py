@@ -358,7 +358,8 @@ _VERSION_RE = re.compile(r'''^DASHBOARD_VERSION\s*=\s*["']([^"']+)["']''', re.MU
 # match — exactly the silent drift the paragraph above warns about, caught by the
 # machine-checkable cross-reference test below, not by inspection.
 FRAMEWORK_INSTALLED_SOURCE = ("methodology_dashboard.py", "methodology_trim.py",
-                              "context_budget.py", ".context-budget.json")
+                              "context_budget.py", "quality_ratchet.py",
+                              ".context-budget.json", ".quality-gates.json")
 
 # The markdown half of the same problem, and the mirror of the defect above. `bin/sync` also
 # installs 23 markdown files, which on its own satisfies detect_doc_only's corpus
@@ -518,6 +519,34 @@ _FRAMEWORK_FILE_SIGNATURES = {
             "fixed_harness_tokens",
             "growth_run",
             "calibrate_against",
+        ),
+        "min_hits": 2,
+    },
+    "quality_ratchet.py": {
+        # The quality-ratchet gate (quality-ratchet plan D2): 494 LOC of python installed at the
+        # adopter root by bin/sync — the same class as context_budget.py above, and the same
+        # per-file signature discipline (PR #71: a name in the tuple whose content is checked
+        # against the SCANNER's signatures is never excluded). Its own version constant is
+        # VERSION, like context_budget.py's.
+        "version_re": re.compile(r'''^VERSION\s*=\s*["']([^"']+)["']''', re.MULTILINE),
+        "signatures": (
+            "quality_ratchet.py — declared quality thresholds",
+            "CONFIG_NAME",
+            "def precommit",
+            "def run_gates",
+        ),
+        "min_hits": 2,
+    },
+    ".quality-gates.json": {
+        # Config, like .context-budget.json above — same structural unreachability, same reason
+        # for carrying a real signature set anyway. The seed's `_example` gate carries these keys
+        # even while `gates` is empty, so a freshly seeded file matches.
+        "version_re": None,
+        "signatures": (
+            "results_file",
+            "\"direction\"",
+            "\"threshold\"",
+            "quality_ratchet.py",
         ),
         "min_hits": 2,
     },

@@ -44,12 +44,14 @@ DISTRIBUTION = [
     ("starter-kit/methodology_dashboard.py", "methodology_dashboard.py", TRACKED),
     ("starter-kit/methodology_trim.py", "methodology_trim.py", TRACKED),
     ("starter-kit/context_budget.py", "context_budget.py", TRACKED),
+    ("starter-kit/quality_ratchet.py", "quality_ratchet.py", TRACKED),
     # seed-once root-files: created if absent, then adopter-owned (never clobbered)
     ("starter-kit/SESSION_NOTES.md", "SESSION_NOTES.md", SEED),
     ("starter-kit/CHANGELOG.md", "CHANGELOG.md", SEED),
     ("starter-kit/HANDOFFS.md", "HANDOFFS.md", SEED),
     ("starter-kit/ROADMAP.md", "ROADMAP.md", SEED),
     ("starter-kit/context-budget.json", ".context-budget.json", SEED),
+    ("starter-kit/quality-gates.json", ".quality-gates.json", SEED),
     # framework docs -> docs/methodology/
     ("ITERATIVE_METHODOLOGY.md", "docs/methodology/ITERATIVE_METHODOLOGY.md", TRACKED),
     ("HOW_TO_USE.md", "docs/methodology/HOW_TO_USE.md", TRACKED),

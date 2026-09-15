@@ -414,6 +414,13 @@ CHECKLIST_EXEMPT = {
                          "session-operating discipline this checklist measures was followed",
     ".context-budget.json": "SEED config for the context-budget gate above; scored the same way "
                             "for the same reason, not a session-operating artifact",
+    "quality_ratchet.py": "the quality-ratchet gate (quality-ratchet plan D2), same class as "
+                          "context_budget.py: sync installs it, so its presence measures sync, "
+                          "not adoption; whether a project DECLARES gates is answered by the "
+                          "dashboard's gate metrics, not by the compliance checklist",
+    ".quality-gates.json": "SEED manifest for the ratchet above — starts empty by decision "
+                           "(plan §8.4), so its presence proves only that sync ran; a declared "
+                           "gate count and its outcomes are reported as risks/points instead",
 }
 
 
