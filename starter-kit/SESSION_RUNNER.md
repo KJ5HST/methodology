@@ -220,7 +220,7 @@ Capture what this session learned so the next session inherits it. Always update
 
 - **Adopter project** (you copied this `SESSION_RUNNER.md` from the methodology repo): put project learnings in your `CLAUDE.md` → **Project-Specific Methodology Adaptations** → **Project-specific Learnings** subsection. Do NOT edit the framework's own learnings table in [`FRAMEWORK_LEARNINGS.md`](FRAMEWORK_LEARNINGS.md) — like this file it is synced from canonical and must stay byte-identical, or local edits will block future syncs (see BOOTSTRAP, "Customizations Go in CLAUDE.md, Not in Synced Files"). Agents read `CLAUDE.md` at session start, so a learning recorded there is applied on top of the base protocol.
 - **Canonical methodology repo** (you are dogfooding the framework on itself): record framework-level learnings by appending a new row to the table in [`FRAMEWORK_LEARNINGS.md`](FRAMEWORK_LEARNINGS.md), the sibling this file ships alongside. This repo has no `CLAUDE.md` Adaptations section because that file is its learnings home; the rows there are real framework learnings, not placeholders. Append new rows — do not edit or overwrite existing ones.
-- **A mechanical learning is a gate, not a row.** If what you learned is a mechanical invariant — a count that must not drop, a size that must not grow, a check that must pass — declare it as a gate (a `.quality-gates.json` entry, or a test) and write the row or Adaptation as a one-line pointer to it. A row is read; a gate refuses. This is Learning #12 generalized from "test" to "gate", and it is the decay term failure mode #28 says close-out lacks: a gate does not grow the mandatory read.
+- **A mechanical learning is a gate, not a row.** A mechanical invariant — a count that must not drop, a size that must not grow, a check that must pass — is declared as a gate (a `.quality-gates.json` entry, or a test); the row or Adaptation is a one-line pointer to it. A row is read; a gate refuses. Learning #12 generalized from "test" to "gate" — the decay term failure mode #28 says close-out lacks.
 
 Capture, wherever it lands:
 
@@ -271,6 +271,8 @@ Complete this session's ` ```handoff ` block in `HANDOFFS.md` (opened as a `stat
 Run `/verify` (Claude Code built-in) for the smoke test, or `/run` to drive the application directly — see [`RECOMMENDED_SKILLS.md`](RECOMMENDED_SKILLS.md). When the skills are unavailable, the rule applies manually: start the application, scan startup logs for errors or unexpected fallback paths, confirm your deliverable is active and not silently overridden.
 
 If you cannot runtime-verify (requires hardware, external service, CI), state this explicitly in session notes. Do not silently skip. A self-assessment that notes "no runtime verification" without treating it as a defect is failure mode #24 (build-passes-ship-it) in action.
+
+Where `.quality-gates.json` declares gates, `quality_ratchet.py --run` is this step's mechanical half; cite its summary line in the receipt.
 
 ### 3F: Commit
 
@@ -360,7 +362,7 @@ These are documented tendencies. The agent must actively guard against them.
 | Resident context is mostly process history, and states what the project is *for* only in passing | Failure mode #28 is active in its harder-to-see form | Restore the statement of purpose first, from the requirements document, and fence it against future cuts. Under low-information direction a session picks its task from resident context; if that context is overwhelmingly past failures, the work drifts to process. |
 | A health check has reported the same finding for several consecutive sessions and nothing has changed | The signal is not missing — nothing gates on it | Do not add a second report. Add a gate: something that fails, refuses, or blocks, with the cost of overriding it printed at the moment of override. |
 | A close-out appends to a mandated-read file, and no close-out has ever removed anything from one | The protocol has a compounding term and no decay term | Reduction is part of close-out, not a separate project. If nothing can be removed this session, say so explicitly in the handoff rather than leaving it unsaid. |
-| A declared quality threshold was loosened — or a gate removed — in the same commit that needed it to pass | Failure mode #17 (protocol erosion) in mechanical form: gate erosion | Revert the loosening; thresholds only tighten (`SAFEGUARDS.md` Blast Radius). A threshold that is genuinely wrong changes by plan-mode approval, in its own commit, with the reason in the ledger. |
+| A declared quality threshold was loosened — or a gate removed — in the same commit that needed it to pass | Failure mode #17 (protocol erosion) in mechanical form: gate erosion | Revert it; thresholds only tighten (`SAFEGUARDS.md` Blast Radius). A genuinely wrong threshold changes by plan-mode approval, in its own commit, reason in the ledger. |
 
 **If you detect 2+ warning signs: STOP.** Re-read this document from the top. Do not continue until you've re-internalized the protocol. The cost of pausing to re-read is 2 minutes. The cost of a ghost session or failed delivery is the user's trust.
 

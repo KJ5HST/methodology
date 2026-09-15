@@ -151,6 +151,16 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   `quality-gates.json`; `tools/` gains the three canonical-only unit suites), `CLAUDE.md` (starter-kit and
   tools tables), `docs/tutorials/T1_setup.md` (the expected-result file list and the seeds), and
   `HOW_TO_USE.md`'s Phase 3C line (the mechanical branch). No count claim moved. `bin/check-links` 107 OK.
+- **Self-review (checkpoints 10–11), before the PR.** (a) The gate run is now a named close-out step everywhere
+  close-out is enumerated (Learning #8): `SESSION_RUNNER.md` 3E (one line — `--run` is the smoke test's
+  mechanical half; cite its summary line), `ITERATIVE_METHODOLOGY.md` Phase 6 step 8 (c), `HOW_TO_USE.md` 3E.
+  (b) Learning #15's *"26 of 28 failure modes bind by text alone"* put in the past tense — this ratchet is
+  what changes it. (c) **Two budget consequences, paid by reduction, not by a raised ceiling** (the rule this
+  PR adds): the P4c table rows had pushed `CLAUDE.md` **984 B over its arrival-size pin** (59,168 B — the F3
+  class flagged on #80); six existing rows/bullets were tightened and it reads **59,153 B, 15 under**;
+  the runner's two new lines were shaved so it sits at 18,878 / 18,900 tokens. Measured pair after the
+  trims: doubled Read **49,683 → 24,842 tokens** (99.4 % of the cap; tool estimate 24,824, within 18).
+  `context_budget.py --status` OK, exit 0.
 
 ### 2026-09-15 · [ad hoc] Merged PR #80 — the read-set budgets series (#76–#79)
 
