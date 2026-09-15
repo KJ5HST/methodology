@@ -59,7 +59,7 @@ what_was_done: <what you did, including a commit sha — or the literal `pending
 next_steps: <specific and actionable; never "pick next from backlog">
 key_files: <each entry carries a path:line token, e.g. SessionManager.java:245>
 gotchas: <traps the next session should watch for>
-runtime_smoke: <a run result, or "n/a — docs-only", or "impossible: <reason>">
+runtime_smoke: <a run result, or "n/a — docs-only", or "impossible: <reason>"; where .quality-gates.json declares gates, the `quality_ratchet: N/M pass · …` summary line of this session's --run>
 changelog_ref: <PR #N, a short-sha, or CHANGELOG.md "<its ### heading>" — never a bare line number, which decays once the ledger is trimmed>
 commit: <short-sha — or the literal `pending`>
 ```
@@ -154,6 +154,20 @@ What is specific to *this* file, and gets receipts wrong if assumed:
 The shared key across all three is the commit sha (`changelog_ref` / `commit` here). This file
 **distills** the handoff; it does not copy the scratchpad. The belongs-here test: *would the next
 session need this block to continue the work without re-reading the whole repo?*
+
+## Citing the gate run — honesty made countable
+
+Where the project declares quality gates (`.quality-gates.json` with at least one gate), a
+`status: complete` receipt cites the session's own gate run: paste the summary line
+`quality_ratchet.py --run` prints (`quality_ratchet: N/M pass · F fail · U unmeasured · results
+<sha12> · manifest <sha12>`) into `runtime_smoke` (or `what_was_done`). The canonical-only
+`bin/check-handoff` lints the **newest** receipt for that token when a manifest with gates is present;
+the next session's Phase 0 reconcile compares the cited `results` hash and counts against the current
+`.quality-gates-results.json` (or re-runs `--run`) and treats a contradiction — a receipt claiming
+`6/6 pass` over results that say otherwise — as the same class of finding as an unrecorded commit.
+Ceiling, stated as v3.3 stated it: the lint checks the citation's **structure**, the reconcile checks
+its **counts**; neither reaches the truth of anything no gate expresses. Receipts written before the
+manifest existed are not re-judged.
 
 ---
 
