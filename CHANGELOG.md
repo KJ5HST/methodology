@@ -92,6 +92,25 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   leak check for private-correspondence phrasing, internal-only paths, project names and brand names: 0 hits;
   `bin/check-links` OK (83/21), `bin/check-handoff --allow-pending` OK.
 
+### 2026-09-15 · [ad hoc] PR #80 review F1 (a), step 2: `FRAMEWORK_LEARNINGS.md` ships rows 1–13 and the reserved `#14`, as this PR's description says
+
+- **Change:** rows #15–#47 — 33 learnings from the contributor's fork, 32 of them citing fork sessions —
+  leave the distributed `starter-kit/FRAMEWORK_LEARNINGS.md` (56,673 → 13,983 B). Rows 1–13 are
+  byte-identical to what this PR carried. The `#14` callout stays, reworded because no row 15 exists now:
+  the next row appended is `#15`, and its two sentences about fork sessions S34 and S35 are gone.
+  `bin/check-learnings`' comment quoting the old callout follows it. The fork keeps its rows in its own
+  copy; any of them can come upstream later, one PR at a time.
+- **Why:** F1 of the review ([comment](https://github.com/KJ5HST/methodology/pull/80#issuecomment-5674670153)),
+  option (a), the reviewer's default, taken by the contributor: the canonical numbered set grows one row
+  at a time, and this PR's description says 13 rows.
+- **Placed** above step 1, with this PR's own entries.
+- **Verified:** `bin/check-learnings` exit 0 — *"13 Learning row(s), contiguous 1..13; all citations
+  resolve"*; a `Learning #20` planted in `starter-kit/SAFEGUARDS.md` is caught (exit 1, *"cites Learning
+  #20, which does not exist"*) and the restored tree passes. `bin/check-links` OK (105 links, 23 files);
+  `tools/test_methodology_dashboard.py` 211 OK; `context_budget.py --status` reports the file `ok` at
+  13,983 of 73,728 B.
+- **Commit:** this commit, on `read-set-budgets` (PR #80)
+
 ### 2026-09-15 · [ad hoc] PR #80 review F1 (a), step 1: citations of Learnings past #13 now state their rule, before the table keeps only rows 1–13
 
 - **Change:** comments and two docstrings, in three files; no behaviour changes. The review of this PR

@@ -66,9 +66,9 @@ TABLE_HEADER_RE = re.compile(
     r"^\s*\|\s*#\s*\|\s*Learning\s*\|\s*Source\s*\|\s*When to Apply\s*\|\s*$"
 )
 
-# A number this file's own prose explicitly reserves — e.g. this fork's
-# `` `#14` is reserved, and the gap between 13 and 15 is deliberate `` callout,
-# held by an unmerged branch's decision so a later append cannot collide with it.
+# A number this file's own prose explicitly reserves — e.g. the Learnings file's
+# `` `#14` is reserved `` callout, held by an unmerged branch's decision so a later
+# append cannot collide with it.
 # A reserved gap is not a defect: it is intentional, and the contiguity check must
 # not flag it as a missing row.
 RESERVED_RE = re.compile(r"`#(\d+)`\s+is reserved")
