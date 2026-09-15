@@ -71,6 +71,20 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   measurement); the runner sits 32 tokens under its 18,900 ceiling, so the next runner growth must be paid
   for by a reduction. `bin/check-links` 105 OK; `bin/check-learnings` OK (14 rows, contiguous with #14
   reserved); `bin/tests.sh` 116/0; dashboard unit 211 OK.
+- **P2a — the tool (checkpoint 3).** New `starter-kit/quality_ratchet.py` (**D2**; 494 lines, stdlib only, no
+  `--force`): `--precommit` refuses a staged `.quality-gates.json` whose thresholds are looser than `HEAD`'s
+  (a `min` lowered, a `max` raised, a gate removed, a direction flipped); tightening and adding always pass;
+  a changed `command`/`extract` warns (the ratchet holds thresholds, not commands). `--run` executes each
+  declared gate (regex `extract` → the number; no `extract` → the exit code), writes a results file
+  (`.quality-gates-results.json`, hash-stamped, time-independent hash) and prints a **citable summary line**
+  (`quality_ratchet: N/M pass · F fail · U unmeasured · results <sha12> · manifest <sha12>`); a gate with
+  no command is **unmeasured, never pass** (exit 1). `--status`, `--selftest` (17 checks, each observed
+  failing and passing, incl. the installed hook refusing a loosening through real `git commit`),
+  `install-hook` (honours `core.hooksPath`; prints the chain line for a foreign hook). New
+  `starter-kit/quality-gates.json` seed (**§8.4 empty**, with the schema and one valid `_example`). New
+  canonical-only `tools/test_quality_ratchet.py` — **33 tests** (pure ratchet arithmetic; config defects;
+  measurement incl. the index-not-worktree rule and a 127 exit for a missing command; results/status;
+  precommit through git; stdlib/no-force/selftest/seed invariants).
 
 ### 2026-09-15 · [ad hoc] Merged PR #80 — the read-set budgets series (#76–#79)
 
