@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S17
+date: 2026-09-14
+status: pending
+active_task: Repository housekeeping after the day's four sessions — delete provably merged local and remote branches (PR heads left behind by #73, #74, #81 and older merged fix branches), the stray `pr/63` ref, and the local tracking copy of `read-set-budgets` (its remote is PR #80's head and stays); keep the two unmerged local branches and report them. No history rewrite. ONE DELIVERABLE (the cleanup, recorded here because branch deletion leaves no commit).
+```
+
+```handoff
 session: S16
 date: 2026-09-14
 status: complete

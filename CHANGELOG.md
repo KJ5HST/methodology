@@ -35,6 +35,20 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-09-14 · [ad hoc] Housekeeping — merged branches and stray refs deleted (non-commit actions)
+
+- **Deleted, all verified merged into `main` by `git branch --merged` first:** local `docs/quality-ratchet-plan`,
+  `feat/context-budget`, `feature/protocols-as-first-class-upstream`, `fix/issue-32-phase2-link-reconciliation`,
+  `fix/issue-32-phase3-sync-coverage`, `fix/issue-32-phase4-status-per-file`, `fix/issue-36-check-links-no-mutate`;
+  remote `origin/docs/quality-ratchet-plan` (#81), `origin/fix/issue-67-stale-version-remedy` (#73),
+  `origin/release/v3.7` (#74); the stray `refs/remotes/pr/63` (merged long ago). Also the local tracking copy
+  of `read-set-budgets` created in S15 — `origin/read-set-budgets` is PR #80's head and is untouched.
+- **Kept, deliberately:** `docs/operator-gated-review-plan` (3 unpushed commits; reserves Learning #14) and
+  `experimental/pocock-audit` (17 unmerged commits, 2026-05-02) — both are the maintainer's to decide.
+- **Not done:** no history rewrite. The S16 truncated commits (`356556f`, `ad7bd37`, `ed9ab7e`) stay in
+  `main`'s history with the repair `ed98444` on top; removing them would force-push a public branch with a
+  fork downstream and is not a housekeeping call. Session S17; exact ref list re-verified at close-out.
+
 ### 2026-09-14 · [ad hoc] Shipped `.githooks/commit-msg` — the disclosure gate (FM #16's honesty counterpart)
 
 - **Change:** new `.githooks/commit-msg` (canonical-only, like the ledger hook beside it — `.githooks/`
