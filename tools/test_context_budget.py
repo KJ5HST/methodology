@@ -345,6 +345,16 @@ class TestFitGateEndToEnd(unittest.TestCase):
         if not cfgp.exists():
             self.skipTest("this repo has no .context-budget.json")
         self.cfg = json.loads(cfgp.read_text())
+        # "Any transcript exists" is not "enough to fit". calibrate() refuses below its own
+        # minimum (4 usable sessions; 3 sizes in history) and prints "not enough" — on a machine
+        # with one or two transcripts for this path both tests below RAN and FAILED against
+        # that message, while a worktree (different slug) skipped and a well-used clone passed.
+        # Ask the tool rather than re-deriving its rule here: a probe at an impossible floor
+        # either reaches the fit (and refuses the constant) or stops short of it.
+        rc, out = self._run(1.01)
+        if "not enough" in out:
+            self.skipTest("transcripts present but below calibrate()'s fit minimum: "
+                          + out.strip().splitlines()[-1])
 
     def _run(self, floor):
         import contextlib, io
@@ -1217,6 +1227,54 @@ class TestPrecommitClassArm(unittest.TestCase):
             cfg = self._repo(d, 600, 600)
             cfg["classes"]["pair"].pop("total_bytes")
             self.assertEqual(cb.precommit(d, cfg), cb.CLEAN)
+
+
+class TestThisRepoReadSetPartition(unittest.TestCase):
+    """The repo's OWN config declares the Phase 0 mandatory-read pair in TOKENS, one ceiling per
+    file, and the two are meant to PARTITION the 25,000-token read cap: the pair fits one Read
+    only if the per-file ceilings sum to no more than the cap. Nothing in the tool holds that
+    sum — config_defects() checks each max_tokens against the cap singly — and the byte class
+    ceiling that used to guard it (redundant by construction while the partition held) was
+    dropped in PR #80's F3 fix. So the invariant lived in prose. Re-partitioning "by hand", which
+    the config itself instructs when read_cap_tokens changes, had no check to fail (PR #80
+    re-review, G1). RED first: with SESSION_RUNNER.md's ceiling raised 19,200 -> 22,000 the tool
+    reported OK, config_defects [], and this suite passed 116/116."""
+
+    def setUp(self):
+        cfgp = REPO / ".context-budget.json"
+        if not cfgp.exists():
+            self.skipTest("this repo has no .context-budget.json")
+        self.cfg = json.loads(cfgp.read_text())
+
+    def _members_by_class(self):
+        out = {}
+        for spec in self.cfg.get("files", []):
+            if spec.get("max_tokens") is not None:
+                out.setdefault(spec.get("class"), []).append(spec)
+        return out
+
+    def test_whole_read_class_token_ceilings_partition_the_read_cap(self):
+        cap = int(self.cfg.get("read_cap_tokens", cb.READ_CAP_TOKENS))
+        checked = 0
+        for cls, members in self._members_by_class().items():
+            if cls not in cb.WHOLE_READ_CLASSES or len(members) < 2:
+                continue
+            total = sum(int(m["max_tokens"]) for m in members)
+            self.assertLessEqual(
+                total, cap,
+                f"class {cls!r}: per-file max_tokens sum to {total:,} > the {cap:,}-token read "
+                f"cap ({', '.join(m['path'] + '=' + str(m['max_tokens']) for m in members)}) — "
+                f"every member can pass its own ceiling while the pair no longer fits one Read")
+            checked += 1
+        # Presence control: the assertion above is vacuous if no class qualifies. This repo's
+        # read-set pair is the reason the test exists, so it must have been examined.
+        self.assertGreaterEqual(checked, 1, "no whole-read class with >= 2 token-ceilinged "
+                                            "members found — the partition was not checked")
+
+    def test_the_read_set_pair_is_the_class_examined(self):
+        members = self._members_by_class().get("read-set", [])
+        self.assertEqual(sorted(m["path"] for m in members),
+                         ["starter-kit/SAFEGUARDS.md", "starter-kit/SESSION_RUNNER.md"])
 
 
 class TestReserveIdentity(unittest.TestCase):

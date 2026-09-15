@@ -42,6 +42,16 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   checkpoint commit per layer with the full matrix at each boundary, and open a PR for review. Phases 5
   (adopter dogfood) and 6 (release) are separate sessions by the plan's own text. Session S20; the
   checkpoint list and the PR number are completed at close-out.
+- **P0 — preconditions (checkpoint 1).** `tools/test_context_budget.py`: `TestFitGateEndToEnd` skipped only
+  when NO transcript existed, but `calibrate()` refuses to fit below 4 usable sessions — on this machine (2
+  transcripts for the repo path) both tests ran and failed against *"not enough to fit"*, so `bin/tests.sh`
+  read 115/1 on `main` (S19 gotcha 1); the class now asks the tool (a probe at an impossible floor) and skips
+  on its "not enough". New `TestThisRepoReadSetPartition` (**G1** of the #80 re-review): the repo's own
+  `.context-budget.json` per-file token ceilings in a whole-read class must sum to ≤ `read_cap_tokens` —
+  RED first at 27,800 with the 22,000 mutant, OK at 25,000. And the read-set partition is **re-split
+  19,200 + 5,800 → 18,900 + 6,100**: `SAFEGUARDS.md` was pinned at its exact size (5,800/5,800), which would
+  have refused the one Blast Radius row D3 adds; 300 tokens move from the runner's margin. `--status` OK,
+  `config_defects []`, budget suite 116 → **118** OK.
 
 ### 2026-09-15 · [ad hoc] Merged PR #80 — the read-set budgets series (#76–#79)
 
