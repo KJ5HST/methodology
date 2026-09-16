@@ -51,6 +51,18 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   calibrate); §3 the finding (*one closer per tree*; two shapes by who closes out); §4 fifteen decisions D1–D15
   plus an alternatives table (changelog fragments considered and deferred); §6 six phases, one per session;
   §7 six honest ceilings; §8 twelve operator decisions; §9 the evidence commands, all re-run before commit.
+- **PR opened (non-commit action):** [PR #83](https://github.com/KJ5HST/methodology/pull/83) from
+  `docs/parallel-sessions-plan` at `903d724`, read back from the API (OPEN, +492/−0, 3 files); its body carries
+  the summary and asks the operator to answer §8 there — that answer is the plan's Phase 0. **Not merged.**
+- **Gate run at `903d724`:** `quality_ratchet: 8/10 pass · 2 fail · 0 unmeasured · results bcbd7f39383a ·
+  manifest 97a7aab85b9a`. The two fails are one **environmental** failure — `tests-sh-passed` 138 /
+  `tests-sh-failed` 1 from `tools/test_context_budget.py` `TestFitGateEndToEnd::test_an_admitting_floor_prints_the_constant`:
+  this machine now holds exactly 4 transcripts for this path (calibrate()'s fit minimum; this session's is the
+  4th), so the fit runs on 4 points and is refused for a negative slope (R² 0.049), a refusal the test's `setUp`
+  does not skip on (it skips only on "not enough" — S16's fix for the sibling case S19 reported). Tool and test
+  are byte-identical to `main @ 6b29d3d`; not loosened; the one-file fix is the next session's first small task.
+- Session S24: claim `3c244aa` + plan `903d724` + the close-out commit (receipt complete, cites the run). Every
+  commit ran the ledger co-staging hook clean — no `--no-verify`.
 
 ### 2026-09-16 · [ad hoc] PR #82 merged — post-merge verification on main and the first tightening
 
