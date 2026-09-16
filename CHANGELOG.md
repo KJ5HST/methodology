@@ -45,6 +45,12 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   merge-session receipt (the open "11 reconciled receipts" ruling), and on Test 9's `--source=github`
   coupling to `main`. Deliverable: `docs/planning/parallel-sessions-plan.md` + a PR for review, nothing
   implemented (S13's shape). Results appended at close-out.
+- **The plan, committed:** `docs/planning/parallel-sessions-plan.md` — 468 lines; §1 decomposes the operator's
+  own records into six mechanisms (two-writers-in-one-tree, the return-content fan-out that worked, the S21
+  double-ledger conflict, the undischargeable "11 receipts", Test 9's `main` coupling, the worktree-blind
+  calibrate); §3 the finding (*one closer per tree*; two shapes by who closes out); §4 fifteen decisions D1–D15
+  plus an alternatives table (changelog fragments considered and deferred); §6 six phases, one per session;
+  §7 six honest ceilings; §8 twelve operator decisions; §9 the evidence commands, all re-run before commit.
 
 ### 2026-09-16 · [ad hoc] PR #82 merged — post-merge verification on main and the first tightening
 
