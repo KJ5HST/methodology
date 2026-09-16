@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S24
+date: 2026-09-16
+status: pending
+active_task: Planning session — write docs/planning/parallel-sessions-plan.md: how the methodology supports fan-out to multiple concurrent WRITING sessions (the two prepend-only ledgers + the co-staging hook conflict at one anchor; serial S<N> identity; no receipt for a merge; Test 9 couples branches to GitHub main). Evidence-based inventory, per-phase DONE/verify/STOP, open decisions for the operator. ONE DELIVERABLE (the plan document + a PR for review, S13's shape). Nothing implemented. Operator trigger: "I want that plan." IN PROGRESS.
+```
+
+```handoff
 session: S23
 date: 2026-09-16
 status: complete

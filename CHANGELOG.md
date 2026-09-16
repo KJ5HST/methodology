@@ -35,6 +35,17 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-09-16 · [ad hoc] Parallel-sessions plan — making fan-out to concurrent writing sessions clean, not just safe
+
+- **Action:** planning session S24 on branch `docs/parallel-sessions-plan`. The operator asked whether the
+  quality-ratchet work (PR #82) made multi-agent fan-out workable; the Phase 0 answer was *safe but not
+  clean* — `ITERATIVE_METHODOLOGY.md` §Mechanical Gates binds every actor's output, but two writing
+  sessions still collide on `CHANGELOG.md`/`HANDOFFS.md` (prepend-only, one anchor, co-staging hook forces
+  every commit onto them — S21 hit it with two sequences), on serial `S<N>` identity, on the absent
+  merge-session receipt (the open "11 reconciled receipts" ruling), and on Test 9's `--source=github`
+  coupling to `main`. Deliverable: `docs/planning/parallel-sessions-plan.md` + a PR for review, nothing
+  implemented (S13's shape). Results appended at close-out.
+
 ### 2026-09-16 · [ad hoc] PR #82 merged — post-merge verification on main and the first tightening
 
 - **Action:** the operator merged [PR #82](https://github.com/KJ5HST/methodology/pull/82) (quality ratchet,
