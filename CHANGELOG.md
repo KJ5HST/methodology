@@ -35,6 +35,20 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-09-26 · [ad hoc] The suite's ratchet floor rises to what this branch measures
+
+- **Why:** this branch adds 49 assertions to `bin/tests.sh`, and `.quality-gates.json` still floored
+  `tests-sh-passed` at the count from before them. The ratchet therefore protected none of the new tests — a later
+  change that silently removed all 49 would still have passed the gate.
+- **Measured, not assumed:** `bash bin/tests.sh` reports **139 passed, 0 failed** in a clone of the commit this
+  branch starts from and **188 passed, 0 failed** in a clone of its tip. Diffing the two runs' `PASS:` lines names
+  49 assertions present only on the branch and **none** of the base's missing from it. The floor becomes 188.
+- **Tightening only, and the guard is live:** `quality_ratchet.py --precommit` accepts the change (exit 0) and
+  refuses the same line lowered by one (exit 2, *"gate 'tests-sh-passed': floor lowered 139 -> 138"*), so the check
+  was exercised on this tree rather than assumed to work. `--run` reports 10/10 pass with the new floor met exactly.
+- **A later merge cannot invalidate it:** the gate is a minimum, and every other change in flight adds tests rather
+  than removing them. Where another one raises this same line to a lower number, a minimum resolves to the larger.
+
 ### 2026-09-22 · [ad hoc] The documents say what the update route now does, and stop requiring the `gh` CLI
 
 - **Why:** two earlier changes on this branch made `--source=github` clone the repository and made `bin/sync`'s
