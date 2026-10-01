@@ -255,11 +255,19 @@ def parse_block(block_text: str) -> dict:
     """key: value pairs found INSIDE an already-isolated block. Only recognized
     keys (REQUIRED_KEYS) are captured, so free-text prose lines never masquerade
     as a field."""
-    fields = {}
+    fields, counts = {}, {}
     for line in block_text.splitlines():
         m = KEY_RE.match(line)
         if m:
+            counts[m.group(1)] = counts.get(m.group(1), 0) + 1
             fields[m.group(1)] = m.group(2).strip()
+    # A key that appears twice is never a receipt -- it is two receipts in one block, which is
+    # what `merge=union` makes of two receipts prepended at one anchor: git sets aside the fence
+    # lines they share, so both land inside ONE pair of fences, and the last value of each key
+    # silently won here (parallel-sessions plan §8A, row 3'). Recorded, so validate() refuses it.
+    repeated = sorted(k for k, c in counts.items() if c > 1)
+    if repeated:
+        fields["__repeated__"] = repeated
     return fields
 
 
@@ -276,6 +284,10 @@ def check_int_range(key: str, value: str, lo: int = 1, hi: int = 10):
 def validate(fields: dict, allow_pending: bool) -> list:
     """Return a list of finding strings; empty list = structurally clean."""
     findings = []
+    for key in fields.get("__repeated__", ()):
+        findings.append("key %s appears more than once in one block: two receipts fused into one "
+                        "(a union merge of HANDOFFS.md does this; resolve keep-both with "
+                        "git merge-file --union --diff3)" % key)
     session = fields.get("session", "").strip()
     is_s1 = session == "S1"
 
@@ -334,6 +346,8 @@ def validate(fields: dict, allow_pending: bool) -> list:
 
     # Anti-pattern lints applied to every present field's value.
     for key, value in fields.items():
+        if key.startswith("__"):
+            continue  # parse_block's own bookkeeping (e.g. __repeated__), not a receipt field
         if NEED_TO_VERIFY_RE.search(value):
             findings.append("%s contains a deferred-verification placeholder ('need to verify')" % key)
         if value.strip().lower() in BARE_PLACEHOLDERS:

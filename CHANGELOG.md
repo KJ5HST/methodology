@@ -44,6 +44,18 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Phase 1 Layer B — `bin/check-ledger`, and `check-handoff` stops passing a fused receipt
+
+- **Action:** S30. New canonical-only `bin/check-ledger` (CHANGELOG.md counterpart of `check-handoff`): no conflict
+  marker, every `###` heading `YYYY-MM-DD · ` + exactly one source tag right after the date (tags in inline code
+  ignored), no duplicate heading, no orphaned text, no seed sentinel once entries exist; date order and union's lost
+  blank line deliberately accepted. Declared as a gate, `check-ledger --all` max 0 (an addition). **`bin/check-handoff`
+  fix:** `parse_block` kept the last value of a repeated key, so two receipts fused by a union merge passed `--all` as
+  one clean receipt — found by Layer A's RED control, contradicting the assumption in rmsharp's #83 review that the
+  checker would catch it; a repeated key is now a finding. `bin/tests.sh`: Test 30 gains that assertion (RED against
+  the old checker), Test 31 has 14 fixtures; three `check-ledger` mutants each killed, a fourth exposed a footer branch
+  that could never change an outcome — removed. Both checkers clean on this repo (28 receipts; live ledger + shard).
+
 ### 2026-10-01 · [ad hoc] Measured: GitHub's merge does not apply `merge=union` — probe PR #90, closed unmerged
 
 - **Action (non-commit, then this commit):** S30, the plan's Phase 1 verification item. Two scratch branches off `main`

@@ -71,6 +71,13 @@
       "why": "exit code: every receipt structurally complete (the newest may be a Phase 1B stub mid-session); with a manifest present the newest complete receipt must cite its gate run"
     },
     {
+      "name": "check-ledger",
+      "direction": "max",
+      "threshold": 0,
+      "command": "bin/check-ledger --all",
+      "why": "exit code: CHANGELOG.md and its archive shards are structurally sound — one source tag per entry, no duplicate heading, no orphaned text, no conflict marker. union merges never ask, so this reads the result (parallel-sessions plan, Phase 1)"
+    },
+    {
       "name": "commit-msg-selftest",
       "direction": "max",
       "threshold": 0,

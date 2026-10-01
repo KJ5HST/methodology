@@ -1215,6 +1215,12 @@ git -C "$U" merge -q --no-edit beta >/dev/null 2>&1; RC=$?
 [ "$RC" = 0 ] && [ "$(grep -c '^```handoff' "$U/HANDOFFS.md")" = 2 ] && [ "$(grep -c '^session:' "$U/HANDOFFS.md")" = 3 ] \
     && pass "RED control: HANDOFFS.md under union merges at exit 0 into ONE block holding two receipts" \
     || fail "RED control: union on HANDOFFS.md did not fuse (exit $RC) -- re-measure before keeping the exclusion"
+# ...and the checker the recipe relies on must see it: parse_block once kept the last of a repeated key,
+# so the fused block passed check-handoff --all as one clean receipt (found in S30; RED before the fix).
+OUT="$("$BIN/check-handoff" --all --file "$U/HANDOFFS.md" 2>&1)"; RC=$?
+[ "$RC" = 1 ] && grep -q 'appears more than once in one block' <<<"$OUT" \
+    && pass "check-handoff --all rejects the fused block (a key repeated in one block)" \
+    || fail "check-handoff --all accepted two receipts fused into one block"
 rm -rf "$U"
 # A trim on one branch against a new entry on the other, the real trimmer at a small cut: nothing archived returns.
 U="$(mktemp -d)"
@@ -1244,6 +1250,33 @@ printf 'mine\n' > "$P/.gitattributes"
 [ "$(cat "$P/.gitattributes")" = mine ] && pass "sync never overwrites an adopter's .gitattributes, even with --force" \
     || fail "sync clobbered an adopter's .gitattributes"
 rm -rf "$P"
+
+echo "== Test 31: check-ledger reads what a union merge leaves behind (RED-first against fixtures) =="
+# union never asks, so a CHANGELOG.md merge that went wrong is caught only by a checker that reads the result.
+L="$(mktemp -d)"
+l31() { # $1 label, $2 wanted exit, $3 ledger body (printf format) after the front matter
+    printf "# Changelog\n\nfront matter\n\n---\n\n$3" > "$L/CHANGELOG.md"
+    "$BIN/check-ledger" --file "$L/CHANGELOG.md" >/dev/null 2>&1; local got=$?
+    [ "$got" = "$2" ] && pass "check-ledger: $1" || fail "check-ledger: $1 (exit $got, wanted $2)"
+}
+E2='### 2026-10-02 · [ad hoc] two\n\n- body two\n\n'
+E1='### 2026-10-01 · [issue #7] one\n\n- body one\n'
+l31 "a clean ledger passes"                                  0 "## 2026-10\n\n$E2$E1"
+l31 "a heading directly under the last body (union's lost blank line) passes" 0 "### 2026-10-02 · [ad hoc] two\n\n- body two\n$E1"
+l31 "dates out of order across a merge pass (not checked)"   0 "$E1\n$E2"
+l31 "a tag quoted in inline code is not a second tag"        0 "### 2026-10-03 · [BL-9] adopt \`[BL-<id>]\` here\n\n- b\n\n$E1"
+l31 "a footer after a closing --- rule passes"               0 "$E2$E1\n---\n\nfooter text\n"
+l31 "the sentinel mentioned in prose is not the sentinel"    0 "$E2- not the METHODOLOGY-SEED-SENTINEL line\n\n$E1"
+l31 "a duplicated entry heading fails"                       1 "$E2$E2$E1"
+l31 "a heading with no source tag fails"                     1 "### 2026-10-02 · two\n\n- b\n\n$E1"
+l31 "a heading with two source tags fails"                   1 "### 2026-10-02 · [ad hoc] [issue #3] two\n\n- b\n\n$E1"
+l31 "a heading without the date prefix fails"                1 "### two [ad hoc]\n\n- b\n\n$E1"
+l31 "orphaned text under a month heading fails"              1 "## 2026-10\n\nstray line\n\n$E2$E1"
+l31 "a surviving conflict marker fails"                      1 "<<<<<<< HEAD\n$E2=======\n$E1>>>>>>> beta\n"
+l31 "the seed sentinel left in a ledger with entries fails"  1 "<!-- METHODOLOGY-SEED-SENTINEL: fresh ledger -->\n\n$E2$E1"
+rm -rf "$L"
+"$BIN/check-ledger" --all >/dev/null 2>&1 && pass "check-ledger --all: this repository's ledger and its archive shard are clean" \
+    || fail "check-ledger --all: this repository's own ledger has findings"
 
 echo ""
 echo "== Summary: $PASS passed, $FAIL failed =="
