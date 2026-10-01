@@ -44,6 +44,12 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Phase 4 U1 — HOW_TO_USE §Multi-Agent Teams names the two shapes and the one-writer rule
+
+- **Action:** S33. Worker-drafted, lead-integrated: the section states Shape A and Shape B, that each concurrent
+  session runs on its own branch or worktree, that a working tree has one writer, and points to §Parallel Actors for
+  the contract; every existing true line kept. Claims re-derived: 0 wrong.
+
 ### 2026-10-01 · [ad hoc] Phase 4 U2 — both campaign templates cite the one-writer rule in their sub-agent dispatch
 
 - **Action:** S33. Worker-drafted, lead-integrated: `workstreams/TEMPLATE_CAMPAIGN.md` gains a **One writer** paragraph

@@ -867,7 +867,11 @@ Beyond the session runner, AI agents benefit from these adaptations. These findi
 
 ### Multi-Agent Teams
 
-For large workstreams, agents can work in parallel on different sessions:
+Parallel work comes in two shapes, told apart by who closes out:
+- **Shape A — one session, many hands.** One lead session runs orient and close-out for the whole deliverable. Workers build units of it and return their work to the lead, who alone commits it; workers write no session records.
+- **Shape B — many sessions, many closers.** Several independent sessions run at the same time, each following the full session runner on its own deliverable. Their work joins by merge.
+
+For large workstreams, Shape B lets agents work in parallel on different sessions:
 - Agent A: Session for resource X
 - Agent B: Session for resource Y
 - Both read the same prior session outputs
@@ -875,7 +879,9 @@ For large workstreams, agents can work in parallel on different sessions:
 
 The session documents are the coordination mechanism. Agents don't need to communicate directly — they communicate through accumulated patterns and anti-patterns.
 
-Each agent should follow its own copy of the session runner. The orient phase is the same; the deliverable is different; the close-out feeds into the shared workstream prompt.
+Each concurrent session follows its own copy of the session runner, on its own branch or worktree. The orient phase is the same; the deliverable is different; the close-out feeds into the shared workstream prompt. In either shape, **a working tree has one writer** (`SAFEGUARDS.md` §Blast Radius Limits): agents that edit, build or test in the same tree at once read each other's half-finished changes as defects.
+
+The contract for both shapes — who may write what, how the lead integrates workers' units, and how two lines of sessions join — is [`ITERATIVE_METHODOLOGY.md` §Parallel Actors](ITERATIVE_METHODOLOGY.md#parallel-actors).
 
 ---
 
