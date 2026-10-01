@@ -357,7 +357,37 @@ If `status` shows `locally modified`, sync will refuse to overwrite. Extract tho
 
 ### Without `bin/sync`
 
-Tell your agent: *"Update methodology using https://github.com/KJ5HST/methodology"*. It will fetch the latest starter-kit files and overlay them.
+Tell your agent: *"Update methodology using https://github.com/KJ5HST/methodology"*.
+
+**Give it these three rules with the instruction. The first one protects your history.**
+
+**1. Overlay the tracked files; never overwrite the adopter-owned ones.** The distribution splits in
+two, and the split is not cosmetic:
+
+| Class | Files | On update |
+|---|---|---|
+| **Tracked** (canonical owns them) | `SESSION_RUNNER.md`, `FRAMEWORK_LEARNINGS.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `BOOTSTRAP.md`, the `*_TEMPLATE.md` files, `methodology_dashboard.py`, `methodology_trim.py`, `context_budget.py`, `quality_ratchet.py`, and everything under `docs/methodology/` | **overlay** — replace with the latest |
+| **Adopter-owned** | `CHANGELOG.md`, `HANDOFFS.md`, `SESSION_NOTES.md`, `ROADMAP.md`, `.context-budget.json`, `.quality-gates.json` | **never overwrite** — these hold *your* history (or, for `.context-budget.json` and `.quality-gates.json`, your project's own tuned budgets and declared gates) |
+
+Overlaying the second row replaces your action ledger and your close-out receipts with empty
+templates. `bin/sync` refuses to do it by construction — `bin/_manifest.py` classes those six as
+seeds, installed once and never again — but an agent working from prose has only this sentence to
+stop it. Say it explicitly.
+
+**2. Reconcile the adopter-owned files by hand, because nothing else will.** Since they are never
+overwritten, a project moving up from an earlier methodology keeps its ledgers *in their old
+format* — gaining the new behaviour while silently missing the new structure. This is the migration
+the ***Updating an existing project from an earlier methodology version*** paragraph describes in
+§Setup with `bin/sync` above, and it is owed just the same here: diff your `CHANGELOG.md` and
+`HANDOFFS.md` front matter against the current seeds in `starter-kit/` and bring across whatever is
+missing above your first entry or receipt. Nothing below that point is touched — this is a
+front-matter change, never a rewrite of history.
+
+**3. Verify afterwards, don't assume.** From a full methodology checkout,
+`../methodology/bin/status your-project/` lists every file as `current`, `N versions behind`,
+`locally modified`, `missing`, or — for a seed whose *format* predates the current methodology —
+`present (stale format)`, with a migration note beneath the table. A seed still reading
+`present (stale format)` after an update means rule 2 has not been done yet.
 
 ---
 

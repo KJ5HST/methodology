@@ -81,6 +81,30 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   only newest-entries-first keeps a keep-both resolution newest-on-top (84-first put #88's 09-26 entry below
   #87's 09-21 ones); `bin/tests.sh` on the 88 → 87 → 84 tree 212/0. Receipt `next_steps` (b) corrected in place.
 
+### 2026-09-26 · [ad hoc] The prose update route gets the three rules that stop it overwriting an adopter's ledgers
+
+- **Why:** `starter-kit/BOOTSTRAP.md` §Without `bin/sync` was one sentence — *"It will fetch the latest
+  starter-kit files and overlay them"* — and it named no exception. An agent following it literally overlays
+  `CHANGELOG.md` and `HANDOFFS.md`, which are seeds: the adopter's action ledger and every close-out receipt
+  are replaced with empty templates. A six-adopter acceptance test found this and rated it critical. The
+  `bin/sync` route has never had the defect; only the prose route does, and the prose route is the one the
+  instruction in that section tells people to use.
+- **What is added:** three numbered rules given with the instruction. **(1)** a two-row table splitting the
+  distribution into tracked files that are overlaid and adopter-owned files that are never overwritten, with
+  the consequence of getting it wrong stated in the sentence after it. **(2)** the hand reconcile the seeds
+  need afterwards, pointing at the *Updating an existing project from an earlier methodology version*
+  paragraph in §Setup with `bin/sync` rather than restating it, so the two cannot drift apart. **(3)** verify
+  with `bin/status` and what its five verdicts mean.
+- **The table is derived from `bin/_manifest.py`, not written from memory:** its `DISTRIBUTION` list is what
+  classes six files as seeds — `CHANGELOG.md`, `HANDOFFS.md`, `SESSION_NOTES.md`, `ROADMAP.md`,
+  `.context-budget.json`, `.quality-gates.json` — and every other entry as tracked.
+- **Rule 3's five verdicts are the ones `bin/status` actually prints:** `missing`, `current`,
+  `N versions behind`, `locally modified`, and `present (stale format)` — read from the source, not inferred
+  from the documentation.
+- **Measured:** `bash bin/tests.sh` reports **139 passed, 0 failed** on this branch, unchanged from the commit
+  it starts from; `bin/check-links` resolves 107 links; `quality_ratchet.py --run` reports **10/10 pass**. The
+  change is prose in one file and no gate moves.
+
 ### 2026-09-16 · [ad hoc] PR #82 merged — post-merge verification on main and the first tightening
 
 - **Action:** the operator merged [PR #82](https://github.com/KJ5HST/methodology/pull/82) (quality ratchet,
