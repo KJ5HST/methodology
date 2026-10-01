@@ -208,6 +208,7 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 │   └── quality-gates.json            ← Its seed manifest (→ .quality-gates.json; starts empty)
 │
 ├── docs/                             ← Tutorials and supporting docs
+│   ├── versioning-archive.md         ← CLAUDE.md §Versioning entries v1.0–v2.9, archived verbatim
 │   └── tutorials/                    ← Hands-on learning track + sample todo-CLI project
 │
 ├── bin/                              ← Sync tools (v2.2+)
@@ -280,6 +281,31 @@ Domain-specific adaptations of the master framework. Each workstream customizes 
 Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during development of a commercial software product. The methodology emerged organically from an initial 11-session design series, was codified into a reusable framework, and subsequently validated across 1100+ sessions of varied work.
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
+
+### What's New in v4.0
+
+**The ledger rules get one synced home, and the routes that update an adopter stop endangering its ledgers.** Seven pull requests, merged together on 2026-10-01. A major version: **if you adopted an earlier version, there is one manual step** — see *Updating* below.
+
+- **One home for the `CHANGELOG.md` rules** ([#84](https://github.com/KJ5HST/methodology/pull/84)) — the rules lived *inside* the seed, and `bin/sync` writes a seed once and never again, so every correction stranded the copies adopters already had; restated across fourteen files, they had also come to contradict each other fifteen ways. They now live in `FRAMEWORK_APPARATUS.md` §The Action Ledger, which is distributed and kept current by sync. The seed shrinks from 12,893 B to a 1,335 B pointer carrying a format marker, `ledger-format: 2`; the `HANDOFFS.md` seed's size section carries `handoffs-format: 2`.
+- **The prose update route no longer wipes ledgers** ([#88](https://github.com/KJ5HST/methodology/pull/88)) — `BOOTSTRAP.md` §Without `bin/sync`, the route `README.md` gives every adopter, said only to overlay the starter-kit, and six of those files are seeds that hold your history (`CHANGELOG.md`, `HANDOFFS.md`, `SESSION_NOTES.md`, `ROADMAP.md`, `.context-budget.json`, `.quality-gates.json`). An agent following it literally would replace them with empty templates. Three rules now follow the instruction: overlay tracked files only, reconcile seeds by hand, verify with `bin/status`.
+- **`bin/sync --source=github` works** ([#87](https://github.com/KJ5HST/methodology/pull/87)) — it clones the repository, so a file that is merely behind upgrades without `--force` while a genuine local edit is still refused; the `gh` CLI is no longer needed (just `git` and network); a shallow or tarball source is named as the cause of a refusal instead of your files.
+- **The ledger gate stops switching itself off** ([#85](https://github.com/KJ5HST/methodology/pull/85)) — a `REBASE_HEAD` left behind by any stopped rebase made `.githooks/pre-commit` skip every later commit. Fixed, and the hook's own `--selftest` is now a quality gate.
+- **`context_budget.py --status` writes nothing** ([#86](https://github.com/KJ5HST/methodology/pull/86)) — it fell through to the default run, which appends to `.context-budget-history.jsonl` whenever a size changed; now `--status`/`--check` only measure, an unknown argument exits 3 with a hint instead of silently running, and the headline stops contradicting the table.
+- **Canonical-only:** a machine-dependent test now skips instead of failing ([#89](https://github.com/KJ5HST/methodology/pull/89)); the parallel-sessions plan lands as a draft with its decisions open ([#83](https://github.com/KJ5HST/methodology/pull/83)); `CLAUDE.md`'s v1.0–v2.9 release entries move verbatim to `docs/versioning-archive.md`.
+
+**Updating.** Re-run `bin/sync`, then `bin/status`. Because sync never overwrites a seed, an existing `CHANGELOG.md` or `HANDOFFS.md` will read `present (stale format)`; migrate it once by hand along the route the note prints. No entry or receipt is rewritten.
+
+**No principle, phase, gate, or workstream change. Failure modes stay 28; no new Learning.** `bin/tests.sh` **139 → 215**; quality gates **10 → 11**.
+
+### What's New in v3.8
+
+**The quality ratchet, the ledger trimmer and the read-on-demand siblings ship as distributed tools** (tagged 2026-09-30; these notes were deferred to v4.0).
+
+- **`quality_ratchet.py`** + seed `quality-gates.json` ([#82](https://github.com/KJ5HST/methodology/pull/82), plan [#81](https://github.com/KJ5HST/methodology/pull/81)) — quality thresholds declared in `.quality-gates.json` that only tighten. `--precommit` refuses a loosened or removed gate; `--run` measures every gate and prints the line a close-out receipt cites. With it: a `SAFEGUARDS.md` rule (loosening needs plan-mode approval, tightening never does), the flight-manual section *Mechanical Gates Bind Every Actor*, Audit anti-pattern #10 *Findings that stay prose*, and Learnings #15 and #16.
+- **`methodology_trim.py`** ([#80](https://github.com/KJ5HST/methodology/pull/80)) — archives the oldest records of a grow-and-must-be-read ledger (`CHANGELOG.md`, `HANDOFFS.md`), and refuses to write unless the reconstruction is provably lossless.
+- **Read-on-demand siblings** ([#80](https://github.com/KJ5HST/methodology/pull/80)) — `FRAMEWORK_APPARATUS.md` takes the flight manual's tables, tests and scoring scales so `ITERATIVE_METHODOLOGY.md` fits one read; `FRAMEWORK_LEARNINGS.md` takes the runner's Learnings table, synced read-only. `context_budget.py` gains token ceilings for the Phase 0 read set.
+
+**No principle, phase, gate, or workstream change; failure modes stay 28.** `bin/_manifest.py` 24 → 29 rows; `DASHBOARD_VERSION` 2.10.6 → 2.11.1; `bin/tests.sh` 114 → 139.
 
 ### What's New in v3.7
 

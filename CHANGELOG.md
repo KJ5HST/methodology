@@ -38,6 +38,18 @@ ledger's next new month, and nothing below is retrofitted (§The Action Ledger, 
 
 ---
 
+## 2026-10
+
+### 2026-10-01 · [ad hoc] v4.0 release documentation — `CLAUDE.md` §Versioning and `README.md` What's New for v3.8 and v4.0
+
+- **Action:** S26. `CLAUDE.md` *Current version* v3.7 → v4.0; §Versioning gains the v3.8 entry (rmsharp tagged and
+  released v3.8 on 2026-09-30 with its docs deferred) and the v4.0 entry; `README.md` What's New gains both, and its
+  repository tree a `docs/versioning-archive.md` row. `CLAUDE.md` 40,771 → 45,842 B under its unchanged 59,168 B
+  ceiling; `bin/check-links` OK; a sweep for `Current version`, `v3.7`/`v3.8`/`v4.0` and the old gate and test counts
+  outside the ledgers found no other stale claim. The release itself: [`CLAUDE.md` §Versioning](CLAUDE.md#versioning)
+  v4.0 (pointer, not re-narrated). This opens the ledger's first month heading, per *Placement*; the September entries
+  below are not retrofitted.
+
 ### 2026-10-01 · [ad hoc] v4.0 — the open pull requests merged and released
 
 - **Action:** session S26 on `main`. Operator: "Merge them and release 4.0." Merge #89 → #88 → #87 → #86 → #85 →
