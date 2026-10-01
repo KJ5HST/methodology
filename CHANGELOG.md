@@ -44,6 +44,18 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] S28 close-out — housekeeping done; branches deleted, PR #83 notified, oversight scanner refreshed
+
+- **Action:** closes the S28 claim entry (*Housekeeping … (in progress)*). Non-commit actions this session: merged
+  branches `fix/context-budget-fit-skip` and `docs/parallel-sessions-plan` deleted locally and on GitHub, and the stale
+  remote `read-set-budgets` (PR #80, merged) deleted — each verified an ancestor of `main` first; a notice of the
+  §8A decisions posted on [PR #83](https://github.com/KJ5HST/methodology/pull/83#issuecomment-5942319472), asking
+  rmsharp's view on D8 before Phase 3 changes his Test 28; the oversight root's `methodology_dashboard.py` copied
+  2.6.1 → 2.11.1 (recorded in the oversight `CHANGELOG.md`). Left for the operator, untouched: two local-only
+  unmerged branches, `docs/operator-gated-review-plan` (a 2026-07-31 DRAFT plan awaiting ratification) and
+  `experimental/pocock-audit` (17 commits, May). Gate run at `3e857aa`: `quality_ratchet: 11/11 pass · 0 fail ·
+  0 unmeasured · results 30d2a763be2b · manifest 58b9c63d75da`.
+
 ### 2026-10-01 · [ad hoc] `CLAUDE.md` density re-measured; `.context-budget-history.jsonl` ruled tracked
 
 - **Action:** S28. `.context-budget.json`: `CLAUDE.md` `bytes_per_token` 2.5182 → **2.5687** and `measured_bytes`
