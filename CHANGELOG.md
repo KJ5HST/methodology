@@ -44,6 +44,14 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] `CLAUDE.md` density re-measured; `.context-budget-history.jsonl` ruled tracked
+
+- **Action:** S28. `.context-budget.json`: `CLAUDE.md` `bytes_per_token` 2.5182 → **2.5687** and `measured_bytes`
+  59,119 → 45,842 — the doubled-file read reports 35,693 tokens, so 17,846.5 for the file (the S26 archive moved it
+  31% off the old measurement); `max_tokens` 23,483 unchanged (a pin). The tracked-or-ignored ruling open since S23 is
+  settled as **tracked**, matching the fork and the reason `.gitignore` already gives (the growth-run trigger reads the
+  series, which survives a clone only if committed); its first row is committed here.
+
 ### 2026-10-01 · [ad hoc] Ledger trim: `CHANGELOG.md` → `docs/archive/CHANGELOG-through-2026-09-30.md` (96 record(s), 229,112 B → 17,036 B)
 
 **Written by:** `methodology_trim.py` v1.5.0 — a tool action, not a session's judgment.
