@@ -35,6 +35,16 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-10-01 · [ad hoc] Fit-gate end-to-end test skips, never fails, when the data refuse the fit
+
+- **Action:** session S25 on branch `fix/context-budget-fit-skip` (from `main` at `6b29d3d`). S24's
+  next step (a0): `tools/test_context_budget.py` `TestFitGateEndToEnd.setUp` skips only on calibrate()'s
+  "not enough" refusal, but calibrate() has further refusals that depend on the machine's transcripts, not
+  on the floor under test — a non-positive slope or an undefined R² (refused at every floor), and no
+  variation in the regressor ("cannot fit") — so on such a machine the two tests FAIL instead of skipping
+  (S24 measured it: 4 transcripts, slope −3.57, `bin/tests.sh` 138/1, `--run` 8/10). One file, RED first.
+  `CHANGELOG: pending` — results appended at close-out.
+
 ### 2026-09-16 · [ad hoc] PR #82 merged — post-merge verification on main and the first tightening
 
 - **Action:** the operator merged [PR #82](https://github.com/KJ5HST/methodology/pull/82) (quality ratchet,

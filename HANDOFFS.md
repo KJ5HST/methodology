@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S25
+date: 2026-10-01
+status: pending
+active_task: Fix S24's next step (a0) — tools/test_context_budget.py TestFitGateEndToEnd must skip, not fail, when calibrate() refuses for a reason the floor does not decide (non-positive slope, undefined R², no regressor variation); RED first, then green; one file, own branch fix/context-budget-fit-skip from main + PR. ONE DELIVERABLE. Operator trigger: "fix the context-budget test (a0) and lets clean everything up so we can merge and version all these changes" — the merge/version clean-up is several deliverables; it is sequenced in this receipt's next_steps, not started. IN PROGRESS.
+```
+
+```handoff
 session: S23
 date: 2026-09-16
 status: complete
