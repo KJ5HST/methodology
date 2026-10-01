@@ -39,7 +39,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 CONFIG_NAME = ".context-budget.json"
 HISTORY_NAME = ".context-budget-history.jsonl"
 
@@ -876,6 +876,31 @@ def calibration_verdict(slope, r2, floor):
     return None
 
 
+def transcript_dir(root):
+    """Where the agent harness keeps this project's session transcripts.
+
+    Keyed on the MAIN checkout's path, not on `root`: a linked `git worktree` has a path of
+    its own, but its sessions belong to the same project — and worktrees are the isolation
+    unit the methodology recommends for parallel actors (parallel-sessions plan, D9). The main
+    checkout is the parent of git's common directory. `--path-format=absolute` needs git 2.31;
+    an older git answers relatively (or not at all), so the last line is taken and resolved
+    against `root`. Outside a repository, or for a common directory not named `.git` (a
+    submodule's), the root itself is the key, as it always was.
+    """
+    base = Path(root).resolve()
+    rc, out, _ = run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"], cwd=root)
+    if rc:
+        rc, out, _ = run(["git", "rev-parse", "--git-common-dir"], cwd=root)
+    if rc == 0 and out:
+        common = Path(out.splitlines()[-1].strip())
+        if not common.is_absolute():
+            common = Path(root) / common
+        common = common.resolve()
+        if common.name == ".git":
+            base = common.parent
+    return Path.home() / ".claude" / "projects" / ("-" + str(base).strip("/").replace("/", "-"))
+
+
 def calibrate(root, cfg):
     """Re-derive bytes-per-token by regressing each session's opening context against
     the size of the resident file at that moment. Writes nothing. A tool whose thesis
@@ -888,8 +913,7 @@ def calibrate(root, cfg):
     read-past-it failure (FM #28) this tool was built to interrupt, committed by the
     tool itself. An adopter has no second instrument to catch it with.
     """
-    slug = "-" + str(Path(root).resolve()).strip("/").replace("/", "-")
-    tdir = Path.home() / ".claude" / "projects" / slug
+    tdir = transcript_dir(root)
     if not tdir.exists():
         print(f"{CYN}no transcripts at {tdir} — cannot calibrate{R}")
         return WARN

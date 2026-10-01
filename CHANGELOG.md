@@ -44,6 +44,16 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Phase 3 D9 — `context_budget.py --calibrate` works from a linked worktree (1.3.1)
+
+- **Action:** S32. New `transcript_dir(root)` keys the transcript directory on the MAIN checkout (the parent of git's
+  common directory; `--path-format=absolute`, with a relative fallback for git < 2.31; the root itself outside a repo
+  or for a submodule's common dir), and `calibrate()` uses it — it had derived the slug from the worktree's own path,
+  so a linked worktree, the isolation unit the plan recommends, reported `no transcripts at …`. RED first, by
+  behaviour: a fixture repo + worktree + temporary `HOME` with one transcript under the main slug; the old tool said
+  "no transcripts". `TestFitGateEndToEnd.setUp` now asks the tool for the directory. `VERSION` 1.3.0 → 1.3.1; unit
+  suite 145 → 148; `--selftest` OK.
+
 ### 2026-10-01 · [ad hoc] Parallel-sessions plan Phase 3 — worktree-aware `--calibrate`; manifest-at-ref as a PR (in progress)
 
 - **Action:** session S32 claimed on `main`. D9: `context_budget.py --calibrate` finds the main checkout's transcripts

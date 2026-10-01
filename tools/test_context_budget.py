@@ -336,6 +336,47 @@ class TestFitGate(unittest.TestCase):
         self.assertIsNotNone(cb.calibration_verdict(0.3557, 0.30, 0.75))
 
 
+class TestCalibrateFromALinkedWorktree(unittest.TestCase):
+    """D9 (parallel-sessions plan): a linked `git worktree` has a path of its own, but its
+    sessions belong to the same project — so --calibrate run there must look where the MAIN
+    checkout's transcripts are. It derived the slug from the worktree's own path and reported
+    `no transcripts at …` in the very isolation unit the plan recommends for parallel actors."""
+
+    def test_a_linked_worktree_finds_the_main_checkouts_transcripts(self):
+        import contextlib, io
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as t:
+            main, wt, home = Path(t) / "main", Path(t) / "wt", Path(t) / "home"
+            main.mkdir(); home.mkdir()
+            subprocess.run(["git", "init", "-q", "-b", "main", str(main)], check=True)
+            git(main, "commit", "-q", "--allow-empty", "-m", "x")
+            git(main, "worktree", "add", "-q", str(wt))
+            slug = "-" + str(main.resolve()).strip("/").replace("/", "-")
+            tdir = home / ".claude" / "projects" / slug
+            tdir.mkdir(parents=True)
+            (tdir / "s.jsonl").write_text('{"timestamp": "2026-10-01T00:00:00Z"}\n')
+            buf = io.StringIO()
+            with mock.patch.dict(os.environ, {"HOME": str(home)}), contextlib.redirect_stdout(buf):
+                cb.calibrate(str(wt), {})
+            self.assertNotIn("no transcripts at", buf.getvalue(),
+                             "--calibrate from a linked worktree did not find the main checkout's transcripts")
+
+    def test_the_main_checkout_and_its_worktree_share_one_transcript_dir(self):
+        with tempfile.TemporaryDirectory() as t:
+            main, wt = Path(t) / "main", Path(t) / "wt"
+            main.mkdir()
+            subprocess.run(["git", "init", "-q", "-b", "main", str(main)], check=True)
+            git(main, "commit", "-q", "--allow-empty", "-m", "x")
+            git(main, "worktree", "add", "-q", str(wt))
+            self.assertEqual(cb.transcript_dir(str(wt)), cb.transcript_dir(str(main)))
+            self.assertEqual(cb.transcript_dir(str(main)).name,
+                             "-" + str(main.resolve()).strip("/").replace("/", "-"))
+
+    def test_outside_a_repository_the_directory_itself_is_the_key(self):
+        with tempfile.TemporaryDirectory() as t:
+            self.assertEqual(cb.transcript_dir(t).name, "-" + str(Path(t).resolve()).strip("/").replace("/", "-"))
+
+
 class TestFitGateEndToEnd(unittest.TestCase):
     """The unit gate above proves the verdict; this proves calibrate() ACTS on it — that
     a refused fit suppresses the number rather than printing it with a caveat beside it.
@@ -346,8 +387,7 @@ class TestFitGateEndToEnd(unittest.TestCase):
     """
 
     def setUp(self):
-        slug = "-" + str(REPO).strip("/").replace("/", "-")
-        self.tdir = Path.home() / ".claude" / "projects" / slug
+        self.tdir = cb.transcript_dir(str(REPO))   # the tool's own key, so a worktree finds them too
         if not self.tdir.exists() or not any(self.tdir.glob("*.jsonl")):
             self.skipTest(f"no transcripts at {self.tdir}")
         cfgp = REPO / ".context-budget.json"
