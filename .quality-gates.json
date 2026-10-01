@@ -31,7 +31,7 @@
     {
       "name": "context-budget-unit-tests",
       "direction": "min",
-      "threshold": 118,
+      "threshold": 119,
       "command": "python3 tools/test_context_budget.py",
       "extract": "Ran (\\d+) tests"
     },

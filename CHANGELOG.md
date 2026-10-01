@@ -55,6 +55,9 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   both tests; after the fix all three skip, naming the cause, while a positive and a low-R² fixture still run
   and pass. Three mutant `calibrate()`s (ignores its floor, prints nothing, always refuses) are still caught —
   failed, never skipped — on both admitting fixtures and on this machine's real transcripts.
+- **Gate run at `229f08d`:** `quality_ratchet: 10/10 pass · 0 fail · 0 unmeasured · results a3b034f8cabf ·
+  manifest 97a7aab85b9a` — `bin/tests.sh` 139/0 again on this machine. **Tightening owed and taken:**
+  `context-budget-unit-tests` 118 → 119 (the new pin test), per the manifest's standing rule.
 
 ### 2026-09-16 · [ad hoc] PR #82 merged — post-merge verification on main and the first tightening
 
