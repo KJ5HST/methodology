@@ -44,6 +44,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Parallel-sessions plan Phase 3 — worktree-aware `--calibrate`; manifest-at-ref as a PR (in progress)
+
+- **Action:** session S32 claimed on `main`. D9: `context_budget.py --calibrate` finds the main checkout's transcripts
+  from a linked worktree, RED first. D8 (`bin/sync --source=github` iterates the clone's manifest) changes rmsharp's
+  Test 28, so it goes up as a PR for his review, not onto `main`. Also: S31's receipt cited `.context-budget.json:51`
+  for a note at `:52` — corrected there.
+
 ### 2026-10-01 · [ad hoc] S31 close-out — Phase 2 of the parallel-sessions plan done
 
 - **Action:** closes the S31 claim entry (*Parallel-sessions plan Phase 2 — the prose … (in progress)*). Gate run at
