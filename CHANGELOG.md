@@ -44,6 +44,15 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Phase 4 U4 — BOOTSTRAP Step 10 gives existing-`.gitattributes` adopters the three union lines
+
+- **Action:** S33. Worker-drafted (read-only, returned content), lead-reviewed and integrated: a *Ledger merge driver*
+  paragraph — sync never overwrites a SEED, so a project that already had `.gitattributes` appends the three lines
+  itself; `HANDOFFS.md` excluded; GitHub's merge ignores the driver, merge locally. Worker claims re-derived by the lead
+  (`bin/sync:234` never-overwrite, the seed on `origin/main`, anchor uniqueness): 0 wrong. The worker flagged a
+  pre-existing contradiction, fixed here by the lead: `:325` "the one hook" and `:345` "the only hook it ships" vs
+  `:327` "the second hook" (the ratchet, since v3.8).
+
 ### 2026-10-01 · [ad hoc] Phase 4, lead's unit (U5) — `README.md` tree and `CLAUDE.md` tables name the new seed and checker
 
 - **Action:** S33. The shared files a worker may not touch (contract gate f), written by the lead: `README.md`'s
