@@ -240,6 +240,162 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   adopter projects turned 8 misread files from *locally modified* into *N versions behind* and left the 3 genuine
   local edits refused. Carried here with the test renumbered and three comments reworded; the logic is unchanged.
 
+### 2026-09-21 · [ad hoc] `.quality-gates.json`: the same two floors tightened again, to what this branch now measures
+
+- **Action:** `tests-sh-passed` 141 → 142 and `context-budget-unit-tests` 129 → 140. These are the values
+  `python3 starter-kit/quality_ratchet.py --run` measures after the two `context_budget.py` changes recorded
+  between this entry and the first tightening below, which add 11 unit tests and 1 `bin/tests.sh` row. No other
+  floor moves: every other gate measures exactly its threshold. This is a separate commit from the first
+  tightening, so either can be dropped alone.
+- **Measured** in a fresh clone of the branch before this commit: `10/10 pass · 0 fail · 0 unmeasured`, with
+  `tests-sh-passed` 142 and `context-budget-unit-tests` 140.
+
+### 2026-09-21 · [ad hoc] `context_budget.py`: a row over a ceiling stays `over` when a structure pattern also fails
+
+- **Action:** `measure_file()` in `starter-kit/context_budget.py` gave a row the status of whichever check wrote
+  last. A ceiling check (bytes, lines, line length, tokens) sets `over`; a structure pattern that matched fewer
+  records than its `expect_min` then set `instrument-failed` unconditionally, overwriting it. `render()` ranks
+  `instrument-failed` just below `over`, so the headline read `INSTRUMENT-FAILED`, the row read
+  `instrument-failed`, and when the growth run fired the advisory said *"Nothing is over a ceiling yet"* directly
+  above the finding that said the ceiling was exceeded. That write was the only one in `measure_file()` that could
+  lower a status. It now leaves an `over` row as it is, so a check can raise a row's status and never lower it.
+  Both findings still print, and the exit code is 2 either way. This is the case the growth-run entry two below
+  lists under *Not changed here*.
+- **A comment corrected:** the comment above `main()`'s exit said the tool's ordering *"already ranks"* an
+  instrument failure *"above `over`"*; `render()`'s ranking puts it just below. The comment now says what the code
+  does: a config defect exits 2 exactly as `over` does.
+- **Tests, RED first against the unchanged tool** (blob `f75482c2`): 4 in a new `TestStatusPrecedence` class in
+  `tools/test_context_budget.py`. (1) The real `main()` → `render()` path under `--status`, on a file over its byte
+  ceiling that also fails a pattern, with the growth run fired: the headline reads `OVER`, both findings print,
+  the advisory gives the over-state sentence, and the exit is 2. (2) `--status --json` reports that row as `over`.
+  (3) A control: a row that only fails its pattern still reads `instrument-failed`. (4) Raising still works: a
+  row past its warn line that fails its pattern reads `instrument-failed`. Tests (1) and (2) fail on the old tool;
+  (3) and (4) pass on it by design, and the mutants below are what they catch.
+- **Mutants, run rather than predicted,** after the fixed tool passed the same harness: the guard removed, so the
+  last writer wins again (tests 1 and 2); the guard made to never set the status (tests 3 and 4); raising from
+  `warn` blocked (test 4 alone); raising from `ok` blocked (test 3 alone). `--selftest` catches the two that stop
+  a pattern-only row reading `instrument-failed`, and neither of the others.
+- **Counts:** `tools/test_context_budget.py` 136 → 140 tests, `--selftest` 52 checks unchanged, `bin/tests.sh`
+  142 passed, 0 failed (unchanged: no shell row added). No gate threshold changes in this commit.
+
+### 2026-09-21 · [ad hoc] `context_budget.py`: `--check` is a second name for `--status`, and a refused argument is told what it most likely meant
+
+- **Action:** the refusal added below (exit 3 and the usage text) said what was wrong and not what to do instead.
+  Searched in this repository and seven adopter projects, the arguments typed after this tool's name that it
+  did not define were two: `--status`, which now exists, and `--check`. `--check` is the ledger trimmer's name for its report-only run
+  (`methodology_trim.py --check`: *"evaluate the trigger and report; never writes"*), and one adopter project's
+  session notes tell the next session to *"Re-measure (`python3 context_budget.py --check`) before writing
+  more"*. Now:
+  - `--check`, with or without `--json`, is accepted and is the same run as `--status`: the same ledger, the
+    same exit code, and no history row. The usage text gains a `--check` line.
+  - Every other refused argument gets a line of its own, `unknown argument: <arg>`, followed by what it most
+    likely meant, taken from what the sibling tools use the same flag for:
+    - `--force` (the trimmer's and the dashboard's override): *"there is deliberately no --force: to permit
+      growth, raise that file's ceiling in .context-budget.json"*;
+    - `--dry-run` (the dashboard's preview): *"did you mean --status? It measures and writes nothing"*;
+    - `--run` and `--write` (the ratchet's and the trimmer's real run): *"run with no argument to measure and
+      record"*;
+    - a misspelling of an accepted argument: *"did you mean <nearest>?"*, from `difflib.get_close_matches`
+      with a cutoff of 0.75;
+    - anything else: nothing more.
+  - Unchanged: exit 3, nothing read or written, and the usage text after the refusal.
+- **The cutoff was measured, not chosen.** At `difflib`'s default of 0.6, `--version` is offered `--json`, which
+  is not what anyone typing it meant; at 0.75 it is offered nothing. Both cutoffs send `--stauts`, `status`,
+  `--jsn`, `--selftset`, `--calibrat`, `--precomit`, `--chek` and `--hlep` to the intended argument, and neither
+  offers anything for `--zzz`, `--verbose` or `-v`. The one loss at 0.75: `install` is no longer offered
+  `install-hook`.
+- **Where the hint table lives.** It names `--force`, so it sits below the selftest, which refuses that string
+  anywhere above its own definition, and hints are looked up by key rather than by testing the argument list for
+  a flag, the form `bin/tests.sh` and the unit tests grep for.
+- **Tests, RED first against the unchanged tool** (blob `dd4803bf`): 7 new in `TestCommandLine` in
+  `tools/test_context_budget.py`, and its frozen accepted set gains `--check`. Six fail on the old tool: the
+  `--check` test, the `--force`, preview, misspelling and one-line-each hint tests, and the frozen set. Two pass on
+  it by design, because the old tool never suggested anything: `--zzz` and `--version` are offered nothing. The
+  mutants below are what those two catch. One row in `bin/tests.sh`: `--check` on the seed config exits as
+  `--status` does and writes nothing. It fails on the old tool (exit 3 against 1).
+- **Mutants, run rather than predicted,** after the fixed tool passed the same harness: `--check` dropped from
+  the write guard (the `--check` test and the shell row); the hint table emptied (the `--force`, preview and
+  one-line-each tests); the cutoff at 0.6 (the `--version` test); the suggestion printed unconditionally (the
+  `--zzz`, `--version` and one-line-each tests); the hint table moved above the selftest (`--selftest` exits 2 on
+  *"--force is not offered"*). `--selftest` catches only the last.
+- **Counts:** `tools/test_context_budget.py` 129 → 136 tests, `--selftest` 52 checks unchanged, `bin/tests.sh`
+  141 → 142 passed, 0 failed. `VERSION` stays 1.3.0, which this pull request already sets. No gate threshold
+  changes in this commit.
+
+### 2026-09-21 · [ad hoc] `.quality-gates.json`: two floors tightened to what this branch measures
+
+- **Action:** `tests-sh-passed` 139 → 141 and `context-budget-unit-tests` 118 → 129. These are the values
+  `python3 starter-kit/quality_ratchet.py --run` measures after the two `context_budget.py` changes below,
+  which add 11 unit tests and 2 `bin/tests.sh` rows. The manifest says the next tightening is owed whenever a
+  measured value rises, and a tightening passes the pre-commit ratchet without approval. No other floor
+  moves: every other gate measures exactly its threshold.
+- **Measured** in a fresh clone of the branch before this commit: `10/10 pass · 0 fail · 0 unmeasured`, with
+  `tests-sh-passed` 141 and `context-budget-unit-tests` 129.
+
+### 2026-09-21 · [ad hoc] `context_budget.py`: the growth-run advisory no longer says nothing is over a ceiling when something is
+
+- **Action:** when the growth run fires, `render()` in `starter-kit/context_budget.py` prints an advisory
+  whose second sentence was a literal: *"Nothing is over a ceiling yet — that is the point. Ceilings fire
+  late."* It printed in every such run, including runs whose headline read `context budget OVER` above
+  a table with rows marked `over`. The sentence is now chosen by `worst`, the variable the headline
+  prints, so the two cannot disagree. When nothing is over, the sentence is unchanged, word for word.
+  When something is, it reads *"A ceiling has fired as well — see the rows marked over."* No other output
+  changes.
+- **Tests, RED first against the unchanged tool** (blob `131158cb`): 3 in a new `TestGrowthRunAdvisory`
+  class in `tools/test_context_budget.py`. (1) A matrix over every status `render()` ranks (`ok`,
+  `unmeasured`, `warn`, `instrument-failed`, `over`), with and without the growth run. It calls
+  `render()` in process, checks each cell's headline and advisory first, and asserts the advisory never
+  says *"Nothing is over a ceiling"* when the headline says `OVER`. (2) The presence control: every
+  status below `over` still prints the original sentence, so deleting it would not pass (1). (3) The
+  real `main()` → `render()` path on a project over its resident total, with a growth-run limit of 2 and a
+  seeded history. Tests (1) and (3) fail on the old tool, and (2) passes on it by design.
+- **Mutants, run rather than predicted,** after the fixed tool passed the same harness: the literal
+  restored (tests 1 and 3 fail); the sentence deleted in both states (all 3); the condition inverted (all
+  3); the condition widened to `instrument-failed` (test 2). `--selftest` catches none of them, since it
+  does not cover the advisory.
+- **Not changed here:** a row can be over a ceiling and still read `instrument-failed`. `measure_file()`
+  gives a row the status of whichever check wrote last, so a failed structure pattern overwrites a byte
+  ceiling's `over`. The headline then reads `INSTRUMENT-FAILED`, and the advisory keeps the original
+  sentence above a finding that says the ceiling was exceeded. That is a status-precedence question in
+  `measure_file()`, not in the advisory.
+- **Counts:** `tools/test_context_budget.py` 126 → 129 tests, `--selftest` 52 checks unchanged, `bin/tests.sh`
+  141 passed, 0 failed (unchanged: no shell row added). No gate threshold changes in this commit.
+
+### 2026-09-21 · [ad hoc] `context_budget.py --status` now exists and writes nothing; an unknown argument is refused
+
+- **Action:** `starter-kit/context_budget.py` had no `--status` command and ignored any argument it did
+  not recognise, so `--status`, `--check`, `--force` and a typo each ran the default measurement. That run
+  appends a row to `.context-budget-history.jsonl` whenever a size changed. `--status` is nonetheless
+  cited as a verification step in this repository's own ledgers, and the PR #82 review thread named its
+  write as what stands in the way of a `context-budget` gate. Now:
+  - `--status`, with or without `--json`, is the default run without its one write: the same ledger, the
+    same exit code, and no history row.
+  - An argument outside a fixed list (`install-hook`, `--precommit`, `--calibrate`, `--selftest`, `--json`,
+    `--status`; `-h`/`--help` still win) exits **3**, the tool's documented usage code. It prints
+    `unknown argument: …` and the usage text, and reads and writes nothing. The usage text's *"There is
+    deliberately no --force"* is now observable: `--force` is refused rather than silently measured.
+  - `VERSION` 1.2.0 → 1.3.0. The usage text gains a `--status` line, and the default's *"append one
+    history line"* now says *"when a size changed"*, which is what `append_history` does.
+- **Where the list lives, and a guard that narrowed on the way.** The list sits above `def selftest`
+  because the selftest's escape-hatch check (the string `--force` must not appear in the source above
+  that function) is the only existing guard that can read it; `main()` is below it. While the list was
+  being written, a comment above it named that function's definition. The check splits the source on the
+  first mention, so it moved up, and `--force` added to the list then passed the selftest. A new test
+  pins the split point to the function itself.
+- **Tests, RED first against the unchanged tool** (blob `b1111d92`): 8 in a new `TestCommandLine` class in
+  `tools/test_context_budget.py`. Six fail on the old tool. Two are controls that pass on it by design: the
+  default run still writes, and `--help` still wins over an unknown argument. Two rows in `bin/tests.sh`'s
+  budget block, in a `mktemp` project with the seed config: `--status` leaves `git status --porcelain
+  --ignored` empty, and `--zzz` exits 3 and changes nothing. The same project's default run comes last, as
+  the presence control: the fixture does get written to. Both rows fail on the old tool.
+- **Mutants, run rather than predicted:** the append made unconditional again (3 unit tests and 1 row
+  fail); the rejection removed (2 and 1); `--force` added to the list (3 unit tests, and the selftest,
+  which now sees it); a comment naming the selftest's definition above the list, plus `--force` (3 unit
+  tests; the selftest does not see it). The two `"--force" in args` greps, in `bin/tests.sh` and
+  `tools/test_context_budget.py`, catch neither `--force` mutant, since they match that expression only.
+- **Counts:** `tools/test_context_budget.py` 118 → 126 tests, `--selftest` 52 checks unchanged, `bin/tests.sh`
+  139 → 141 passed, 0 failed. No gate threshold changes in this commit.
+
 ### 2026-09-16 · [ad hoc] PR #82 merged — post-merge verification on main and the first tightening
 
 - **Action:** the operator merged [PR #82](https://github.com/KJ5HST/methodology/pull/82) (quality ratchet,

@@ -676,6 +676,36 @@ cp "$CB" "$P/context_budget.py"
     || fail "install-hook did not write the default .git/hooks/pre-commit"
 rm -rf "$P"
 
+# --status measures and writes nothing; an argument the tool does not know is refused
+# before the tree is read. Both used to run the default measurement, history append
+# included. --ignored, because a project may leave the history file untracked or ignore
+# it. The default run last is the presence control: this project DOES get written to, so
+# an empty status after the others is a non-write rather than a run that stopped early.
+# --check is --status under a second name: the same exit code, and no write.
+P="$(mktemp_project)"
+cp "$STARTER/context-budget.json" "$P/.context-budget.json"
+cp "$CB" "$P/context_budget.py"
+(cd "$P" && git add -A && git -c user.email=t@t -c user.name=t commit -q -m baseline)
+(cd "$P" && python3 context_budget.py --status >/dev/null 2>&1); RC_STATUS=$?
+AFTER_STATUS="$(git -C "$P" status --porcelain --ignored)"
+(cd "$P" && python3 context_budget.py --check >/dev/null 2>&1); RC_CHECK=$?
+AFTER_CHECK="$(git -C "$P" status --porcelain --ignored)"
+(cd "$P" && python3 context_budget.py --zzz >/dev/null 2>&1); RC=$?
+AFTER_UNKNOWN="$(git -C "$P" status --porcelain --ignored)"
+(cd "$P" && python3 context_budget.py >/dev/null 2>&1)
+[ -f "$P/.context-budget-history.jsonl" ] && WROTE=1 || WROTE=0
+[ -z "$AFTER_STATUS" ] && [ "$WROTE" = "1" ] \
+    && pass "context_budget --status writes nothing to the project" \
+    || fail "context_budget --status wrote [$AFTER_STATUS] (default run wrote: $WROTE)"
+[ -z "$AFTER_CHECK" ] && [ "$RC_CHECK" = "$RC_STATUS" ] && [ "$RC_CHECK" != "3" ] \
+    && [ "$WROTE" = "1" ] \
+    && pass "context_budget --check is --status: the same exit code, writing nothing" \
+    || fail "context_budget --check exited $RC_CHECK (--status $RC_STATUS); left [$AFTER_CHECK]"
+[ "$RC" = "3" ] && [ "$AFTER_UNKNOWN" = "$AFTER_STATUS" ] && [ "$WROTE" = "1" ] \
+    && pass "context_budget refuses an unknown argument with exit 3, writing nothing" \
+    || fail "context_budget --zzz exited $RC; left [$AFTER_UNKNOWN] after [$AFTER_STATUS]"
+rm -rf "$P"
+
 # sync must distribute the tool (TRACKED) and seed the config (SEED).
 P="$(mktemp_project)"
 "$BIN/sync" "$P" --mode=commit --source=local >/dev/null 2>&1

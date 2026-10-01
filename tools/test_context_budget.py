@@ -512,6 +512,371 @@ class TestToolInvariants(unittest.TestCase):
         self.assertNotIn('"--force" in args', src)
 
 
+# ---------------------------------------------------------------------------------
+# The command line. `--status` was cited as a command — in session receipts and as a
+# proposed gate — while the tool had no such flag and ignored every argument it did not
+# know, so each of those runs was the default measurement, history append included. A
+# status read now measures and writes nothing, and an argument the tool does not know is
+# refused before the tree is read. `--check` -- what an adopter's instructions type, and
+# what the ledger trimmer calls its own report-only run -- is a second name for `--status`.
+# Every other refusal names what the user most likely meant, where anything can be said.
+# ---------------------------------------------------------------------------------
+
+# Frozen here on purpose: a set derived from the code cannot be asserted to cover the code.
+ACCEPTED_ARGUMENTS = frozenset({"install-hook", "--precommit", "--calibrate", "--selftest",
+                                "--json", "--status", "--check"})
+
+
+class TestCommandLine(unittest.TestCase):
+
+    def _project(self, d):
+        """A committed project the tool can measure, with no history file yet. Proved clean
+        before use; test_the_default_run_still_writes_its_row proves the same fixture
+        writes, so an empty status after a run is a non-write, not a run that never got
+        far enough to write."""
+        new_repo(d)
+        Path(d, ".context-budget.json").write_text(json.dumps({
+            "classes": {"resident": {"total_bytes": 34000}},
+            "files": [{"path": "CLAUDE.md", "class": "resident", "max_bytes": 100000}]}))
+        Path(d, "CLAUDE.md").write_text("x" * 999 + "\n")
+        git(d, "add", "-A")
+        git(d, "commit", "-q", "-m", "baseline")
+        self.assertEqual(self._dirt(d), "", "fixture: the project must start clean")
+
+    def _run(self, d, *args):
+        return subprocess.run([sys.executable, str(CB_PY), *args], cwd=d,
+                              capture_output=True, text=True)
+
+    def _dirt(self, d):
+        """--ignored as well: upstream leaves the history file untracked, and an adopter
+        may ignore it, so a write must show whichever way the project treats the file."""
+        return git(d, "status", "--porcelain", "--ignored")
+
+    def _rows(self, d):
+        p = Path(d, cb.HISTORY_NAME)
+        return len(p.read_text().splitlines()) if p.exists() else 0
+
+    def test_status_prints_what_the_default_run_prints_and_only_the_default_run_appends(self):
+        """--status runs FIRST: an append advances the growth-run counter, so the reverse
+        order would compare two different counts rather than two different writes."""
+        with tempfile.TemporaryDirectory() as d:
+            self._project(d)
+            self._run(d)
+            Path(d, "CLAUDE.md").write_text("x" * 1999 + "\n")
+            self.assertEqual(self._rows(d), 1, "fixture: one history row before")
+            status = self._run(d, "--status")
+            rows_after_status = self._rows(d)
+            bare = self._run(d)
+            self.assertEqual(rows_after_status, 1, "--status appended a history row")
+            self.assertEqual(self._rows(d), 2,
+                             "fixture: the size change is real, so the default run appends")
+            self.assertEqual(status.stdout, bare.stdout)
+            self.assertEqual(status.returncode, bare.returncode)
+
+    def test_status_writes_nothing_with_or_without_json(self):
+        for argv in (["--status"], ["--status", "--json"]):
+            with self.subTest(argv=argv), tempfile.TemporaryDirectory() as d:
+                self._project(d)
+                p = self._run(d, *argv)
+                self.assertNotIn("Traceback", p.stderr)
+                self.assertEqual(self._dirt(d), "", f"{' '.join(argv)} wrote to the project")
+                if "--json" in argv:
+                    self.assertIn("files", json.loads(p.stdout))
+
+    def test_the_default_run_still_writes_its_row(self):
+        """PRESENCE CONTROL for the two above, on the same fixture."""
+        with tempfile.TemporaryDirectory() as d:
+            self._project(d)
+            self._run(d)
+            self.assertEqual(self._rows(d), 1)
+            self.assertIn(cb.HISTORY_NAME, self._dirt(d))
+
+    def test_check_is_status_under_a_second_name(self):
+        """An adopter's session notes say "Re-measure (`python3 context_budget.py --check`)
+        before writing more", and the ledger trimmer's --check means "report, never write".
+        So --check is the status run: the same output and exit code, and no write. The
+        fixture is the one the default run is shown writing to above."""
+        for check, status in ((["--check"], ["--status"]),
+                              (["--check", "--json"], ["--status", "--json"])):
+            with self.subTest(argv=check), tempfile.TemporaryDirectory() as d:
+                self._project(d)
+                s = self._run(d, *status)
+                c = self._run(d, *check)
+                self.assertNotEqual(c.returncode, cb.USAGE, f"{' '.join(check)} was refused")
+                self.assertEqual(c.stdout, s.stdout)
+                self.assertEqual(c.returncode, s.returncode)
+                self.assertEqual(self._dirt(d), "", f"{' '.join(check)} wrote to the project")
+
+    def _assert_refused(self, arg):
+        """Returns the refusal's own line, ANSI stripped, for the hint tests below."""
+        with tempfile.TemporaryDirectory() as d:
+            self._project(d)
+            p = self._run(d, arg)
+            out = re.sub(r"\x1b\[[0-9;]*m", "", p.stdout)
+            self.assertEqual(p.returncode, cb.USAGE)
+            self.assertIn(f"unknown argument: {arg}", out)
+            self.assertIn("Usage:", out)
+            self.assertEqual(self._dirt(d), "", f"a refused {arg} touched the project")
+            # The config loads, so the 3 above came from the argument and not from a
+            # missing or unreadable .context-budget.json, which exits 3 too.
+            self.assertNotEqual(self._run(d).returncode, cb.USAGE)
+        lines = [l for l in out.splitlines() if l.startswith("unknown argument:")]
+        self.assertEqual(len(lines), 1, out)
+        return lines[0]
+
+    def test_an_unknown_argument_is_refused_and_touches_nothing(self):
+        self._assert_refused("--zzz")
+
+    def test_force_is_refused_like_any_other_unknown_argument(self):
+        """The usage text says there is deliberately no --force. Until arguments were
+        checked, passing it ran the default measurement, so nothing could observe that."""
+        self._assert_refused("--force")
+
+    def test_force_is_told_the_one_way_to_permit_growth(self):
+        """Refused, and told where the decision it wanted is made."""
+        self.assertIn(cb.CONFIG_NAME, self._assert_refused("--force"))
+
+    def test_a_preview_or_a_do_it_flag_is_told_the_command_it_meant(self):
+        """What the sibling tools use each for: --dry-run previews without writing (the
+        dashboard), --run and --write do the real thing (the ratchet, the trimmer)."""
+        self.assertIn("did you mean --status?", self._assert_refused("--dry-run"))
+        for arg in ("--run", "--write"):
+            with self.subTest(arg=arg):
+                self.assertIn("run with no argument", self._assert_refused(arg))
+
+    def test_a_misspelling_is_offered_the_command_it_is_closest_to(self):
+        self.assertIn("did you mean --status?", self._assert_refused("--stauts"))
+
+    def test_an_argument_like_nothing_accepted_is_offered_nothing(self):
+        """CONTROL for the two above: the suggestion is not unconditional."""
+        line = self._assert_refused("--zzz")
+        self.assertEqual(line, "unknown argument: --zzz")
+
+    def test_the_suggestion_cutoff_offers_version_nothing(self):
+        """Pins the cutoff, measured rather than chosen: at difflib's default of 0.6,
+        --version is offered --json, which is not what anyone typing it meant."""
+        self.assertEqual(self._assert_refused("--version"), "unknown argument: --version")
+
+    def test_each_unknown_argument_gets_its_own_line_and_its_own_hint(self):
+        """They used to share one line, which has no room for a hint apiece."""
+        with tempfile.TemporaryDirectory() as d:
+            self._project(d)
+            p = self._run(d, "--force", "--zzz")
+            out = re.sub(r"\x1b\[[0-9;]*m", "", p.stdout)
+            self.assertEqual(p.returncode, cb.USAGE)
+            lines = [l for l in out.splitlines() if l.startswith("unknown argument:")]
+            self.assertEqual(len(lines), 2, out)
+            self.assertTrue(lines[0].startswith("unknown argument: --force "), lines[0])
+            self.assertIn(cb.CONFIG_NAME, lines[0])
+            self.assertEqual(lines[1], "unknown argument: --zzz")
+            self.assertEqual(self._dirt(d), "")
+
+    def test_the_accepted_arguments_are_exactly_the_frozen_set_and_all_documented(self):
+        self.assertEqual(set(cb.ACCEPTED_ARGUMENTS), ACCEPTED_ARGUMENTS)
+        usage = subprocess.run([sys.executable, str(CB_PY), "--help"],
+                               capture_output=True, text=True).stdout
+        for a in sorted(ACCEPTED_ARGUMENTS | {"-h", "--help"}):
+            # Bounded, so "-h" is not found inside "--help" nor "--json" inside a longer flag.
+            self.assertRegex(usage, rf"(?<![\w-]){re.escape(a)}(?![\w-])",
+                             f"{a} is accepted but not in the usage text")
+
+    def test_the_selftest_escape_hatch_check_still_reads_the_accepted_list(self):
+        """The selftest refuses "--force" anywhere in the source before `def selftest`, and
+        that is the one existing guard able to see the accepted list, which is why the list
+        sits above it. It splits on the FIRST mention, so a second one earlier in the file --
+        a comment is enough -- silently narrows the check to whatever lies above it. That
+        happened while this list was being written, and --force added to it then passed the
+        selftest."""
+        src = CB_PY.read_text()
+        self.assertEqual(src.index("def selftest"), src.index("\ndef selftest(") + 1,
+                         "the check's split point is no longer the function itself")
+        self.assertIn("ACCEPTED_ARGUMENTS = (", src.split("def selftest")[0])
+
+    def test_help_still_wins_over_an_unknown_argument(self):
+        """Run where there is no config at all: help reads nothing, so it needs none."""
+        with tempfile.TemporaryDirectory() as d:
+            p = self._run(d, "--help", "--zzz")
+            self.assertEqual(p.returncode, cb.CLEAN)
+            self.assertIn("Usage:", p.stdout)
+            self.assertNotIn("unknown argument", p.stdout)
+
+
+# ---------------------------------------------------------------------------------
+# The growth-run advisory. Its second sentence was a literal -- "Nothing is over a
+# ceiling yet" -- printed whenever the run fired, so a run whose headline read OVER, with
+# four rows marked over, said nothing was. The sentence is now chosen by `worst`, the
+# variable the headline prints, so the two cannot disagree.
+# ---------------------------------------------------------------------------------
+
+NOT_OVER_YET = "Nothing is over a ceiling yet — that is the point. Ceilings fire late."
+FIRED_AS_WELL = "A ceiling has fired as well — see the rows marked over."
+
+
+def _plain(text):
+    """ANSI stripped and whitespace collapsed: the advisory wraps mid-sentence."""
+    return " ".join(re.sub(r"\x1b\[[0-9;]*m", "", text).split())
+
+
+class TestGrowthRunAdvisory(unittest.TestCase):
+
+    # Every status render() ranks, lowest first. Frozen, not read from the tool.
+    STATUSES = ("ok", "unmeasured", "warn", "instrument-failed", "over")
+
+    def _row(self, status):
+        row = {"path": "A.md", "class": "resident", "bytes": 1500, "lines": 1,
+               "max_bytes": 1000, "status": status, "findings": []}
+        if status == "unmeasured":
+            row["reason"] = "file does not exist"
+        if status == "over":
+            row["findings"] = [{"kind": "bytes", "msg": "1,500 B exceeds the 1,000 B ceiling"}]
+        return row
+
+    def _render(self, status, run_hit):
+        import contextlib, io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            cb.render("/nonexistent", [self._row(status)], [], 12, run_hit, {},
+                      {"resident_bytes": 1500}, totals=[])
+        return _plain(buf.getvalue())
+
+    def test_the_advisory_never_says_nothing_is_over_when_the_headline_says_over(self):
+        """The matrix: every status render() can rank worst, with and without the run."""
+        for status in self.STATUSES:
+            for run_hit in (True, False):
+                with self.subTest(worst=status, run_hit=run_hit):
+                    out = self._render(status, run_hit)
+                    # Prove the fixture: the headline reads the status this cell is about,
+                    # and the advisory is printed exactly when the run fired.
+                    self.assertIn(f"context budget {status.upper()} ", out)
+                    self.assertEqual("growth run: 12 consecutive" in out, run_hit)
+                    if status == "over":
+                        self.assertNotIn("Nothing is over a ceiling", out)
+                    if status == "over" and run_hit:
+                        self.assertIn(FIRED_AS_WELL, out)
+
+    def test_the_not_over_advisory_still_prints_the_original_sentence(self):
+        """PRESENCE CONTROL for the matrix: without it, deleting the sentence outright
+        would pass the assertion above. Every status below `over` keeps it word for word,
+        instrument-failed included: the sentence follows the headline, and no row's status
+        is over."""
+        for status in self.STATUSES[:-1]:
+            with self.subTest(worst=status):
+                out = self._render(status, True)
+                self.assertIn(NOT_OVER_YET, out)
+                self.assertNotIn(FIRED_AS_WELL, out)
+
+    def test_an_over_project_with_a_fired_growth_run_says_so_end_to_end(self):
+        """The real main() -> render() path: a resident class over its total, a growth-run
+        limit of 2, and a seeded history the current size extends to a run of 2."""
+        with tempfile.TemporaryDirectory() as d:
+            new_repo(d)
+            Path(d, ".context-budget.json").write_text(json.dumps({
+                "growth_run": 2,
+                "classes": {"resident": {"total_bytes": 1000}},
+                "files": [{"path": "CLAUDE.md", "class": "resident"}]}))
+            Path(d, "CLAUDE.md").write_text("x" * 1500)
+            Path(d, cb.HISTORY_NAME).write_text("".join(
+                json.dumps({"resident_bytes": n, "files": {"CLAUDE.md": n}}) + "\n"
+                for n in (1300, 1400)))
+            p = subprocess.run([sys.executable, str(CB_PY)], cwd=d,
+                               capture_output=True, text=True)
+            out = _plain(p.stdout)
+            self.assertNotIn("Traceback", p.stderr)
+            self.assertIn("context budget OVER ", out, "fixture: the project must be over")
+            self.assertIn("(resident total)", out, "fixture: the over row must exist")
+            self.assertIn("growth run: 2 consecutive", out, "fixture: the run must fire")
+            self.assertNotIn("Nothing is over a ceiling", out)
+            self.assertIn(FIRED_AS_WELL, out)
+
+
+# ---------------------------------------------------------------------------------
+# Status precedence in measure_file(). Each check wrote the row's status in turn, so the
+# last one to run won: a byte ceiling set `over`, then a structure pattern below its
+# minimum overwrote it with `instrument-failed`, which render() ranks BELOW `over`. The
+# headline followed the row, and the growth-run advisory said nothing was over a ceiling
+# directly above the finding that said one was. A check may raise a status, never lower it.
+# ---------------------------------------------------------------------------------
+
+# No line of the fixture files below starts with "## ", so this pattern always fails.
+FAILING_PATTERN = [{"pattern": "^## ", "expect_min": 1}]
+
+
+class TestStatusPrecedence(unittest.TestCase):
+
+    def _project(self, d):
+        """A resident file over its byte ceiling that also fails a structure pattern, and a
+        history the current size extends to a growth run of 2 against a limit of 2. No
+        class total is declared, so the file's row is the only one that can be over."""
+        new_repo(d)
+        Path(d, ".context-budget.json").write_text(json.dumps({
+            "growth_run": 2,
+            "files": [{"path": "CLAUDE.md", "class": "resident", "max_bytes": 1000,
+                       "structure": FAILING_PATTERN}]}))
+        Path(d, "CLAUDE.md").write_text("x" * 1500)
+        Path(d, cb.HISTORY_NAME).write_text("".join(
+            json.dumps({"resident_bytes": n, "files": {"CLAUDE.md": n}}) + "\n"
+            for n in (1300, 1400)))
+
+    def _run(self, d, *args):
+        return subprocess.run([sys.executable, str(CB_PY), *args], cwd=d,
+                              capture_output=True, text=True)
+
+    def _measure(self, d, **spec):
+        """1,500 B in a class outside the token arm, so the byte and structure checks are
+        the only two that can write the row's status."""
+        Path(d, "t.md").write_text("x" * 1500)
+        return cb.measure_file(d, {"path": "t.md", "class": "on-demand",
+                                   "structure": FAILING_PATTERN, **spec})
+
+    @staticmethod
+    def _kinds(row):
+        return sorted(f["kind"] for f in row["findings"])
+
+    def test_a_row_over_its_ceiling_that_also_fails_a_pattern_reads_over_end_to_end(self):
+        """The real main() -> render() path. The exit is BREACH either way; what changed is
+        what the headline and the advisory say."""
+        with tempfile.TemporaryDirectory() as d:
+            self._project(d)
+            p = self._run(d, "--status")
+            out = _plain(p.stdout)
+            self.assertNotIn("Traceback", p.stderr)
+            # Prove the fixture: both checks fired, and the run fired.
+            self.assertIn("1,500 B exceeds the 1,000 B ceiling", out)
+            self.assertIn("fewer than the declared minimum", out)
+            self.assertIn("growth run: 2 consecutive", out)
+            self.assertIn("context budget OVER ", out)
+            self.assertNotIn("Nothing is over a ceiling", out)
+            self.assertIn(FIRED_AS_WELL, out)
+            self.assertEqual(p.returncode, cb.BREACH)
+
+    def test_the_json_report_gives_that_row_as_over(self):
+        with tempfile.TemporaryDirectory() as d:
+            self._project(d)
+            p = self._run(d, "--status", "--json")
+            self.assertNotIn("Traceback", p.stderr)
+            row = json.loads(p.stdout)["files"][0]
+            self.assertEqual(row["path"], "CLAUDE.md")
+            self.assertIn("bytes", self._kinds(row), "fixture: the byte ceiling must fire")
+            self.assertIn("instrument", self._kinds(row), "fixture: the pattern must fail")
+            self.assertEqual(row["status"], "over")
+
+    def test_a_row_that_only_fails_its_pattern_is_still_instrument_failed(self):
+        """CONTROL: the guard must not stop the status being set at all."""
+        with tempfile.TemporaryDirectory() as d:
+            r = self._measure(d, max_bytes=2000)
+            self.assertEqual(self._kinds(r), ["instrument"], "fixture: only the pattern fails")
+            self.assertEqual(r["status"], "instrument-failed")
+
+    def test_a_warn_row_that_fails_its_pattern_is_raised_to_instrument_failed(self):
+        """Raising still works: `warn` ranks below `instrument-failed`."""
+        with tempfile.TemporaryDirectory() as d:
+            r = self._measure(d, max_bytes=2000, warn_bytes=1000)
+            self.assertEqual(self._kinds(r), ["bytes", "instrument"])
+            self.assertIn("warn line", r["findings"][0]["msg"],
+                          "fixture: the byte finding must be the warn line, not a ceiling")
+            self.assertEqual(r["status"], "instrument-failed")
+
+
 class TestTokenCeiling(unittest.TestCase):
     """The ceiling is denominated in TOKENS, the unit the read cap is actually in.
 

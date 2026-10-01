@@ -29,6 +29,7 @@ interrupt, and a machine-written ledger is easier to over-trust than a prose one
 
 Python 3 stdlib only, cross-platform. Conventions follow methodology_dashboard.py.
 """
+import difflib
 import hashlib
 import json
 import os
@@ -38,7 +39,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 CONFIG_NAME = ".context-budget.json"
 HISTORY_NAME = ".context-budget-history.jsonl"
 
@@ -47,6 +48,18 @@ RED = "\033[31m"; YEL = "\033[33m"; GRN = "\033[32m"; CYN = "\033[36m"
 W = 74
 
 CLEAN, WARN, BREACH, USAGE = 0, 1, 2, 3
+
+# Every argument main() acts on, besides -h/--help. Anything else exits USAGE before the
+# tree is read: an unknown argument used to fall through to the default measurement, so a
+# typo, or a flag borrowed from another tool, ran the real thing -- history append
+# included -- while looking like something else. Declared here rather than in main()
+# because the selftest's escape-hatch check reads only the source above the selftest
+# function, and main() is below it. (Name that function's definition in a comment up here
+# and the check stops there instead: it splits the source on the first mention.)
+# --check is a second name for --status: it is what the ledger trimmer calls its own
+# report-only run, and what at least one adopter's instructions already type.
+ACCEPTED_ARGUMENTS = ("install-hook", "--precommit", "--calibrate", "--selftest", "--json",
+                      "--status", "--check")
 
 # === THE READ CAP, AND WHY THE CEILING IS DENOMINATED IN TOKENS ===
 #
@@ -414,7 +427,12 @@ def measure_file(root, spec, cfg=None):
             out["findings"].append({"kind": "instrument", "msg":
                 f"pattern {s['pattern']!r} matched {n}, fewer than the declared minimum "
                 f"{s['expect_min']} — the check is not measuring what it claims"})
-            out["status"] = "instrument-failed"
+            # A check may raise a row's status, never lower it. `over` is the one status
+            # render() ranks above this, and a ceiling that fired is still exceeded
+            # whatever a pattern matched: overwriting it put an INSTRUMENT-FAILED headline
+            # over a row whose own finding said it was over.
+            if out["status"] != "over":
+                out["status"] = "instrument-failed"
         elif "max" in s and n > s["max"]:
             over(f"{n}× {s['pattern']!r}, expected at most {s['max']}"
                  + (f" — {s['why']}" if s.get("why") else ""), "structure")
@@ -649,8 +667,14 @@ def render(root, results, synced, run_len, run_hit, cfg, snapshot, totals=None,
         return
     print(f"{D}{'─'*W}{R}")
     if run_hit:
+        # The second sentence is chosen by `worst`, the variable the headline prints, so the
+        # two cannot disagree. It was a literal, and said nothing was over a ceiling in runs
+        # whose headline read OVER beside four rows marked over.
+        second = ("Nothing is\n  over a ceiling yet — that is the point. Ceilings fire late."
+                  if worst != "over" else
+                  "A ceiling\n  has fired as well — see the rows marked over.")
         print(f"  {YEL}{B}growth run{R}: {run_len} consecutive non-shrinking measurements. "
-              f"Nothing is\n  over a ceiling yet — that is the point. Ceilings fire late.")
+              f"{second}")
     for r, f in findings:
         print(f"\n  {status_colour(r['status'])}{B}{r['path']}{R} — {f['msg']}")
         for i, (name, how) in enumerate(REMEDIES.get(f["kind"], []), 1):
@@ -1287,14 +1311,45 @@ def selftest(root, cfg):
 
 # === MAIN ===
 
+# What a refused argument most likely meant, from what the sibling tools use the same flag
+# for. Looked up by key, never by a membership test on the argument list: bin/tests.sh and
+# the unit tests grep this file for that form to prove --force is never honoured. It sits
+# below the selftest because it names --force, which the selftest refuses anywhere above
+# its own definition.
+REFUSED_ARGUMENT_HINTS = {
+    "--force": ("there is deliberately no --force: to permit growth, raise that file's "
+                f"ceiling in {CONFIG_NAME}"),
+    "--dry-run": "did you mean --status? It measures and writes nothing",
+    "--run": "run with no argument to measure and record",
+    "--write": "run with no argument to measure and record",
+}
+
+# Measured, not chosen: at difflib's default of 0.6, --version is offered --json.
+SUGGESTION_CUTOFF = 0.75
+
+
+def refusal_hint(arg):
+    """What to tell someone who typed `arg`, or None when nothing useful can be said."""
+    hint = REFUSED_ARGUMENT_HINTS.get(arg)
+    if hint is None:
+        near = difflib.get_close_matches(arg, ACCEPTED_ARGUMENTS + ("-h", "--help"),
+                                         n=1, cutoff=SUGGESTION_CUTOFF)
+        hint = f"did you mean {near[0]}?" if near else None
+    return hint
+
+
 def print_usage():
     print(f"context_budget.py v{VERSION} — size budgets for session-resident documents")
     print("")
     print("Usage: python3 context_budget.py [command] [options]")
     print("")
     print("Commands:")
-    print("  (default)      Measure every budgeted file, append one history line, print")
-    print("                 the ledger. Exit 2 if anything is over a hard ceiling.")
+    print("  (default)      Measure every budgeted file, append one history line when a")
+    print("                 size changed, print the ledger. Exit 2 if anything is over")
+    print("                 a hard ceiling.")
+    print("  --status       The default run without its write: the same ledger and exit")
+    print("                 code, and no history line.")
+    print("  --check        The same as --status.")
     print("  install-hook   Install a git pre-commit hook that refuses a commit growing")
     print("                 a budgeted file past its ceiling. Opt-in.")
     print("  --precommit    What the hook runs. Refuses only when the staged file is over")
@@ -1315,6 +1370,15 @@ def main():
     args = sys.argv[1:]
     if "-h" in args or "--help" in args:
         print_usage(); return CLEAN
+    unknown = [a for a in args if a not in ACCEPTED_ARGUMENTS]
+    if unknown:
+        # One line each, so each can say what that argument most likely meant.
+        for a in unknown:
+            hint = refusal_hint(a)
+            print(f"{RED}unknown argument: {a}{R}" + (f" — {hint}" if hint else ""))
+        print("")
+        print_usage()
+        return USAGE
     root = find_root()
     cfg, cfg_path = load_config(root)
     if cfg is None:
@@ -1372,7 +1436,11 @@ def main():
 
     hist = load_history(root)
     run_len, run_hit = growth_run(hist, snapshot, cfg.get("growth_run", 10))
-    append_history(root, snapshot, hist)
+    # --status is this run with its one write removed, so reading the state cannot change
+    # it: the ledger and the exit code are the default run's, and no history row lands.
+    # --check is the same run under a second name.
+    if "--status" not in args and "--check" not in args:
+        append_history(root, snapshot, hist)
 
     if "--json" in args:
         print(json.dumps({"resident_bytes": resident, "growth_run": run_len,
@@ -1386,9 +1454,10 @@ def main():
     # Class totals vote too. Without them a class in WARN was invisible to the exit code,
     # so a CI step gating on it could not see the one signal that arrives before a breach.
     states = [r["status"] for r in results + synced] + [c["status"] for c in totals]
-    # A config defect is an INSTRUMENT failure, which this tool's own ordering already
-    # ranks above `over`: if a declared ceiling is not the one in force, every verdict
-    # measured against it is unreliable, including the green ones.
+    # A config defect is an INSTRUMENT failure, and it exits BREACH exactly as `over` does:
+    # if a declared ceiling is not the one in force, every verdict measured against it is
+    # unreliable, including the green ones. (render()'s ranking puts `instrument-failed`
+    # just below `over`; that decides the headline, not this exit.)
     if defects or "over" in states or "instrument-failed" in states:
         return BREACH
     if "warn" in states or "unmeasured" in states or run_hit:
