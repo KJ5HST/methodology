@@ -44,6 +44,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Ratchet: `context-budget-unit-tests` 145 → 148 after D9; PR #91 opened for D8
+
+- **Action:** S32. Measured at `5ff62ea`: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results fd8305354596 ·
+  manifest 312cd7c405c8`; the three worktree tests raise the budget suite to 148 — tightened. **PR opened (non-commit
+  action):** [PR #91](https://github.com/KJ5HST/methodology/pull/91), `feat/sync-manifest-at-ref` → `main`, D8 for
+  rmsharp's review; not merged.
+
 ### 2026-10-01 · [ad hoc] Phase 3 D9 — `context_budget.py --calibrate` works from a linked worktree (1.3.1)
 
 - **Action:** S32. New `transcript_dir(root)` keys the transcript directory on the MAIN checkout (the parent of git's
