@@ -40,6 +40,13 @@ ledger's next new month, and nothing below is retrofitted (§The Action Ledger, 
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] S27 close-out — the decision receipt completed
+
+- **Action:** S27's `HANDOFFS.md` receipt goes `status: pending` → `complete`; this entry closes the S27 claim entry
+  (*Parallel-sessions plan: the twelve §8 decisions (in progress)*). Gate run at `5bab033`: `quality_ratchet: 11/11
+  pass · 0 fail · 0 unmeasured · results 30d2a763be2b · manifest 58b9c63d75da`. Not done here, recorded as next
+  steps: the PR #77 backfill and the due `CHANGELOG.md` trim found while deciding.
+
 ### 2026-10-01 · [ad hoc] Parallel-sessions plan ratified with amendments — §8A records the twelve decisions
 
 - **Action:** S27, under the operator's delegation. `docs/planning/parallel-sessions-plan.md` gains §8A (decision
