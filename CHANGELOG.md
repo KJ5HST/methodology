@@ -35,6 +35,14 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 
 ---
 
+### 2026-10-01 · [ad hoc] v4.0 — the open pull requests merged and released
+
+- **Action:** session S26 on `main`. Operator: "Merge them and release 4.0." Merge #89 → #88 → #87 → #86 → #85 →
+  #84 → #83 onto `main` locally, newest ledger entries first (the order S25's corrected receipt records), each
+  `CHANGELOG.md` conflict resolved keep-both with `main`'s side on top; full suite and gate run on the merged tree;
+  push; then the v4.0 release docs (README What's New, `CLAUDE.md` §Versioning — which also owes the undocumented
+  v3.8), tag and GitHub Release. `CHANGELOG: pending` — results appended at close-out.
+
 ### 2026-09-16 · [ad hoc] PR #82 merged — post-merge verification on main and the first tightening
 
 - **Action:** the operator merged [PR #82](https://github.com/KJ5HST/methodology/pull/82) (quality ratchet,

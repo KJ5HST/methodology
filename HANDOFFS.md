@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S26
+date: 2026-10-01
+status: pending
+active_task: Merge the open PRs onto main in newest-ledger-entries-first order (#89 → #88 → #87 → #86 → #85 → #84 → #83), verify the merged tree (bin/tests.sh + quality_ratchet --run), push, then release v4.0 — README What's New, CLAUDE.md §Versioning (v3.8 was tagged without docs; v4.0), annotated tag + GitHub Release. ONE DELIVERABLE (the v4.0 release). Operator trigger: "Merge them and release 4.0". IN PROGRESS.
+```
+
+```handoff
 session: S23
 date: 2026-09-16
 status: complete
