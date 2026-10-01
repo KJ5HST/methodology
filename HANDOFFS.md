@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S30
+date: 2026-10-01
+status: pending
+active_task: Parallel-sessions plan Phase 1 per §8A — a pre-declared 2-layer slice. Layer A (≤5 files): .gitattributes, starter-kit/gitattributes seed (CHANGELOG.md, dashboard_history.jsonl, .context-budget-history.jsonl under merge=union; HANDOFFS.md excluded), bin/_manifest.py 29 → 30 (SEED), bin/tests.sh Test 30 (two-branch merge: CHANGELOG exit 0 whole, HANDOFFS conflicts and the --diff3 recipe resolves it; RED with HANDOFFS under union; trim-against-prepend; the seed installs and is never clobbered). Layer B (≤5 files): bin/check-ledger, its tests, the check-ledger gate. In-phase: GitHub's merge vs merge=union on a scratch PR. IN PROGRESS.
+```
+
+```handoff
 session: S29
 date: 2026-10-01
 status: complete

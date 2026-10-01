@@ -44,6 +44,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Parallel-sessions plan Phase 1 — ledger merge mechanics (in progress)
+
+- **Action:** session S30 claimed on `main`: Phase 1 of `docs/planning/parallel-sessions-plan.md` as §8A amends it.
+  Layer A: `.gitattributes` + `starter-kit/gitattributes` seed (three `merge=union` lines, not `HANDOFFS.md`),
+  `bin/_manifest.py` 29 → 30, two-branch merge and trim-against-prepend tests, RED first. Layer B: `bin/check-ledger`
+  and its gate. In-phase: whether GitHub's merge honours `merge=union`, measured on a scratch PR.
+
 ### 2026-10-01 · [ad hoc] S29 close-out — the never-edited gate receipt completed
 
 - **Action:** closes the S29 claim entry (*The ledger gate refuses an edit to a committed entry (in progress)*). Gate
