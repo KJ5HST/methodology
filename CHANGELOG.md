@@ -44,6 +44,17 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Phase 1 Layer A, checkpoint 2 — the dashboard accounts for the new `.gitattributes` seed (2.11.2)
+
+- **Action:** S30. Adding a distributed file tripped three of the dashboard's structural tests, as Learning #12
+  intends: every adopter-root dest must be scored or exempt, and the installed-file tuple must match the manifest.
+  `.gitattributes` joins `FRAMEWORK_INSTALLED_SOURCE` with its own signature set, `CONFIG_FILES` (name-matched — a
+  dotfile's `Path.suffix` is empty), and the test's `CHECKLIST_EXEMPT` with its reason (merge configuration says
+  nothing about session discipline; the advisory is deferred, plan §8A item 11). `DASHBOARD_VERSION` 2.11.1 → 2.11.2,
+  both twins byte-identical; unit suite 226 OK. **Found, not changed:** `.gitignore` / `.editorconfig` / `.eslintrc`
+  / `.prettierrc` in `CONFIG_EXTS` can never match for the same reason — fixing it would re-categorize every
+  scanned repo's dotfiles, a separate change.
+
 ### 2026-10-01 · [ad hoc] Phase 1 Layer A — the `.gitattributes` seed merges `CHANGELOG.md` by union; `HANDOFFS.md` stays visible
 
 - **Action:** S30. New `starter-kit/gitattributes` (SEED → `.gitattributes`; `bin/_manifest.py` 29 → 30) and this

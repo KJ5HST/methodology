@@ -422,6 +422,11 @@ CHECKLIST_EXEMPT = {
     ".quality-gates.json": "SEED manifest for the ratchet above — starts empty by decision "
                            "(plan §8.4), so its presence proves only that sync ran; a declared "
                            "gate count and its outcomes are reported as risks/points instead",
+    ".gitattributes": "SEED merge-driver config (parallel-sessions plan, Phase 1): it makes concurrent "
+                      "ledger merges clean, which says nothing about whether sessions follow the "
+                      "runner; sync installs it, so its presence measures sync. A dashboard advisory "
+                      "for a missing merge driver was considered and deferred until Phase 5 "
+                      "measures concurrent sessions (plan §8A, item 11)",
 }
 
 
@@ -2376,10 +2381,10 @@ class TestFmtRatioAndTwins(unittest.TestCase):
                         "tools/ and starter-kit/ dashboards must be byte-identical")
 
     def test_dashboard_version(self):
-        self.assertEqual(md.DASHBOARD_VERSION, "2.11.1")
+        self.assertEqual(md.DASHBOARD_VERSION, "2.11.2")
         starter_src = Path(STARTER_PY).read_text(encoding="utf-8")
-        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.11\.1"', starter_src, re.MULTILINE),
-                        "starter-kit twin must also declare DASHBOARD_VERSION 2.11.1")
+        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.11\.2"', starter_src, re.MULTILINE),
+                        "starter-kit twin must also declare DASHBOARD_VERSION 2.11.2")
 
 
 class TestCliRemedyProportionality(unittest.TestCase):

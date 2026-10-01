@@ -83,7 +83,7 @@ from collections import defaultdict
 # Every other copy (portfolio root + per-project) is a synced copy of the canonical and must
 # carry the same value. A copy whose DASHBOARD_VERSION is older than the canonical is stale —
 # re-sync from the canonical. Bump on any change to the canonical script.
-DASHBOARD_VERSION = "2.11.1"
+DASHBOARD_VERSION = "2.11.2"
 
 ROOT = Path(__file__).parent
 EXCLUDE_DIRS = {"methodology", "BrogueCE-iOS", ".git", "__pycache__", "node_modules", ".venv", "venv"}
@@ -104,6 +104,10 @@ DOC_EXTS = {".md", ".txt", ".rst", ".adoc", ".org", ".qmd", ".rmd"}
 CONFIG_FILES = {
     "Dockerfile", "Makefile", "CMakeLists.txt", "Rakefile", "Gemfile",
     "Procfile", "fly.toml", "netlify.toml", "vercel.json",
+    # Name-matched, not extension-matched: Path(".gitattributes").suffix is "" (a dotfile has no
+    # suffix), so CONFIG_EXTS can never see it. Distributed as a SEED since the parallel-sessions
+    # plan's Phase 1 (bin/_manifest.py), and categorized here so the installed-file tests hold.
+    ".gitattributes",
 }
 CONFIG_EXTS = {
     ".json", ".yaml", ".yml", ".toml", ".ini", ".cfg", ".conf",
@@ -360,7 +364,8 @@ _VERSION_RE = re.compile(r'''^DASHBOARD_VERSION\s*=\s*["']([^"']+)["']''', re.MU
 # machine-checkable cross-reference test below, not by inspection.
 FRAMEWORK_INSTALLED_SOURCE = ("methodology_dashboard.py", "methodology_trim.py",
                               "context_budget.py", "quality_ratchet.py",
-                              ".context-budget.json", ".quality-gates.json")
+                              ".context-budget.json", ".quality-gates.json",
+                              ".gitattributes")
 
 # The markdown half of the same problem, and the mirror of the defect above. `bin/sync` also
 # installs 23 markdown files, which on its own satisfies detect_doc_only's corpus
@@ -548,6 +553,19 @@ _FRAMEWORK_FILE_SIGNATURES = {
             "\"direction\"",
             "\"threshold\"",
             "quality_ratchet.py",
+        ),
+        "min_hits": 2,
+    },
+    ".gitattributes": {
+        # The ledger merge-driver SEED (parallel-sessions plan, Phase 1). Config like the two JSON
+        # seeds above — categorized "config" by name in CONFIG_FILES, so structurally unreachable
+        # here today — and given a real signature set for the same reason they are: the
+        # completeness test needs no special case that could hide a future gap.
+        "version_re": None,
+        "signatures": (
+            "Methodology ledgers",
+            "CHANGELOG.md merge=union",
+            "HANDOFFS.md is deliberately NOT listed",
         ),
         "min_hits": 2,
     },
