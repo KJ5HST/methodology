@@ -44,6 +44,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Phase 4 U2 — both campaign templates cite the one-writer rule in their sub-agent dispatch
+
+- **Action:** S33. Worker-drafted, lead-integrated: `workstreams/TEMPLATE_CAMPAIGN.md` gains a **One writer** paragraph
+  OUTSIDE its bracketed placeholder (an adopter's fill-in would erase it inside); `RESEARCH_EXHAUSTIVE_VERIFICATION_
+  CAMPAIGN.md` closes *When to fan out* with it. Each cites failure mode #29 and §Parallel Actors in that file's own
+  link style. Claims re-derived: 0 wrong.
+
 ### 2026-10-01 · [ad hoc] Phase 4 U3 — RECOMMENDED_SKILLS names the illustrative Claude Code mechanism for worker isolation
 
 - **Action:** S33. Worker-drafted, lead-integrated: after the capability-tiered paragraph, *Shape A fan-out — worker

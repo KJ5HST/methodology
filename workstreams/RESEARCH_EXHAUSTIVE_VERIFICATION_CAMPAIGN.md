@@ -286,6 +286,8 @@ Parallel sub-agents (one per claim or one per section) are appropriate when:
 - Sub-agent permission asymmetry permits read-but-not-write (parent must apply edits anyway — see [`RESEARCH_DOCUMENTATION_WORKSTREAM.md`](RESEARCH_DOCUMENTATION_WORKSTREAM.md) §Sub-Agent Permission Asymmetry)
 - Claims are independent (cross-claim consistency checks happen at the parent level)
 
+Fan-out never adds a writer: sub-agents read and return the quoted passage and status/verdict, and only the parent writes to the working tree or commits — no sub-agent edits, builds, or runs tests in the shared tree (failure mode #29; see [Iterative Methodology §Parallel Actors](../ITERATIVE_METHODOLOGY.md#parallel-actors)).
+
 ### Verdict and status calibration
 
 Different sub-agents apply different standards unless given explicit calibration. Include in every sub-agent prompt:
