@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S35-beta
+date: 2026-10-01
+status: pending
+active_task: ITERATIVE_METHODOLOGY.md §Parallel Actors, Shape B list — one bullet for D15's session-notes half (SESSION_NOTES.md is branch-local; the integrating session rewrites it at 3D, never merges two sets). IN PROGRESS.
+```
+
+```handoff
 session: S34
 date: 2026-10-01
 status: pending

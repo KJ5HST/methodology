@@ -44,6 +44,10 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Shape B dogfood (beta) — §Parallel Actors says where session notes go under Shape B (in progress)
+
+- **Action:** session S35-beta claimed on branch `s35-beta` (parallel-sessions plan Phase 5, concurrent with S35-alpha): D15's session-notes sentence in §Parallel Actors.
+
 ### 2026-10-01 · [ad hoc] Parallel-sessions plan Phase 5 — the Shape B dogfood: two concurrent sessions and one merge (in progress)
 
 - **Action:** session S34 claimed on `main` as the merging session. Two concurrent sessions, `S35-alpha` and
