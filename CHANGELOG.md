@@ -44,6 +44,17 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   variation in the regressor ("cannot fit") — so on such a machine the two tests FAIL instead of skipping
   (S24 measured it: 4 transcripts, slope −3.57, `bin/tests.sh` 138/1, `--run` 8/10). One file, RED first.
   `CHANGELOG: pending` — results appended at close-out.
+- **The fix (one file, `tools/test_context_budget.py`):** `setUp` now skips on both stops calibrate() names
+  ("not enough", "cannot fit"), then probes the admitting floor 0.0 and skips when the refusal there does not
+  cite the floor — the data decided it, not the gate under test. A refusal that *does* cite the floor at 0.0 is
+  not skipped: no defined R² is below 0.0, so it would mean calibrate() applied the wrong floor. New unit test
+  `test_only_the_floor_refusal_names_the_floor` pins that word as the discriminator (118 → 119 tests).
+  **RED first** — the natural failure no longer reproduces here (a 5th transcript turned the slope positive),
+  so it was reproduced with a fixture `HOME` whose synthetic transcripts give each shape, tool and test
+  unmodified: negative slope and flat response FAILED the presence control, no regressor variation FAILED
+  both tests; after the fix all three skip, naming the cause, while a positive and a low-R² fixture still run
+  and pass. Three mutant `calibrate()`s (ignores its floor, prints nothing, always refuses) are still caught —
+  failed, never skipped — on both admitting fixtures and on this machine's real transcripts.
 
 ### 2026-09-16 · [ad hoc] PR #82 merged — post-merge verification on main and the first tightening
 

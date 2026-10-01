@@ -322,6 +322,15 @@ class TestFitGate(unittest.TestCase):
         self.assertIn("R²", cb.calibration_verdict(0.0678, 0.0503, cb.MIN_R2))
         self.assertIn("slope", cb.calibration_verdict(-0.3557, 0.999, cb.MIN_R2))
 
+    def test_only_the_floor_refusal_names_the_floor(self):
+        """TestFitGateEndToEnd tells a refusal the floor decided from one the data decided by
+        this word. Were the floor's refusal to lose it, a calibrate() that ignored its floor
+        would be skipped there instead of caught; were a data refusal to gain it, an honest
+        skip would turn into a failure."""
+        self.assertIn("floor", cb.calibration_verdict(0.0678, 0.0503, cb.MIN_R2))
+        self.assertNotIn("floor", cb.calibration_verdict(-0.3557, 0.999, cb.MIN_R2))
+        self.assertNotIn("floor", cb.calibration_verdict(0.3557, None, cb.MIN_R2))
+
     def test_the_floor_is_configurable_per_project(self):
         self.assertIsNone(cb.calibration_verdict(0.3557, 0.30, 0.25))
         self.assertIsNotNone(cb.calibration_verdict(0.3557, 0.30, 0.75))
@@ -350,11 +359,27 @@ class TestFitGateEndToEnd(unittest.TestCase):
         # with one or two transcripts for this path both tests below RAN and FAILED against
         # that message, while a worktree (different slug) skipped and a well-used clone passed.
         # Ask the tool rather than re-deriving its rule here: a probe at an impossible floor
-        # either reaches the fit (and refuses the constant) or stops short of it.
+        # either reaches the fit (and refuses the constant) or stops short of it. "Cannot fit"
+        # is the same stop one step later: every usable session saw one size of the file, so
+        # there is no line to fit. A stop the tool does not name falls through and FAILS below,
+        # which is the safe direction — loud, never a silent skip.
         rc, out = self._run(1.01)
-        if "not enough" in out:
-            self.skipTest("transcripts present but below calibrate()'s fit minimum: "
+        if "not enough" in out or "cannot fit" in out:
+            self.skipTest("transcripts present but calibrate() stops short of the fit: "
                           + out.strip().splitlines()[-1])
+        # Reaching the fit is not enough either. The verdict refuses a non-positive slope or an
+        # undefined R² at EVERY floor, so where this machine's transcripts fit that way (four
+        # transcripts and a slope of −3.57 on 2026-09-16) the presence control below FAILED
+        # whatever calibrate() did with the floor — the floor is this pair's only variable, and
+        # there it decides nothing. So probe the admitting floor too: a refusal there that does
+        # not cite the floor was decided by the data. One that DOES cite it is not skipped — at
+        # 0.0 no defined R² falls below the floor, so it would mean calibrate() applied some
+        # floor other than the one it was given, which is what this pair exists to catch.
+        rc, out = self._run(0.0)
+        refusal = [ln for ln in out.splitlines() if "no constant recommended" in ln]
+        if refusal and "floor" not in refusal[0]:
+            self.skipTest("the data refuse the fit at every floor, so the floor under test "
+                          "decides nothing here: " + refusal[0].split(" — ", 1)[-1].strip(" ,"))
 
     def _run(self, floor):
         import contextlib, io
