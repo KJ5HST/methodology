@@ -44,6 +44,16 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Phase 2, checkpoint 2 — sequence tags and the merge rule in the `HANDOFFS.md` seed; Learning #17; the count is 29
+
+- **Action:** S31. `starter-kit/HANDOFFS.md`: a *Concurrent sequences* paragraph — each repository's `main` keeps bare
+  `S<N>`, other branches tag `S<N>-<seq>` (rmsharp's wording); the keep-both `git merge-file --union --diff3` recipe;
+  a merge is one action with one receipt that scores the merged line's last receipt and owes no per-commit
+  `reconciled` receipt. `starter-kit/FRAMEWORK_LEARNINGS.md`: Learning #17 (*many hands, one closer; one writer per
+  tree*) — `bin/check-learnings` OK, 16 rows (#14 reserved). Live failure-mode counts 28 → 29: `CLAUDE.md` (the
+  count and *#29 in v4.1*), `README.md` (the feature list). Release narration and Learning #15's historical "26 of 28"
+  left as written. The tutorials' four claims follow in the next commit (the 5-file cap).
+
 ### 2026-10-01 · [ad hoc] Phase 2, checkpoint 1 — §Parallel Actors, FM #29 *Shared-state interference*, the one-writer rule
 
 - **Action:** S31. `ITERATIVE_METHODOLOGY.md`: new `## Parallel Actors` (Shape A's contract = slice gates a–d + (e) one

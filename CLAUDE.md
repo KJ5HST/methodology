@@ -85,7 +85,7 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 
 ## Key Concepts to Preserve When Editing
 
-- **SESSION_RUNNER.md documents 28 failure modes** with specific countermeasures, empirically derived from 1100+ sessions — do not remove or weaken them without strong justification. Never renumber: new FMs append at the end (#24 in v2.3, #25 in v2.6, #26 in v2.7, #27 in v3.1, #28 in v3.7).
+- **SESSION_RUNNER.md documents 29 failure modes** with specific countermeasures, empirically derived from 1100+ sessions — do not remove or weaken them without strong justification. Never renumber: new FMs append at the end (#24 in v2.3, #25 in v2.6, #26 in v2.7, #27 in v3.1, #28 in v3.7, #29 in v4.1).
 - **Phase 0 (Orient) must remain mandatory and blocking** — the most common failure mode is agents skipping orientation and starting work immediately.
 - **"1 and done" rule** — one deliverable per session, then close out. This is structural, not advisory. Since v2.7 the one deliverable MAY be a pre-declared verified vertical slice (issues #20/#21; `SESSION_RUNNER.md` §Vertical Slice Sessions) — the allowance adds a gate and removes no step; one capability never means a second capability.
 - **Ghost session detection and ledger reconciliation** (Phase 0, step 6) exist because crashed sessions and commits that never reached `CHANGELOG.md` leave the next session working from stale state.

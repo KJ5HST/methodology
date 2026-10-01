@@ -86,6 +86,23 @@ within a sequence if you can (never renumber an already-written receipt to do it
 that closes on merge is the lesser defect), but do not treat a repeated id across sequences as
 corruption. `bin/check-handoff --all` keys on the pair for this reason.
 
+**Concurrent sequences in one repository** get a tag. Each repository's `main` uses bare `S<N>`; a session
+claimed on any other branch of the same repository writes `S<N>-<seq>` (`S24-ratchet`, the branch's short name
+or the agent's), so two sessions live at once never share a name. When their branches merge, `HANDOFFS.md`
+conflicts — it is deliberately left out of the `.gitattributes` union driver, which would fuse two prepended
+receipts into one block — and the merge is resolved keep-both, ours on top, from the three index stages:
+
+```sh
+git show :1:HANDOFFS.md > base; git show :2:HANDOFFS.md > ours; git show :3:HANDOFFS.md > theirs
+git merge-file -p --union --diff3 ours base theirs > HANDOFFS.md   # --diff3 keeps each receipt whole
+```
+
+Then check every receipt before committing the merge (the canonical `bin/check-handoff --all` refuses a key
+repeated in one block). **A merge is one action with one receipt:** the merging session writes one receipt
+naming the merged range and its sequence tag, scores the merged sequence's last receipt in one line of its own,
+and owes no `status: reconciled` receipt per merged commit. The method behind all of this:
+`ITERATIVE_METHODOLOGY.md` §Parallel Actors.
+
 ## Size, and when to archive
 
 handoffs-format: 2 — keep this marker, and bring it across with this section; `bin/status` reads it.
