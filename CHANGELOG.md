@@ -44,6 +44,10 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Shape B dogfood (alpha) — T5 gains a failure mode #29 example (in progress)
+
+- **Action:** session S35-alpha claimed on branch `s35-alpha` (parallel-sessions plan Phase 5, concurrent with S35-beta): one T5 corollary for failure mode #29.
+
 ### 2026-10-01 · [ad hoc] Parallel-sessions plan Phase 5 — the Shape B dogfood: two concurrent sessions and one merge (in progress)
 
 - **Action:** session S34 claimed on `main` as the merging session. Two concurrent sessions, `S35-alpha` and

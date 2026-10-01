@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S35-alpha
+date: 2026-10-01
+status: pending
+active_task: Shape B dogfood (alpha) — add one short corollary to docs/tutorials/T5_cautionary.md illustrating failure mode #29 (shared-state interference). IN PROGRESS.
+```
+
+```handoff
 session: S34
 date: 2026-10-01
 status: pending
