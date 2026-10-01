@@ -44,6 +44,11 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] S31 close-out — Phase 2 of the parallel-sessions plan done
+
+- **Action:** closes the S31 claim entry (*Parallel-sessions plan Phase 2 — the prose … (in progress)*). Gate run at
+  `428c452`: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results f5b44d3e26a1 · manifest 312cd7c405c8`.
+
 ### 2026-10-01 · [ad hoc] `bin/check-learnings` reports the highest Learning number, not the row count
 
 - **Action:** S31. Its OK line printed `contiguous 1..<row count>`, which reads "1..16" for a table that runs to #17
