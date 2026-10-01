@@ -93,7 +93,7 @@ for every session. It tells you what to read, when to stop, and how to close out
 
 ### 3. Set up task tracking
 
-Create a `BACKLOG.md` at your project root with your current tasks and priorities — open work items only. Copy `starter-kit/CHANGELOG.md` and `starter-kit/ROADMAP.md` to your project root for completed work history and feature inventory. This three-file split keeps BACKLOG.md scannable (agents read it at session start) while preserving history in dedicated files. When you complete work, remove it from `BACKLOG.md` and add an entry to `CHANGELOG.md`. See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for migration steps if you have an existing monolithic BACKLOG.md.
+Create a `BACKLOG.md` at your project root with your current tasks and priorities — open work items only. Copy `starter-kit/CHANGELOG.md` and `starter-kit/ROADMAP.md` to your project root for the action ledger and feature inventory. This three-file split keeps BACKLOG.md scannable (agents read it at session start) while preserving history in dedicated files. When you take an action, record it in `CHANGELOG.md`; when it completes a backlog item, remove that item from `BACKLOG.md`. See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for migration steps if you have an existing monolithic BACKLOG.md.
 
 ### Full setup guide
 
@@ -111,7 +111,7 @@ See **[`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md)** for the complete 
 | `CLAUDE_TEMPLATE.md` | Template for project `CLAUDE.md` with SESSION PROTOCOL block and Adaptations section |
 | `CONTEXT_TEMPLATE.md` | Project domain-glossary / `CONTEXT.md` template |
 | `RECOMMENDED_SKILLS.md` | Index of recommended skills, cited at the relevant phase/workstream |
-| `CHANGELOG.md` | Completed work history template — keeps BACKLOG.md lean |
+| `CHANGELOG.md` | Action ledger template — keeps BACKLOG.md lean |
 | `HANDOFFS.md` | Durable close-out receipt template — one machine-checkable block per session |
 | `ROADMAP.md` | Feature inventory and future plans template |
 | `methodology_dashboard.py` | Health scanner: project scoring, risk assessment, compliance dashboard |
@@ -197,7 +197,7 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 │   ├── FRAMEWORK_LEARNINGS.md        ← The framework's own learnings (read on demand)
 │   ├── SESSION_NOTES.md              ← Session continuity template
 │   ├── SAFEGUARDS.md                 ← Safety rails template
-│   ├── CHANGELOG.md                  ← Completed work history template
+│   ├── CHANGELOG.md                  ← Action ledger template
 │   ├── HANDOFFS.md                   ← Durable close-out receipts template
 │   ├── ROADMAP.md                    ← Feature inventory & future plans template
 │   ├── methodology_dashboard.py      ← Health scanner (also in tools/)

@@ -1619,6 +1619,32 @@ class TestPrecommitClassArm(unittest.TestCase):
             self.assertEqual(cb.precommit(d, cfg), cb.CLEAN)
 
 
+# The classes whose files are read TOGETHER, in one Read. Only the Phase 0 pair is: the other
+# whole-read classes (cb.WHOLE_READ_CLASSES) are read whole, but one file per Read.
+READ_TOGETHER_CLASSES = ("read-set",)
+
+
+def token_partition(cfg):
+    """(violations, checked) for the classes whose files must fit ONE Read together.
+
+    A class's per-file max_tokens partition the read cap only if its files are read in the same
+    Read. Each violation is (class, total, cap, members); checked counts the classes examined."""
+    cap = int(cfg.get("read_cap_tokens", cb.READ_CAP_TOKENS))
+    by_class = {}
+    for spec in cfg.get("files", []):
+        if spec.get("max_tokens") is not None:
+            by_class.setdefault(spec.get("class"), []).append(spec)
+    violations, checked = [], 0
+    for cls, members in by_class.items():
+        if cls not in READ_TOGETHER_CLASSES or len(members) < 2:
+            continue
+        total = sum(int(m["max_tokens"]) for m in members)
+        if total > cap:
+            violations.append((cls, total, cap, members))
+        checked += 1
+    return violations, checked
+
+
 class TestThisRepoReadSetPartition(unittest.TestCase):
     """The repo's OWN config declares the Phase 0 mandatory-read pair in TOKENS, one ceiling per
     file, and the two are meant to PARTITION the 25,000-token read cap: the pair fits one Read
@@ -1636,35 +1662,55 @@ class TestThisRepoReadSetPartition(unittest.TestCase):
             self.skipTest("this repo has no .context-budget.json")
         self.cfg = json.loads(cfgp.read_text())
 
-    def _members_by_class(self):
-        out = {}
-        for spec in self.cfg.get("files", []):
-            if spec.get("max_tokens") is not None:
-                out.setdefault(spec.get("class"), []).append(spec)
-        return out
-
-    def test_whole_read_class_token_ceilings_partition_the_read_cap(self):
-        cap = int(self.cfg.get("read_cap_tokens", cb.READ_CAP_TOKENS))
-        checked = 0
-        for cls, members in self._members_by_class().items():
-            if cls not in cb.WHOLE_READ_CLASSES or len(members) < 2:
-                continue
-            total = sum(int(m["max_tokens"]) for m in members)
-            self.assertLessEqual(
-                total, cap,
+    def test_the_read_set_token_ceilings_partition_the_read_cap(self):
+        violations, checked = token_partition(self.cfg)
+        for cls, total, cap, members in violations:
+            self.fail(
                 f"class {cls!r}: per-file max_tokens sum to {total:,} > the {cap:,}-token read "
                 f"cap ({', '.join(m['path'] + '=' + str(m['max_tokens']) for m in members)}) — "
                 f"every member can pass its own ceiling while the pair no longer fits one Read")
-            checked += 1
         # Presence control: the assertion above is vacuous if no class qualifies. This repo's
         # read-set pair is the reason the test exists, so it must have been examined.
-        self.assertGreaterEqual(checked, 1, "no whole-read class with >= 2 token-ceilinged "
+        self.assertGreaterEqual(checked, 1, "no read-set class with >= 2 token-ceilinged "
                                             "members found — the partition was not checked")
 
     def test_the_read_set_pair_is_the_class_examined(self):
-        members = self._members_by_class().get("read-set", [])
+        members = [s for s in self.cfg.get("files", [])
+                   if s.get("class") == "read-set" and s.get("max_tokens") is not None]
         self.assertEqual(sorted(m["path"] for m in members),
                          ["starter-kit/SAFEGUARDS.md", "starter-kit/SESSION_RUNNER.md"])
+
+
+class TestTokenPartitionRule(unittest.TestCase):
+    """Only files read in the SAME Read share the cap. The Phase 0 pair (class read-set) is read
+    together; a read-mandated or resident file is read whole but on its own, so two of them at
+    25,000 tokens each are two full Reads, not one Read over its cap. Summing every whole-read
+    class refused exactly that config. RED first: under the every-class sum, the two tests below
+    that declare a read-mandated pair at 25,000 each failed (50,000 > 25,000)."""
+
+    @staticmethod
+    def _cfg(*files):
+        return {"files": [{"path": p, "class": c, "max_tokens": t} for p, c, t in files]}
+
+    def test_separately_read_files_do_not_share_the_cap(self):
+        cfg = self._cfg(("A.md", "read-mandated", 25_000), ("B.md", "read-mandated", 25_000),
+                        ("C.md", "resident", 20_000), ("D.md", "resident", 20_000))
+        self.assertEqual(token_partition(cfg), ([], 0))
+
+    def test_a_read_set_pair_past_the_cap_is_still_refused(self):
+        cfg = self._cfg(("R.md", "read-set", 19_200), ("S.md", "read-set", 6_000))
+        violations, checked = token_partition(cfg)
+        self.assertEqual(checked, 1)
+        self.assertEqual([(v[0], v[1], v[2]) for v in violations], [("read-set", 25_200, 25_000)])
+
+    def test_a_read_set_pair_within_the_cap_passes(self):
+        cfg = self._cfg(("R.md", "read-set", 18_222), ("S.md", "read-set", 6_777),
+                        ("A.md", "read-mandated", 25_000), ("B.md", "read-mandated", 25_000))
+        self.assertEqual(token_partition(cfg), ([], 1))
+
+    def test_a_read_set_pair_at_exactly_the_cap_fits(self):
+        cfg = self._cfg(("R.md", "read-set", 19_000), ("S.md", "read-set", 6_000))
+        self.assertEqual(token_partition(cfg), ([], 1))
 
 
 class TestReserveIdentity(unittest.TestCase):

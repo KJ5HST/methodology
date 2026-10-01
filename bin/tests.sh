@@ -281,14 +281,24 @@ OUT="$("$BIN/status" "$P")"
 echo "$OUT" | grep "CHANGELOG.md" | grep -v '^note:' | grep -q "stale format" && fail "status: current-format (fresh) seed mis-flagged stale" || pass "status: current-format (fresh) seed not flagged"
 echo "$OUT" | grep -q "^note:" && fail "status: spurious stale-format note on fresh tree" || pass "status: no stale-format note on fresh tree"
 # (b) In-use current-format ledger: the METHODOLOGY-SEED-SENTINEL is deleted (as the adopter does on its
-# first real entry) and a dated entry appended, but the ledger TITLE is retained. This is the exact case
-# the marker choice is engineered around (key on the lifetime-stable title, NOT the deletable sentinel);
-# it must NOT be flagged, or binding constraint #2 (no false positive on a current-format seed) breaks.
-printf '# Changelog — Authoritative Action Ledger\n\nThe action ledger.\n\n---\n\n### 2026-01-01 · [ad hoc] a real entry\n- Change: something real.\n' > "$P/CHANGELOG.md"
-grep -q "METHODOLOGY-SEED-SENTINEL" "$P/CHANGELOG.md" && fail "test-bug: in-use fixture still carries the sentinel" || pass "test: in-use fixture is title-only (sentinel deleted)"
+# first real entry) and a dated entry appended, but the seed's marker line is retained. This is the exact
+# case the marker choice is engineered around (key on a lifetime-stable line the seed tells adopters to
+# keep, NOT the deletable sentinel); it must NOT be flagged, or binding constraint #2 (no false positive
+# on a current-format seed) breaks.
+printf '# Changelog — Authoritative Action Ledger\n\nThe action ledger. ledger-format: 2 — keep this marker.\n\n---\n\n### 2026-01-01 · [ad hoc] a real entry\n- Change: something real.\n' > "$P/CHANGELOG.md"
+grep -q "METHODOLOGY-SEED-SENTINEL" "$P/CHANGELOG.md" && fail "test-bug: in-use fixture still carries the sentinel" || pass "test: in-use fixture is current-format with the sentinel deleted"
 OUT="$("$BIN/status" "$P")"
 echo "$OUT" | grep "CHANGELOG.md" | grep -v '^note:' | grep -q "stale format" && fail "status: in-use current-format ledger mis-flagged stale (constraint #2)" || pass "status: in-use current-format ledger not flagged"
 echo "$OUT" | grep -q "^note:" && fail "status: spurious note on in-use current-format ledger" || pass "status: no note on in-use current-format ledger"
+# (b2) The seed as shipped before ledger-format 2, frozen in tools/fixtures/: it carries the current TITLE
+# and the full rules text, and must still read stale. BOOTSTRAP.md ("Updating an existing project…") promises status "flags any seed
+# whose format predates the current methodology"; a marker present in any earlier format can never keep
+# that promise. Driven RED against the title-keyed marker before the marker moved.
+SEED1="$METHODOLOGY/tools/fixtures/seed-CHANGELOG-ledger-format-1.md"
+grep -q "Authoritative Action Ledger" "$SEED1" && pass "test: the frozen pre-ledger-format-2 seed carries the current title" || fail "test-bug: the frozen seed lacks the title it stands for"
+cp "$SEED1" "$P/CHANGELOG.md"
+ROW="$("$BIN/status" "$P" | grep "CHANGELOG.md" | grep -v '^note:')"
+echo "$ROW" | grep -q "stale format" && pass "status: the pre-ledger-format-2 seed flagged 'present (stale format)'" || fail "status: the pre-ledger-format-2 seed NOT flagged — BOOTSTRAP.md's "Updating an existing project" paragraph promises it is"
 # (c) Replace the seed with a pre-v3.1 (Keep-a-Changelog) shape lacking the ledger-title marker.
 printf '# Changelog\n\nAll notable changes to this project.\n\n## [Unreleased]\n' > "$P/CHANGELOG.md"
 OUT="$("$BIN/status" "$P")"
@@ -314,6 +324,41 @@ MULTI="$("$BIN/status" "$P" "$P2")"
 NROWS="$(echo "$MULTI" | grep -v '^note:' | grep -c "stale format")"
 [ "$NROWS" = "2" ] && pass "status: two stale rows across two projects" || fail "status: expected 2 stale rows, got $NROWS"
 echo "$MULTI" | grep '^note:' | grep -q "2 seeds predate" && pass "status: note count matches flagged rows (2), not deduped file types" || fail "status: note count != flagged rows"
+# (g) Each flagged file gets ITS OWN migration route. A stale CHANGELOG.md replaces its
+# header with the seed's; a stale HANDOFFS.md only lacks the seed's size section, and replacing its front
+# matter would delete what a trimmer wrote there (a pointer block, a count sentence). The note once gave
+# the replace route for both. P is stale in CHANGELOG.md only (c/e); P2 gets a stale HANDOFFS.md alone.
+NOTE="$("$BIN/status" "$P" | grep '^note:')"
+echo "$NOTE" | grep -q "for CHANGELOG.md, replace the rules text or old header above the first entry" && pass "status: a stale CHANGELOG.md gets the replace-the-header route" || fail "status: the note lacks CHANGELOG.md's route"
+# The trimmer writes an archive-pointer block and a month heading above the first entry; a route that
+# replaced everything there would delete them (an adopter's migration hit exactly this).
+echo "$NOTE" | grep -q "keeping any archive-pointer block and month heading" && pass "status: the CHANGELOG.md route keeps what the trimmer wrote" || fail "status: the CHANGELOG.md route would delete the trimmer's pointer block"
+echo "$NOTE" | grep -q "Size, and when to archive" && fail "status: the note gives HANDOFFS.md's route when only CHANGELOG.md is stale" || pass "status: no HANDOFFS.md route when only CHANGELOG.md is stale"
+cp "$STARTER/CHANGELOG.md" "$P2/CHANGELOG.md"   # P2's CHANGELOG.md was stale from (f): current seed again
+printf '# Handoff Receipts\n\nNewest on top; prepend-only.\n\n```handoff\nsession: S1\ndate: 2026-01-01\nstatus: complete\n```\n' > "$P2/HANDOFFS.md"
+OUT="$("$BIN/status" "$P2")"
+echo "$OUT" | grep "HANDOFFS.md" | grep -v '^note:' | grep -q "stale format" && pass "status: a HANDOFFS.md without the size section flagged 'present (stale format)'" || fail "status: the stale HANDOFFS.md NOT flagged"
+NOTE="$(echo "$OUT" | grep '^note:')"
+echo "$NOTE" | grep -q "1 seed predates the current format (HANDOFFS.md," && pass "test: HANDOFFS.md is the only stale seed in P2" || fail "test-bug: P2 is not stale in HANDOFFS.md alone"
+echo "$NOTE" | grep -q "for HANDOFFS.md, bring across the current starter-kit seed's '## Size, and when to archive' section" && pass "status: a stale HANDOFFS.md gets the bring-across-the-section route" || fail "status: the note lacks HANDOFFS.md's own route"
+echo "$NOTE" | grep -qi "replace" && fail "status: the note tells a stale HANDOFFS.md to replace its front matter" || pass "status: no replace route for a stale HANDOFFS.md"
+# The HANDOFFS.md seed as shipped before handoffs-format 2 already had the size section's heading, but
+# with the old premise in it (a 65,536 B byte row priced as a "context tax"). Keyed on that heading, it read
+# current in two of six real adopters that carry exactly that text. Keyed on the versioned marker, it is stale.
+grep -q "handoffs-format: 2" "$STARTER/HANDOFFS.md" && pass "test: the shipped HANDOFFS.md seed carries its format marker" || fail "the shipped HANDOFFS.md seed lacks 'handoffs-format: 2'"
+cp "$STARTER/CHANGELOG.md" "$P2/CHANGELOG.md"
+printf '# Handoff Receipts\n\n## Size, and when to archive\n\n| **Bytes** — a per-file budget, default **65,536 B** (64 KB) | **context tax**: every session pays for the whole file |\n\n```handoff\nsession: S1\ndate: 2026-01-01\nstatus: complete\n```\n' > "$P2/HANDOFFS.md"
+ROW="$("$BIN/status" "$P2" | grep "HANDOFFS.md" | grep -v '^note:')"
+echo "$ROW" | grep -q "stale format" && pass "status: a HANDOFFS.md with the old size section but no format marker flagged stale" || fail "status: the pre-handoffs-format-2 seed read current — its heading alone is not a format marker"
+# Both stale in one project: both routes, one each.
+cp "$SEED1" "$P2/CHANGELOG.md"
+NOTE="$("$BIN/status" "$P2" | grep '^note:')"
+echo "$NOTE" | grep -q "for CHANGELOG.md, replace" && echo "$NOTE" | grep -q "for HANDOFFS.md, bring across" && pass "status: two stale seeds in one project get both routes" || fail "status: the note lacks a route when both seeds are stale"
+# The section the note points to gives the same HANDOFFS.md route, so following the pointer cannot
+# contradict the note (the note cites BOOTSTRAP.md's "Updating an existing project from an earlier
+# methodology version" paragraph).
+grep '^\*\*Updating an existing project from an earlier methodology version:\*\*' "$STARTER/BOOTSTRAP.md" | grep -q "Size, and when to archive" && pass "BOOTSTRAP.md: the paragraph the note cites gives HANDOFFS.md's route too" || fail "BOOTSTRAP.md: the paragraph the note cites has no HANDOFFS.md route"
+grep '^\*\*Updating an existing project from an earlier methodology version:\*\*' "$STARTER/BOOTSTRAP.md" | grep -q "keeping any archive-pointer block and month heading" && pass "BOOTSTRAP.md: the paragraph the note cites keeps the trimmer's lines in CHANGELOG.md's route too" || fail "BOOTSTRAP.md: the cited paragraph's CHANGELOG.md route would delete the trimmer's pointer block"
 rm -rf "$P" "$P2"
 
 # Shared fixture builder for Tests 21-22: a fully well-formed, status: complete
@@ -433,6 +478,75 @@ F="$(mktemp)"
     good_handoff
 } > "$F"
 "$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && pass "prose outside the fenced block does not trigger the lint (block isolation)" || fail "block isolation: outside prose leaked into the check"
+rm -f "$F"
+
+# Fences with an info string. CommonMark opens a fence with three or more backticks and an
+# optional info string (```sh), and closes it only with a bare run at least as long. The
+# seed's "Size, and when to archive" section carries a ```sh block, so an adopter's ledger
+# has one above its receipts. Read as prose, that block's closing fence was taken for a
+# wrapper opener: everything up to the next bare fence was skipped, the newest receipt with
+# it, and the check still reported OK. Most fixtures below put a receipt with a defect where
+# a skip would hide it; the first assertion is the control that shows the defect is caught
+# whenever the receipt is read.
+receipt() {  # receipt SESSION [KEY] — good_handoff as SESSION, without KEY's line if given
+    good_handoff | sed "s/^session:.*/session: $1/" | grep -v "^${2:-no-such-key}:"
+}
+seed_front() {  # the seed as an adopter keeps it: sentinel comment deleted, receipts to follow
+    python3 - "$STARTER/HANDOFFS.md" <<'PY'
+import re, sys
+s = open(sys.argv[1], encoding="utf-8").read()
+new = re.sub(r"<!-- METHODOLOGY-SEED-SENTINEL.*?-->\n", "", s, count=1, flags=re.S)
+if new == s or not re.search(r"^```(?!handoff)[^`\s]", new, flags=re.M):
+    sys.exit(2)  # no sentinel to delete, or no info-string fence left: the fixture is vacuous
+sys.stdout.write(new)
+PY
+}
+all_reads_two() {  # all_reads_two FILE — --all exits 0 and counts exactly two receipts
+    local out rc
+    out="$("$BIN/check-handoff" --file "$1" --all 2>&1)"; rc=$?
+    [ "$rc" = 0 ] && [[ "$out" == *"— 2 receipt(s) in"* ]]
+}
+
+F="$(mktemp)"
+{ receipt S13 gotchas; receipt S12; } > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && fail "control: a newest receipt missing gotchas passed" || pass "control: a newest receipt missing gotchas is caught"
+
+{ printf 'Run this:\n\n```sh\npython3 methodology_trim.py --file HANDOFFS.md --check\n```\n\n'; receipt S13 gotchas; receipt S12; } > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && fail "a \`\`\`sh block above the receipts hid the newest one" || pass "a \`\`\`sh block above the receipts does not hide the newest"
+
+if seed_front > "$F"; then
+    { receipt S13 gotchas; receipt S12; } >> "$F"
+    "$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && fail "the seed's own front matter hid the newest receipt" || pass "the seed's front matter does not hide the newest receipt"
+    seed_front > "$F"; { receipt S13; receipt S12; } >> "$F"
+    all_reads_two "$F" && pass "--all reads both receipts below the seed's front matter" || fail "--all under the seed's front matter did not read exactly two receipts"
+else
+    fail "fixture: the seed has no sentinel comment or no info-string fence — the seed cases would test nothing"
+fi
+
+{ receipt S13; printf '\n```sh\nbin/check-handoff --all\n```\n\n'; receipt S12 gotchas; } > "$F"
+"$BIN/check-handoff" --file "$F" --all >/dev/null 2>&1 && fail "a \`\`\`sh block in a receipt's prose hid the receipt below it from --all" || pass "a \`\`\`sh block in a receipt's prose does not hide the receipt below it"
+
+{ printf '````\n```sh\necho example\n```\n```handoff\nsession: S0\n```\n````\n\n'; receipt S13 gotchas; receipt S12; } > "$F"
+"$BIN/check-handoff" --file "$F" >/dev/null 2>&1 && fail "a \`\`\`sh block inside a 4-backtick wrapper hid the newest receipt" || pass "a \`\`\`sh block inside a 4-backtick wrapper stays inert"
+
+# A line that starts with inline code quoting a fence is prose: an info string may not
+# contain a backtick, so this line opens nothing.
+{ printf '```` ```sh ```` is the fence the seed carries; this line is prose, not a fence.\n\n'; receipt S13; receipt S12; } > "$F"
+all_reads_two "$F" && pass "a prose line quoting a fence in inline code opens no fence" || fail "a prose line quoting a fence in inline code was read as a fence"
+
+# A longer fence closes only on a run at least as long: its inner ``` is content.
+{ printf '````sh\n```\n````\n\n'; receipt S13; receipt S12; } > "$F"
+all_reads_two "$F" && pass "a \`\`\`\`sh fence is closed only by a run of four" || fail "a \`\`\`\`sh fence was closed by a shorter run"
+
+{ receipt S13; receipt S12; printf '\n```sh\necho never closed\n'; } > "$F"
+"$BIN/check-handoff" --file "$F" --all >/dev/null 2>&1 && fail "an unclosed \`\`\`sh fence not caught by --all" || pass "an unclosed \`\`\`sh fence caught by --all"
+
+# A receipt whose fence tag is misspelled is not a receipt, and its fields are still
+# reported as orphaned, from its first field's own line: skipping the block must not
+# hide what it holds.
+{ receipt S13 | sed 's/^```handoff$/```handof/'; receipt S12; } > "$F"
+out="$("$BIN/check-handoff" --file "$F" --all 2>&1)"; rc=$?
+[ "$rc" != 0 ] && [[ "$out" == *"line 2: receipt field outside"* ]] && pass "a receipt under a misspelled fence tag is reported as orphaned, at its own line" || fail "a receipt under a misspelled fence tag went unreported, or was reported at the wrong line"
 rm -f "$F"
 
 

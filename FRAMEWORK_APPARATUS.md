@@ -6,9 +6,11 @@ demand**: you open it while writing a session document, validating a scope, or s
 understand the framework. The theory these sections implement — the 9 principles, the 6 phases, the 12
 quality gates — stays in [`ITERATIVE_METHODOLOGY.md`](ITERATIVE_METHODOLOGY.md).
 
-The six sections below were moved here **verbatim** from that file, which had grown past the size a
-single read can hold. Nothing was rewritten, condensed, or dropped in the move; the only edit was to
-turn one in-file cross-reference into a link back to `ITERATIVE_METHODOLOGY.md`.
+The first six sections below were moved here **verbatim** from that file, which had grown past the
+size a single read can hold. Nothing was rewritten, condensed, or dropped in the move; the only edit
+was to turn one in-file cross-reference into a link back to `ITERATIVE_METHODOLOGY.md`. The seventh,
+[§The Action Ledger](#the-action-ledger), holds the rules for a project's `CHANGELOG.md`, moved here
+from the starter-kit seed so that `bin/sync` keeps them current.
 
 ---
 
@@ -330,3 +332,205 @@ Maintain a performance comparison table across ALL sessions in the methodology p
 - Scores that were stable at 8+ dropping below 5
 - Self-assessments getting shorter or less specific
 - "Maturity" being used as justification for skipping steps
+
+---
+
+## The Action Ledger
+
+The rules for a project's `CHANGELOG.md`, the authoritative action ledger. They live here, in a
+file `bin/sync` keeps current, rather than in the starter-kit seed, which each project receives
+once and never again — so a correction made here reaches every project. The subsections
+below began as that seed's text, moved one heading level down; the seed now carries a
+pointer to this section and its format marker. Inside them, *this file* and *this ledger* mean
+your `CHANGELOG.md`.
+
+### How to add an entry
+
+Prepend one entry per action, **newest on top** — when and where are *Lifecycle* and *Placement*,
+below. Key on a mechanical fact, not judgment: *did this session author or retain any commit, or take any non-commit action?* If
+yes, an entry is owed — "too small to log" or "I'll batch it next time" **is** failure mode
+#27, not an exception. The only exemption is a session whose diff is empty and that took no
+action at all.
+
+**Source tag — exactly one per entry, from this closed vocabulary:**
+
+- `[issue #<N>]` — a repository issue. If issues live in another repo (e.g. an upstream parent
+  of a fork), cite an absolute URL, not a bare `#<N>`.
+- `[BL-<id>]` — a `BACKLOG.md` item, under whatever id that backlog gives it. Remove it from
+  `BACKLOG.md` in the same commit.
+- `[ad hoc]` — work with no backlog or issue origin (the source most prone to vanishing):
+  releases, tag/branch ops, PR opens, upstream issue closes, access grants, and
+  decline/wontfix/grooming decisions all land here.
+
+**The audit** enumerates every logged action and proves all three sources landed. It counts the
+archived shards as well as the live file, because a trim moves entries from one into the other,
+and it gives the same number in `bash` and in `zsh`:
+
+```
+cat CHANGELOG.md $(git ls-files 'docs/archive/CHANGELOG-*.md') \
+  | grep -cE '^### [0-9]{4}-[0-9]{2}-[0-9]{2} · \[(issue #[0-9]+|BL-[^]]+|ad hoc)\]'
+```
+
+Three details in that command are load-bearing. **`git ls-files`, not a bare glob** — zsh aborts
+a command whose glob matches nothing, so `docs/archive/CHANGELOG-*.md` written directly would
+return no count at all in the common case of a project that has never trimmed. **Anchored to the
+entry heading** — an unanchored pattern also matches the vocabulary's own definitions and every
+mention of a tag in prose, so it can report more actions than the ledger holds; the project this
+was measured on counted 78 where 64 had happened. **`BL-[^]]+`, not `BL-[0-9]+`** — it counts whatever id the project's backlog uses.
+
+Entries written before a project adopted this vocabulary stay as written; the audit does not
+count them, and that gap is expected rather than a defect to repair.
+
+**Format** — the `###` header line is the required, greppable unit; the detail bullets are
+recommended, plus one further bullet, `Model`, that is optional even relative to the others:
+
+```
+### YYYY-MM-DD · [SOURCE] one-line outcome-focused summary
+- **Change:** what is now true in the repo/product that was not before
+- **Commit/PR:** `<short-sha>`  —or—  PR #<N> (merged `<sha>`)
+- **Session:** S<N> · **Verified:** <build/test/render/runtime evidence, or "n/a — docs-only">
+- **Model:** <acting model> (optional — omit the line entirely when not recorded)
+```
+
+*(The `[SOURCE]`, `[issue #<N>]`, `[BL-<id>]`, and `[ad hoc]` tokens above are illustrative.)*
+
+**Model:** — self-reported, free text; omit the line when not recorded. Names which model
+executed the action — an agent-independent key with a concrete value, the same pattern
+`key_files` already uses for paths. Single-tier work names one model:
+
+```
+### 2026-01-15 · [ad hoc] Ship the export-retry fix
+- **Change:** exports now retry once on a transient network error instead of failing immediately
+- **Commit/PR:** `a1b2c3d`
+- **Session:** S42 · **Verified:** unit suite green, manual retry reproduced and confirmed fixed
+- **Model:** <model>
+```
+
+Capability-tiered work (one session whose layers are built or reviewed across different tiers) is
+recorded *per entry*, not compressed into one line: each layer/checkpoint already gets its own
+`CHANGELOG.md` entry, so each entry's **Model:** bullet states only its own role:
+
+```
+### 2026-01-16 · [ad hoc] Layer 3 — draft the parser (delegated layer)
+- **Change:** the new input format parses without a follow-up fixup pass
+- **Commit/PR:** `d4e5f6a`
+- **Session:** S43 · **Verified:** unit tests for the new parser pass
+- **Model:** <model A> (delegated; reviewed by <model B>)
+
+### 2026-01-16 · [ad hoc] Layer 4 — review and land the parser (primary layer)
+- **Change:** the delegated layer's diff is reviewed and the checkpoint committed
+- **Commit/PR:** `b7c8d9e`
+- **Session:** S43 · **Verified:** full suite green after review fixes
+- **Model:** <model B> (primary)
+```
+
+`HANDOFFS.md`'s "How to write a receipt" section documents a complementary session-level
+convention: naming the model once in a receipt's free-text prose, for a reader who wants one
+session's answer without correlating multiple entries here. That convention adds no new
+`HANDOFFS.md` schema key — it is not a second, competing structured field, and it is fine for both
+files to name the same model for a single-tier session, since they answer different questions
+("what happened, action by action" vs. "which model ran this session"). A canonical-only
+`bin/model-report` (copy it into your `bin/` if you want it) reads this file's **Model:** bullets
+back alongside `HANDOFFS.md`'s free-text mentions and git's `Co-Authored-By` trailers, keeping all
+three visually separate — see that tool's own docstring for why trailers are corroboration-only,
+never authoritative.
+
+**Lifecycle — one entry per commit, never edited.** The commit is the unit the ledger co-staging
+hook checks, so each commit carries its own entry, and each non-commit action gets one of its own.
+
+- **A claim commit carries an *(in progress)* entry**, and close-out adds its own entry rather than
+  rewriting the claim's. Work committed but not finished — an in-progress hand-off, a reverted
+  slice — is marked `(in progress)` the same way, and a later session closes it out or records the
+  revert as its own entry.
+- **A committed entry is never edited.** A correction is a new entry that names what was wrong. The
+  one exception is removing content that must not be published — a credential, personal data — and
+  that removal is recorded by an entry of its own.
+- **A Phase 0 backfill is the one entry that may span several commits**: it records history that no
+  close-out reached.
+- **The Phase 1B `CHANGELOG: pending` marker lives in `SESSION_NOTES.md`.** A project that keeps no
+  `SESSION_NOTES.md` relies on its `status: pending` `HANDOFFS.md` receipt instead.
+
+**Placement — prepend under the topmost `## YYYY-MM`.** Reverse-chronological and prepend-only, so
+close-out never re-sorts. When the month changes, open the new month's heading above the last one:
+group by month, **not** by release. A ledger that has no month headings starts them at its next new
+month, or at its first trim, whose own entry `methodology_trim.py` files under the current month's
+heading; nothing already written is retrofitted. A merged branch's entries keep the order they had on
+the branch, as one block, rather than being re-sorted into the dates around them. Entries stay at
+`###`, the level the tools key on.
+
+### Reading and archiving
+
+**The protocol never asks a session to read this file whole.** Its three reads are each partial:
+
+- **Phase 0 reconcile** takes the frontier from git — `git log -1 --format=%H -- CHANGELOG.md` — and
+  lists the commits after it with `git log`; a backfill it owes goes on at the top.
+- **Close-out** reads the top and prepends the session's entries there.
+- **A lookup** — when was X done, which entry records commit Y — is a `grep` or a `git log --grep`,
+  not a read.
+
+So the file's size costs no session a read, and it has no place in a read budget. Past the
+harness's default-read refusal — the trimmer's `READ_REFUSE_BYTES`, beyond which a default read
+returns no content at all, front matter included — read the top with an offset and a limit.
+
+**Archiving is optional.** A project that wants a smaller live file moves its oldest entries to a
+frozen shard with `methodology_trim.py`, which refuses to write unless it can prove the split
+lossless. The tool's trigger is the only statement of *when* — these rules name no size:
+
+```sh
+python3 methodology_trim.py --file CHANGELOG.md --check
+```
+
+`--check` evaluates the trigger, reports whether it fires, and never writes. For a project that has
+chosen not to archive, its report is information, not a fault. `--write` performs the trim; a dry
+run is the default. **It neither commits nor stages** — it leaves the live file modified and the new
+shard *untracked*, prints the rollback, and leaves the commit to you. Stage both yourself:
+`git add CHANGELOG.md docs/archive/` — committing with `-a` alone would land the shortened ledger
+while the shard, being untracked, never enters history at all. `--budget-bytes <N>` overrides the
+tool's byte budget for a single run.
+
+**Archiving again is not always the answer.** If the file has already given back everything the
+last archive removed, another archive resets the *level* and not the *rate* — the tool measures
+exactly that and **refuses to fire**; `--force` is how you overrule it deliberately. Before a file's
+first archive there is no baseline to measure against, so it abstains rather than compute a zero.
+
+#### The shard convention
+
+An archive is a **shard** — a new frozen file, same format, same newest-on-top order.
+
+- **Path: `docs/archive/<LIVE-BASENAME>-through-<CUT-KEY>.md`.** Both halves are load-bearing. The
+  directory keeps a shard from shadowing the live file by sort order, and the `CHANGELOG-` prefix is
+  what the trigger's own glob looks for when it hunts its baseline — a shard named otherwise is
+  silently invisible to it, and the trigger then measures against the wrong boundary.
+- **The live file keeps one short pointer** naming each shard and the span it covers. Every count
+  stated in that pointer carries the command that recomputes it, because a hand-maintained count
+  drifts on the next prepend.
+- **The shard back-links to the live file and states only facts about itself** — its own span, its
+  own count. It must **not** restate a forward-looking rule. A shard is frozen, so a rule copied
+  into one is wrong the moment the live rule moves, and correcting it means editing a frozen
+  record. Cite the live file; do not copy it.
+- **Conservation: the live file and its shards together never lose an entry.** A trim moves entries
+  and deletes none, so anything that counts or enumerates this ledger reads both, never the live file
+  alone — `cat CHANGELOG.md $(git ls-files 'docs/archive/CHANGELOG-*.md')`, which runs the same in
+  bash and zsh, shard or no shard. The live file's own count falls at every trim by design, so a guard
+  that compared it across commits would refuse every trim.
+- **Prefer a release frontier as the cut key**, because a shipped release is a boundary nothing can
+  ever be written back into. A calendar date works too, but it is frozen only by convention; if you
+  cut at one, say in the shard's own front matter that you departed and why.
+
+**A trim is an action, not a side effect.** It earns its own commit and its own `[ad hoc]` entry
+here — one ledger, one shard, one commit, one revert. It does **not** belong in Phase 0, which is
+read-only apart from the reconcile backfill.
+
+**Not everything that grows can be archived this way.** Archiving moves *history*. A file that grows
+because someone keeps adding *procedure* has no past to move — extract a section to a sibling file
+and leave a pointer instead. A backlog of open items is live state rather than history: that is a
+grooming problem, and its completed items belong here, in this ledger, not in a frozen shard.
+
+### CHANGELOG.md vs SESSION_NOTES.md — two files, two questions, one shared key
+
+`SESSION_NOTES.md` is the **transient handoff** — *"what's next, what traps?"* — overwritten
+every session. `CHANGELOG.md` is the **cumulative ledger** — *"what was done, ever?"* —
+append-only, and never read whole (see above). Nothing is ever deleted: when a project archives,
+the oldest entries move to a shard. The commit SHA is the only intended intersection. Close-out **distills** the
+durable outcome into a ledger entry; it does not copy the handoff. The belongs-here test:
+*would the operator, six months out, need this to know what the repo does or how it got there?*

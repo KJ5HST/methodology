@@ -162,8 +162,8 @@ cat >&2 <<'MSG'
 ✗ CHANGELOG.md not staged — failure mode #27 (unrecorded action).
 
 This commit changes tracked content but does not update the authoritative
-ledger. Append one dated, source-tagged entry to CHANGELOG.md — exactly one of
-[issue #<N>] | [BL-<N>] | [ad hoc] — newest on top, then stage it and re-commit.
+ledger. Prepend one dated, source-tagged entry to CHANGELOG.md — exactly one of
+[issue #<N>] | [BL-<id>] | [ad hoc] — newest on top, then stage it and re-commit.
 
   * Bypass this once:  git commit --no-verify
       Phase 0 reconcile-on-read backfills anything bypassed, so the ledger is

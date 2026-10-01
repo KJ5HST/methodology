@@ -79,22 +79,34 @@ DISTRIBUTION = [
 
 # Optional "current-format" markers for SEED dests, keyed by adopter-relative dest path.
 #
-# A SEED is adopter-owned and never overwritten (Decision 2a), so an adopter upgrading from a
-# pre-v3.1 methodology keeps its OLD-shaped seed: it gains the new behavior (the synced
-# SESSION_RUNNER.md's FM #27 + Phase 0 reconcile) but silently misses the new seed FORMAT. When a
-# seed listed here is PRESENT but its content lacks the marker string, bin/status reports it
-# advisory-only as "present (stale format)" so the migration is DISCOVERABLE. sync still never
-# auto-overwrites it — reconcile manually or delete-and-reseed (BOOTSTRAP.md "Updating an existing
-# project…"; BL-6 item 2).
+# A SEED is adopter-owned and never overwritten (Decision 2a), so an adopter upgrading from an
+# earlier methodology keeps its OLD-shaped seed: it gains the new behavior (the synced files) but
+# silently misses the new seed FORMAT. When a seed listed here is PRESENT but its content lacks the
+# marker string, bin/status reports it advisory-only as "present (stale format)" so the migration
+# is DISCOVERABLE. sync still never auto-overwrites it — the adopter migrates it by hand
+# (BOOTSTRAP.md "Updating an existing project…"; BL-6 item 2).
 #
-# The marker must be a token that PERSISTS across the seed's whole lifetime, not a one-shot banner:
-#   * CHANGELOG.md keys on the ledger TITLE ("Authoritative Action Ledger"), which append-only
-#     entries never remove — NOT the METHODOLOGY-SEED-SENTINEL, which the adopter deletes on its
-#     first real entry, so keying on the sentinel would mis-flag an in-use current-format ledger.
+# A marker needs two properties:
+#   1. LIFETIME-STABLE — it survives every prepend, trim and close-out, so an in-use current-format
+#      seed is never mis-flagged. That rules out the METHODOLOGY-SEED-SENTINEL, which the adopter
+#      deletes on its first real entry. A marker in the front matter survives, because
+#      methodology_trim.py pins that zone and never archives it.
+#   2. VERSION-DISCRIMINATING — absent from every earlier format it must detect, or it can never
+#      fire. A marker keyed to something that never changes across versions, such as a title,
+#      reports every old seed as current.
+#
+#   * CHANGELOG.md keys on "ledger-format: 2", on the seed's pointer to FRAMEWORK_APPARATUS.md
+#     §The Action Ledger, which holds the rules the seed used to carry; the seed asks adopters to
+#     keep that line. Bump the number whenever the seed's format changes again, and drive the stale
+#     case in bin/tests.sh Test 20 red before trusting it — a marker that never moves never fires.
+#   * HANDOFFS.md keys on "handoffs-format: 2", the first line of the seed's "Size, and when to
+#     archive" section, so bringing that section across (the documented migration) carries it. It
+#     used to key on the heading itself, which failed property 2: the seed that shipped with the
+#     trimmer already had the heading, over the size premise this format replaced.
 #   * SESSION_NOTES.md is deliberately omitted: it is rewritten wholesale every session, so no
 #     token is stable enough to detect its format without false positives. Add an entry here only
-#     when a seed gains a lifetime-stable marker.
+#     when a seed gains a marker with both properties.
 SEED_FORMAT_MARKERS = {
-    "CHANGELOG.md": "Authoritative Action Ledger",
-    "HANDOFFS.md": "Handoff Receipts",
+    "CHANGELOG.md": "ledger-format: 2",
+    "HANDOFFS.md": "handoffs-format: 2",
 }

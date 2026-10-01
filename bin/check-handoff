@@ -71,6 +71,10 @@ STUB_KEYS = ("session", "date", "status", "active_task")
 
 KEY_RE = re.compile(r"^(" + "|".join(REQUIRED_KEYS) + r"):\s*(.*)$")
 HANDOFF_OPEN_RE = re.compile(r"^```handoff[ \t]*$")
+# Any backtick fence opener, matched against a stripped line: a run of 3+ backticks and
+# an optional info string, which may not itself contain a backtick (CommonMark). So a
+# prose line that starts with inline code quoting a fence ("```` ```sh ````") opens nothing.
+FENCE_OPEN_RE = re.compile(r"^(`{3,})([^`]*)$")
 
 # `key_files` must carry a `path:line` token somewhere in the value (e.g.
 # "SessionManager.java:245"). The pre-colon token must be PATH-LIKE — contain a
@@ -116,6 +120,13 @@ def scan(text: str):
     backtick count). Without this, a ```handoff shown as documentation INSIDE a
     stronger wrapper would be misparsed as a real receipt.
 
+    A fence with any other info string (```sh, ```python) is skipped whole the same
+    way, to a bare closer at least as long. Read as prose instead, its closing fence
+    would open a wrapper and swallow everything up to the next bare fence: in a ledger
+    whose front matter carries the seed's ```sh block, the newest receipt, with the
+    check still reporting OK. Unlike a wrapper's, such a block's lines stay visible to
+    the orphan check below, so a receipt under a misspelled tag (```handof) is reported.
+
     The orphan check is what catches the issue-#65 Evidence B corruption: a session
     prepending its receipt reused the previous block's opening fence and overwrote
     the `session:`/`date:` lines under it, leaving that receipt's body as loose
@@ -129,9 +140,12 @@ def scan(text: str):
     i, n = 0, len(lines)
     while i < n:
         stripped = lines[i].strip()
-        if stripped and set(stripped) == {"`"} and len(stripped) >= 3:
-            # Bare wrapper fence: skip to its matching (or stronger) closer.
-            fence_len = len(stripped)
+        fence = FENCE_OPEN_RE.match(stripped)
+        info = fence.group(2).split() if fence else []
+        if fence and info[:1] != ["handoff"]:
+            # A fence that cannot open a receipt — a bare wrapper, or a block with any
+            # other info string: skip to its matching (or stronger) bare closer.
+            fence_len = len(fence.group(1))
             open_line = i + 1
             i += 1
             closed = False
@@ -141,9 +155,12 @@ def scan(text: str):
                 if set(s2) == {"`"} and len(s2) >= fence_len:
                     closed = True
                     break
+                if info:
+                    outside.append(i)
             if not closed:
                 findings.append(
-                    "line %d: unclosed ``` fence — opened here, never closed" % open_line
+                    "line %d: unclosed ```%s fence — opened here, never closed"
+                    % (open_line, info[0] if info else "")
                 )
             continue
         if HANDOFF_OPEN_RE.match(lines[i]):

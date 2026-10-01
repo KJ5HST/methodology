@@ -169,6 +169,25 @@ def file_status(project: Path, dest: str, canonical_sha: str, history: dict) -> 
 
 STALE_SEED = "present (stale format)"
 
+# How to migrate each seed SEED_FORMAT_MARKERS can flag, as BOOTSTRAP.md "Updating an existing project
+# from an earlier methodology version" gives it. Per file, because the routes differ: the CHANGELOG.md
+# seed's header replaces the rules an older copy carries (but not the pointer block or month heading
+# methodology_trim.py writes above the first entry), while an older HANDOFFS.md only lacks the
+# size section that carries its marker, and replacing its front matter would delete what a trimmer wrote there — a
+# pointer block, a regenerated count. A file with no route here gets the general rule.
+MIGRATION_ROUTES = {
+    "CHANGELOG.md": (
+        "replace the rules text or old header above the first entry with the current starter-kit seed's "
+        "header, keeping any archive-pointer block and month heading a trimmer wrote there"
+    ),
+    "HANDOFFS.md": (
+        "bring across the current starter-kit seed's '## Size, and when to archive' section, which carries "
+        "its format marker, above the first receipt (replacing any older copy of that section), and keep the "
+        "rest of the front matter"
+    ),
+}
+GENERAL_ROUTE = "bring across whatever the current starter-kit seed has above the first record"
+
 
 def seed_status(project: Path, dest: str) -> str:
     """SEED files are adopter-owned; only existence matters and an absent seed is
@@ -258,12 +277,13 @@ def report(paths: list, methodology_root: Path, source: str, origin: str) -> int
     if stale_rows:
         dests = sorted(set(stale_rows))  # count instances (one per project), list distinct files
         noun = "seed predates" if len(stale_rows) == 1 else "seeds predate"
+        routes = "; ".join(f"for {dest}, {MIGRATION_ROUTES.get(dest, GENERAL_ROUTE)}" for dest in dests)
         print(
             f"\nnote: {len(stale_rows)} {noun} the current format ({', '.join(dests)}, marked "
             f"'{STALE_SEED}'). These are adopter-owned and are never auto-overwritten. To migrate, "
-            f"reconcile against the current starter-kit seed by hand, or delete the file and re-run "
-            f"bin/sync to reseed (see BOOTSTRAP.md \"Updating an existing project from an earlier "
-            f"methodology version\")."
+            f"{routes}; leave every entry and receipt as written. Delete the file and re-run bin/sync "
+            f"to reseed only if it holds no history (see BOOTSTRAP.md \"Updating an existing project "
+            f"from an earlier methodology version\")."
         )
     return 0
 

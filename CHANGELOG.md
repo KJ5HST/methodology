@@ -8,18 +8,20 @@ This repository dogfoods its own methodology: every session records its actions 
 close-out (`starter-kit/SESSION_RUNNER.md` Phase 3F), and Phase 0 reconciles the ledger against
 `git log` and backfills anything a crashed or out-of-band session missed. Taking an action — any
 commit, or any non-commit action (release, tag, PR, upstream issue close, access grant, grooming
-decision) — and not recording it is failure mode #27. The full close-out and reconcile rules, plus
-the reusable seed, live in [`starter-kit/CHANGELOG.md`](starter-kit/CHANGELOG.md).
+decision) — and not recording it is failure mode #27. The rules for this file live in
+[`FRAMEWORK_APPARATUS.md` §The Action Ledger](FRAMEWORK_APPARATUS.md#the-action-ledger); the reusable
+seed, [`starter-kit/CHANGELOG.md`](starter-kit/CHANGELOG.md), points there.
 
-**Source tag — exactly one per entry**, so `grep -E '\[(issue #|BL-|ad hoc)' CHANGELOG.md`
-enumerates every logged action and proves all three sources landed:
+**Source tag — exactly one per entry**, so the audit in §The Action Ledger — anchored to the entry
+heading, and reading any archived shards — enumerates every logged action and proves all three
+sources landed:
 
 - `[issue #<N>]` — a repository issue. Issues live in `KJ5HST/methodology`; the fork
   `rmsharp/methodology` has Issues disabled, so entries — authored from either side — cite an
   **absolute URL**, never a bare `#<N>`, and resolve identically from both.
-- `[BL-<N>]` — a backlog item, removed from the backlog in the same commit. That backlog is
+- `[BL-<id>]` — a backlog item, removed from the backlog in the same commit. That backlog is
   [`docs/planning/BACKLOG.md`](https://github.com/rmsharp/methodology/blob/main/docs/planning/BACKLOG.md)
-  on fork `main` only — **this repo has no `docs/planning/BACKLOG.md`** — so a `[BL-<N>]` entry here
+  on fork `main` only — **this repo has no `docs/planning/BACKLOG.md`** — so a `[BL-<id>]` entry here
   records work whose origin lives in the fork.
 - `[ad hoc]` — work with no backlog or issue origin: releases, tag/branch ops, PR opens, upstream
   issue closes, access grants, and decline/wontfix/grooming decisions.
@@ -31,7 +33,8 @@ non-release work (housekeeping, doc-only PRs, adopter coordination, backlog groo
 otherwise has no home but raw `git log`. Where the two overlap — a release — this ledger carries a
 **one-line pointer** into §Versioning, never a re-narration (cite, don't restate).
 
-Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sections as it grows.
+Reverse-chronological, newest on top; prepend-only. Month headings (`## YYYY-MM`) start at this
+ledger's next new month, and nothing below is retrofitted (§The Action Ledger, *Placement*).
 
 ---
 
@@ -796,6 +799,490 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 - **Verification:** 425 lines; 26 `file:line` anchors on `main @ 512c2ed` re-checked by script (26/26);
   leak check for private-correspondence phrasing, internal-only paths, project names and brand names: 0 hits;
   `bin/check-links` OK (83/21), `bin/check-handoff --allow-pending` OK.
+
+### 2026-09-18 · [BL-72] `bin/check-handoff` skips a fenced block with an info string, instead of the newest receipt behind it
+
+- **Defect:** `scan()` recognised two fence openers, a bare backtick run (a wrapper) and a `handoff` fence. A fence
+  with any other info string, such as the `sh` block in the seed's *Size, and when to archive* section, was read as
+  prose, so its closing fence opened a wrapper that ran to the next bare fence: the closing fence of the newest
+  receipt. That receipt was never parsed. The checker validated the one below it and exited 0, and `--all` counted
+  one receipt fewer. Every adopter ledger that keeps the seed's section above its receipts was affected.
+- **Fix:** such a fence is now skipped whole, to a bare closer at least as long (CommonMark), as a wrapper already
+  was. An info string may not contain a backtick, so a prose line that starts with inline code quoting a fence
+  opens nothing. Unlike a wrapper's, the block's lines stay visible to the orphan check, so a receipt under a
+  misspelled tag is reported field by field, at its own lines. An unclosed one is reported like an unclosed
+  wrapper. A `handoff` fence is read as before.
+- **Tests:** ten assertions in `bin/tests.sh` Test 22, after block isolation. Six fail on the previous checker, and
+  each of six mutants of the fix fails at least one. The seed fixtures read the seed itself, and fail loudly if it
+  loses its sentinel comment or its info-string fence, rather than passing on a fixture that tests nothing.
+- **Placed** above the previous entry, below `upstream/main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-17 · [BL-57] Four wording fixes: the thin seed, the flight manual's index row, a moved note, two test references
+
+- **Change:**
+  - `starter-kit/CHANGELOG.md` — *"Old entries are archived"* becomes *may be archived* (archiving is optional), and
+    *"size and archiving"* becomes *reading and archiving* (the rules name no size).
+  - `ITERATIVE_METHODOLOGY.md:575` — the §Reference Apparatus row, the same *reading and archiving*.
+  - `FRAMEWORK_APPARATUS.md` — the note under the entry format kept a clause about the seed's freshness check, which
+    no longer applies where the note now lives; it says only that the tokens are illustrative.
+  - `bin/tests.sh` Test 20 (b2) — two references to `BOOTSTRAP.md:85`, which this branch moved to `:87`, cite the
+    paragraph by name instead.
+- **Why:** each was found by the same independent review. No rule changes; no marker changes, so no seed reads stale
+  because of this.
+- **Placed** above the previous entry, below `upstream/main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-17 · [BL-57] *Placement* covers the trimmer's first month heading and a merged branch's entries
+
+- **Change:** two sentences in `FRAMEWORK_APPARATUS.md` §The Action Ledger, *Placement*. A ledger with no month
+  headings starts them at its next new month **or at its first trim**, whose entry `methodology_trim.py` files under
+  the current month's heading (`insert_ledger_entry`). A merged branch's entries keep their branch order as one block
+  rather than being re-sorted by date.
+- **Why:** the rule as written contradicted the trimmer, which adds the current month's heading on its first trim;
+  and it said nothing about a merged branch, whose newer entries sit below older-dated ones on `main` today (PR #80's
+  did, and this branch's will). Found by the same independent review.
+- **Placed** above the previous entry, below `upstream/main`'s — the case the second sentence describes.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-17 · [BL-57] The `HANDOFFS.md` seed says its archive rule is its own, not the ledger's optional one
+
+- **Change:** `starter-kit/HANDOFFS.md`'s pointer to *Reading and archiving* adds one sentence: that subsection makes
+  archiving optional for `CHANGELOG.md`, and this file keeps its own rule — archive when the trimmer's trigger fires.
+- **Why:** the seed states that rule and then sends the reader to a subsection that concludes *"Archiving is
+  optional"*, which read as a contradiction. The two rules differ on purpose; this branch changes the ledger's and
+  leaves `HANDOFFS.md`'s as it was. Found by the same independent review.
+- **Placed** above the previous entry, below `upstream/main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-17 · [BL-57] The `CHANGELOG.md` migration route keeps the lines a trimmer wrote above the first entry
+
+- **Change:** `bin/status`'s route for a stale `CHANGELOG.md`, and `starter-kit/BOOTSTRAP.md`'s *Updating an existing
+  project* paragraph, said to replace **everything** above the first entry with the seed's header. They now say to
+  replace the rules text or old header, keeping any archive-pointer block and month heading a trimmer wrote there.
+  The `HANDOFFS.md` route in both says to replace any older copy of the size section, and the paragraph names the
+  `handoffs-format: 2` line as what makes a copy current (the previous entry's marker).
+- **Why:** `methodology_trim.py` writes its shard pointer block and the topmost `## YYYY-MM` heading into that
+  zone (`:310`, `:1191`), so the old route, followed literally, deleted them; one adopter's migration nearly did. The
+  `HANDOFFS.md` route already kept them; the `CHANGELOG.md` one did not. Found by the same independent review.
+- **Test:** Test 20 (g) — the route assertion follows the new wording, and two new assertions require the keep
+  clause in the note and in the paragraph it cites. Neither text carried it at the previous commit.
+- **Placed** above the previous entry, below `upstream/main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-17 · [BL-57] The `HANDOFFS.md` seed gets a versioned format marker; its section heading could not tell an old seed from a new one
+
+- **Change:** `starter-kit/HANDOFFS.md` opens its *Size, and when to archive* section with `handoffs-format: 2`, a line
+  the seed asks adopters to keep; `bin/_manifest.py` keys `HANDOFFS.md` on it, as `CHANGELOG.md` keys on
+  `ledger-format: 2`; `bin/status`'s route names the section, which carries the marker, and says to replace any older
+  copy of it.
+- **Why:** the heading arrived in the seed that shipped with the trimmer (`56997af`), over the size premise this
+  branch removes (a 65,536 B byte row priced as a *context tax*). Keyed on the heading, that seed read current: a
+  marker present in the earlier format can never flag it. Two of six real adopters carry exactly that text and read
+  current. Found by an independent review of this branch before the pull request.
+- **Test:** `bin/tests.sh` Test 20 (g) gains the shipped-marker check and a fixture with the heading, the old premise
+  and no marker. Run against the heading key, that fixture read `present`; against the marker, `present (stale format)`.
+  A freshly synced project reads `present` for both seeds, with no note.
+- **Placed** above the previous entry, below `upstream/main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-17 · [BL-57] Two code comments stop citing a plan item that exists only in the contributor's fork
+
+- **Change:** `bin/status:112` and `bin/tests.sh:323` each ended a sentence with *"(BL-57 item (22))"*, a pointer into
+  a planning document on `rmsharp/methodology` that this repository does not have. Both sentences already state the
+  reason in full, so the citation is dropped and nothing replaces it. Comments only; no behaviour changes.
+- **Placed** above the density entry, below `upstream/main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-17 · [BL-57] The three read-set densities re-measured on the blobs this branch ships
+
+- **Change:** `.context-budget.json` — `bytes_per_token` and `measured_bytes` for `CLAUDE.md`,
+  `starter-kit/SESSION_RUNNER.md` and `starter-kit/SAFEGUARDS.md`, and each entry's note: which blob was measured,
+  and which blob id to watch for the next re-measure. The config's own rule is to re-measure when a file's blob
+  changes; this branch changed all three, and the densities still named `1244e95b`, `2a3e410d` and `933816b4`.
+- **Measured** by the doubled-file method (seven copies for `SAFEGUARDS.md`), each run reproducing the previous
+  measurement exactly as a control: `CLAUDE.md` `dd416ea` 46,953 doubled → 23,476.5 tokens, 2.5182 B/token (control
+  46,965); the runner `4811f02` 37,717 → 18,858.5, 2.8225 (control 37,731); `SAFEGUARDS.md` `ed49b97` 42,586 over seven
+  → 6,083.7, 2.8155 (control 42,208).
+- **Every ceiling holds:** 6.5 tokens under `CLAUDE.md`'s 23,483, 41.5 under the runner's 18,900, 16.3 under
+  `SAFEGUARDS.md`'s 6,100; the pair is 24,942.2 of the 25,000-token read cap (99.77%). No ceiling changed.
+- **Correction:** the `[BL-63]` entry below gave `SAFEGUARDS.md` as *"about 6,067 tokens"*, an estimate at the old
+  density. It measures 6,083.7. Left at 2.8234, the tool counted 6,066, 18 tokens under.
+- **Placed** above the `[BL-63]` entry, below `upstream/main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-17 · [BL-63] `BOOTSTRAP.md` says how to commit a `bin/sync` run, and `SAFEGUARDS.md`'s five-file cap names it
+
+- **Change:**
+  - `starter-kit/BOOTSTRAP.md`, *Setup with `bin/sync`* — a new *Committing a sync* paragraph after *Drift safety*:
+    in committed mode, one `bin/sync` run is one commit, holding exactly the files it wrote (which `--dry-run` lists
+    first) plus that commit's `CHANGELOG.md` entry; the adopter's own edits afterwards go in their own commits under
+    the cap. It gives the reasons: every file is a byte-for-byte copy of a canonical one, one `git revert` undoes the
+    run, and a split can leave operating files citing tools that have not arrived yet.
+  - `starter-kit/SAFEGUARDS.md`, the five-file cap row — one sentence, *"A committed-mode `bin/sync` run is one
+    commit, whatever its file count"*, linking `BOOTSTRAP.md`. Without it the new paragraph would contradict a file
+    that says it wins over other guidance and lists the cap under *No Exceptions*.
+- **Why:** `bin/sync` copies the whole distributed corpus and does not commit, and no distributed document said how
+  its result is committed, so every committed-mode sync that updates more than five files broke the cap or left the
+  adopter to invent a split. Measured in one adopter's syncs: 15 and 21 files; dry runs in three others: 14–16.
+- **Size:** `SAFEGUARDS.md` 17,024 → 17,129 B, about 6,067 tokens at its recorded 2.8234 B/token against its 6,100
+  `max_tokens`; the read-set pair's partition (18,900 + 6,100) is unchanged. `BOOTSTRAP.md` +584 B; it has no budget.
+- **Separable:** this commit touches nothing else, so it can be dropped from the pull request on its own.
+- **Placed** above the previous `[BL-62]` entry, below `upstream/main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-17 · [BL-62] The read-cap partition test sums only the files read together, not every whole-read class
+
+- **Change:**
+  - `tools/test_context_budget.py` — `TestThisRepoReadSetPartition` summed the `max_tokens` of every class in
+    `WHOLE_READ_CLASSES` (resident, read-mandated, read-set) against the one 25,000-token Read. Only the read-set
+    pair, the Phase 0 mandatory read, is read in one Read; a read-mandated or resident file is read whole but on its
+    own. So a config declaring two read-mandated ledgers at 25,000 tokens each, two full Reads, failed the test as
+    50,000 > 25,000. The check moves into `token_partition(cfg)`, which sums only `READ_TOGETHER_CLASSES`
+    (`("read-set",)`); the repo test and its presence control run on it unchanged in meaning, and the renamed
+    `test_the_read_set_token_ceilings_partition_the_read_cap` replaces
+    `test_whole_read_class_token_ceilings_partition_the_read_cap`. New `TestTokenPartitionRule`, four tests on
+    fixture configs: separately-read files do not share the cap; a read-set pair past the cap is still refused;
+    one within it passes; one at exactly the cap fits.
+  - `.context-budget.json` — the read-set note said the test fails any edit whose ceilings *"in a whole-read
+    class"* exceed the cap. It now says *"in the read-set class"*.
+- **Why:** the fork hit it with its own config (two read-mandated ledgers at 25,000 each) and had to drop the two
+  declarations to pass. Canonical-only: the test file is not distributed, so no adopter runs it.
+- **Checked:** test-first. With the check extracted but the old every-class rule kept, two of the new tests failed
+  (50,000 > 25,000); with the rule restricted, the file runs 122 tests, 0 failures, 2 skipped (118 and the same
+  2 skips before). Five mutants each fail it: the old every-class rule (2 failures), no class summed (4), `>`
+  becoming `>=` at the cap (2), a pair skipped (4), `checked` never counted (4).
+- **Placed** above the previous `[BL-57]` entry, below `upstream/main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-17 · [BL-57] `methodology_trim.py` links its design doc's public copy, and stops citing a hook flag no hook has
+
+- **Change:** `starter-kit/methodology_trim.py`, comments only.
+  - The module docstring said the design doc (`docs/planning/ledger-trimmer-design.md`) *"has not been published
+    to a public remote"*, so it gave no URL. The doc is public in the `rmsharp/methodology` fork, so the docstring
+    now links it at the commit that last changed it (`979dc73`), where the link cannot drift. The file's section
+    citations (*design §2*, *§4*, *§5*, *P2* and the rest) now resolve through that link.
+  - The *defaults* paragraph said the tool never runs `git mv` because *"`--no-renames` in the FM #27 pre-commit
+    hook"* would let a rename-shaped trim pass. This repository's hook has no `--no-renames`, and never did. The
+    paragraph now keeps the rule and says what the tool does instead: it writes a new shard and edits the live
+    ledger in place, so the ledger keeps its path and its history.
+- **Why:** item F5 of the PR #80 review, open since #80 merged. A distributed comment that cites a missing document
+  and a flag that does not exist sends the next maintainer of the tool looking for both.
+- **Checked:** the module still parses; `grep -c 'no-renames\|not been published'` on the file reads 0; the link
+  resolves on GitHub (74,109 B, blob `09c99c14`, the blob the fork's `main` holds). No test reads the docstring.
+- **Placed** above the previous `[BL-57]` entry, below `upstream/main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-17 · [BL-57] `bin/status`'s stale-seed note gives each seed its own migration route, and the `BOOTSTRAP.md` paragraph it cites gives the `HANDOFFS.md` one too
+
+- **Change:**
+  - `bin/status` — the note beneath the table told an adopter holding either stale seed to *"replace the text
+    above the first entry (or receipt) with the current starter-kit seed's"*. It now gives each flagged file
+    its own route: for `CHANGELOG.md`, replace the text above the first entry with the seed's header; for
+    `HANDOFFS.md`, bring across the seed's `## Size, and when to archive` section, above the first receipt,
+    and keep the rest of the front matter. The routes sit in `MIGRATION_ROUTES`, beside `STALE_SEED`; the
+    `HANDOFFS.md` one names the section from `bin/_manifest.py`'s marker, and a file with no route gets the
+    general rule.
+  - `starter-kit/BOOTSTRAP.md:85` — the paragraph the note cites named only the `CHANGELOG.md` formats and
+    route. It now also names a `HANDOFFS.md` without the size section, and gives that file's route.
+  - `bin/tests.sh` Test 20 (g) — eight assertions: a route appears only for a flagged file; a stale
+    `HANDOFFS.md` is flagged and gets its own route and no *replace*; two stale seeds get both routes; the
+    cited paragraph gives the `HANDOFFS.md` route.
+- **Why:** BL-57 item (22). The `HANDOFFS.md` seed differs from an older copy by one section, the one the
+  marker keys on. Replacing the front matter instead deletes whatever an adopter's trimmer wrote there, an
+  archive pointer and a count sentence among them.
+- **Checked:** Test 20 was run alone before the fix: 5 failures, among them *"the note tells a stale
+  HANDOFFS.md to replace its front matter"*; 24 passed, 0 failed after. Two mutants fail it: routes printed
+  for files that are not flagged (2 failures), and no `HANDOFFS.md` route (1).
+- **Placed** above the previous `[BL-57]` entry, below `upstream/main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-16 · [BL-57] This ledger's front matter points to §The Action Ledger for its rules, its audit and its month headings
+
+- **Change, in this file's front matter only** (the maintainer's own file — the PR body will say it can
+  be dropped, and that dropping it leaves the pointer false):
+  - `:11`–`:13` — the rules *"live in [`FRAMEWORK_APPARATUS.md` §The Action Ledger]"*; the seed *"points
+    there"*. It said the rules and the seed both *"live in `starter-kit/CHANGELOG.md`"*, which P1 made
+    false when it moved the rules out of the seed.
+  - `:15`–`:17` — the source-tag paragraph cites *"the audit in §The Action Ledger — anchored to the entry
+    heading, and reading any archived shards"*, where it published the unanchored one-file
+    `grep -E '\[(issue #|BL-|ad hoc)' CHANGELOG.md`. On this commit that form matches **94** lines
+    against **68** entries: it also counts the tag definitions and every in-prose mention of a tag.
+  - `:22`, `:24` — `[BL-<N>]` becomes `[BL-<id>]` in the tag definitions, the item P3 recorded as left
+    for P4. What `[BL-<N>]` remains on this tree is history: entry bodies here, `CLAUDE.md:123` (v3.1)
+    and `README.md:365` (*What's New*).
+  - `:36`–`:37` — *"Promote to `## YYYY-MM` sections as it grows"* becomes *"Month headings start at this
+    ledger's next new month, and nothing below is retrofitted"*. This ledger has none today, so the
+    first one opens at the first entry dated in October.
+- **Why:** BL-57 D8 (i), in one commit as the plan requires; C10, C13 and P3's finding (4).
+- **Checked:** the audit gives **68** in `zsh` and in `bash` on this commit, equal to the file's `^### `
+  count — this tree has no shards. `FRAMEWORK_APPARATUS.md:338` is `## The Action Ledger`, the link's
+  target.
+- **Placed** above the previous `[BL-57]` entry.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-16 · [BL-57] `CHANGELOG.md` is described as the action ledger, not as completed-work history — and `CLAUDE.md` is back under its token ceiling
+
+- **Change:** *"Completed work history"* becomes the action ledger at `starter-kit/BOOTSTRAP.md:23`, `:107`,
+  `:131`, `README.md:96`, `:114`, `:200` and `CLAUDE.md:51`. Two instructions that framed an entry as
+  something written when work *completes* now say to record each action, and to remove a finished
+  backlog item from `BACKLOG.md`: `starter-kit/BOOTSTRAP.md:139` and the matching sentence in
+  `README.md:96`. The migration step at `starter-kit/BOOTSTRAP.md:145` moves completed items in *as
+  entries, newest on top*, where it said *"into reverse-chronological sections"*.
+- **Also:** `CLAUDE.md:21`, the *Reference apparatus* row, now reads *"its tables, tests, scoring scales
+  and ledger rules; distributed"*. It pays back the 4 tokens the merge `52ad407` carried over
+  `CLAUDE.md`'s `max_tokens` 23,483 — P1's *"and the `CHANGELOG.md` rules"* was 9 B shorter and 4
+  tokens longer than the wording it replaced.
+- **Why:** BL-57 C11. The seed's ledger records every action, including releases, PRs and declines, and
+  an instruction keyed to *completing work* misses all three.
+- **What *"completed work"* still says, and why it stays:** `README.md:530` is the v2.1 *What's New* entry
+  (history); `CLAUDE.md:128` is the v3.6 release narrative quoting a dashboard label; `starter-kit/BOOTSTRAP.md:134`
+  says that open work, completed work and plans belong in separate files, which is the backlog split
+  and still true. `grep -ni 'completed work history'` over the three files finds only `README.md:530`.
+- **Size, in tokens:** `CLAUDE.md` reads **46,953** doubled (23,476.5 tokens) against **≤ 46,965**
+  (`upstream/main`'s blob `1244e95b`, whose recorded figure reproduced in the same run): 6 under
+  `upstream/main`, 10 under the merge. Bytes: `CLAUDE.md` −25, `README.md` +13, `BOOTSTRAP.md` +81; the
+  last two carry no budget row. The runner is untouched by this commit.
+- **Placed** above the previous `[BL-57]` entry.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-16 · [BL-57] A newest-on-top ledger is prepended to, not appended to; the claim commit's entry says *(in progress)*
+
+- **Change:** seven instructions that said *"append … newest on top"* now say *prepend*: the runner's
+  Phase 3F (`starter-kit/SESSION_RUNNER.md:281`), failure mode #27's countermeasure (`:332`) and its
+  Degradation row (`:360`); `ITERATIVE_METHODOLOGY.md:294`, Phase 6 step 8; `HOW_TO_USE.md:767` and
+  `:804`; and the ledger hook's refusal text (`.githooks/pre-commit:70`). The runner's Phase 1B stub
+  (`:88`) and the flight manual's Phase 1B step 1 (`ITERATIVE_METHODOLOGY.md:169`) now say the claim
+  commit's ledger entry reads *(in progress)* and close-out records the rest, where they said the
+  session's actions are recorded at Phase 3F — which a claim commit's own entry contradicts.
+- **Why:** BL-57 C3 and C7. §The Action Ledger already said *prepend*; these seven sites were the other
+  side of that disagreement. *Append-only*, meaning never edited, is a different claim and stays.
+- **Size, in tokens, against the criterion restated before this phase's first edit:** the runner reads
+  **37,717** doubled (18,858.5 tokens) against **≤ 37,731** (`upstream/main`'s blob `2a3e410d`) — 7 tokens
+  more than P4's start at the merge, 7 under the criterion; the 36,955 control reproduced in the same
+  run. Bytes: runner +9, `ITERATIVE_METHODOLOGY.md` +45, `HOW_TO_USE.md` +2, the hook +1. The flight
+  manual's +45 misses the plan's *"byte-neutral wording"*; it has no budget row — `.context-budget.json`
+  lists it under `_deliberate_exclusions`.
+- **Checked:** `grep -nE '[Aa]ppends? (a|one) dated|Append the owed entry'` over the runner,
+  `ITERATIVE_METHODOLOGY.md`, `HOW_TO_USE.md` and the hook exits 1 — no matches. No test or tool pins
+  the changed text (`git grep` over `bin`, `tools` and the starter-kit scripts).
+- **Placed** above the previous `[BL-57]` entry.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-16 · [BL-57] §The Action Ledger states when an entry is written and where it goes: one per commit, never edited, under the topmost month
+
+- **Change:** `FRAMEWORK_APPARATUS.md` §The Action Ledger replaces its closing paragraph — *"Work
+  committed but not finished … Promote to `## YYYY-MM` sections as the list grows"* — with two rules,
+  and its opening sentence stops saying entries are written *"At close-out"*, which a claim commit's
+  entry contradicts. Each rule, as it now reads on this commit:
+  - `:439` — *"**Lifecycle — one entry per commit, never edited.** The commit is the unit the ledger
+    co-staging hook checks, so each commit carries its own entry, and each non-commit action gets one
+    of its own."*
+  - `:442` — *"A claim commit carries an *(in progress)* entry, and close-out adds its own entry rather
+    than rewriting the claim's."* Work committed but unfinished is marked the same way.
+  - `:446` — *"A committed entry is never edited. A correction is a new entry that names what was
+    wrong. The one exception is removing content that must not be published … and that removal is
+    recorded by an entry of its own."*
+  - `:449` — *"A Phase 0 backfill is the one entry that may span several commits."*
+  - `:451` — *"The Phase 1B `CHANGELOG: pending` marker lives in `SESSION_NOTES.md`. A project that
+    keeps no `SESSION_NOTES.md` relies on its `status: pending` `HANDOFFS.md` receipt instead."*
+  - `:454` — *"**Placement — prepend under the topmost `## YYYY-MM`.** … When the month changes, open
+    the new month's heading above the last one: group by month, not by release. A ledger that has no
+    month headings starts them at its next new month, and nothing already written is retrofitted.
+    Entries stay at `###`, the level the tools key on."* — `_DATED_ENTRY_RE`
+    (`starter-kit/methodology_dashboard.py:211`) and the trimmer's `record_start`
+    (`starter-kit/methodology_trim.py:307`) both anchor on `^###`.
+- **Also:** `HOW_TO_USE.md:748` gives the apparatus as *"~535 lines"* — 534 after this change; it said
+  515, which P2 had already made stale at 501.
+- **Why:** BL-57 C7, C8 and C13, as the operator decided at Q4 A (one entry per commit, never edited).
+  The rules had one sentence on a claim's entry (*"mark it `(in progress)`"*) and none on editing,
+  and the month rule said *"promote … as the list grows"*, which names no point at which to start —
+  this ledger holds 65 entries and no month heading.
+- **Placed** above the previous `[BL-57]` entry, below `upstream/main`'s block, after the merge `52ad407`.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-16 · [BL-57] Correction: §The Action Ledger attributed a measurement to a ledger that does not record it
+
+- **What was wrong:** the entry above, and the text it describes, said the unanchored audit *"returned
+  78 against 64 actions"* **"on this framework's own ledger."** The measurement is real, but it was
+  taken on the project whose ledger was split at v3.6, not on this repository's — whose root
+  `CHANGELOG.md` carries no such record. A reader of this tree could not check the claim, and merged
+  upstream it would attribute the count to a ledger where the comparison was never run.
+- **Change:** the sentence now states the failure first and the number as what it is —
+  *"an unanchored pattern … can report more actions than the ledger holds; the project this was
+  measured on counted 78 where 64 had happened."* The mechanism is checkable anywhere; the figure no
+  longer claims a home it does not have.
+- **Why:** an unverifiable number in a distributed file is the thing §The Action Ledger's own advice
+  warns against — it is right when written and unfalsifiable afterwards. Caught by grepping this
+  tree for the figure's provenance before close-out, not by any gate.
+- **Placed** above the previous entry.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-16 · [BL-57] The `HANDOFFS.md` seed enumerates its shards with `git ls-files`, not a bare glob
+
+- **Change:** `starter-kit/HANDOFFS.md`'s rule that anything counting receipts must span the live
+  file and its shards published that span as the bare glob `HANDOFFS.md docs/archive/HANDOFFS-*.md`.
+  It now reads `HANDOFFS.md $(git ls-files 'docs/archive/HANDOFFS-*.md')`, with the reason stated:
+  zsh aborts a command whose glob matches nothing, so before the first split the bare form counts
+  nothing at all — the same reason the ledger's audit is written that way. 10,417 → 10,676 B.
+- **Why:** C10. The bullet was outside P2's lines and was carried to P3 with the audit it matches.
+- **Reproduced in a throwaway repository with one entry and no shard:** the bare form prints `0`
+  under zsh (with `no matches found` on stderr, exit 1) and `1` under bash (with a `cat` error on
+  stderr, exit 0); the `git ls-files` form prints `1` and exits 0 under both. The failure the fix
+  removes is not an error the caller sees — it is **two shells returning two different counts**.
+- **Placed** above the previous entry.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-16 · [BL-57] The runner cites the ledger rules instead of restating their audit; three files adopt `[BL-<id>]`
+
+- **Change:** `starter-kit/SESSION_RUNNER.md:39` (Phase 0, the backfill step) drops the inline
+  `grep -E '\[(issue #|BL-|ad hoc)' CHANGELOG.md` for a link to
+  [§The Action Ledger](docs/methodology/FRAMEWORK_APPARATUS.md#the-action-ledger), so the audit is
+  published in exactly one place. `:278` (Phase 3F) and `:329` (failure mode #27) change
+  `[BL-<N>]` to `[BL-<id>]`, as do `ITERATIVE_METHODOLOGY.md:294` and `.githooks/pre-commit:57`.
+  After this commit `grep -F '[BL-<N>]'` over the runner, the flight manual, `HOW_TO_USE.md`, the
+  hook, §The Action Ledger and both seeds finds nothing.
+- **Why:** C6 and C10, the distributed half of BL-57's P3. One rule, one home, one audit.
+- **Two duplicate clauses paid for the link.** The step already showed `[ad hoc]` in its own entry
+  template, so *"default `[ad hoc]`"* was removed; and the note's closing paragraph already says the
+  backfill *"does not become this session's deliverable"*, so the step's weaker *"separate from this
+  session's later deliverable"* was removed. **The runner ends smaller than it started: 52,195 →
+  52,163 B, and 18,477.5 → 18,463.5 tokens.**
+- **The two units disagreed about the link, which is why the size rule is now stated in tokens.**
+  Adding the cross-reference and the two id changes alone measured **+36 B but only +9 tokens** — a
+  path tokenizes at about 4 B/token where this file averages 2.8248 — so a byte rule overstates what
+  a cross-reference costs and understates what cut prose saves. Tokens are the unit the read cap and
+  the file's own ceiling are written in.
+- **Placed** above the previous entry.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-16 · [BL-57] §The Action Ledger: a source tag admits any backlog id, and the audit reads the archived shards
+
+- **Change:** `FRAMEWORK_APPARATUS.md` §The Action Ledger states the vocabulary as `[issue #<N>]`,
+  `[BL-<id>]` and `[ad hoc]` — `<id>` being whatever id the project's backlog gives the item, not a
+  number. The audit moves out of the vocabulary sentence into its own paragraph and becomes
+  `cat CHANGELOG.md $(git ls-files 'docs/archive/CHANGELOG-*.md') | grep -cE '^### …'`. Three
+  properties of that command are stated in place, because each fixes a way the old one-line form
+  gave a wrong number rather than an error: **`git ls-files`, not a bare glob** — zsh aborts a
+  command whose glob matches nothing, so in a project that has never trimmed the bare form returns
+  no count at all; **anchored to the entry heading** — unanchored it also matches the vocabulary's
+  own definitions and every mention of a tag in prose, which on this repository's ledger returned
+  78 against 64 actions; and **`BL-[^]]+`, not `BL-[0-9]+`** — it counts whatever id the backlog
+  uses. A closing sentence says entries written before a project adopted the vocabulary stay as
+  written and are not counted, so the shortfall is expected rather than a defect to repair.
+- **Why:** C6 and C10, the source-tag half of BL-57's P3. The rules live in one place now, so the
+  audit published beside them is the one every project runs.
+- **Measured, not asserted.** The two shells disagree on the bare-glob form in a repository with no
+  shard: zsh prints `0`, bash prints `1`. Across the six adopter repositories, widening
+  `BL-[0-9]+` to `BL-[^]]+` moves the count 96 → 262, 599 → 784 and 236 → 247 in three of them —
+  **362 logged actions the numeric-only pattern could not see** — and leaves the other three
+  unchanged. One of those adopters tags with `BL-OPS-ADMIN-PW-RECOVERY-001`.
+- **Placed** above the previous entry.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-15 · [BL-57] The `HANDOFFS.md` seed names no size — archive when the trimmer's trigger fires; the trimmer's budget comment drops *"context-tax"*
+
+- **Change:** `starter-kit/HANDOFFS.md` §Size, and when to archive keeps its heading, which `bin/status`
+  keys on (D9), and replaces what follows it: the premise that Phase 0 reads the file every session, and
+  the two-cap table with its 65,536 B default and its citations of BL-52 and a fork-only plan, give way
+  to the reads the protocol makes and one rule — *"Archive it when the trimmer's trigger fires. The tool
+  states the trigger, and this file names no size of its own."* The pointer to §The Action Ledger names
+  *Reading and archiving* and what it holds, and the *three files* list says receipts move *"when the
+  file is archived"*, not *"once the file outgrows a session's read"*. `starter-kit/methodology_trim.py:186`:
+  *"the per-file context-tax budget"* → *"the per-file byte budget"* — a comment; the module's AST is
+  identical to `b82dcff`'s. 11,505 → 10,417 B.
+- **Why:** steps 2 and 3 of BL-57's P2 (C1, C2, C12, C14). This file's own archive rule otherwise stands
+  (D7); whether *optional* extends to it is the operator's call.
+- **Placed** above the previous entry.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-15 · [BL-57] §The Action Ledger: the ledger is never read whole, and archiving is optional — the two-cap size rule goes
+
+- **Change:** `FRAMEWORK_APPARATUS.md`'s *Size, and when to archive* becomes *Reading and archiving*,
+  on the operator's Q2 A. Each rule, at its line in this commit: `:428` *"The protocol never asks a
+  session to read this file whole"*, then its three partial reads — Phase 0 reconcile from `git log`
+  (`:430`), close-out at the top (`:432`), a lookup by `grep` or `git log --grep` (`:433`); `:436`–`:438`,
+  past the trimmer's `READ_REFUSE_BYTES`, read the top with an offset and a limit; `:440` *"Archiving is
+  optional"*; `:442` *"The tool's trigger is the only statement of when — these rules name no size"*;
+  `:476` conservation, *"the live file and its shards together never lose an entry"*, so a count spans
+  both and never the live file alone, or a count ratchet refuses every trim (C9); `:486`, kept, a trim
+  *"does not belong in Phase 0"*. The two-cap table goes — its 65,536 B default (C2), its *"every session
+  pays"* premise (C1), its citations of BL-52 and a planning document this repository does not hold
+  (C12) — with the rate-versus-level argument, which describes a line cap the trimmer no longer has. The
+  shard convention stays; its enumeration becomes `cat CHANGELOG.md $(git ls-files
+  'docs/archive/CHANGELOG-*.md')`, equal in bash, zsh and a Python count with no shard (55) and with
+  eleven (526). The *three files* paragraph (`:498`) no longer says the ledger splits *"once it outgrows
+  a session's read"*, and the file's intro (`:13`) and the section's opening (`:342`) no longer call the
+  moved text verbatim. 28,022 → 25,983 B.
+- **Why:** step 1 of BL-57's P2 (C1, C2, C9, C12, and C4's half in this file). The protocol reads only
+  parts of the ledger, so its size costs no session a read; the trimmer stays, for a project that wants
+  a smaller live file.
+- **Placed** above BL-57's P1 entries, below `main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-15 · [BL-57] The documents that describe `FRAMEWORK_APPARATUS.md` name its seventh section
+
+- **Change:** `HOW_TO_USE.md`'s layer table (the apparatus row gains *write a ledger entry*; ~330 → ~515
+  lines), `CLAUDE.md`'s Document Hierarchy row, and `ITERATIVE_METHODOLOGY.md` §Reference Apparatus, whose
+  table listed the six sections that moved there and now lists §The Action Ledger as well. Wording only.
+  The `CLAUDE.md` row is 9 B shorter than before: `.context-budget.json` pins that file's ceiling at its
+  size (59,168 B), so it names the rules and drops *"Extracted so the manual fits one read"*, which the
+  apparatus's own intro already says.
+- **Why:** step 4 of BL-57's P1 — the file gained a section in step 2, and three documents that describe
+  it did not know. The plan named the first two; the third is the same kind of index, found by grepping
+  for the set-size claim (*"Six sections moved there"*).
+- **Placed** above #80's entries, below `main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-15 · [BL-57] `bin/status` keys the `CHANGELOG.md` seed on `ledger-format: 2`, and its migration advice stops rewriting entries
+
+- **Change:** `bin/_manifest.py`'s `SEED_FORMAT_MARKERS` key `CHANGELOG.md` on `ledger-format: 2`, the
+  seed's pointer line, instead of its title, and `HANDOFFS.md` on its `Size, and when to archive` heading
+  instead of its title; the comment states why a title can never fire. `bin/status`'s migration note and
+  `BOOTSTRAP.md`'s *Updating an existing project* paragraph now say: replace the text above the first
+  entry with the current seed's, leave every entry as written, and reseed only a file with no history.
+  `bin/tests.sh` Test 20: the in-use fixture carries the marker line, and a new case (b2) holds the frozen
+  pre-ledger-format-2 seed, which must read *present (stale format)*.
+- **Why:** step 3 of BL-57's P1. A title never changed across formats, so keying on it reported every old
+  seed as current; and the old advice — *"reconcile its header and per-entry format"* — told adopters to
+  rewrite committed entries.
+- **Verified:** (b2) fails against the title-keyed marker (116 passed / 2 failed) and passes with this
+  commit (117 / 1; the other failure is Test 9 throughout). On copies of six adopters, `bin/status` reads
+  every `CHANGELOG.md` *present (stale format)*, with the new advice beneath, and its six `HANDOFFS.md`
+  verdicts equal fork `main`'s, which already keys on that heading.
+- **Placed** above #80's entries, below `main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-15 · [BL-57] The `CHANGELOG.md` rules move to `FRAMEWORK_APPARATUS.md` §The Action Ledger; the seed becomes a pointer with a format marker
+
+- **Change:** the seed's three rule sections — *How to add an entry*, *Size, and when to archive* and
+  *CHANGELOG.md vs SESSION_NOTES.md* — move verbatim, one heading level down, into a seventh section of
+  `FRAMEWORK_APPARATUS.md` (15,493 → 28,022 B), whose intro now says so. `starter-kit/CHANGELOG.md` keeps
+  its title, purpose paragraph, sentinel and footer, and gains a linked pointer carrying
+  `ledger-format: 2` (12,893 → 1,335 B). `starter-kit/HANDOFFS.md`'s cross-reference points at the new
+  home, and `methodology_trim.py`'s fence-tracking comment says where the fenced examples live now
+  (comment only: its AST is unchanged). No rule changes.
+- **Why:** step 2 of BL-57's P1. `bin/sync` writes a seed once and never again, so rules kept in a seed
+  froze at each project's seeding; in a synced file a correction reaches every project.
+- **Verified:** each moved section occurs byte for byte in the home (the plan's §9.3 check); the trimmer
+  reports `NO_RECORDS` on the new seed; `bin/sync` into an empty directory seeds it; `bin/check-links`
+  resolves the two new links (105 → 107).
+- **Placed** above #80's entries, below `main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
+
+### 2026-09-15 · [BL-57] The trimmer's fence-awareness controls read a frozen copy of today's seed, so they survive the seed shrinking
+
+- **Change:** `tools/test_methodology_trim.py` and a new `tools/fixtures/seed-CHANGELOG-ledger-format-1.md`,
+  both canonical-only; nothing distributed changes. Three controls asserted that the live
+  `starter-kit/CHANGELOG.md` holds record-shaped example lines inside fences. They now read the fixture —
+  the seed exactly as it ships today, git blob `47bc8485`, which a new test asserts — while the live seed
+  must still hold no records. The dated-prose test's `.replace()` anchor, `## How to add an entry`,
+  becomes the `---` line, asserted to occur exactly once before the replace; a docstring cites the
+  sentinel by its token, not by line number. Green with either seed.
+- **Why:** step 1 of BL-57's P1. The seed's rules text moves to `FRAMEWORK_APPARATUS.md` next, and every
+  adopter seeded before then keeps the fenced examples, so the controls stay meaningful on the copy.
+- **Placed** above #80's entries, below `main`'s.
+- **Commit:** this commit, on `bl57/changelog-rules`
 
 ### 2026-09-15 · [ad hoc] PR #80 review F3: the root `.context-budget.json` holds the Phase 0 pair to the read cap in tokens at its measured density, and drops the two ledgers it could only report as over
 

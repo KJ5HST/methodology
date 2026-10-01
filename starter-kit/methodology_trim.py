@@ -5,15 +5,14 @@ Moves the oldest records out of a grow-and-must-be-read ledger into a frozen sha
 `docs/archive/`, and refuses to do it unless the move is provably lossless.
 
 Implements the ledger-trimmer design (S35). `bin/sync` installs this file at your project root
-and does NOT install that design, which lives only in the methodology repository as
-`docs/planning/ledger-trimmer-design.md` — deliberately, since it is a working document for the
-tool's authors rather than something an adopter operates. No URL is given for it on purpose: it
-has not been published to a public remote, and a link that 404s is worse than a path plus the
-repository's name. The design is the spec and this file does not re-open it; whoever changes this
-module reads its §2 (the three-zone record model), §4 (the three assertions) and §5 (the trigger)
-first, from a checkout of that repository. Nothing mechanical protects this reference:
-`bin/check-links` validates only the distributed *markdown*, so a dangling citation inside this
-module is never reported.
+and does NOT install that design, a working document for the tool's authors rather than something
+an adopter operates. It is `docs/planning/ledger-trimmer-design.md` in the rmsharp/methodology
+fork, linked here at the commit that last changed it, so the link cannot drift:
+https://github.com/rmsharp/methodology/blob/979dc7382702be0963b0534846e3dd23d5b6d4ca/docs/planning/ledger-trimmer-design.md
+The design is the spec and this file does not re-open it; whoever changes this module reads its
+§2 (the three-zone record model), §4 (the three assertions) and §5 (the trigger) first. Nothing
+mechanical protects this reference: `bin/check-links` validates only the distributed *markdown*,
+so a dangling citation inside this module is never reported.
 
 WHY THREE ASSERTIONS AND NOT ONE
     The manual procedure this replaces proved whole-file byte identity under concatenation, and
@@ -30,8 +29,8 @@ WHY THREE ASSERTIONS AND NOT ONE
 
 DEFAULTS THAT ARE INVERTED ON PURPOSE
     Dry run is the default; `--write` is required to touch anything. The tool never commits, and
-    it never runs `git mv` (design P2 — `--no-renames` in the FM #27 pre-commit hook means a
-    rename-shaped trim passes a gate meant to notice it).
+    it never runs `git mv` (design P2): a trim writes a new shard and edits the live ledger in
+    place, so the ledger keeps its path and its history.
 
 Python 3 stdlib only, cross-platform — this file is destined for adopter roots (design §6.1).
 """
@@ -183,7 +182,7 @@ CLASS_A_STOP_BYTES = 96 * 1024    # 98,304 — cut back to at or under this. Del
 # against". That is impossible for BL-9, which CLOSED 2026-08-01 against a constant first written
 # 2026-08-03 (df381ea); §5.4's 52,927 B is BL-9's own output commit 7a71df0, so BL-9 is this
 # constant's INPUT. The other four were not re-derived and are claimed neither way.
-DEFAULT_BUDGET_BYTES = 192 * 1024  # 196,608 — the per-file context-tax budget, still overridable
+DEFAULT_BUDGET_BYTES = 192 * 1024  # 196,608 — the per-file byte budget, still overridable
                                    # per LedgerSpec and per run via --budget-bytes
 
 # LINE_FIRE_BELOW / LINE_STOP_ABOVE ARE GONE, DELIBERATELY. This note is the record of why, so a
@@ -357,10 +356,11 @@ LEDGERS = {
 # =============================================================================================
 # Fence tracking — mandatory, and the seed files are the proof.
 #
-# `starter-kit/CHANGELOG.md` holds 3 `^### YYYY-MM-DD` lines and ALL 3 are inside fenced
-# documentation examples; `starter-kit/HANDOFFS.md` holds 1 ```handoff and it is inside a
-# 4-backtick wrapper. A trimmer that is not fence-aware trims an adopter's freshly seeded
-# ledger on day one (design §2.2).
+# A `CHANGELOG.md` seeded before ledger-format 2 holds 3 `^### YYYY-MM-DD` lines and ALL 3 are
+# inside fenced documentation examples — every adopter seeded that early still carries them,
+# though the current seed points at FRAMEWORK_APPARATUS.md §The Action Ledger instead;
+# `starter-kit/HANDOFFS.md` holds 1 ```handoff and it is inside a 4-backtick wrapper. A trimmer
+# that is not fence-aware trims an adopter's freshly seeded ledger on day one (design §2.2).
 # =============================================================================================
 
 _FENCE = re.compile(r"^(`{3,}|~{3,})(.*)$")

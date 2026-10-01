@@ -88,14 +88,13 @@ corruption. `bin/check-handoff --all` keys on the pair for this reason.
 
 ## Size, and when to archive
 
-This file gains a receipt every session and Phase 0 reads it every session, so it carries the same
-size discipline as `CHANGELOG.md`: **two caps, two distinct failure modes, fire if either fires,
-stop only when both stop conditions hold.**
+handoffs-format: 2 — keep this marker, and bring it across with this section; `bin/status` reads it.
 
-| Cap | Protects against | Form | Fire when | Cut until |
-|---|---|---|---|---|
-| **Lines** — ~2,000, a **proxy** for the agent `Read` cap (the cap itself is denominated in **tokens**, not lines) | **measures an unread tail** — it does not, on its own, establish a remedy. A read past the cap returns only the prefix that fits, and says so: a `PARTIAL view` banner names the delivered span and the true length, and an explicit over-cap line range errors outright. **Announced, not silent.** **Whether archiving the tail REMEDIES this is an open question, not a settled benefit.** Truncation is ordered top-down and this file is newest-on-top, so the records a cut removes are ones a whole-file read was not delivering anyway: the delivered prefix is the same before and after, and what changes is that the reader stops being warned. Raised as BL-52. **Re-measure rather than trusting this row** — the reproduction is `docs/planning/read-cap-premise-correction-plan.md` Appendix A in the framework repo | a **rate** | headroom < **15** receipts | headroom > **30** |
-| **Bytes** — a per-file budget, default **65,536 B** (64 KB) | **context tax**: every session pays for the whole file, every time | a **level with hysteresis** | `size > budget` | `size ≤ ½ × budget` |
+This file gains a receipt every session and nothing removes one, so it grows without bound. The
+protocol never asks a session to read it whole: Phase 0 reconciles it against `git log` and checks
+the newest receipt, and a session reads that receipt at the top — past the harness's default-read
+refusal, with an offset and a limit. Archive it when the trimmer's trigger fires. The tool states the
+trigger, and this file names no size of its own.
 
 **Run this rather than estimating it:**
 
@@ -103,7 +102,7 @@ stop only when both stop conditions hold.**
 python3 methodology_trim.py --file HANDOFFS.md --check
 ```
 
-`--check` evaluates both conditions and never writes. `--write` performs the trim, refuses unless it
+`--check` evaluates the trigger and never writes. `--write` performs the trim, refuses unless it
 can prove the split lossless, and **neither commits nor stages** — it leaves this file modified and
 the new shard *untracked*, and leaves the commit to you (`git add HANDOFFS.md docs/archive/`).
 
@@ -118,11 +117,16 @@ An archive is a **shard**: a new frozen file, same format, same newest-on-top or
   forward-looking rule: a shard is frozen, so a rule copied into one cannot be corrected when the
   live rule moves.
 - **After a split, anything that enumerates receipts must span both** — `HANDOFFS.md
-  docs/archive/HANDOFFS-*.md` — or it silently counts a shrunken population.
+  $(git ls-files 'docs/archive/HANDOFFS-*.md')` — or it silently counts a shrunken
+  population. Enumerate the shards with `git ls-files`, never as a bare glob: zsh aborts a
+  command whose glob matches nothing, so before the first split the bare form counts nothing
+  at all — the same reason the ledger's audit is written that way.
 
-If a `CHANGELOG.md` sits beside this file, its own **Size, and when to archive** section carries the
-reasoning both files share: why the line cap must be a rate, why the byte cap cannot be one, and how
-to choose the budget. Everything needed to *act* is here.
+The reasoning this file shares with `CHANGELOG.md` — how a ledger is read, why the tool is the only
+statement of its trigger, and what a split must conserve — is in the *Reading and archiving*
+subsection of [§The Action Ledger](docs/methodology/FRAMEWORK_APPARATUS.md#the-action-ledger).
+That subsection makes archiving optional for `CHANGELOG.md`; this file keeps its own rule, above —
+archive it when the trimmer's trigger fires. Everything needed to *act* is here.
 
 What is specific to *this* file, and gets receipts wrong if assumed:
 
@@ -147,8 +151,8 @@ What is specific to *this* file, and gets receipts wrong if assumed:
 
 - **`SESSION_NOTES.md`** — the *transient scratchpad*: rich working notes, overwritten every session.
 - **`HANDOFFS.md`** (this file) — the *durable receipt*: the distilled, machine-checkable proof that
-  the handoff was written. Nothing is ever deleted; once the file outgrows a session's read, the
-  oldest receipts move to a frozen shard (see **Size, and when to archive** above).
+  the handoff was written. Nothing is ever deleted; when the file is archived, the oldest receipts
+  move to a frozen shard (see **Size, and when to archive** above).
 - **`CHANGELOG.md`** — the *cumulative action ledger*: *"what was done here, ever?"*, append-only.
 
 The shared key across all three is the commit sha (`changelog_ref` / `commit` here). This file

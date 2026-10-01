@@ -22,6 +22,7 @@ TWO FIXTURES ARE REAL HISTORY, NOT INVENTED — both events happened in this rep
       same commit, making "the move was verbatim" unfalsifiable.
 """
 
+import hashlib
 import importlib.util
 import os
 import re
@@ -51,6 +52,19 @@ def show(ref):
 def records_of(text, spec):
     z = mod.classify_zones(text, spec, mod.Result("x"))
     return z.records() if z else []
+
+
+# The CHANGELOG seed as it shipped before ledger-format 2 — frozen, byte for byte. Its rules text,
+# fenced example entries included, moves to FRAMEWORK_APPARATUS.md §The Action Ledger, so the live
+# seed stops carrying record-shaped lines inside fences; every adopter seeded before then still
+# carries them. The fence-awareness controls run against this copy. A file rather than a pinned
+# sha, because a fork clone may not hold the sha; its git blob id is asserted instead.
+SEED_CL_FORMAT_1 = REPO / "tools" / "fixtures" / "seed-CHANGELOG-ledger-format-1.md"
+SEED_CL_FORMAT_1_BLOB = "47bc848591fb4ee6906dde885c28f53348af0f26"
+
+
+def seed_cl_format_1():
+    return SEED_CL_FORMAT_1.read_text(encoding="utf-8")
 
 
 # =============================================================================================
@@ -235,19 +249,32 @@ class TestFixtureControls(unittest.TestCase):
                          "close-out-finalised-in-the-trim-commit shape")
         self.assertEqual(s, b[6:], "control: the archived records themselves are untouched")
 
+    def test_the_frozen_seed_fixture_is_the_seed_as_shipped_before_ledger_format_2(self):
+        """Prove the fixture first: it is frozen, so it must still be exactly those bytes."""
+        data = SEED_CL_FORMAT_1.read_bytes()
+        blob = hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+        self.assertEqual(blob, SEED_CL_FORMAT_1_BLOB,
+                         "the fixture is frozen: it must stay the pre-ledger-format-2 seed")
+
     def test_seed_files_hold_zero_records_under_the_declared_grammar(self):
-        """Fence-awareness control. Both seeds contain record-shaped lines that are NOT records."""
-        cl_seed = (REPO / "starter-kit" / "CHANGELOG.md").read_text(encoding="utf-8")
+        """Fence-awareness control. Both seeds contain record-shaped lines that are NOT records.
+
+        The CHANGELOG half reads the frozen pre-ledger-format-2 seed, which every adopter seeded
+        before that format still holds. The live seed need not carry the fenced examples, but it
+        must hold no records either."""
+        cl_seed = seed_cl_format_1()
         hf_seed = (REPO / "starter-kit" / "HANDOFFS.md").read_text(encoding="utf-8")
+        live_cl = (REPO / "starter-kit" / "CHANGELOG.md").read_text(encoding="utf-8")
         self.assertEqual(len(re.findall(r"(?m)^### 20", cl_seed)), 3,
                          "the seed must still contain the fenced examples this guards against")
         self.assertEqual(len(re.findall(r"(?m)^```handoff", hf_seed)), 1)
         self.assertEqual(records_of(cl_seed, CL), [], "a freshly seeded ledger has no records")
         self.assertEqual(records_of(hf_seed, HF), [], "a freshly seeded ledger has no records")
+        self.assertEqual(records_of(live_cl, CL), [], "a freshly seeded ledger has no records")
 
     def test_a_fence_blind_scan_would_have_trimmed_the_seed(self):
         """NARROWED: drop fence-awareness and the day-one hazard reappears."""
-        cl_seed = (REPO / "starter-kit" / "CHANGELOG.md").read_text(encoding="utf-8")
+        cl_seed = seed_cl_format_1()
         naive = [ln for ln in cl_seed.splitlines() if CL.record_start.match(ln)]
         self.assertEqual(len(naive), 3,
                          "a fence-blind scanner finds 3 'records' in a file that has none")
@@ -1821,10 +1848,13 @@ class TestGrammarMismatch(unittest.TestCase):
         change. The anchored probe ignores it (it is not heading- or row-shaped) AND the sentinel
         exemption would cover it anyway. Belt and braces, because the seed is a file adopters get.
         """
-        data = show(SEED_CL).replace(
-            "## How to add an entry",
-            "For instance an entry dated 2026-01-15 sits above one dated 2026-01-14.\n\n"
-            "## How to add an entry", 1)
+        seed = show(SEED_CL)
+        self.assertEqual(seed.count("\n---\n"), 1,
+                         "the anchor must occur exactly once, or the replace below tests nothing")
+        data = seed.replace(
+            "\n---\n",
+            "\nFor instance an entry dated 2026-01-15 sits above one dated 2026-01-14.\n\n---\n", 1)
+        self.assertNotEqual(data, seed, "control: the sentence was inserted")
         r = evaluate_text(self, "CHANGELOG.md", data)
         self.assertEqual(r.codes, ["NO_RECORDS"], [f.message for f in r.findings])
 
@@ -2000,9 +2030,10 @@ class TestGrammarMismatch(unittest.TestCase):
     def test_a_seed_that_gained_a_real_entry_in_the_wrong_grammar_is_refused(self):
         """The sentinel is a conjunction, exactly as the seed's own comment states it.
 
-        `starter-kit/CHANGELOG.md:10` says the file is fresh "While this line is present AND there
-        are no dated (### YYYY-MM-DD) entries below." An adopter who starts writing entries in
-        their own grammar without deleting the comment has a mismatch, not a fresh ledger.
+        The seed's sentinel comment (`METHODOLOGY-SEED-SENTINEL`) says the file is fresh "While
+        this line is present AND there are no dated (### YYYY-MM-DD) entries below." An adopter
+        who starts writing entries in their own grammar without deleting the comment has a
+        mismatch, not a fresh ledger.
         """
         data = show(SEED_CL) + "\n### 2026-07-27 — did a thing\n\n- Change: x\n"
         self.assertIn(mod_seed_sentinel(), data, "control: the sentinel is still present")
@@ -2025,8 +2056,9 @@ class TestGrammarMismatch(unittest.TestCase):
             self.assertFalse(size_only, "a size-only rule would report this mismatch as empty")
 
     def test_NARROWED_a_fence_blind_probe_would_refuse_our_own_shipped_seed(self):
-        """Drop fence-awareness from the probe and day one breaks for every adopter."""
-        cl = show(SEED_CL)
+        """Drop fence-awareness from the probe and day one breaks for every adopter — on the seed
+        as shipped before ledger-format 2, whose rules text carries probe-shaped example lines."""
+        cl = seed_cl_format_1()
         blind = [ln for ln in cl.splitlines() if mod.LEDGERS["CHANGELOG.md"].content_probe
                  and mod.LEDGERS["CHANGELOG.md"].content_probe.search(ln)]
         self.assertGreater(len(blind), 0,

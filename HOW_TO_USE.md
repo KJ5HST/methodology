@@ -745,7 +745,7 @@ Workstream prompts          ← Mission procedures (EXECUTE these)
 |-------|----------|---------------|--------|
 | **Operating procedure** | `SESSION_RUNNER.md` (project root) | Know what to do RIGHT NOW, step by step | ~400 lines |
 | **Master framework** | `ITERATIVE_METHODOLOGY.md` | Understand WHY the steps exist | ~580 lines |
-| **Reference apparatus** | `FRAMEWORK_APPARATUS.md` | Fill in a session document, validate a scope, score a claim | ~330 lines |
+| **Reference apparatus** | `FRAMEWORK_APPARATUS.md` | Fill in a session document, validate a scope, score a claim, write a ledger entry | ~535 lines |
 | **Workstream prompts** | e.g., `DEVELOPMENT_WORKSTREAM.md` | Know HOW to execute for a specific domain | Varies |
 
 The session runner is deliberately short. It fits in a single read. Every line is an imperative instruction, not an explanation. It does not teach — it directs.
@@ -764,7 +764,7 @@ The session runner is deliberately short. It fits in a single read. Every line i
 - **3C: Document learnings** — Update the workstream document; record project learnings in CLAUDE.md → Adaptations → Project-specific Learnings (adopters), or append to the `FRAMEWORK_LEARNINGS.md` table (canonical repo dogfooding). A learning that is a *mechanical invariant* becomes a gate — a `.quality-gates.json` entry or a test — and the row is a one-line pointer to it: a row is read, a gate refuses
 - **3D: Write handoff notes** — Update SESSION_NOTES.md for the next session, and write the same handoff as a durable ` ```handoff ` receipt in `HANDOFFS.md` — the six minimum requirements plus both 1–10 scores, machine-checkable by the canonical-only `bin/check-handoff`. SESSION_NOTES.md is the transient scratchpad (overwritten next session); the receipt is the durable proof the handoff exists, so a *skipped* close-out report is caught at the next Orient by Phase 0 reconcile — not left silent. **The agent knows the next session will score these notes**, which changes the quality of what gets written.
 - **3E: Runtime smoke test** — If the deliverable changes runtime behavior (startup, service registration, config resolution, dispatch, plugin loading), launch the app and confirm the change is active *and not silently overridden* before committing — "build clean" is necessary but not sufficient. If you cannot runtime-verify (needs hardware, an external service, or CI), say so in the handoff *and treat it as a defect* — disclosing the gap is not the same as discharging it (Failure Mode #24). Where `.quality-gates.json` declares gates, `quality_ratchet.py --run` is the mechanical half of this step; its summary line goes into the receipt.
-- **3F: Commit** — All changes committed. **Record the action ledger:** append one dated, source-tagged entry per action to `CHANGELOG.md` and co-stage it with the commit (Failure Mode #27) — the durable answer to "what was done here, ever?", distinct from the session-overwritten handoff notes.
+- **3F: Commit** — All changes committed. **Record the action ledger:** prepend one dated, source-tagged entry per action to `CHANGELOG.md` and co-stage it with the commit (Failure Mode #27) — the durable answer to "what was done here, ever?", distinct from the session-overwritten handoff notes.
 - **3G: Report and STOP** — Summary to user including previous session's handoff score, then session is over
 
 The close-out is the most important innovation. Before the session runner, close-out was manual — the user had to explicitly tell the agent to self-assess, update the prompt, and stop. The agent's natural tendency is to finish the deliverable and immediately start the next one (Failure Mode #2). Making close-out automatic and mandatory means the self-improvement loop runs every session, not just the sessions where the user remembers to ask for it.
@@ -801,7 +801,7 @@ The **handoff accountability loop** (steps 3A and 3D) is what makes sessions com
 | 24 | Build-passes-ship-it (build success ≠ runtime correctness) | If the deliverable changes runtime behavior, launch the app before close-out (Phase 3E); "build clean" is necessary but not sufficient |
 | 25 | Horizontal slicing (all-of-a-layer, never end-to-end) | Vertical slices (tracer bullets) — one feature through every layer; ask "if I stop here, is something working?" |
 | 26 | Mega-session posing as a vertical slice | One slice = ONE capability = one pre-declared, operator-approved layer list; split multiple intents |
-| 27 | Unrecorded action (commit/close out without logging it) | Append one dated, source-tagged CHANGELOG.md entry per action at close-out (Phase 3F), newest on top |
+| 27 | Unrecorded action (commit/close out without logging it) | Prepend one dated, source-tagged CHANGELOG.md entry per action at close-out (Phase 3F), newest on top |
 
 The failure modes table serves two purposes: it warns the agent about its own tendencies, and it gives the user language for course-correction ("You're doing Failure Mode #2 — stop and close out").
 

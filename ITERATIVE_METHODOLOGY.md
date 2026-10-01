@@ -166,7 +166,7 @@ Every session follows these phases in order. Phases are sequential and gated —
 **Purpose:** Leave a trace before any work begins, so that even a catastrophic failure (crash, context loss, timeout) produces evidence of what was attempted.
 
 **Steps:**
-1. Write a stub to the session notes file with: session identifier, task description, start time, status "IN PROGRESS", and a `CHANGELOG: pending` ledger marker (the crash breadcrumb the next session's Pre-Flight reconcile reads; cleared when Phase 6 records the entry)
+1. Write a stub to the session notes file with: session identifier, task description, start time, status "IN PROGRESS", and a `CHANGELOG: pending` ledger marker (the crash breadcrumb the next session's Pre-Flight reconcile reads); the claim commit's ledger entry says *(in progress)*, and Phase 6 records the rest
 2. Open a `HANDOFFS.md` close-out receipt stub — a durable receipt block with `status: pending` — and commit it with the claim; unlike the transient session-notes stub it survives a fresh clone, so it is the crash breadcrumb the next session's reconcile greps. Phase 6 completes it to `status: complete`
 3. Both stubs are overwritten/completed during Phase 6 with the full close-out
 
@@ -291,7 +291,7 @@ Every session follows these phases in order. Phases are sequential and gated —
 5. **Update the performance comparison table.** (See [§Performance Tracking](FRAMEWORK_APPARATUS.md#performance-tracking).) Add this session's metrics.
 6. **Update the pattern library and anti-pattern list.** (See [§Knowledge Accumulation System](FRAMEWORK_APPARATUS.md#knowledge-accumulation-system).) If you discovered a new pattern or made a new mistake, name it and add it.
 7. **Write handoff notes for the next session.** (See below.) You will be judged on these — the next session will score your handoff just as you scored your predecessor's. Write them both to `SESSION_NOTES.md` (the transient scratchpad) and as a durable ` ```handoff ` receipt block in `HANDOFFS.md` — set `status: complete` and fill the six minimum requirements (the sixth *is* `self_score`) plus `predecessor_score`. The receipt is the machine-checkable proof the handoff exists (the canonical-only `bin/check-handoff` asserts its structure — copy it in if you want it — never its quality); a skipped receipt is caught at the next Pre-Flight reconcile with no tooling.
-8. **Record every action, then commit.** Before committing: (a) remove any debug instrumentation added during this session (tagged debug logs per `/diagnose` — see [`RECOMMENDED_SKILLS.md`](../../RECOMMENDED_SKILLS.md) — and ad-hoc prints); (b) append a dated, source-tagged entry to the authoritative ledger `CHANGELOG.md` for **each action this session took** — one per commit *and* per non-commit action (release, tag/branch op, PR open, upstream issue close, access grant, decline/grooming decision): `### YYYY-MM-DD · [issue #<N>] | [BL-<N>] | [ad hoc]` + a one-line outcome, newest on top, removing any completed `BACKLOG.md` item in the same commit. If `CHANGELOG.md` is absent, create it from the bootstrap seed; the only exemptions are a project that records "no CHANGELOG" in `CLAUDE.md` and a session whose diff is empty with no action taken. "Too small to log" is failure mode #27, not an exception. Where the project declares quality gates (`.quality-gates.json`), (c) run them — `quality_ratchet.py --run` — and cite the summary line in the close-out receipt, so the session's claim of "tests pass" is a measured number the next Orient can compare against the results file (§Mechanical Gates Bind Every Actor). Then commit with a structured message referencing the session. (Failure mode #17: the ledger records what the session did; it does not authorize a second deliverable.)
+8. **Record every action, then commit.** Before committing: (a) remove any debug instrumentation added during this session (tagged debug logs per `/diagnose` — see [`RECOMMENDED_SKILLS.md`](../../RECOMMENDED_SKILLS.md) — and ad-hoc prints); (b) prepend a dated, source-tagged entry to the authoritative ledger `CHANGELOG.md` for **each action this session took** — one per commit *and* per non-commit action (release, tag/branch op, PR open, upstream issue close, access grant, decline/grooming decision): `### YYYY-MM-DD · [issue #<N>] | [BL-<id>] | [ad hoc]` + a one-line outcome, newest on top, removing any completed `BACKLOG.md` item in the same commit. If `CHANGELOG.md` is absent, create it from the bootstrap seed; the only exemptions are a project that records "no CHANGELOG" in `CLAUDE.md` and a session whose diff is empty with no action taken. "Too small to log" is failure mode #27, not an exception. Where the project declares quality gates (`.quality-gates.json`), (c) run them — `quality_ratchet.py --run` — and cite the summary line in the close-out receipt, so the session's claim of "tests pass" is a measured number the next Orient can compare against the results file (§Mechanical Gates Bind Every Actor). Then commit with a structured message referencing the session. (Failure mode #17: the ledger records what the session did; it does not authorize a second deliverable.)
 
 **Minimum handoff requirements (Step 7):** The next session starts with zero context. Your handoff is their only connection to your work. A handoff that doesn't include ALL of the following is incomplete. "Done — pick next task" is not a handoff; it's an abdication that forces the next session to rediscover context you already had.
 
@@ -561,7 +561,8 @@ A second factor: **workstream transfer amnesia.** Discipline built on one type o
 
 The apparatus these principles operate — the tables you fill in, the tests you run, the scales you
 score against — lives in [`FRAMEWORK_APPARATUS.md`](FRAMEWORK_APPARATUS.md), a sibling read **on
-demand** rather than every session. Six sections moved there intact, content unchanged:
+demand** rather than every session. Six sections moved there intact, content unchanged; a seventh
+holds the `CHANGELOG.md` rules the starter-kit seed used to carry:
 
 | Section | What it gives you |
 |---|---|
@@ -571,6 +572,7 @@ demand** rather than every session. Six sections moved there intact, content unc
 | **Verification Hierarchy** | The seven ascending levels of verification |
 | **Session Document Template** | The copy-paste template for a session document |
 | **Performance Tracking** | Cross-session metric columns, their interpretation, maturity and erosion indicators |
+| **The Action Ledger** | The rules for a project's `CHANGELOG.md`: entry format, source tags, reading and archiving |
 
 Nothing was condensed or dropped, and every point of need above links onward — Principles 4–7,
 Phase 2 steps 6–8, Phase 6 steps 4–6 with its honest-accounting bullet and its gate, and the
