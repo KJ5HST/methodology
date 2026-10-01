@@ -13,14 +13,109 @@
 #   Enable:      git config core.hooksPath .githooks
 #   Bypass once: git commit --no-verify   (reconcile-on-read backfills it)
 #   Opt out:     delete CHANGELOG.md and record that decision in CLAUDE.md
+#   Self-test:   .githooks/pre-commit --selftest
 #
 set -u
+
+if [ "${1:-}" = "--selftest" ]; then
+	# Resolve $0 BEFORE anything cds: every probe runs inside a throwaway repo.
+	self=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
+	t=$(mktemp -d); fails=0; n=0
+
+	# A throwaway repo holding exactly the shape the ledger gate exists to refuse:
+	# a tracked change staged, the ledger modified but NOT co-staged. `noledger`
+	# builds one that never tracked a CHANGELOG.md at all.
+	build() {
+		n=$((n + 1)); d=$t/r$n
+		mkdir -p "$d"
+		(
+			cd "$d" || exit 1
+			unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+			# --template= : a user's init.templateDir would otherwise install ITS
+			# hooks into every probe repo, and answer for the hook under test.
+			git init -q -b main --template= .
+			git config user.email selftest@example.invalid
+			git config user.name selftest
+			printf 'one\n' > tracked.txt
+			[ "${1:-}" = noledger ] || printf '# Changelog\n' > CHANGELOG.md
+			git add -A
+			git commit -q -m init
+			printf 'two\n' > tracked.txt
+			[ "${1:-}" = noledger ] || printf '# Changelog\n\n### entry\n' > CHANGELOG.md
+			git add tracked.txt
+		) >/dev/null 2>&1
+		# Prove the fixture, not just the guard: a probe run against a repo that
+		# failed to build answers about nothing, and would do it in green.
+		git -C "$d" rev-parse --verify -q HEAD >/dev/null 2>&1 \
+			&& [ -n "$(git -C "$d" diff --cached --name-only)" ] \
+			|| { echo "  FAIL: fixture r$n did not build (no HEAD, or nothing staged)"; fails=$((fails + 1)); }
+	}
+
+	expect() { # $1 label, $2 wanted exit -- $d is the repo build() just made
+		label=$1; want=$2
+		( cd "$d" && unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE && sh "$self" ) >/dev/null 2>&1
+		got=$?
+		if [ "$got" -eq "$want" ]; then
+			echo "  PASS: $label"
+		else
+			echo "  FAIL: $label (exit $got, wanted $want)"; fails=$((fails + 1))
+		fi
+	}
+
+	# The gate itself, with no operation in progress.
+	build;          expect "no markers, ledger not co-staged -> refused"        1
+	build; ( cd "$d" && git add CHANGELOG.md >/dev/null 2>&1 )
+	                expect "ledger co-staged -> pass"                           0
+	build; ( cd "$d" && git reset -q >/dev/null 2>&1 )
+	                expect "empty index -> pass"                                0
+	build noledger; expect "no tracked ledger -> pass (never block a repo without one)" 0
+
+	# Git LEAVES REBASE_HEAD BEHIND after a rebase that stopped (a conflict, or -i
+	# at `edit`) completes -- measured on git 2.50.1 -- so a hook that reads it as
+	# "rebase in progress" disarms itself for the life of the clone. It is also the
+	# ONLY marker in the list that leaks: MERGE_HEAD, CHERRY_PICK_HEAD, rebase-merge
+	# and rebase-apply are all removed when their operation ends or is aborted.
+	build; ( cd "$d" && : > .git/REBASE_HEAD )
+	                expect "stale REBASE_HEAD -> STILL REFUSED"                 1
+
+	# ...and the skip must still fire for every state that is genuinely in progress.
+	# REBASE_HEAD is redundant for this: a stopped rebase always carries a DIRECTORY
+	# too -- rebase-merge on the merge backend, rebase-apply on --apply and `git am`.
+	build; ( cd "$d" && mkdir -p .git/rebase-merge )
+	                expect "rebase-merge in progress -> skipped"                0
+	build; ( cd "$d" && mkdir -p .git/rebase-apply )
+	                expect "rebase-apply in progress (rebase --apply, git am) -> skipped" 0
+	build; ( cd "$d" && : > .git/MERGE_HEAD )
+	                expect "MERGE_HEAD in progress -> skipped"                  0
+	build; ( cd "$d" && : > .git/CHERRY_PICK_HEAD )
+	                expect "CHERRY_PICK_HEAD in progress -> skipped"            0
+	build; ( cd "$d" && mkdir -p .git/rebase-merge && : > .git/REBASE_HEAD )
+	                expect "stopped rebase (REBASE_HEAD + rebase-merge) -> skipped" 0
+
+	rm -rf "$t"
+	[ "$fails" -eq 0 ] && echo "pre-commit selftest: OK (10 checks)" || { echo "pre-commit selftest: $fails FAILED"; exit 1; }
+	exit 0
+fi
 
 git_dir=$(git rev-parse --git-dir)
 
 # Skip merge/rebase/cherry-pick/am: they replay commits already in the ledger's
 # history; forcing a fresh entry onto a replayed commit would double-log.
-for marker in MERGE_HEAD REBASE_HEAD CHERRY_PICK_HEAD rebase-merge rebase-apply; do
+#
+# REBASE_HEAD IS DELIBERATELY ABSENT FROM THIS LIST. Git leaves it behind when a
+# rebase that STOPPED -- a conflict, or `-i` parked at `edit` -- completes, so
+# listing it let a single rebase disarm this hook for the life of the clone,
+# taking the quality ratchet below it along: both gates read as green because
+# neither ran. It is the only marker that leaks -- MERGE_HEAD, CHERRY_PICK_HEAD
+# and both directories are removed when their operation ends or is aborted -- and
+# it is redundant besides: a rebase in progress always carries a DIRECTORY too,
+# rebase-merge on the merge backend, rebase-apply on --apply and `git am`, so
+# dropping it costs no in-progress coverage. Measured by running every operation
+# in this list to completion on git 2.50.1 and observing the markers at each
+# stage; `--selftest` asserts both halves. A CLEAN rebase leaks nothing, which is
+# why the trap only arms after a rebase that stopped. Use `-e`, not `-f`/`-d`:
+# the list mixes files and directories.
+for marker in MERGE_HEAD CHERRY_PICK_HEAD rebase-merge rebase-apply; do
 	if [ -e "$git_dir/$marker" ]; then
 		exit 0
 	fi

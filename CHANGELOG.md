@@ -396,6 +396,34 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
 - **Counts:** `tools/test_context_budget.py` 118 → 126 tests, `--selftest` 52 checks unchanged, `bin/tests.sh`
   139 → 141 passed, 0 failed. No gate threshold changes in this commit.
 
+### 2026-09-20 · [ad hoc] The ledger gate stopped running after any stopped rebase — the marker git leaves behind, dropped
+
+- **Action:** `.githooks/pre-commit` skipped replayed commits by testing five markers under the git
+  dir. One of them, `REBASE_HEAD`, is **left behind by git** when a rebase that *stopped* — a
+  conflict, or `-i` parked at `edit` — runs to completion. From that moment the hook exited 0 on
+  every commit in that clone. The marker loop runs **before** both gates the hook chains, so the
+  casualty was not only the failure-mode-#27 ledger gate but `quality_ratchet.py --precommit`,
+  whose whole job is refusing a loosened threshold. Both then read green because neither ran.
+- **The shape was chosen from a measurement, not from plausibility.** Every operation in the marker
+  list was run to completion on git 2.50.1 and its markers observed at each stage. Two facts decided
+  it: `REBASE_HEAD` is the **only** marker that survives its operation (the other four are removed
+  when the operation ends or is aborted, so none needs the same treatment), and it is **redundant** —
+  every rebase in progress carries `rebase-merge` or `rebase-apply` alongside it, so dropping it
+  costs no in-progress coverage. A third measured fact explains how it goes unnoticed: a **clean**
+  rebase leaks nothing, so only a stopped rebase arms the trap.
+- **A hook is the one gate nothing else watches, and it fails open** — its failure mode is silence,
+  not red. So the fix ships with `.githooks/pre-commit --selftest` (10 checks, on the
+  `.githooks/commit-msg --selftest` precedent) and a `pre-commit-selftest` gate in
+  `.quality-gates.json`, modelled on the existing `commit-msg-selftest` entry. Adding a gate always
+  passes the ratchet; no threshold moved.
+- **Evidence:** RED-first — the same ten checks against the unfixed marker list go red on exactly
+  one, green on the other nine, so the test isolates the defect rather than being vacuously red;
+  0 red after the fix. The selftest builds each probe repo with `git init --template=`, so a user's
+  `init.templateDir` cannot install *its* hooks into the probe and answer for the hook under test,
+  and it asserts each fixture actually built (a probe against a repo that failed to build answers
+  about nothing, in green). `bin/tests.sh` unchanged at 139 passed / 0 failed;
+  `quality_ratchet.py --run` 11/11 with the new gate.
+
 ### 2026-09-16 · [ad hoc] PR #82 merged — post-merge verification on main and the first tightening
 
 - **Action:** the operator merged [PR #82](https://github.com/KJ5HST/methodology/pull/82) (quality ratchet,

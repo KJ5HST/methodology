@@ -76,6 +76,13 @@
       "threshold": 0,
       "command": ".githooks/commit-msg --selftest",
       "why": "exit code: the disclosure gate's own checks"
+    },
+    {
+      "name": "pre-commit-selftest",
+      "direction": "max",
+      "threshold": 0,
+      "command": ".githooks/pre-commit --selftest",
+      "why": "exit code: the ledger gate's own checks. A hook fails OPEN, so nothing else reports when it stops running -- this one skipped every commit in a clone for as long as a stale REBASE_HEAD sat in the git dir, while every other gate stayed green."
     }
   ]
 }
