@@ -1,7 +1,8 @@
 # Parallel-Sessions Plan — making fan-out to many agents clean, not just safe
 
 **Date:** 2026-09-16 (methodology session S24)
-**Status:** DRAFT — a planning-session deliverable awaiting operator ratification. Nothing here is implemented.
+**Status:** RATIFIED WITH AMENDMENTS on 2026-10-01 (session S27, under the operator's delegation) — **§8A records
+the twelve decisions and overrides any text below that conflicts with it.** Nothing here is implemented.
 **Workstream:** Planning (`starter-kit/SESSION_RUNNER.md` §Planning Sessions); document shape per
 `workstreams/ARCHITECTURE_WORKSTREAM.md` §The Architecture Document. The plan is the deliverable.
 **Trigger:** the operator's question at this session's Orient — *"Do the recent changes allow for fanning out with
@@ -288,6 +289,9 @@ session at 3D — it is overwritten every session by definition (`starter-kit/SE
 
 ## 6. Phased plan — one phase per session, each with a STOP
 
+**Amended by §8A** — Phases 0, 1, 2, 3, 4 and 6 carry changes listed there (*Phase amendments*). Read §8A before
+executing any phase; where it and the text below disagree, §8A wins.
+
 Every phase: Orient → claim (1B, with a sequence tag if not on `main` — dogfooding D5 from Phase 1 on) → one
 deliverable → full close-out with receipt and ledger entry (FM #27). RED-first for every new check: watch the
 old tree fail the new test before the fix. Verification commands are the ones `main` runs today; new ones are
@@ -433,6 +437,84 @@ by reduction against its token pin.
 12. **Scope guard:** this plan does **not** touch the vertical-slice gates (a)–(d), the 6 phases, the 12
     quality gates, the 9 principles, or any workstream's phase adaptations. It adds a section, a rule, a
     seed, a checker, and two tool fixes. Confirm that boundary.
+
+---
+
+## 8A. Decisions — ratified 2026-10-01 (S27)
+
+**Who decided.** The operator delegated these twelve decisions on 2026-10-01 (*"you do it"*); session S27
+(Claude, on `main` after v4.0) made them. Each weighs the plan's recommendation, rmsharp's review on PR #83
+(2026-09-21), and what changed after the plan was written: v3.8 and v4.0 shipped, and #84–#87 merged. Where a
+claim could be computed, S27 measured it (§9A). The operator may reverse any item.
+
+| # | Decision | Ruling | Basis |
+|---|---|---|---|
+| 1 | Framing (§3, D1) | **Ratified as proposed.** One closer per tree; the session stays the unit of accountability; workers are layers, not sessions. | Plan §1 rows 1–2; rmsharp agrees. |
+| 2 | D2 | **Ratified as a `SAFEGUARDS.md` hard rule**, paid by reduction in the same commit. | Headroom **measured at 17 tokens** (6,083 / 6,100), not the plan's 71; #84 used the rest, as rmsharp predicted. The row costs ~70–90 tokens, so nearly all of it is paid by cutting. |
+| 3 | D4 ordering | **Ratified: leave union-merged order as merged**; S19's one-time reorder item is closed by this ruling. | Measured (§9A): `union` keeps ours above theirs, so the result is not chronological. *Prepend-only, never re-sorted* already governs. |
+| 3′ | D4 scope (rmsharp's main change) | **Amended: `merge=union` for `CHANGELOG.md`, `dashboard_history.jsonl` and `.context-budget-history.jsonl` only. `HANDOFFS.md` gets no merge driver.** Its conflicts stay marked and are resolved keep-both with `git merge-file --union --diff3` on the three index stages, then `bin/check-handoff --all`. | Measured (§9A): two receipts prepended at one anchor merge into **one block with two `session:` lines** under the default conflict style and under `zdiff3`, with merge exit 0. Only `diff3` keeps them whole, and that is per-clone configuration the methodology cannot ship. GitHub's server-side merge is a further unknown. The `--diff3` recipe resolved two real receipt-on-receipt merges cleanly in S26 (#89 and #83 into `main`). The alternatives table's **per-session receipt files** reopens as the fallback if receipt conflicts prove frequent. |
+| 4 | D5 identity | **Ratified with rmsharp's wording:** *each repository's `main` uses bare `S<N>`; `S<N>-<seq>` is for other branches in the same repository.* | A fork's `main` is a trunk too (rmsharp's fork: 200+ bare `S<N>`), and `starter-kit/HANDOFFS.md` already keeps fork and upstream numbering separate. |
+| 5 | D6 | **Ratified: a merge is one action with one receipt; the 11-reconciled-receipts instruction is dropped.** **Addition:** after a merge, the merging session checks that every merged PR has a ledger entry, and backfills one if not. | rmsharp: the 11 are his PR #80 commits, already in his fork's ledger. The addition is **verified on this repo**: PR #77's `56997af` (2026-09-02) changed only the seed, and no entry in the root `CHANGELOG.md` mentions PR #77. Phase 0's frontier-based gap stopped seeing it once a later commit edited the ledger. |
+| 6 | D7 | **Ratified: workers produce, the lead commits.** A hook that waives the ledger gate in a "worker context" stays **not adopted**. | — |
+| 7 | D8 | **Ratified as a requirement:** Test 9 must not be red by construction on a branch that adds a distributed file. **Mechanism, adapted to #87:** the github route already clones, so Phase 3 makes it iterate the **clone's** `bin/_manifest.py` (list and contents at one ref), with an optional `--ref`. | #87 clones `main` but still imports the *local* manifest (`bin/sync:15`). A local row the clone lacks is now refused on purpose (`absent_sources`, Test 28), so Test 9 still fails on such a branch. Iterating the source's manifest also fixes a stale adopter checkout missing files `main` added. This changes #87's Test 28 premise, so Phase 3 settles the form with rmsharp first. rmsharp's rate-limit note no longer applies: #87 replaced the ~29 per-file API calls with one clone. |
+| 8 | D12 | **Superseded.** v3.8 (2026-09-30) and v4.0 (2026-10-01) shipped without this plan, so it ships as **v4.1** (minor). | `git tag`; §Versioning. |
+| 9 | D13 | **Ratified:** the merging session scores the merged sequence's last receipt in one line of its own receipt. | — |
+| 10 | D14 | **Ratified: append FM #29 "Shared-state interference"** (the name broadened from "Shared-tree mutation"): *run concurrent actors that edit, build, test, or consume a rate-limited service against shared state — one working tree, one build directory, one quota — and each reads the others' side effects as defects.* Plus its Degradation row. FMs 1–28 byte-unchanged; count 28 → 29 with the Learning #7/#10 sweep. | Plan §1 row 1 (adopter S163). rmsharp saw the tendency twice more: a review agent writing into the distributed `starter-kit/CHANGELOG.md` in a shared tree, and two concurrent suites tripping GitHub's secondary rate limit while sharing no tree. *Shared state* covers all three; *shared tree* covers one. |
+| 11 | D11 | **Deferred until after Phase 5**; removed from Phase 4. | rmsharp: a permanent LOW advisory on every single-sequence project is a report nothing acts on. Phase 5's counts decide whether it earns a place. |
+| 12 | Scope guard | **Confirmed, with corrected wording:** this plan *adds none, removes none and renumbers none* of the 9 principles, 6 phases and 12 quality gates. *It amends Principle 9 by one paragraph and Phase 1 step 4 by one clause.* It does not touch the vertical-slice gates (a)–(d) or any workstream's phase adaptations. | rmsharp: the original wording said the plan does not touch the principles or phases, which D1 and D6 contradict. |
+
+**Unchanged by §8:** D3, D9, D10 and D15 stand as written, with two notes:
+
+- **D10:** the runner's headroom is measured at **42 tokens** (18,858 / 18,900).
+- **D15:** observed once in practice. S26 resolved a `.quality-gates.json` conflict between #86 and #87 by taking each gate's tighter `min`.
+
+**Phase amendments (these override §6):**
+
+- **Phase 0** is done: §8 is answered here. The D12 clause is replaced by item 8.
+- **Phase 1 Layer A:**
+  - `.gitattributes` gets **three** `merge=union` lines, without `HANDOFFS.md`.
+  - The two-branch test expects:
+    - `CHANGELOG.md` to merge with exit 0 and both entries whole;
+    - `HANDOFFS.md` to **conflict**, and the documented `git merge-file --union --diff3` recipe to resolve it with `check-handoff --all` green.
+  - RED first: the same test with `HANDOFFS.md` under `union` must show the fused block.
+  - Add the **trim-against-prepend** case for `CHANGELOG.md` under `union`, with the real trimmer at its smallest cuts (§9A: green at `--cut 1` and `--cut 3`). The trimmer refuses `--cut 0` (`CUT_OUT_OF_RANGE`: it must retain at least one record; exit 3).
+- **Phase 1 Layer B:** `bin/check-ledger` accepts a `###` heading directly under the previous entry's last line, because `union` drops that blank line (measured). The trimmer already accepts such a ledger (§9A).
+- **Phase 2:**
+  - D5 and D14 use the wording above.
+  - D6 carries the merged-PR check.
+  - The scope sentence uses item 12's wording.
+  - SAFEGUARDS has 17 tokens of headroom and the runner 42.
+- **Phase 3:** D8 as adapted above, starting from #87's clone. Test 28's semantics change, so coordinate with rmsharp first. D9's slug line is now `starter-kit/context_budget.py:891`.
+- **Phase 4:** D11 is dropped (item 11).
+- **Phase 5:** concurrent suites no longer contend for GitHub API quota (#87 clones), but still share the network. Keep the rule: run suites one at a time.
+- **Phase 6:** the release is **v4.1**.
+
+**Found while deciding, not acted on here:**
+
+- PR #77's `56997af` is an unrecorded action in this repo's ledger (failure mode #27). It needs a backfill entry.
+- This repo's `CHANGELOG.md` is 226,217 B, past the trimmer's 196,608 B archive trigger, so a trim is due. `methodology_trim.py --cut 3` dry-runs green: L1–L3 OK, 101 of 104 records to `docs/archive/`.
+
+### 9A. Commands that produced §8A's measurements (S27, `main` @ `934975a`)
+
+```sh
+# D4 (rmsharp's objection): two receipts prepended at one anchor, HANDOFFS.md merge=union, three conflict styles
+#   scratch repo; base = one receipt; branches alpha/beta each prepend one; git -c merge.conflictStyle=<s> merge
+#   merge:  rc 0, 2 ```handoff fences for 3 session: lines  -> FUSED
+#   diff3:  rc 0, 3 fences / 3 sessions                     -> whole
+#   zdiff3: rc 0, 2 fences / 3 sessions                     -> FUSED
+# D4 (trim vs prepend): scratch clone of main; CHANGELOG.md merge=union via .git/info/attributes
+python3 starter-kit/methodology_trim.py --file CHANGELOG.md --cut 1 --write   # branch A (also --cut 3)
+#   branch B prepends one entry under "## 2026-10"; git merge -> rc 0; live entries = kept + 1; no archived record back
+#   the merged ledger: methodology_trim.py --check rc 0; a dry-run re-trim reports L1_OK L2_OK L3_OK
+#   one blank line lost between the two entries (a ### directly under the previous body)
+# D2 / D10 headroom
+python3 starter-kit/context_budget.py --status --json   # SAFEGUARDS 6083/6100 tokens; SESSION_RUNNER 18858/18900
+# D8 after #87
+sed -n '15p;97,128p' bin/sync                             # local manifest import; clone_source; absent_sources
+# D6 addition
+git show --stat --format= 56997af | grep CHANGELOG       # only starter-kit/CHANGELOG.md (the seed)
+grep -n 'pull/77\|PR #77' CHANGELOG.md                   # no match
+```
 
 ---
 

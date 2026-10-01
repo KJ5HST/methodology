@@ -40,6 +40,17 @@ ledger's next new month, and nothing below is retrofitted (§The Action Ledger, 
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Parallel-sessions plan ratified with amendments — §8A records the twelve decisions
+
+- **Action:** S27, under the operator's delegation. `docs/planning/parallel-sessions-plan.md` gains §8A (decision
+  table, phase amendments, §9A commands) and its Status moves from DRAFT to ratified-with-amendments. Main
+  amendment, measured: `HANDOFFS.md` leaves `merge=union` (rmsharp's objection reproduced — two receipts fuse
+  under the default and `zdiff3` styles, merge exit 0; whole only under `diff3`); `CHANGELOG.md` keeps it (trim
+  against prepend merges clean at `--cut 1`/`--cut 3`, and the trimmer accepts the result). Also: D5 and FM #29
+  wording per rmsharp (FM #29 named *Shared-state interference*); D6 gains a merged-PR ledger check (PR #77's
+  `56997af` has no entry here — verified); D8 kept as a requirement and adapted to #87's clone; D11 deferred past
+  Phase 5; D12 superseded — the plan ships as v4.1. Nothing implemented.
+
 ### 2026-10-01 · [ad hoc] Parallel-sessions plan: the twelve §8 decisions (in progress)
 
 - **Action:** session S27 claimed on `main`. The operator delegated the plan's open decisions ("you do it", answering
