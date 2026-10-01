@@ -44,6 +44,17 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] S33 close-out — Phase 4 done; the Shape A dogfood measured
+
+- **Action:** closes the S33 claim entry (*Parallel-sessions plan Phase 4 … (in progress)*). **Shape A, measured
+  (the plan's Phase 5 asks for these counts):** 4 worker units, each a read-only agent (no Edit/Write tool) returning
+  exact edits + the claims it relied on, dispatched in parallel; 1 lead unit (the shared README/CLAUDE.md, gate f);
+  2 sweep finds the plan's file list missed. Worker claims re-derived by the lead: all load-bearing ones; found
+  wrong: **0**; pre-existing defects a worker surfaced: **1** (BOOTSTRAP's "only hook" vs the ratchet). Integration:
+  one unit per checkpoint commit, `check-links` after each; no worker wrote a byte. Workers spent ~47–52k tokens each
+  in their own contexts; each report cost the lead ~2–3k. Gate run at `9b0a760`: `quality_ratchet: 12/12 pass · 0
+  fail · 0 unmeasured · results df965ece841e · manifest 01be7a18f6cb`.
+
 ### 2026-10-01 · [ad hoc] Phase 4 sweep — the third campaign template and the research workstream's race example
 
 - **Action:** S33, the plan's Learning #10 whole-corpus sweep for *sub-agent / worktree / parallel*. Two sites the plan's
