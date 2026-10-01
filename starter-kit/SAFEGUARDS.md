@@ -47,6 +47,7 @@ If there are uncommitted changes from a previous session, **do not touch them**.
 |------|-----|
 | **Commit before any multi-file change** | Every disaster becomes a `git checkout` instead of a multi-hour recovery |
 | **Never touch more than 5 files without committing first** — the cap is *per-commit*, not per-session | Forces incremental, recoverable progress. A pre-declared vertical slice (`SESSION_RUNNER.md` §Vertical Slice Sessions) may touch more than 5 files across a session, but never more than 5 between checkpoint commits. A committed-mode `bin/sync` run is one commit, whatever its file count ([`BOOTSTRAP.md`](BOOTSTRAP.md)). |
+| **One writer per working tree** — workers return content or own an isolated worktree; lenses read a committed tree; the one writer makes every mutation, serially | Concurrent edits, builds and test runs read each other's half-states as defects (failure mode #29; `ITERATIVE_METHODOLOGY.md` §Parallel Actors) |
 | **Never refactor across module boundaries without plan mode** | Cross-module refactoring is Architect Mode work, period |
 | **Never delete a file without verifying it's committed** | `git log --oneline -- <file>` before `rm`. No shortcuts. |
 | **Never rename/move files as part of a "quick fix"** | Renames cascade. They are never quick. |
@@ -171,8 +172,6 @@ An optional `pre-commit` hook makes the authoritative-ledger rule mechanical: it
 - **It never blocks a repo that has no ledger.** If `CHANGELOG.md` is untracked (an adopter mid-bootstrap, or a project that opted out), the hook passes — self-provisioning is the session runner's job (Phase 0), not the hook's. It also skips merges, rebases, and cherry-picks, which replay commits already in the ledger's history.
 - **Setup is opt-in and per-clone.** `git config core.hooksPath .githooks` enables it; each clone and CI runner sets it independently. See [`BOOTSTRAP.md`](BOOTSTRAP.md) Step 10. The canonical reference implementation is [`.githooks/pre-commit`](https://github.com/KJ5HST/methodology/blob/main/.githooks/pre-commit).
 
-The hook is a convenience, not a substitute: the SESSION_RUNNER Phase 3F write-gate and Phase 0 reconcile are the primary mechanisms and hold with or without it.
-
 ### Close-Out Completeness Hook (recommended — agent-specific)
 
 The `HANDOFFS.md` receipt and Phase 0 reconcile catch a skipped close-out report *durably* and *at the next Orient*. The fastest catch, though, is *in-session* — the moment the agent tries to end its turn. Git has no session-end hook; only the agent harness does. So, as a **recommendation, not a shipped mechanism** (the methodology recommends; it does not reimplement), an adopter can wire their harness's session-end / "stop" hook to check the receipt and re-prompt the agent to finish close-out before the turn ends.
@@ -180,11 +179,11 @@ The `HANDOFFS.md` receipt and Phase 0 reconcile catch a skipped close-out report
 - **How to check.** Grep `HANDOFFS.md` for a trailing `status: pending` (portable), or run the canonical `bin/check-handoff`. That checker is **canonical-only** — it is not synced into adopter projects; copy it if you want the structural checker, exactly as you copy `.githooks/pre-commit`. The receipt discipline itself needs no tooling: it is the synced Phase 3D write-step plus Phase 0 reconcile.
 - **Fast path, not the guarantee** — same status as the ledger co-staging hook. It is agent-specific (each harness names the hook differently; some have none), human-dismissable, and defeated by a crash before the callback fires. The guarantee remains Phase 0 reconcile-on-read.
 - **Soft-remind, not hard-block** by default — surface the incomplete receipt and let the agent finish it, rather than refusing to stop (which risks a livelock).
-- The methodology ships no such hook — it is external harness configuration, in the same class as agent-level memory. See [`BOOTSTRAP.md`](BOOTSTRAP.md) Step 10.
+- See [`BOOTSTRAP.md`](BOOTSTRAP.md) Step 10.
 
 ### Disclosure Hook (failure mode #16 — the agent never takes credit)
 
-The human is the author of every commit and owns it. When an AI agent drove the commit, the message must say so — a `Co-Authored-By: <agent name> <agent email>` trailer — so no reader of the history is misled about how the work was produced. That is **disclosure, never credit.** It is also an instruction a session must remember on every commit, so the canonical repo makes it a gate: [`.githooks/commit-msg`](https://github.com/KJ5HST/methodology/blob/main/.githooks/commit-msg) refuses an undisclosed commit **only when an agent harness is detectable in the environment** (`AI_AGENT`, `CLAUDECODE`, `CLAUDE_CODE_SESSION_ID`; `METHODOLOGY_REQUIRE_COAUTHOR=1` forces it, `=0` disables) — a human committing by hand is never asked to disclose an agent that was not there. Canonical-only, like the ledger hook: copy it if you want it; `--selftest` checks it; `--no-verify` bypasses once.
+The human authors and owns every commit. When an AI agent drove it, the message says so — a `Co-Authored-By: <agent name> <agent email>` trailer — so no reader is misled about how the work was produced: **disclosure, never credit.** The canonical [`.githooks/commit-msg`](https://github.com/KJ5HST/methodology/blob/main/.githooks/commit-msg) refuses an undisclosed commit **only when an agent harness is detectable** (`AI_AGENT`, `CLAUDECODE`, `CLAUDE_CODE_SESSION_ID`; `METHODOLOGY_REQUIRE_COAUTHOR=1` forces it, `=0` disables), so a human committing by hand is never asked. Canonical-only, like the ledger hook: copy it if you want it; `--selftest` checks it; `--no-verify` bypasses once.
 
 ---
 

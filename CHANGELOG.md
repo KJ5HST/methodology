@@ -44,6 +44,21 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Phase 2, checkpoint 1 — §Parallel Actors, FM #29 *Shared-state interference*, the one-writer rule
+
+- **Action:** S31. `ITERATIVE_METHODOLOGY.md`: new `## Parallel Actors` (Shape A's contract = slice gates a–d + (e) one
+  closer, (f) disjoint write scopes, (g) serial integration; Shape B's identity, ledger merge, one-receipt merge and
+  cross-line scoring; the capability-tier elaboration moved from the runner; an honest ceiling), a Principle 9
+  paragraph (*many hands, one closer*), a Phase 1 step-4 `--merges` clause, a Mechanical Gates pointer.
+  `starter-kit/SESSION_RUNNER.md`: FM #29 appended (1–28 byte-unchanged) + its Degradation row, the step-6 `--merges`
+  line, the merge-is-one-action sentence, the one-writer pointer, a task-map row — paid by reduction (capability-tiered
+  paragraph compressed to its gate statement, reconcile and session-notes paragraphs tightened): 53,229 → 52,839 B.
+  `starter-kit/SAFEGUARDS.md`: the one-writer Blast Radius row, paid by reduction: 17,129 → 16,965 B. **Measured, not
+  estimated:** an intermediate draft the density estimate called in-ceiling read 25,034.5 tokens as a pair — over the
+  25,000 read cap; the shipped pair reads 24,844.5 (HEAD's was 24,942.5), runner 18,799.5 / 18,900 and SAFEGUARDS
+  6,046.4 / 6,100 by doubled reads, densities recorded in `.context-budget.json`. Flight manual 20,533.5 → 22,772.5
+  tokens (one read).
+
 ### 2026-10-01 · [ad hoc] Parallel-sessions plan Phase 2 — the prose: Parallel Actors, one writer per tree, FM #29 (in progress)
 
 - **Action:** session S31 claimed on `main`: Phase 2 of `docs/planning/parallel-sessions-plan.md` per §8A — the flight
