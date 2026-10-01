@@ -44,6 +44,12 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] S29 close-out — the never-edited gate receipt completed
+
+- **Action:** closes the S29 claim entry (*The ledger gate refuses an edit to a committed entry (in progress)*). Gate
+  run at `106f22b`: `quality_ratchet: 11/11 pass · 0 fail · 0 unmeasured · results 30d2a763be2b · manifest
+  58b9c63d75da` (`pre-commit-selftest` now runs 17 checks).
+
 ### 2026-10-01 · [ad hoc] `.githooks/pre-commit` refuses an edit to a committed `CHANGELOG.md` entry
 
 - **Action:** S29. With the ledger co-staged, the hook now compares the staged ledger with HEAD's entry by entry (a
