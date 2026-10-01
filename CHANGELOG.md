@@ -40,6 +40,13 @@ ledger's next new month, and nothing below is retrofitted (§The Action Ledger, 
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Housekeeping: the items S26 and S27 left open (in progress)
+
+- **Action:** session S28 claimed on `main`. Operator: "Do not leave anything unfinished." This session covers the
+  small open items: the PR #77 backfill, the due `CHANGELOG.md` trim, the `CLAUDE.md` density re-measure, the
+  `.context-budget-history.jsonl` ruling, merged-branch cleanup, the PR #83 notice, and the oversight dashboard
+  refresh. The larger items follow as their own sessions.
+
 ### 2026-10-01 · [ad hoc] S27 close-out — the decision receipt completed
 
 - **Action:** S27's `HANDOFFS.md` receipt goes `status: pending` → `complete`; this entry closes the S27 claim entry

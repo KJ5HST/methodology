@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S28
+date: 2026-10-01
+status: pending
+active_task: Housekeeping — the open small items from S26/S27: PR #77 backfill entry; CHANGELOG.md trim (226 KB > 196 KB trigger); CLAUDE.md bytes_per_token re-measure; .context-budget-history.jsonl tracked-or-ignored ruling; delete merged branches; notify rmsharp on PR #83; refresh the oversight-root dashboard copy 2.6.1 → 2.11.1. Operator: "Do not leave anything unfinished." IN PROGRESS.
+```
+
+```handoff
 session: S27
 date: 2026-10-01
 status: complete
