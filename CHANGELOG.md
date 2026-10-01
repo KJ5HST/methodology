@@ -44,6 +44,11 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Ratchet: `tests-sh-passed` 215 → 237 after Phase 1
+
+- **Action:** S30. Measured at `e4aa45f`: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results b1e984497caa ·
+  manifest 12c131faffed` — `bin/tests.sh` 237/0 (Tests 30 and 31 add 22). Tightening only.
+
 ### 2026-10-01 · [ad hoc] Phase 1 Layer B — `bin/check-ledger`, and `check-handoff` stops passing a fused receipt
 
 - **Action:** S30. New canonical-only `bin/check-ledger` (CHANGELOG.md counterpart of `check-handoff`): no conflict
