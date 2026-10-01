@@ -44,6 +44,10 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] SCRATCH (head) — GitHub merge=union probe, never merged
+
+- scratch head
+
 ### 2026-10-01 · [ad hoc] Phase 1 Layer A, checkpoint 2 — the dashboard accounts for the new `.gitattributes` seed (2.11.2)
 
 - **Action:** S30. Adding a distributed file tripped three of the dashboard's structural tests, as Learning #12
