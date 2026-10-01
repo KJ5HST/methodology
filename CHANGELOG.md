@@ -44,6 +44,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Phase 4, lead's unit (U5) — `README.md` tree and `CLAUDE.md` tables name the new seed and checker
+
+- **Action:** S33. The shared files a worker may not touch (contract gate f), written by the lead: `README.md`'s
+  repository tree gains `starter-kit/gitattributes` and `bin/check-ledger`; `CLAUDE.md`'s starter-kit table gains the
+  seed row and its Tools table a row for the three canonical-only checkers (`check-handoff`, `check-ledger`,
+  `check-learnings`) — Learning #10's sweep for the Phase 1 artifacts. `CLAUDE.md` 45,842 → 46,280 B.
+
 ### 2026-10-01 · [ad hoc] Parallel-sessions plan Phase 4 — the docs sweep, run as a Shape A fan-out (in progress)
 
 - **Action:** session S33 claimed on `main`: Phase 4 of `docs/planning/parallel-sessions-plan.md` per §8A, executed as

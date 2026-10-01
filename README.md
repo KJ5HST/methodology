@@ -205,7 +205,8 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 │   ├── context_budget.py             ← Context-budget gate (ceilings on the files a session must read)
 │   ├── context-budget.json           ← Its seed config (→ .context-budget.json at the adopter root)
 │   ├── quality_ratchet.py            ← Quality ratchet (declared thresholds that only tighten)
-│   └── quality-gates.json            ← Its seed manifest (→ .quality-gates.json; starts empty)
+│   ├── quality-gates.json            ← Its seed manifest (→ .quality-gates.json; starts empty)
+│   └── gitattributes                 ← Ledger merge-driver seed (→ .gitattributes; union for CHANGELOG.md, not HANDOFFS.md)
 │
 ├── docs/                             ← Tutorials and supporting docs
 │   ├── versioning-archive.md         ← CLAUDE.md §Versioning entries v1.0–v2.9, archived verbatim
@@ -217,6 +218,7 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 │   ├── check-links                   ← Validate relative links resolve in the adopter layout
 │   ├── check-handoff                 ← Validate close-out receipts — newest, or --all (canonical-only)
 │   ├── check-learnings               ← Validate the Learnings table + its citations (canonical-only)
+│   ├── check-ledger                  ← Validate CHANGELOG.md's structure + archive shards (canonical-only)
 │   ├── _manifest.py                  ← Shared (src, dest, disposition) manifest — single source of truth
 │   └── tests.sh                      ← Test suite for the bin/ tooling
 │
