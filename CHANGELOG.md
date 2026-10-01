@@ -44,6 +44,11 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] `bin/check-learnings` reports the highest Learning number, not the row count
+
+- **Action:** S31. Its OK line printed `contiguous 1..<row count>`, which reads "1..16" for a table that runs to #17
+  (16 rows, #14 reserved) — noticed when Learning #17 landed. Now `max(valid)`. Output only; no check changed.
+
 ### 2026-10-01 · [ad hoc] Phase 2, checkpoint 3 — the tutorials say 29 failure modes
 
 - **Action:** S31. `docs/tutorials/README.md`, `T2_first_session.md`, `T5_cautionary.md` (three places) and

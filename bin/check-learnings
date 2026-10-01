@@ -313,8 +313,10 @@ def main() -> int:
         return 1
 
     scope = "table shape only (--no-citations)" if args.no_citations else "all citations resolve"
+    # The upper bound is the highest NUMBER, not the row count: a reserved number (#14) makes the two
+    # differ, and printing the count said "1..16" for a table that runs to #17.
     print("check-learnings: OK — %d Learning row(s), contiguous 1..%d; %s; %s."
-          % (len(rows), len(rows), scope, budget))
+          % (len(rows), max(valid, default=0), scope, budget))
     return 0
 
 
