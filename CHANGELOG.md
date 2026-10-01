@@ -45,6 +45,19 @@ ledger's next new month, and nothing below is retrofitted (§The Action Ledger, 
   `CHANGELOG.md` conflict resolved keep-both with `main`'s side on top; full suite and gate run on the merged tree;
   push; then the v4.0 release docs (README What's New, `CLAUDE.md` §Versioning — which also owes the undocumented
   v3.8), tag and GitHub Release. `CHANGELOG: pending` — results appended at close-out.
+- **Seven merges** (claim `1befe64`), first-parent: [#89](https://github.com/KJ5HST/methodology/pull/89) `19f8d4f` →
+  [#88](https://github.com/KJ5HST/methodology/pull/88) `19566b6` → [#87](https://github.com/KJ5HST/methodology/pull/87)
+  `af8a693` → [#86](https://github.com/KJ5HST/methodology/pull/86) `a4eeef3` →
+  [#85](https://github.com/KJ5HST/methodology/pull/85) `a9946c6` → [#84](https://github.com/KJ5HST/methodology/pull/84)
+  `99377b3` → [#83](https://github.com/KJ5HST/methodology/pull/83) `d7768cb`. Ledgers merged keep-both with
+  `git merge-file --union --diff3` — diff3 keeps git from refining the shared fence lines out of two prepended
+  `HANDOFFS.md` receipts, the fusion rmsharp's #83 review demonstrated; `bin/check-handoff --all` after every merge
+  (receipts S26 → S25 → S24 → S23). Two non-ledger conflicts: `.quality-gates.json` at #86 (two `min` floors →
+  the larger of each) and `starter-kit/BOOTSTRAP.md` at #84 (#87's head + #84's tail, the resolution #87's body
+  documents). #84's own entries keep their branch order below, per its new *Placement* rule.
+- **Gate run on the merged tree (`d7768cb`):** `quality_ratchet: 11/11 pass · 0 fail · 0 unmeasured · results
+  219197070a3b · manifest 21dd9f1c1d67` — `bin/tests.sh` 215/0. **Tightening owed and taken:** `tests-sh-passed`
+  188 → 215, `context-budget-unit-tests` 140 → 145, `trimmer-unit-tests` 123 → 124.
 
 ### 2026-10-01 · [ad hoc] Fit-gate end-to-end test skips, never fails, when the data refuse the fit
 

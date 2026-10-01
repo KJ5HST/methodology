@@ -7,7 +7,7 @@
     {
       "name": "tests-sh-passed",
       "direction": "min",
-      "threshold": 188,
+      "threshold": 215,
       "command": "bash bin/tests.sh",
       "extract": "== Summary: (\\d+) passed",
       "why": "the framework's build equivalent; the passed count is a ratchet — every suite it wires in (dashboard, trim, budget, ratchet units) reports through it"
@@ -31,14 +31,14 @@
     {
       "name": "context-budget-unit-tests",
       "direction": "min",
-      "threshold": 140,
+      "threshold": 145,
       "command": "python3 tools/test_context_budget.py",
       "extract": "Ran (\\d+) tests"
     },
     {
       "name": "trimmer-unit-tests",
       "direction": "min",
-      "threshold": 123,
+      "threshold": 124,
       "command": "python3 tools/test_methodology_trim.py",
       "extract": "Ran (\\d+) tests"
     },
