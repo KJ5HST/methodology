@@ -267,6 +267,8 @@ Parallel sub-agents (one per call-graph cluster) are appropriate when:
 - Entry points are largely independent (cross-entry-point shared state is the integration-step concern, not the per-entry-point concern)
 - Sub-agent permission asymmetry permits read-only — the unit deliverable is written by the parent, so sub-agents do not need write access
 
+Fan-out never adds a writer: sub-agents read and return their cluster's findings, and only the parent writes to the working tree or commits — no sub-agent edits, builds, or runs tests in the shared tree (failure mode #29; see [Iterative Methodology §Parallel Actors](../ITERATIVE_METHODOLOGY.md#parallel-actors)).
+
 ### Calibration
 
 Different sub-agents apply different rigor unless given explicit calibration. Include in every sub-agent prompt:

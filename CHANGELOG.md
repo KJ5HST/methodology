@@ -44,6 +44,14 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Phase 4 sweep — the third campaign template and the research workstream's race example
+
+- **Action:** S33, the plan's Learning #10 whole-corpus sweep for *sub-agent / worktree / parallel*. Two sites the plan's
+  file list missed: `workstreams/INHERITED_CODEBASE_FAMILIARIZATION_CAMPAIGN.md` has the same Sub-Agent Dispatch
+  section as the two U2 updated — it gets the same one-writer sentence (lead-written, in that file's link style);
+  `RESEARCH_DOCUMENTATION_WORKSTREAM.md:121`'s parallel-download race is named as failure mode #29. The rest of the
+  hits (read-only research fan-out, the permission-asymmetry pattern) already agree with the rule.
+
 ### 2026-10-01 · [ad hoc] Phase 4 U1 — HOW_TO_USE §Multi-Agent Teams names the two shapes and the one-writer rule
 
 - **Action:** S33. Worker-drafted, lead-integrated: the section states Shape A and Shape B, that each concurrent
