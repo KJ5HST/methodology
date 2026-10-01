@@ -44,6 +44,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Parallel-sessions plan Phase 4 — the docs sweep, run as a Shape A fan-out (in progress)
+
+- **Action:** session S33 claimed on `main`: Phase 4 of `docs/planning/parallel-sessions-plan.md` per §8A, executed as
+  the Shape A dogfood — read-only workers each draft one unit and return content; the lead integrates one unit per
+  checkpoint and owns the shared files (`README.md`, `CLAUDE.md`). Measured: units, worker claims re-derived, claims
+  found wrong. D11 is not in this phase (deferred).
+
 ### 2026-10-01 · [ad hoc] S32 close-out — Phase 3: D9 on `main`, D8 in PR #91
 
 - **Action:** closes the S32 claim entry (*Parallel-sessions plan Phase 3 … (in progress)*). Gate run at `9565c45`:
