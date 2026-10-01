@@ -43,6 +43,44 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   push; then the v4.0 release docs (README What's New, `CLAUDE.md` §Versioning — which also owes the undocumented
   v3.8), tag and GitHub Release. `CHANGELOG: pending` — results appended at close-out.
 
+### 2026-10-01 · [ad hoc] Fit-gate end-to-end test skips, never fails, when the data refuse the fit
+
+- **Action:** session S25 on branch `fix/context-budget-fit-skip` (from `main` at `6b29d3d`). S24's
+  next step (a0): `tools/test_context_budget.py` `TestFitGateEndToEnd.setUp` skips only on calibrate()'s
+  "not enough" refusal, but calibrate() has further refusals that depend on the machine's transcripts, not
+  on the floor under test — a non-positive slope or an undefined R² (refused at every floor), and no
+  variation in the regressor ("cannot fit") — so on such a machine the two tests FAIL instead of skipping
+  (S24 measured it: 4 transcripts, slope −3.57, `bin/tests.sh` 138/1, `--run` 8/10). One file, RED first.
+  Claimed at `1a36282`; results below.
+- **The fix (one file, `tools/test_context_budget.py`):** `setUp` now skips on both stops calibrate() names
+  ("not enough", "cannot fit"), then probes the admitting floor 0.0 and skips when the refusal there does not
+  cite the floor — the data decided it, not the gate under test. A refusal that *does* cite the floor at 0.0 is
+  not skipped: no defined R² is below 0.0, so it would mean calibrate() applied the wrong floor. New unit test
+  `test_only_the_floor_refusal_names_the_floor` pins that word as the discriminator (118 → 119 tests).
+  **RED first** — the natural failure no longer reproduces here (a 5th transcript turned the slope positive),
+  so it was reproduced with a fixture `HOME` whose synthetic transcripts give each shape, tool and test
+  unmodified: negative slope and flat response FAILED the presence control, no regressor variation FAILED
+  both tests; after the fix all three skip, naming the cause, while a positive and a low-R² fixture still run
+  and pass. Three mutant `calibrate()`s (ignores its floor, prints nothing, always refuses) are still caught —
+  failed, never skipped — on both admitting fixtures and on this machine's real transcripts.
+- **Gate run at `229f08d`:** `quality_ratchet: 10/10 pass · 0 fail · 0 unmeasured · results a3b034f8cabf ·
+  manifest 97a7aab85b9a` — `bin/tests.sh` 139/0 again on this machine. **Tightening owed and taken:**
+  `context-budget-unit-tests` 118 → 119 (the new pin test), per the manifest's standing rule — `02677ea`;
+  re-run at the tightened manifest: `quality_ratchet: 10/10 pass · 0 fail · 0 unmeasured · results f5d8c427f056 ·
+  manifest b2e7f7752273`.
+- **PR opened (non-commit action):** [PR #89](https://github.com/KJ5HST/methodology/pull/89) from
+  `fix/context-budget-fit-skip` at `02677ea`, read back from the API (OPEN, +60/−4, 4 files). **Not merged.**
+- **Observed, not acted on:** every open PR (#83–#88) and this branch share base `6b29d3d`; `git merge-tree`
+  shows each pair conflicting on the `CHANGELOG.md` top anchor except #84 (clean against all but #87, on
+  `starter-kit/BOOTSTRAP.md`), plus #86×#87 on `.quality-gates.json` and this branch×#83 on `HANDOFFS.md`.
+  The v3.8 tag and GitHub Release (rmsharp, 2026-09-30, at `6b29d3d`) are not yet in this ledger — the
+  release-docs session records them. The operator's "clean everything up so we can merge and version" is
+  sequenced in the S25 receipt's next steps, not started here.
+- **Correction — merge order:** the receipt's first draft put #84 first; the operator proposed 88 → 87 → 84
+  and a scratch-clone simulation of both orders backed it — same final tree except `CHANGELOG.md` order, where
+  only newest-entries-first keeps a keep-both resolution newest-on-top (84-first put #88's 09-26 entry below
+  #87's 09-21 ones); `bin/tests.sh` on the 88 → 87 → 84 tree 212/0. Receipt `next_steps` (b) corrected in place.
+
 ### 2026-09-16 · [ad hoc] PR #82 merged — post-merge verification on main and the first tightening
 
 - **Action:** the operator merged [PR #82](https://github.com/KJ5HST/methodology/pull/82) (quality ratchet,
