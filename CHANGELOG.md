@@ -57,7 +57,12 @@ ledger's next new month, and nothing below is retrofitted (§The Action Ledger, 
   documents). #84's own entries keep their branch order below, per its new *Placement* rule.
 - **Gate run on the merged tree (`d7768cb`):** `quality_ratchet: 11/11 pass · 0 fail · 0 unmeasured · results
   219197070a3b · manifest 21dd9f1c1d67` — `bin/tests.sh` 215/0. **Tightening owed and taken:** `tests-sh-passed`
-  188 → 215, `context-budget-unit-tests` 140 → 145, `trimmer-unit-tests` 123 → 124.
+  188 → 215, `context-budget-unit-tests` 140 → 145, `trimmer-unit-tests` 123 → 124 — `746c17a`; pushed
+  `6b29d3d..746c17a`, and GitHub read back all seven PRs as MERGED.
+- **Room for the release entries (operator's choice of three):** `CLAUDE.md` stood at 59,119 B under its pinned
+  59,168 B resident ceiling. The v1.0–v2.9 §Versioning entries (17 entries, 18,537 B) moved **verbatim** to new
+  `docs/versioning-archive.md` (canonical-only, not distributed), with a one-line pointer in their place — the
+  archive body compared byte-equal to the span at `746c17a`. `CLAUDE.md` → 40,771 B; the ceiling is unchanged.
 
 ### 2026-10-01 · [ad hoc] Fit-gate end-to-end test skips, never fails, when the data refuse the fit
 
