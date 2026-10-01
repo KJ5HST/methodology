@@ -44,6 +44,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Parallel-sessions plan Phase 5 — the Shape B dogfood: two concurrent sessions and one merge (in progress)
+
+- **Action:** session S34 claimed on `main` as the merging session. Two concurrent sessions, `S35-alpha` and
+  `S35-beta`, run in linked worktrees on branches `s35-alpha` / `s35-beta`, each with one doc-only deliverable and a
+  full close-out; S34 merges both locally and measures the result. Also: S33's receipt cited `README.md:211`; the rows
+  are at `:209` and `:221` — corrected there.
+
 ### 2026-10-01 · [ad hoc] S33 close-out — Phase 4 done; the Shape A dogfood measured
 
 - **Action:** closes the S33 claim entry (*Parallel-sessions plan Phase 4 … (in progress)*). **Shape A, measured
