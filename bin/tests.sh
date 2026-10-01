@@ -1278,6 +1278,29 @@ rm -rf "$L"
 "$BIN/check-ledger" --all >/dev/null 2>&1 && pass "check-ledger --all: this repository's ledger and its archive shard are clean" \
     || fail "check-ledger --all: this repository's own ledger has findings"
 
+echo "== Test 32: --source=github installs the SOURCE's manifest, so a checkout ahead of it is not refused (RED-first) =="
+# D8 (parallel-sessions plan): sync iterated THIS checkout's manifest against a clone of the source, so a branch
+# that adds a distributed file could not sync from github until it merged (Test 9 went red on such a branch in S30).
+# The source here is this checkout minus its newest row -- exactly main before that branch.
+S32="$(mktemp -d)"; git -C "$S32" init -q -b main
+mkdir -p "$S32/bin"; cp "$BIN/sync" "$BIN/status" "$S32/bin/"
+grep -v '"starter-kit/gitattributes"' "$BIN/_manifest.py" > "$S32/bin/_manifest.py"
+python3 -c "import sys; sys.path.insert(0, '$S32/bin'); import _manifest; print('\n'.join(s for s, _d, _x in _manifest.DISTRIBUTION))" \
+    | while read -r src; do mkdir -p "$S32/$(dirname "$src")"; cp "$METHODOLOGY/$src" "$S32/$src"; done
+git -C "$S32" add -A; git -C "$S32" -c user.email=t@t -c user.name=t commit -qm "source without the newest row"
+P="$(mktemp_project)"
+OUT="$(METHODOLOGY_SOURCE_URL="file://$S32" "$BIN/sync" "$P" --source=github 2>&1)"; RC=$?
+[ "$RC" = 0 ] && [ -f "$P/SESSION_RUNNER.md" ] && [ ! -e "$P/.gitattributes" ] \
+    && pass "github sync from a source behind this checkout installs the source's files and exits 0" \
+    || fail "github sync from a source behind this checkout: exit $RC (the old sync refused with 'do not exist in')"
+grep -q "not distributed by file://$S32 yet" <<<"$OUT" && grep -qF "    starter-kit/gitattributes" <<<"$OUT" \
+    && pass "github sync names the row this checkout has and the source does not" || fail "github sync: no note naming starter-kit/gitattributes"
+OUT="$(METHODOLOGY_SOURCE_URL="file://$S32" "$BIN/status" --source=github "$P" 2>&1)"; RC=$?
+[ "$RC" = 0 ] && grep -qF "    starter-kit/gitattributes" <<<"$OUT" \
+    && pass "github status compares against the source's manifest and names the skipped row" \
+    || fail "github status from a source behind this checkout: exit $RC"
+rm -rf "$S32" "$P"
+
 echo ""
 echo "== Summary: $PASS passed, $FAIL failed =="
 [ "$FAIL" = "0" ]

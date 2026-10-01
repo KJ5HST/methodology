@@ -44,6 +44,15 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Phase 3 D8 — `bin/sync`/`bin/status --source=github` use the source's own manifest (PR, for review)
+
+- **Action:** S32, on branch `feat/sync-manifest-at-ref` (not `main`: it changes #87's premise, so rmsharp reviews it
+  first, as asked on PR #83). In github mode both scripts load the clone's `bin/_manifest.py` and iterate it, so the
+  file list and contents come from one ref; rows only this checkout's manifest has are named in a note and skipped,
+  where the scripts used to refuse the whole run. `absent_sources` now checks the source against its own manifest
+  (Test 28's case — the source lacks a file it lists — still refuses, same wording). New Test 32 (3 checks), RED
+  against `main`'s scripts (all 3 fail, exit 1). `bin/tests.sh` 240/0 on the branch.
+
 ### 2026-10-01 · [ad hoc] Phase 3 D9 — `context_budget.py --calibrate` works from a linked worktree (1.3.1)
 
 - **Action:** S32. New `transcript_dir(root)` keys the transcript directory on the MAIN checkout (the parent of git's
