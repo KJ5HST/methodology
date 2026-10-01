@@ -44,6 +44,17 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Phase 1 Layer A — the `.gitattributes` seed merges `CHANGELOG.md` by union; `HANDOFFS.md` stays visible
+
+- **Action:** S30. New `starter-kit/gitattributes` (SEED → `.gitattributes`; `bin/_manifest.py` 29 → 30) and this
+  repo's own `.gitattributes`: `merge=union` for `CHANGELOG.md`, `dashboard_history.jsonl`,
+  `.context-budget-history.jsonl` — not `HANDOFFS.md`, whose keep-both recipe the seed carries in a comment.
+  `bin/tests.sh` Test 30 (7 checks): a two-branch merge conflicts in `HANDOFFS.md` only, `CHANGELOG.md` auto-merges
+  whole, the recipe yields three whole receipts; a RED control shows union fusing two receipts into one block at
+  exit 0; the real trimmer against a prepend merges clean with nothing archived returning; sync installs the seed and
+  never overwrites an adopter's copy. RED: with no seed in the starter-kit, 5 of the 7 fail. **Found:** the fused
+  block passes `bin/check-handoff --all` (`parse_block` keeps the last of a repeated key) — fixed in Layer B.
+
 ### 2026-10-01 · [ad hoc] Parallel-sessions plan Phase 1 — ledger merge mechanics (in progress)
 
 - **Action:** session S30 claimed on `main`: Phase 1 of `docs/planning/parallel-sessions-plan.md` as §8A amends it.

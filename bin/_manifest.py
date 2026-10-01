@@ -52,6 +52,7 @@ DISTRIBUTION = [
     ("starter-kit/ROADMAP.md", "ROADMAP.md", SEED),
     ("starter-kit/context-budget.json", ".context-budget.json", SEED),
     ("starter-kit/quality-gates.json", ".quality-gates.json", SEED),
+    ("starter-kit/gitattributes", ".gitattributes", SEED),
     # framework docs -> docs/methodology/
     ("ITERATIVE_METHODOLOGY.md", "docs/methodology/ITERATIVE_METHODOLOGY.md", TRACKED),
     ("HOW_TO_USE.md", "docs/methodology/HOW_TO_USE.md", TRACKED),

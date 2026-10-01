@@ -1166,6 +1166,85 @@ printf 'v1\n' > "$P/$D"
     && pass "control: the full-history source upgrades the same file" || fail "control: the full-history source did not upgrade v1"
 rm -rf "$M" "$H" "$P"
 
+echo "== Test 30: the .gitattributes seed merges CHANGELOG.md by union and keeps HANDOFFS.md visible (RED-first) =="
+# Two sessions prepend at one anchor from one base -- the S21 conflict. Under the seed, CHANGELOG.md merges
+# clean with both entries whole. HANDOFFS.md is deliberately NOT under union: union fuses two prepended
+# receipts into one block at exit 0 (the RED control shows it), so it conflicts visibly and the seed's
+# keep-both recipe resolves it with every receipt whole (parallel-sessions plan §8A, row 3').
+l30_entry() { printf '### 2026-10-0%s · [ad hoc] entry %s\n\n- body of entry %s\n\n' "$1" "$2" "$2"; }
+l30_rcpt() { # $1 session, $2 self_score, $3 predecessor_score
+    printf '```handoff\nsession: %s\ndate: 2026-10-01\nstatus: complete\nself_score: %s\npredecessor_score: %s\nactive_task: the task of %s\nwhat_was_done: did it (abc1234)\nnext_steps: the next thing after %s\nkey_files: a.py:%s\ngotchas: none for %s\nruntime_smoke: n/a — docs-only\nchangelog_ref: abc1234\ncommit: abc1234\n```\n\n' \
+        "$1" "$2" "$3" "$1" "$1" "$2" "$1"
+}
+l30_repo() { # a repo with the seed, a one-entry ledger and a one-receipt HANDOFFS.md, committed
+    local u; u="$(mktemp -d)"
+    git -C "$u" init -q -b main; git -C "$u" config user.email t@t; git -C "$u" config user.name t
+    git -C "$u" config core.hooksPath /dev/null
+    cp "$STARTER/gitattributes" "$u/.gitattributes"
+    { printf '# Changelog\n\n---\n\n'; l30_entry 1 base; } > "$u/CHANGELOG.md"
+    { printf '# Handoff Receipts\n\n---\n\n'; l30_rcpt S1 7 6; } > "$u/HANDOFFS.md"
+    git -C "$u" add -A; git -C "$u" commit -qm base
+    for side in alpha beta; do
+        local n=2 s=8; [ "$side" = beta ] && n=3 s=9
+        git -C "$u" checkout -q -b "$side" main
+        { printf '# Changelog\n\n---\n\n'; l30_entry "$n" "$side"; l30_entry 1 base; } > "$u/CHANGELOG.md"
+        { printf '# Handoff Receipts\n\n---\n\n'; l30_rcpt "S2-$side" "$s" 7; l30_rcpt S1 7 6; } > "$u/HANDOFFS.md"
+        git -C "$u" commit -qam "$side"
+    done
+    git -C "$u" checkout -q alpha
+    echo "$u"
+}
+U="$(l30_repo)"
+git -C "$U" merge -q --no-edit beta >/dev/null 2>&1; RC=$?
+CONFL="$(git -C "$U" diff --name-only --diff-filter=U | tr '\n' ' ')"
+[ "$RC" = 1 ] && [ "$CONFL" = "HANDOFFS.md " ] \
+    && pass "seed: a two-branch merge conflicts in HANDOFFS.md only" || fail "seed: merge exit $RC, conflicted: [$CONFL]"
+[ "$(grep -c '^### ' "$U/CHANGELOG.md")" = 3 ] && grep -q 'entry alpha' "$U/CHANGELOG.md" && grep -q 'entry beta' "$U/CHANGELOG.md" \
+    && ! grep -q '^<<<<<<<' "$U/CHANGELOG.md" \
+    && pass "seed: CHANGELOG.md auto-merged by union, both new entries whole" || fail "seed: CHANGELOG.md did not keep both entries"
+( cd "$U" && git show :1:HANDOFFS.md > base.tmp && git show :2:HANDOFFS.md > ours.tmp && git show :3:HANDOFFS.md > theirs.tmp \
+    && git merge-file -p --union --diff3 ours.tmp base.tmp theirs.tmp > HANDOFFS.md; rm -f base.tmp ours.tmp theirs.tmp )
+"$BIN/check-handoff" --all --file "$U/HANDOFFS.md" >/dev/null 2>&1 && [ "$(grep -c '^session:' "$U/HANDOFFS.md")" = 3 ] \
+    && [ "$(grep -c '^```handoff' "$U/HANDOFFS.md")" = 3 ] \
+    && pass "seed recipe: keep-both resolves HANDOFFS.md with all three receipts whole (check-handoff --all)" \
+    || fail "seed recipe: HANDOFFS.md not resolved into three whole receipts"
+rm -rf "$U"
+U="$(l30_repo)"
+printf 'HANDOFFS.md merge=union\n' >> "$U/.git/info/attributes"
+git -C "$U" merge -q --no-edit beta >/dev/null 2>&1; RC=$?
+[ "$RC" = 0 ] && [ "$(grep -c '^```handoff' "$U/HANDOFFS.md")" = 2 ] && [ "$(grep -c '^session:' "$U/HANDOFFS.md")" = 3 ] \
+    && pass "RED control: HANDOFFS.md under union merges at exit 0 into ONE block holding two receipts" \
+    || fail "RED control: union on HANDOFFS.md did not fuse (exit $RC) -- re-measure before keeping the exclusion"
+rm -rf "$U"
+# A trim on one branch against a new entry on the other, the real trimmer at a small cut: nothing archived returns.
+U="$(mktemp -d)"
+git -C "$U" init -q -b main; git -C "$U" config user.email t@t; git -C "$U" config user.name t
+git -C "$U" config core.hooksPath /dev/null
+cp "$STARTER/gitattributes" "$U/.gitattributes"
+{ printf '# Changelog\n\nfront matter\n\n---\n\n'; for d in 9 8 7 6 5 4 3 2 1; do l30_entry "$d" "$d"; done; } > "$U/CHANGELOG.md"
+git -C "$U" add -A; git -C "$U" commit -qm base
+git -C "$U" checkout -q -b trim
+( cd "$U" && python3 "$STARTER/methodology_trim.py" --file CHANGELOG.md --cut 2 --budget-bytes 100 --write ) >/dev/null 2>&1
+git -C "$U" add -A; git -C "$U" commit -qm trim >/dev/null 2>&1
+git -C "$U" checkout -q -b new main
+python3 -c "import sys; p=sys.argv[1]; s=open(p).read(); a='---\n\n'; open(p,'w').write(s.replace(a, a+'### 2026-10-10 · [ad hoc] entry new\n\n- body of entry new\n\n', 1))" "$U/CHANGELOG.md"
+git -C "$U" commit -qam new
+git -C "$U" checkout -q trim
+git -C "$U" merge -q --no-edit new >/dev/null 2>&1; RC=$?
+[ "$RC" = 0 ] && grep -q 'body of entry new' "$U/CHANGELOG.md" && ! grep -q 'body of entry 3$' "$U/CHANGELOG.md" \
+    && [ -f "$U"/docs/archive/CHANGELOG-through-*.md ] \
+    && pass "trim vs prepend under union: clean merge, the new entry kept, no archived record back in the live file" \
+    || fail "trim vs prepend under union: exit $RC, or an archived record returned"
+rm -rf "$U"
+P="$(mktemp_project)"
+"$BIN/sync" "$P" --source=local >/dev/null 2>&1
+cmp -s "$P/.gitattributes" "$STARTER/gitattributes" && pass "sync installs the .gitattributes seed" || fail "sync did not install .gitattributes"
+printf 'mine\n' > "$P/.gitattributes"
+"$BIN/sync" "$P" --source=local --force >/dev/null 2>&1
+[ "$(cat "$P/.gitattributes")" = mine ] && pass "sync never overwrites an adopter's .gitattributes, even with --force" \
+    || fail "sync clobbered an adopter's .gitattributes"
+rm -rf "$P"
+
 echo ""
 echo "== Summary: $PASS passed, $FAIL failed =="
 [ "$FAIL" = "0" ]

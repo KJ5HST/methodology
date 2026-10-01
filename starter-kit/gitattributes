@@ -1,0 +1,16 @@
+# Methodology ledgers: merge the append-only records by union (git's built-in driver,
+# no per-clone setup). Two sessions that each prepend an entry at the top of CHANGELOG.md
+# then merge cleanly with both entries kept, instead of conflicting at the same anchor.
+# Order across the two branches is ours-then-theirs, not by date; that is accepted
+# (prepend-only, never re-sorted). One blank line between the two entries is lost.
+#
+# HANDOFFS.md is deliberately NOT listed. Two prepended receipts share their opening and
+# closing fence lines, and union merges them into ONE block holding both receipts' fields,
+# with a clean exit. So its conflicts stay visible. Resolve them keep-both, ours on top:
+#   git show :1:HANDOFFS.md > base; git show :2:HANDOFFS.md > ours; git show :3:HANDOFFS.md > theirs
+#   git merge-file -p --union --diff3 ours base theirs > HANDOFFS.md
+# then check every receipt (the canonical bin/check-handoff --all) before committing the merge.
+# Measured: methodology docs/planning/parallel-sessions-plan.md §8A and §9A.
+CHANGELOG.md merge=union
+dashboard_history.jsonl merge=union
+.context-budget-history.jsonl merge=union
