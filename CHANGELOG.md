@@ -40,6 +40,16 @@ ledger's next new month, and nothing below is retrofitted (§The Action Ledger, 
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Backfilled: PR #77 merged 2026-09-03 — the ledger trimmer shipped (`56997af`, merge `907a696`)
+
+- **Action (backfill, not S28's):** [PR #77](https://github.com/KJ5HST/methodology/pull/77) (rmsharp, *Ship the ledger
+  trimmer, with tests that run outside this fork* — read-set budgets, 2 of 4) merged at `907a696` on
+  2026-09-03T01:38Z: one commit, `56997af` — `starter-kit/methodology_trim.py` and `tools/test_methodology_trim.py`,
+  the `bin/_manifest.py` row, the trimmer's seed sections in `starter-kit/CHANGELOG.md` and `starter-kit/HANDOFFS.md`,
+  dashboard twins and tests (9 files, +4,691/−6). Neither commit touched this root ledger, so the reconcile gap
+  lost sight of it once a later commit edited the ledger (failure mode #27). Found by rmsharp's PR #83 review;
+  verified in S27 (`docs/planning/parallel-sessions-plan.md` §8A, row 5). The release that carried it is v3.8.
+
 ### 2026-10-01 · [ad hoc] Housekeeping: the items S26 and S27 left open (in progress)
 
 - **Action:** session S28 claimed on `main`. Operator: "Do not leave anything unfinished." This session covers the
