@@ -68,6 +68,10 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   The v3.8 tag and GitHub Release (rmsharp, 2026-09-30, at `6b29d3d`) are not yet in this ledger — the
   release-docs session records them. The operator's "clean everything up so we can merge and version" is
   sequenced in the S25 receipt's next steps, not started here.
+- **Correction — merge order:** the receipt's first draft put #84 first; the operator proposed 88 → 87 → 84
+  and a scratch-clone simulation of both orders backed it — same final tree except `CHANGELOG.md` order, where
+  only newest-entries-first keeps a keep-both resolution newest-on-top (84-first put #88's 09-26 entry below
+  #87's 09-21 ones); `bin/tests.sh` on the 88 → 87 → 84 tree 212/0. Receipt `next_steps` (b) corrected in place.
 
 ### 2026-09-16 · [ad hoc] PR #82 merged — post-merge verification on main and the first tightening
 
