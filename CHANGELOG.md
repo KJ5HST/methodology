@@ -44,6 +44,12 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] S30 close-out — Phase 1 of the parallel-sessions plan done
+
+- **Action:** closes the S30 claim entry (*Parallel-sessions plan Phase 1 — ledger merge mechanics (in progress)*).
+  Gate run at `5ea14d1` (the tightened manifest): `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results
+  f5b44d3e26a1 · manifest 312cd7c405c8`.
+
 ### 2026-10-01 · [ad hoc] Ratchet: `tests-sh-passed` 215 → 237 after Phase 1
 
 - **Action:** S30. Measured at `e4aa45f`: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results b1e984497caa ·
