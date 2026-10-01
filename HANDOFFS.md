@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S27
+date: 2026-10-01
+status: pending
+active_task: Answer the twelve §8 decisions of docs/planning/parallel-sessions-plan.md under the operator's delegation ("you do it"), against rmsharp's PR #83 review and the post-v4.0 tree; measure what can be measured (union vs diff3 on receipts, trim-vs-prepend under union, what #87 did to D8, current SAFEGUARDS/runner headroom); record the decisions in the plan and amend the phases they change. ONE DELIVERABLE (the decision record). Nothing implemented. IN PROGRESS.
+```
+
+```handoff
 session: S26
 date: 2026-10-01
 status: complete

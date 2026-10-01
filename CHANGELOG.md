@@ -40,6 +40,13 @@ ledger's next new month, and nothing below is retrofitted (§The Action Ledger, 
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Parallel-sessions plan: the twelve §8 decisions (in progress)
+
+- **Action:** session S27 claimed on `main`. The operator delegated the plan's open decisions ("you do it", answering
+  S26's next step (a)). Deliverable: the twelve §8 answers recorded in `docs/planning/parallel-sessions-plan.md`, each
+  against rmsharp's PR #83 review and against what has changed since 2026-09-16 (v3.8 and v4.0 shipped; #87 rewrote
+  `--source=github`); the claims that can be computed are measured, not assumed. Nothing in the plan is implemented.
+
 ### 2026-10-01 · [ad hoc] S26 close-out — the v4.0 receipt completed
 
 - **Action:** S26's `HANDOFFS.md` receipt goes `status: pending` → `complete`. This entry closes the S26 claim entry
