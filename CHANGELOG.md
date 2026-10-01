@@ -44,6 +44,14 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Phase 4 U3 — RECOMMENDED_SKILLS names the illustrative Claude Code mechanism for worker isolation
+
+- **Action:** S33. Worker-drafted, lead-integrated: after the capability-tiered paragraph, *Shape A fan-out — worker
+  isolation* — `Agent` `isolation: "worktree"`; read-only agent types make return-content mechanical (a shell tool
+  stays an instruction — the worker's own caveat, kept: the read-only type used in this very fan-out has Bash);
+  the return-content fallback when worktree isolation is refused. Brand names stay confined to this file. Harness
+  claims re-derived by the lead from this session's own tool definitions: 0 wrong.
+
 ### 2026-10-01 · [ad hoc] Phase 4 U4 — BOOTSTRAP Step 10 gives existing-`.gitattributes` adopters the three union lines
 
 - **Action:** S33. Worker-drafted (read-only, returned content), lead-reviewed and integrated: a *Ledger merge driver*
