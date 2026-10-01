@@ -44,6 +44,11 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Phase 2, checkpoint 3 — the tutorials say 29 failure modes
+
+- **Action:** S31. `docs/tutorials/README.md`, `T2_first_session.md`, `T5_cautionary.md` (three places) and
+  `TUTORIAL_TEMPLATE.md`: "28 failure modes" → 29, following FM #29's append. Canonical-only files.
+
 ### 2026-10-01 · [ad hoc] Phase 2, checkpoint 2 — sequence tags and the merge rule in the `HANDOFFS.md` seed; Learning #17; the count is 29
 
 - **Action:** S31. `starter-kit/HANDOFFS.md`: a *Concurrent sequences* paragraph — each repository's `main` keeps bare
