@@ -44,6 +44,18 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] `.githooks/pre-commit` refuses an edit to a committed `CHANGELOG.md` entry
+
+- **Action:** S29. With the ledger co-staged, the hook now compares the staged ledger with HEAD's entry by entry (a
+  `###` heading to the next `#`/`##`/`###` heading or `---` rule, outside fences, trailing blanks ignored) and refuses
+  a committed entry whose heading or body changed, or one that disappeared — unless the commit stages a
+  `docs/archive/` shard (a trim). Needs python3; skipped without it. `--selftest` 10 → 17 checks, two mutants of
+  the check each killed by it. **RED first by replay** of real commits on their parents: under the old hook S26's
+  `746c17a` and `d1c1154` passed; under the new one both are refused and the trim `e010fdf`, the release docs, the
+  backfill and every S26–S29 claim and close-out pass. Sweep of all 119 ledger-touching commits since v3.7: 71 pass
+  (every rmsharp #84–#88 commit among them), 48 refused — each an append to an existing entry under the pre-#84
+  practice, three spot-checked by diff. `FRAMEWORK_APPARATUS.md` *Lifecycle* names the hook.
+
 ### 2026-10-01 · [ad hoc] The ledger gate refuses an edit to a committed entry (in progress)
 
 - **Action:** session S29 claimed on `main`. `FRAMEWORK_APPARATUS.md` §The Action Ledger, *Lifecycle*, says a committed

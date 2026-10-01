@@ -444,7 +444,11 @@ hook checks, so each commit carries its own entry, and each non-commit action ge
   revert as its own entry.
 - **A committed entry is never edited.** A correction is a new entry that names what was wrong. The
   one exception is removing content that must not be published — a credential, personal data — and
-  that removal is recorded by an entry of its own.
+  that removal is recorded by an entry of its own. The canonical ledger hook
+  ([`.githooks/pre-commit`](https://github.com/KJ5HST/methodology/blob/main/.githooks/pre-commit))
+  holds this mechanically: it refuses a staged ledger that changes or drops a committed entry,
+  unless the same commit stages a `docs/archive/` shard (a trim); the exception goes through with
+  `--no-verify`.
 - **A Phase 0 backfill is the one entry that may span several commits**: it records history that no
   close-out reached.
 - **The Phase 1B `CHANGELOG: pending` marker lives in `SESSION_NOTES.md`.** A project that keeps no

@@ -92,8 +92,51 @@ if [ "${1:-}" = "--selftest" ]; then
 	build; ( cd "$d" && mkdir -p .git/rebase-merge && : > .git/REBASE_HEAD )
 	                expect "stopped rebase (REBASE_HEAD + rebase-merge) -> skipped" 0
 
+	# Lifecycle: a committed entry is never edited. Each probe commits a two-entry ledger,
+	# then stages one variant of it with the ledger co-staged, so only the entry check can
+	# refuse. Needs python3, as the check does.
+	F='# Changelog\n\nfront matter\n\n---\n\n'
+	B='### 2026-01-02 · [ad hoc] B\n\n- b body\n\n'
+	A='### 2026-01-01 · [ad hoc] A\n\n- a body\n\n'
+	Z='---\n\nfooter\n'
+	lbuild() { # $1 = the staged ledger (printf format); $2 = "archive" to stage a shard too
+		n=$((n + 1)); d=$t/r$n
+		mkdir -p "$d"
+		(
+			cd "$d" || exit 1
+			unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+			git init -q -b main --template= .
+			git config user.email selftest@example.invalid
+			git config user.name selftest
+			printf "$F$B$A$Z" > CHANGELOG.md
+			printf 'one\n' > tracked.txt
+			git add -A
+			git commit -q -m init
+			printf 'two\n' > tracked.txt
+			printf "$1" > CHANGELOG.md
+			if [ "${2:-}" = archive ]; then mkdir -p docs/archive && printf "$A" > docs/archive/shard.md; fi
+			git add -A
+		) >/dev/null 2>&1
+		git -C "$d" rev-parse --verify -q HEAD >/dev/null 2>&1 \
+			|| { echo "  FAIL: fixture r$n did not build"; fails=$((fails + 1)); }
+	}
+	lbuild "$F### 2026-01-03 · [ad hoc] C\n\n- c body\n\n$B$A$Z"
+	                expect "ledger: a new entry prepended -> pass"              0
+	lbuild "$F## 2026-01\n\n### 2026-01-03 · [ad hoc] C\n\n- c body\n\n$B$A$Z"
+	                expect "ledger: a month heading and an entry prepended -> pass" 0
+	lbuild "# Changelog\n\nfront matter, reworded\n\n---\n\n$B$A---\n\nfooter, reworded\n"
+	                expect "ledger: front matter and footer edited, entries untouched -> pass" 0
+	lbuild "$F### 2026-01-02 · [ad hoc] B\n\n- b body\n- a bullet appended later\n\n$A$Z"
+	                expect "ledger: a committed entry's body edited -> REFUSED" 1
+	lbuild "$F### 2026-01-02 · [ad hoc] B (done)\n\n- b body\n\n$A$Z"
+	                expect "ledger: a committed entry's heading rewritten -> REFUSED" 1
+	lbuild "$F$B$Z"
+	                expect "ledger: a committed entry dropped, no archive shard -> REFUSED" 1
+	lbuild "$F$B$Z" archive
+	                expect "ledger: entries dropped with a docs/archive/ shard staged (a trim) -> pass" 0
+
 	rm -rf "$t"
-	[ "$fails" -eq 0 ] && echo "pre-commit selftest: OK (10 checks)" || { echo "pre-commit selftest: $fails FAILED"; exit 1; }
+	[ "$fails" -eq 0 ] && echo "pre-commit selftest: OK (17 checks)" || { echo "pre-commit selftest: $fails FAILED"; exit 1; }
 	exit 0
 fi
 
@@ -137,6 +180,73 @@ fi
 
 staged=$(git diff --cached --name-only)
 
+# Lifecycle — a committed entry is never edited (FRAMEWORK_APPARATUS.md §The Action Ledger):
+# a correction is a NEW entry that names what was wrong. Compares the staged ledger with
+# HEAD's, entry by entry. An entry is a `### ` heading through the line before the next
+# `#`/`##`/`###` heading or `---` rule, outside fenced blocks, trailing blank lines ignored —
+# so a prepended entry, a new month heading, or the footer a trim moves up under the last
+# retained entry never reads as an edit. A committed entry whose heading or body changed
+# is refused. One that disappears is refused too, unless the same commit stages a
+# docs/archive/ shard: that is the trimmer's commit, and the shard's verify.sh proves the
+# move lossless. Needs python3; without it the check is skipped (the fast path, never the
+# guarantee). A deliberate removal — a credential, personal data — is the one exception:
+# commit it with --no-verify and record the removal in an entry of its own.
+ledger_entries_intact() {
+	command -v python3 >/dev/null 2>&1 || return 0
+	git cat-file -e HEAD:CHANGELOG.md 2>/dev/null || return 0
+	archive=0
+	printf '%s\n' "$staged" | grep -q '^docs/archive/' && archive=1
+	python3 - "$archive" <<'PY'
+import subprocess, sys
+
+def show(spec):
+    return subprocess.run(["git", "show", spec], capture_output=True, check=True).stdout.decode("utf-8", "replace")
+
+def entries(text):
+    """{(heading, nth occurrence): body} for every `### ` entry outside fenced blocks."""
+    out, seen, cur, buf, fence = {}, {}, None, [], False
+    def close():
+        if cur is not None:
+            n = seen.get(cur, 0); seen[cur] = n + 1
+            out[(cur, n)] = "\n".join(buf).rstrip()
+    for line in text.split("\n"):
+        if line.lstrip().startswith("```"):
+            fence = not fence
+        if not fence and line.startswith("### "):
+            close(); cur, buf = line, [line]
+        elif not fence and (line.startswith("## ") or line.startswith("# ") or line.rstrip() == "---"):
+            close(); cur, buf = None, []
+        elif cur is not None:
+            buf.append(line)
+    close()
+    return out
+
+head, staged = entries(show("HEAD:CHANGELOG.md")), entries(show(":CHANGELOG.md"))
+archive = sys.argv[1] == "1"
+edited = [k[0] for k, body in head.items() if k in staged and staged[k] != body]
+removed = [k[0] for k in head if k not in staged]
+bad = [("edited", h) for h in edited] + ([] if archive else [("removed", h) for h in removed])
+if not bad:
+    sys.exit(0)
+sys.stderr.write("✗ CHANGELOG.md: a committed entry was changed — %d entr%s:\n"
+                 % (len(bad), "y" if len(bad) == 1 else "ies"))
+for kind, h in bad[:5]:
+    sys.stderr.write("    %-8s %s\n" % (kind, h[:100]))
+if len(bad) > 5:
+    sys.stderr.write("    … and %d more\n" % (len(bad) - 5))
+sys.stderr.write("""
+A committed entry is never edited (FRAMEWORK_APPARATUS.md §The Action Ledger, Lifecycle).
+Leave it as written and prepend a NEW entry that names what was wrong. A claim's
+(in progress) entry is closed by the close-out's own entry, not by rewriting it.
+  * Removing records? That is methodology_trim.py's job: its commit stages a
+    docs/archive/ shard, and this check lets it through.
+  * Removing a credential or personal data:  git commit --no-verify, then record
+    the removal in an entry of its own.
+""")
+sys.exit(1)
+PY
+}
+
 # Empty index (e.g. `--allow-empty`, or an all-unstaged tree): nothing to gate.
 if [ -z "$staged" ]; then
 	exit 0
@@ -146,6 +256,7 @@ fi
 # -F: match the literal path, not a regex — an unescaped '.' would let a
 # same-length sibling (CHANGELOGxmd, CHANGELOG-md) satisfy the gate.
 if printf '%s\n' "$staged" | grep -qxF 'CHANGELOG.md'; then
+	ledger_entries_intact || exit 1
 	exit 0
 fi
 
