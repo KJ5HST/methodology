@@ -4,17 +4,20 @@
 Contract: methodology v2.2 plan §4D.
 """
 import argparse
-import base64
 import hashlib
-import json
+import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _manifest import DISTRIBUTION, TRACKED, SEED  # noqa: E402  (bin/ on sys.path)
 
 REPO = "KJ5HST/methodology"
+# --source=github clones this URL; the variable overrides it (a private mirror, or a local bare
+# repository in bin/tests.sh). Anything `git clone` accepts: a URL or a path.
+SOURCE_URL_ENV = "METHODOLOGY_SOURCE_URL"
 # Only TRACKED dests are gitignored (ignore mode) and checked for accidental git
 # tracking. SEED files become adopter-owned after first creation and are meant to
 # be committed, so they are deliberately excluded from both.
@@ -53,64 +56,124 @@ def read_local(methodology_root: Path, src: str) -> bytes:
 
 
 def local_history_blobs(methodology_root: Path, src: str) -> set:
-    """Set of blob SHAs this file has had across methodology git history."""
+    """Set of blob SHAs this file has had across methodology git history.
+
+    --full-history, because git's default walk follows only a merge's TREESAME parent: a version
+    on the side a merge did not keep was never visited, so an unmodified copy of it was refused
+    as a local modification."""
     path = src
     try:
         log = subprocess.run(
-            ["git", "-C", str(methodology_root), "log", "--format=%H", "--", path],
+            ["git", "-C", str(methodology_root), "log", "--full-history", "--format=%H", "--", path],
             capture_output=True, text=True, check=True,
         ).stdout.strip().splitlines()
     except (FileNotFoundError, subprocess.CalledProcessError):
         return set()
+    if not log:
+        return set()
+    # One batched lookup rather than a git ls-tree per commit: the full walk visits over twice
+    # the commits the default walk did, and a subprocess each more than doubled the run time.
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(methodology_root), "cat-file", "--batch-check=%(objectname) %(objecttype)"],
+            input="".join(f"{commit}:{path}\n" for commit in log),
+            capture_output=True, text=True, check=True,
+        ).stdout.splitlines()
+    except subprocess.CalledProcessError:
+        return set()
     blobs = set()
-    for commit in log:
-        try:
-            tree = subprocess.run(
-                ["git", "-C", str(methodology_root), "ls-tree", commit, "--", path],
-                capture_output=True, text=True, check=True,
-            ).stdout.strip()
-        except subprocess.CalledProcessError:
-            continue
-        parts = tree.split()
-        if len(parts) >= 3 and parts[1] == "blob":
-            blobs.add(parts[2])
+    for line in out:
+        # "<sha> blob", or "<commit>:<path> missing"
+        parts = line.split()
+        if len(parts) == 2 and parts[1] == "blob":
+            blobs.add(parts[0])
     return blobs
 
 
-def read_github(src: str) -> bytes:
+def source_url() -> str:
+    return os.environ.get(SOURCE_URL_ENV) or f"https://github.com/{REPO}.git"
+
+
+def clone_source(url: str, parent: Path) -> Path:
+    """A full, non-bare clone of url's default branch under parent, for --source=github.
+
+    Full because the history is the point: a file that is merely behind is recognized by
+    matching one of the source's past versions (local_history_blobs), and contents alone
+    cannot do that. The caller owns parent and removes it, clone and all, when the run ends."""
+    clone = parent / "methodology"
     try:
-        result = subprocess.run(
-            ["gh", "api", f"repos/{REPO}/contents/{src}"],
-            capture_output=True, text=True, check=True,
-        )
+        subprocess.run(["git", "clone", "--quiet", url, str(clone)],
+                       capture_output=True, text=True, check=True)
     except FileNotFoundError:
-        sys.exit("error: gh CLI not found; install GitHub CLI or use --source=local")
+        sys.exit("error: git not found; --source=github clones the methodology repository with git")
     except subprocess.CalledProcessError as e:
-        sys.exit(f"error: gh api failed for {src}: {e.stderr.strip() or e.stdout.strip()}\n"
-                 f"hint: run `gh auth login` or use --source=local")
-    payload = json.loads(result.stdout)
-    return base64.b64decode(payload["content"])
+        sys.exit(f"error: could not clone {url}: {e.stderr.strip()}\n"
+                 f"hint: check the network, or sync from a full local checkout with --source=local")
+    return clone
 
 
-def methodology_version(methodology_root: Path, source: str) -> str:
-    if source == "local":
-        try:
-            out = subprocess.run(
-                ["git", "-C", str(methodology_root), "describe", "--tags", "--always"],
-                capture_output=True, text=True, check=True,
-            ).stdout.strip()
-            return out or "local"
-        except (FileNotFoundError, subprocess.CalledProcessError):
-            return "local"
-    # github
+def absent_sources(methodology_root: Path, url: str) -> None:
+    """Exit, naming every distributed file the cloned source lacks, before anything is written.
+
+    A missing file is a version statement, not a fault in the project: this checkout's manifest
+    is ahead of the source, so no complete update is available from it."""
+    srcs = [src for src, _dest, _disp in DISTRIBUTION]
+    absent = [src for src in srcs if not (methodology_root / src).is_file()]
+    if absent:
+        listed = "\n".join(f"    {src}" for src in absent)
+        sys.exit(f"error: {len(absent)} of {len(srcs)} distributed file(s) do not exist in {url} yet:\n"
+                 f"{listed}\n"
+                 f"       The other {len(srcs) - len(absent)} file(s) are there. That repository is "
+                 f"behind this distribution manifest:\n"
+                 f"       those files ship in a version which has not been merged there yet, so no "
+                 f"complete update is available from it.\n"
+                 f"hint: sync from a full local checkout instead — `--source=local` — or wait for "
+                 f"upstream to merge.")
+
+
+def methodology_version(methodology_root: Path) -> str:
     try:
         out = subprocess.run(
-            ["gh", "api", f"repos/{REPO}/commits/main", "--jq", ".sha"],
+            ["git", "-C", str(methodology_root), "describe", "--tags", "--always"],
             capture_output=True, text=True, check=True,
         ).stdout.strip()
-        return f"github:{out[:7]}" if out else "github:main"
+        return out or "local"
     except (FileNotFoundError, subprocess.CalledProcessError):
-        return "github:main"
+        return "local"
+
+
+def git_out(methodology_root: Path, *args: str) -> str:
+    """One git command's stripped stdout in methodology_root, or "" if git fails or is absent."""
+    try:
+        return subprocess.run(["git", "-C", str(methodology_root), *args],
+                              capture_output=True, text=True, check=True).stdout.strip()
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return ""
+
+
+def history_gap(methodology_root: Path, source: str) -> list:
+    """Why this source cannot tell a file that is merely behind from a local edit: the lines
+    that say so, or [] when its history is all there.
+
+    A tracked file matching no version in the source's history is a local edit only if that
+    history is complete. A shallow clone holds its last commits and a downloaded tree (git
+    archive, a release tarball) holds none, so an unmodified older copy matches nothing too."""
+    if not (methodology_root / ".git").exists():
+        return ["  This source cannot tell whether they are merely behind or edited here:",
+                f"  it has no git history (no .git in {methodology_root}), so every version but",
+                "  the canonical one matches nothing, and is refused as if it had been edited.",
+                "  Clone the repository rather than downloading it, and run from the clone:",
+                f"    git clone {source_url()}"]
+    if git_out(methodology_root, "rev-parse", "--is-shallow-repository") != "true":
+        return []
+    n = git_out(methodology_root, "rev-list", "--count", "HEAD")
+    lines = ["  This source cannot tell whether they are merely behind or edited here:",
+             f"  its checkout is shallow ({n} commit{'' if n == '1' else 's'}), so a version older than the",
+             "  commits it holds matches nothing, and is refused as if it had been edited."]
+    if source == "local":
+        return lines + ["  Run from a full clone, or deepen this one:",
+                        f"    git -C {methodology_root} fetch --unshallow"]
+    return lines + ["  Sync from a full clone of it instead, with --source=local."]
 
 
 def ensure_gitignore_entries(project: Path, dry_run: bool) -> list:
@@ -188,7 +251,9 @@ def main() -> int:
     p = argparse.ArgumentParser(description="Sync methodology starter-kit files into a project.")
     p.add_argument("project_path", help="Target project directory")
     p.add_argument("--mode", choices=("commit", "ignore"), help="commit (default) or ignore")
-    p.add_argument("--source", choices=("local", "github"), help="local (default if sibling methodology/ exists) or github")
+    p.add_argument("--source", choices=("local", "github"), help="local (default if sibling methodology/ exists), or github, "
+                                                                 "which clones the repository for this run "
+                                                                 "(needs git and network)")
     p.add_argument("--dry-run", action="store_true", help="Print intent without writing")
     p.add_argument("--force", action="store_true",
                    help="Overwrite files that show local modifications (not matching canonical or any historical version)")
@@ -203,11 +268,26 @@ def main() -> int:
     if source == "local" and not (methodology_root / "starter-kit").is_dir():
         sys.exit(f"error: --source=local but no starter-kit/ at {methodology_root}")
 
+    if source == "local":
+        return sync_from(project, methodology_root, source, str(methodology_root), args)
+    # github: a fresh clone, then exactly the local path over it. The clone lives only as long
+    # as this run, dry run or not.
+    url = source_url()
+    with tempfile.TemporaryDirectory(prefix="methodology-sync-") as parent:
+        clone = clone_source(url, Path(parent))
+        absent_sources(clone, url)
+        return sync_from(project, clone, source, url, args)
+
+
+def sync_from(project: Path, methodology_root: Path, source: str, origin: str, args) -> int:
+    """Sync project from the methodology checkout at methodology_root: the repository this
+    script lives in (--source=local) or a fresh clone of the source (--source=github). origin
+    names where it came from, for the report: the checkout's path, or the URL cloned."""
     mode = args.mode or detect_mode(project)
-    version = methodology_version(methodology_root, source)
+    version = methodology_version(methodology_root)
 
     print(f"sync: {project}")
-    print(f"  source:  {source}" + (f" ({methodology_root})" if source == "local" else ""))
+    print(f"  source:  {source} ({origin})")
     print(f"  mode:    {mode}")
     print(f"  version: {version}")
     if args.dry_run:
@@ -215,14 +295,13 @@ def main() -> int:
 
     entries = []  # (src, dest, disposition, content, classification)
     for src, dest, disp in DISTRIBUTION:
-        content = read_local(methodology_root, src) if source == "local" else read_github(src)
+        content = read_local(methodology_root, src)
         target = project / dest
         if disp == SEED:
             # SEED files are adopter-owned; classification is only present/missing.
             cls = "present" if target.exists() else "missing"
         else:  # TRACKED
-            history = local_history_blobs(methodology_root, src) if source == "local" else set()
-            cls = classify_target(target, content, history)
+            cls = classify_target(target, content, local_history_blobs(methodology_root, src))
         entries.append((src, dest, disp, content, cls))
 
     # Only TRACKED files can block: SEED files are never overwritten, so they
@@ -230,21 +309,40 @@ def main() -> int:
     blocked = [(src, dest) for src, dest, disp, _content, cls in entries
                if disp == TRACKED and cls == "modified"]
     if blocked and not args.force:
+        # "Local modifications" is earned only by a source with its whole history; otherwise
+        # say what the source lacks, which is what the adopter can fix.
+        gap = history_gap(methodology_root, source)
         print("")
-        print("  ERROR: the following files have local modifications that don't match")
-        print("  any canonical or historical version and would be overwritten:")
+        if gap:
+            print("  ERROR: the following files differ from the canonical version and would be overwritten:")
+        else:
+            print("  ERROR: the following files have local modifications that don't match")
+            print("  any canonical or historical version and would be overwritten:")
         for _src, dest in blocked:
             print(f"    {dest}")
         print("")
-        print("  The recommended pattern (see plan §3.2) is to move per-project")
-        print("  customizations into CLAUDE.md's 'Project-Specific Methodology")
-        print("  Adaptations' section, keeping synced files byte-identical to canonical.")
-        print("")
-        print("  To proceed anyway and overwrite local changes, pass --force.")
-        print("  To inspect the drift first:")
-        for src, dest in blocked:
-            if source == "local":
+        if gap:
+            print("\n".join(gap))
+            print("")
+            print("  To proceed anyway and overwrite them, pass --force.")
+        else:
+            print("  The recommended pattern (see plan §3.2) is to move per-project")
+            print("  customizations into CLAUDE.md's 'Project-Specific Methodology")
+            print("  Adaptations' section, keeping synced files byte-identical to canonical.")
+            print("")
+            print("  To proceed anyway and overwrite local changes, pass --force.")
+        if source == "local":
+            print("  To inspect the drift first:")
+            for src, dest in blocked:
                 print(f"    diff {project / dest} {methodology_root / src}")
+        else:
+            # The clone is removed when this run ends, so the hint makes its own, at the commit read.
+            sha = git_out(methodology_root, "rev-parse", "--short", "HEAD")
+            where = f"methodology-{sha}"
+            print("  To inspect the drift first, clone the source at the commit this run read:")
+            print(f"    git clone {origin} {where} && git -C {where} checkout -q {sha}")
+            for src, dest in blocked:
+                print(f"    diff {project / dest} {where}/{src}")
         return 2
 
     file_results = []

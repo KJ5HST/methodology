@@ -58,7 +58,7 @@ Pre-Flight → Research → Create → Present → Implement → Verify & Close
 Each phase is gated. You cannot enter the next phase until the current one is complete. The most valuable gate is between Present and Implement: no implementation begins without stakeholder approval.
 
 ## Quick Start
-*NOTE: The absolute fastest way to use this is to tell Claude (or other service), "Use this methodology: https://github.com/KJ5HST/methodology". Claude will pull it down and put it in place for you. To update an existing project to the latest version, use the same approach: "Update methodology using https://github.com/KJ5HST/methodology".*
+*NOTE: The absolute fastest way to use this is to tell Claude (or other service), "Use this methodology: https://github.com/KJ5HST/methodology". Claude will pull it down and put it in place for you. To update an existing project to the latest version, use the same approach: "Update methodology using https://github.com/KJ5HST/methodology" — have it run `bin/sync` from a full clone of the repository, or `bin/sync --source=github`, which clones one for the run; either carries the git history that recognizes a file you have not edited as merely behind, so it is updated rather than refused.*
 
 > **Important:** After setup completes, start a **new session** before giving Claude real work. Claude Code reads `CLAUDE.md` at session start — changes made during setup don't take effect until the next session. If you say "go" in the same session, Claude will work without the protocol.
 
@@ -69,7 +69,7 @@ Each phase is gated. You cannot enter the next phase until the current one is co
 ```bash
 ../methodology/bin/sync your-project/             # committed mode (default)
 ../methodology/bin/sync your-project/ --mode=ignore  # or: multi-project operator mode
-../methodology/bin/sync your-project/ --source=github  # or: pull from GitHub (needs gh CLI)
+../methodology/bin/sync your-project/ --source=github  # or: pull from GitHub (needs git and network)
 ```
 
 This copies the full methodology corpus into the target: the operating files (`SESSION_RUNNER.md`, `FRAMEWORK_LEARNINGS.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, and the four tools `methodology_dashboard.py`, `methodology_trim.py`, `context_budget.py`, `quality_ratchet.py`) to the project root, and the framework (`ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md`, `workstreams/`) to `docs/methodology/`. These are kept current on every run. `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, `ROADMAP.md`, and the two gate configs `.context-budget.json` and `.quality-gates.json` are *seeded* at the root only when absent — once they exist they are yours and `bin/sync` never overwrites them. See [`starter-kit/BOOTSTRAP.md`](starter-kit/BOOTSTRAP.md) for the difference between committed and ignored modes.

@@ -97,6 +97,7 @@ OUTPUT="$("$BIN/sync" "$P" 2>&1)"; RC=$?
 [ "$RC" != "0" ] && pass "sync exits non-zero when local drift present" || fail "sync exited 0 despite local drift"
 echo "$OUTPUT" | grep -q "ERROR" && pass "sync prints ERROR on local drift" || fail "no ERROR printed"
 echo "$OUTPUT" | grep -q -- "--force" && pass "ERROR mentions --force" || fail "ERROR missing --force hint"
+echo "$OUTPUT" | grep -q "local modifications" && pass "a full-history source blames local modifications" || fail "ERROR no longer names local modifications"
 [ "$(cat "$P/SESSION_RUNNER.md")" = "$BEFORE" ] && pass "file unchanged when blocked" || fail "file modified despite block"
 
 # --force proceeds
@@ -115,13 +116,16 @@ if [ -n "$OLDER_COMMIT" ]; then
 fi
 rm -rf "$P"
 
-echo "== Test 9: github source (requires gh auth; skipped if unauthenticated) =="
-if gh auth status >/dev/null 2>&1; then
+echo "== Test 9: github source (needs the network; skipped if the repository is unreachable) =="
+# --source=github clones the repository over HTTPS, so the guard is reachability, not gh auth. The
+# timeout keeps a machine with no route to GitHub from hanging the suite.
+URL="${METHODOLOGY_SOURCE_URL:-https://github.com/KJ5HST/methodology.git}"
+if python3 -c 'import subprocess, sys; sys.exit(subprocess.run(["git", "ls-remote", "--exit-code", "-h", sys.argv[1]], capture_output=True, timeout=30).returncode)' "$URL" >/dev/null 2>&1; then
     P="$(mktemp_project)"
     "$BIN/sync" "$P" --source=github --dry-run >/dev/null && pass "github source dry-run works" || fail "github source dry-run failed"
     rm -rf "$P"
 else
-    echo "  SKIP: gh unauthenticated"
+    echo "  SKIP: $URL unreachable"
 fi
 
 echo "== Test 10: distributed-file links resolve in the simulated adopter tree =="
@@ -814,6 +818,209 @@ sed -i.bak 's|runtime_smoke: n/a — docs-only|runtime_smoke: quality_ratchet: 1
     && pass "check-handoff: a cited gate run satisfies the lint" \
     || fail "check-handoff rejected a receipt that cites its gate run"
 rm -rf "$P"
+
+echo "== Test 26: status and sync recognise a version a merge hid from the default walk (RED-first) =="
+# Git's default history walk follows only a merge's TREESAME parent, so a version on the side a merge
+# did not keep is never visited: bin/status read it as "locally modified" and bin/sync refused it.
+# The fixture is a methodology repo with both shapes, on one tracked file:
+#   B: main's own v2, then a merge that takes a side branch's v3a -> v3, hiding v2;
+#   A: a side branch's v4side, then a merge that keeps main's v5, hiding v4side.
+# Dates are fixed, because the full walk orders by commit date and ties would make it unstable.
+# N counts the versions that landed on the checkout's first-parent line, so v1 is 3
+# behind (v2, v3, v5), not 5 (every distinct version) or 7 (its position in the full walk).
+F=starter-kit/SAFEGUARDS.md
+D=SAFEGUARDS.md
+T0=1700000000
+mh_git() {  # mh_git <seconds after T0> <git args...>
+    local t=$((T0 + $1)); shift
+    GIT_AUTHOR_DATE="@$t +0000" GIT_COMMITTER_DATE="@$t +0000" \
+        git -C "$M" -c user.email=t@t -c user.name=t -c commit.gpgsign=false "$@"
+}
+mh_fixture() {  # build the fixture in a fresh $M; Test 27 serves the same repo as its source
+    M="$(mktemp -d)"
+    git -C "$M" init -q -b main
+    mkdir -p "$M/bin"
+    cp "$BIN/sync" "$BIN/status" "$BIN/_manifest.py" "$M/bin/"
+    python3 -c "import sys; sys.path.insert(0, '$BIN'); import _manifest; print('\n'.join(s for s, _d, _x in _manifest.DISTRIBUTION))" \
+        | while read -r src; do mkdir -p "$M/$(dirname "$src")"; cp "$METHODOLOGY/$src" "$M/$src"; done
+    printf 'v1\n' > "$M/$F"; git -C "$M" add -A; mh_git 1 commit -qm c1
+    git -C "$M" checkout -qb side1
+    printf 'v3a\n' > "$M/$F"; mh_git 3 commit -qam s1
+    printf 'v3\n' > "$M/$F"; mh_git 4 commit -qam s2
+    git -C "$M" checkout -q main
+    printf 'v2\n' > "$M/$F"; mh_git 2 commit -qam c2
+    mh_git 5 merge -q -X theirs side1 -m mB >/dev/null
+    git -C "$M" checkout -qb side2
+    printf 'v4side\n' > "$M/$F"; mh_git 6 commit -qam t1
+    git -C "$M" checkout -q main
+    printf 'v5\n' > "$M/$F"; mh_git 7 commit -qam c3
+    mh_git 8 merge -q -s ours side2 -m mA >/dev/null
+}
+mh_fixture
+# Prove the fixture before trusting it: v5 is canonical, and the default walk misses exactly c2 and t1.
+N_DEFAULT="$(git -C "$M" log --format=%H -- "$F" | wc -l | tr -d ' ')"
+N_FULL="$(git -C "$M" log --full-history --format=%H -- "$F" | wc -l | tr -d ' ')"
+N_FP="$(git -C "$M" log --first-parent --format=%H -- "$F" | wc -l | tr -d ' ')"
+[ "$(cat "$M/$F")" = "v5" ] && pass "fixture: canonical is v5 after both merges" || fail "fixture: canonical is '$(cat "$M/$F")', not v5"
+[ "$N_DEFAULT/$N_FULL/$N_FP" = "4/8/4" ] \
+    && pass "fixture: the walks visit 4 (default) / 8 (full history) / 4 (first parent) commits" \
+    || fail "fixture: the walks visit $N_DEFAULT/$N_FULL/$N_FP commits, not 4/8/4 -- the merges lack the hiding shape"
+P="$(mktemp_project)"
+"$M/bin/sync" "$P" --mode=commit --source=local >/dev/null
+mh_status() {
+    "$M/bin/status" --source=local "$P" \
+        | awk -v d="$D" '$2 == d { $1 = $2 = $3 = ""; sub(/^ +/, ""); sub(/ +$/, ""); print }'
+}
+mh_expect() {  # mh_expect <content> <expected status> <what>
+    printf '%s\n' "$1" > "$P/$D"
+    local got; got="$(mh_status)"
+    [ "$got" = "$2" ] && pass "status: $1 ($3) reads '$2'" || fail "status: $1 ($3) reads '$got', not '$2'"
+}
+mh_expect v5 "current" "canonical"
+mh_expect v2 "2 versions behind" "main's own version, hidden by merge B"
+mh_expect v4side "1 version behind" "a side version merge A discarded; no main-line position, so the full walk counts"
+mh_expect v3 "1 version behind" "landed by merge B; the side branch's two commits are one main-line version"
+mh_expect v1 "3 versions behind" "the root; merged branches' own commits are not main-line versions"
+mh_expect v2-local "locally modified" "never in history"
+mh_sync() {  # mh_sync <content> <expected rc> <expected content after> <what>
+    printf '%s\n' "$1" > "$P/$D"
+    "$M/bin/sync" "$P" --source=local >/dev/null 2>&1; local rc=$?
+    local after; after="$(cat "$P/$D")"
+    [ "$rc/$after" = "$2/$3" ] && pass "sync: $1 ($4) exits $2 and leaves $3" \
+        || fail "sync: $1 ($4) exits $rc and leaves $after, not $2 and $3"
+}
+mh_sync v2 0 v5 "hidden by merge B, upgraded without --force"
+mh_sync v4side 0 v5 "hidden by merge A, upgraded without --force"
+mh_sync v2-local 2 v2-local "a real local edit is still refused"
+rm -rf "$M" "$P"
+
+echo "== Test 27: --source=github clones its source, so it recognises every version Test 26 does (RED-first) =="
+# --source=github read each file's contents alone, through the GitHub API, and classified the project's copy
+# against an EMPTY history, so a file that was merely behind read "locally modified" and sync refused it:
+# the one case an update exists for. It now clones the source into a temporary directory and runs the
+# --source=local code over that clone. METHODOLOGY_SOURCE_URL points it at a bare clone of Test 26's
+# fixture, so this test needs neither the network nor gh; TMPDIR is fresh so the clone's removal can be seen.
+# The URL is file://, not a bare path: git clones a plain path by copying the repository and ignores
+# --depth, so a shallow clone -- which would lose the history this route exists for -- would pass unseen.
+mh_fixture
+S="$(mktemp -d)/methodology.git"
+git clone -q --bare "$M" "$S"
+U="file://$S"
+SHORT="$(git -C "$S" rev-parse --short=7 HEAD)"
+TMPD="$(mktemp -d)"
+P="$(mktemp_project)"
+"$M/bin/sync" "$P" --mode=commit --source=local >/dev/null
+gs_status() {
+    TMPDIR="$TMPD" METHODOLOGY_SOURCE_URL="$U" "$BIN/status" --source=github "$P" 2>&1 \
+        | awk -v d="$D" '$2 == d { $1 = $2 = $3 = ""; sub(/^ +/, ""); sub(/ +$/, ""); print }'
+}
+gs_expect() {  # gs_expect <content> <expected status> <what>
+    printf '%s\n' "$1" > "$P/$D"
+    local got; got="$(gs_status)"
+    [ "$got" = "$2" ] && pass "github status: $1 ($3) reads '$2'" || fail "github status: $1 ($3) reads '$got', not '$2'"
+}
+gs_expect v5 "current" "canonical"
+gs_expect v2 "2 versions behind" "hidden by merge B"
+gs_expect v4side "1 version behind" "discarded by merge A; counted along the full walk"
+gs_expect v3 "1 version behind" "landed by merge B"
+gs_expect v1 "3 versions behind" "the root"
+gs_expect v2-local "locally modified" "never in history"
+gs_sync() {  # gs_sync <content> <expected rc> <expected content after> <what>
+    printf '%s\n' "$1" > "$P/$D"
+    TMPDIR="$TMPD" METHODOLOGY_SOURCE_URL="$U" "$BIN/sync" "$P" --source=github >/dev/null 2>&1; local rc=$?
+    local after; after="$(cat "$P/$D")"
+    [ "$rc/$after" = "$2/$3" ] && pass "github sync: $1 ($4) exits $2 and leaves $3" \
+        || fail "github sync: $1 ($4) exits $rc and leaves $after, not $2 and $3"
+}
+gs_sync v2 0 v5 "hidden by merge B, upgraded without --force"
+gs_sync v4side 0 v5 "hidden by merge A, upgraded without --force"
+gs_sync v3 0 v5 "landed by merge B, upgraded"
+gs_sync v1 0 v5 "the root, upgraded"
+gs_sync v2-local 2 v2-local "a real local edit is still refused"
+printf 'v2\n' > "$P/$D"
+OUT="$(TMPDIR="$TMPD" METHODOLOGY_SOURCE_URL="$U" "$BIN/sync" "$P" --source=github --dry-run 2>&1)"; RC=$?
+[ "$RC" = "0" ] && pass "github sync --dry-run: exit 0 on a file that is merely behind" || fail "github sync --dry-run: exit $RC"
+printf '%s\n' "$OUT" | grep -qxF "  source:  github ($U)" \
+    && pass "github sync names the URL it cloned" || fail "github sync's source line does not name $U"
+printf '%s\n' "$OUT" | grep -q "^  version: .*$SHORT" && ! printf '%s\n' "$OUT" | grep -q '^  version: github:' \
+    && pass "github sync reports the clone's own version ($SHORT)" || fail "github sync's version line is not the clone's"
+[ "$(cat "$P/$D")" = "v2" ] && pass "github sync --dry-run wrote nothing" || fail "github sync --dry-run wrote $P/$D"
+[ -z "$(ls -A "$TMPD")" ] && pass "every run removed its temporary clone" || fail "a temporary clone was left in $TMPD: $(ls -A "$TMPD")"
+rm -rf "$M" "$(dirname "$S")" "$TMPD" "$P"
+
+echo "== Test 28: --source=github names every distributed file its source lacks, before writing anything (RED-first) =="
+# A source behind this checkout's manifest -- a file added here and not merged there -- is a version
+# statement about the source, not a local fault: say so, list every missing file, and write nothing.
+mh_fixture
+GONE=starter-kit/RECOMMENDED_SKILLS.md
+git -C "$M" rm -q "$GONE"; mh_git 9 commit -qm "drop one distributed file"
+S="$(mktemp -d)/methodology.git"
+git clone -q --bare "$M" "$S"
+U="file://$S"
+P="$(mktemp_project)"
+OUT="$(METHODOLOGY_SOURCE_URL="$U" "$BIN/sync" "$P" --source=github 2>&1)"; RC=$?
+[ "$RC" = "1" ] && pass "github sync: a source missing a distributed file exits 1" || fail "github sync: exit $RC, not 1"
+printf '%s\n' "$OUT" | grep -qxF "    $GONE" && printf '%s\n' "$OUT" | grep -q "1 of [0-9]* distributed file(s) do not exist in $U" \
+    && pass "github sync: the inventory names the missing file and its source" || fail "github sync: no inventory naming $GONE -- got: $OUT"
+[ -z "$(ls -A "$P" | grep -vx .git)" ] && pass "github sync: nothing written before the inventory" \
+    || fail "github sync wrote into the project before refusing: $(ls -A "$P" | tr '\n' ' ')"
+OUT="$(METHODOLOGY_SOURCE_URL="$U" "$BIN/status" --source=github "$P" 2>&1)"; RC=$?
+[ "$RC" = "1" ] && printf '%s\n' "$OUT" | grep -qxF "    $GONE" \
+    && pass "github status: the same inventory, exit 1" || fail "github status: exit $RC, output: $OUT"
+rm -rf "$M" "$(dirname "$S")" "$P"
+
+echo "== Test 29: a source without its history is named as the cause, not the project's files (RED-first) =="
+# A file that matches no version in the source's history is a local edit only if that history is all
+# there. A shallow clone holds its last commits and a downloaded tree holds none, so an unmodified older
+# copy was refused as "local modifications". The refusal now says what the source lacks. v1 is the
+# fixture's root version, merely behind: a full-history source upgrades it (the control, last).
+mh_fixture
+P="$(mktemp_project)"
+"$M/bin/sync" "$P" --mode=commit --source=local >/dev/null
+printf 'v1\n' > "$P/$D"
+H="$(cd "$(mktemp -d)" && pwd -P)"  # resolved, as bin/sync prints its own root (/var is /private/var on macOS)
+git clone -q --depth 1 "file://$M" "$H/shallow"  # file://, or git copies the repository and ignores --depth
+mkdir "$H/tarball"; git -C "$M" archive HEAD | tar -x -C "$H/tarball"
+[ "$(git -C "$H/shallow" rev-parse --is-shallow-repository)" = "true" ] && [ ! -e "$H/tarball/.git" ] \
+    && cmp -s "$H/shallow/bin/sync" "$BIN/sync" && cmp -s "$H/tarball/bin/sync" "$BIN/sync" \
+    && pass "fixture: a shallow clone and a tree with no .git, each carrying the sync under test" \
+    || fail "fixture: the clone is not shallow, the tree has a .git, or a copy of bin/sync differs"
+hs_refuse() {  # hs_refuse <source tree> <sentence naming the cause> <what>
+    local out rc
+    out="$("$1/bin/sync" "$P" --source=local 2>&1)"; rc=$?
+    [ "$rc" = "2" ] && pass "$3: exit 2" || fail "$3: exit $rc, not 2"
+    grep -qF "$2" <<<"$out" && pass "$3: the refusal says '$2'" || fail "$3: no '$2' in the refusal: $out"
+    ! grep -q "local modifications" <<<"$out" && pass "$3: no claim of local modifications" \
+        || fail "$3: the refusal still blames local modifications"
+    [ "$(cat "$P/$D")" = "v1" ] && pass "$3: nothing written" || fail "$3: $P/$D was rewritten"
+}
+hs_refuse "$H/shallow" "is shallow (1 commit)" "shallow source"
+git clone -q --depth 2 "file://$M" "$H/shallow2"  # depth 2 reaches both of the merge's parents
+N2="$(git -C "$H/shallow2" rev-list --count HEAD)"
+hs_refuse "$H/shallow2" "is shallow ($N2 commits)" "a deeper shallow source"
+hs_refuse "$H/tarball" "has no git history" "source with no .git"
+OUT="$("$H/shallow/bin/sync" "$P" --source=local 2>&1)"
+grep -qF "git -C $H/shallow fetch --unshallow" <<<"$OUT" \
+    && pass "shallow source: the refusal gives the command that deepens it" || fail "shallow source: no fetch --unshallow command for $H/shallow"
+OUT="$("$H/tarball/bin/sync" "$P" --source=local 2>&1)"
+grep -qxF "    git clone ${METHODOLOGY_SOURCE_URL:-https://github.com/KJ5HST/methodology.git}" <<<"$OUT" \
+    && pass "source with no .git: the refusal gives the clone command" || fail "source with no .git: no clone command in the refusal"
+# --source=github: its clone is gone when the run ends, so the hint must work without it. Run the hint
+# as printed, from an empty directory: diff exits 1 only if both files exist and differ (2 = missing).
+git clone -q --bare "$M" "$H/methodology.git"
+printf 'v2-local\n' > "$P/$D"
+OUT="$(METHODOLOGY_SOURCE_URL="file://$H/methodology.git" "$BIN/sync" "$P" --source=github 2>&1)"
+HINT="$(grep -A3 "To inspect the drift first" <<<"$OUT")"
+mkdir "$H/inspect"
+( cd "$H/inspect" && eval "$(grep '^    git clone ' <<<"$HINT")" ) >/dev/null 2>&1; RC_CLONE=$?
+( cd "$H/inspect" && eval "$(grep '^    diff ' <<<"$HINT")" ) >/dev/null 2>&1; RC_DIFF=$?
+grep -qF "git clone file://$H/methodology.git " <<<"$HINT" && [ "$RC_CLONE/$RC_DIFF" = "0/1" ] \
+    && pass "github refusal: the inspect hint, run after the run, clones the source and diffs the edit" \
+    || fail "github refusal: the inspect hint does not work once the run is over (clone $RC_CLONE, diff $RC_DIFF): $HINT"
+printf 'v1\n' > "$P/$D"
+"$M/bin/sync" "$P" --source=local >/dev/null 2>&1 && [ "$(cat "$P/$D")" = "v5" ] \
+    && pass "control: the full-history source upgrades the same file" || fail "control: the full-history source did not upgrade v1"
+rm -rf "$M" "$H" "$P"
 
 echo ""
 echo "== Summary: $PASS passed, $FAIL failed =="

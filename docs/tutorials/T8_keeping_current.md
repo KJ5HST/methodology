@@ -160,7 +160,7 @@ Two habits turn this into maintenance you don't think about:
 
   ```sh
   git -C "$METH" pull                 # bring the checkout to the latest release, THEN status/sync
-  "$METH"/bin/status . --source=github   # or: compare straight against canonical on GitHub (needs gh CLI)
+  "$METH"/bin/status . --source=github   # or: compare straight against canonical on GitHub (needs git and network)
   ```
 
 Keeping current is cheap and fully reversible — the **lighter default** the [Matching Reasoning Effort to Stakes](../../ITERATIVE_METHODOLOGY.md#matching-reasoning-effort-to-stakes) rule reserves for low-blast-radius work. The deep reasoning belongs to the sessions this maintenance *protects*, not to the sync itself.

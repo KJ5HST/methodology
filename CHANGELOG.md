@@ -105,6 +105,141 @@ Reverse-chronological, newest on top; prepend-only. Promote to `## YYYY-MM` sect
   it starts from; `bin/check-links` resolves 107 links; `quality_ratchet.py --run` reports **10/10 pass**. The
   change is prose in one file and no gate moves.
 
+### 2026-09-26 · [ad hoc] The suite's ratchet floor rises to what this branch measures
+
+- **Why:** this branch adds 49 assertions to `bin/tests.sh`, and `.quality-gates.json` still floored
+  `tests-sh-passed` at the count from before them. The ratchet therefore protected none of the new tests — a later
+  change that silently removed all 49 would still have passed the gate.
+- **Measured, not assumed:** `bash bin/tests.sh` reports **139 passed, 0 failed** in a clone of the commit this
+  branch starts from and **188 passed, 0 failed** in a clone of its tip. Diffing the two runs' `PASS:` lines names
+  49 assertions present only on the branch and **none** of the base's missing from it. The floor becomes 188.
+- **Tightening only, and the guard is live:** `quality_ratchet.py --precommit` accepts the change (exit 0) and
+  refuses the same line lowered by one (exit 2, *"gate 'tests-sh-passed': floor lowered 139 -> 138"*), so the check
+  was exercised on this tree rather than assumed to work. `--run` reports 10/10 pass with the new floor met exactly.
+- **A later merge cannot invalidate it:** the gate is a minimum, and every other change in flight adds tests rather
+  than removing them. Where another one raises this same line to a lower number, a minimum resolves to the larger.
+
+### 2026-09-22 · [ad hoc] The documents say what the update route now does, and stop requiring the `gh` CLI
+
+- **Why:** two earlier changes on this branch made `--source=github` clone the repository and made `bin/sync`'s
+  refusal name a source that has no history to compare against. The prose still described the route as it behaved
+  before: it required the `gh` CLI, and it told readers to *prefer* `--source=local` because only a local checkout
+  carried the history that recognizes a file as merely behind. Both statements are now false.
+- **The `gh` CLI is no longer required, and four documents said it was:** `README.md`'s Option A, the sync block in
+  `starter-kit/BOOTSTRAP.md`, and the `--source=github` lines in `docs/tutorials/T1_setup.md` and
+  `docs/tutorials/T8_keeping_current.md` now say *needs git and network*. Both `--source` help strings say what
+  `github` does — it clones the repository for the run.
+- **Either source now carries the history:** `BOOTSTRAP.md`'s *Updating an existing project* paragraph no longer
+  prefers `--source=local`. It says both sources carry the history that recognizes a file as merely behind, keeps the
+  sentence about a shallow clone or a downloaded tarball, and points that sentence at the refusal that now names it
+  rather than reporting it against the reader's files.
+- **`README.md`'s Quick Start note** keeps its wording and gains one clause: where to run `bin/sync` from, and that
+  either source recognizes an unedited file that is merely behind, so it is updated rather than refused.
+- **`BOOTSTRAP.md` troubleshooting** gains the second cause a reader can now meet — a shallow or history-less source —
+  beside the *locally modified* entry that was the only one there.
+- **Scope:** prose and two help strings only; no behaviour changes. `bin/check-links` OK, 107 links.
+
+### 2026-09-22 · [ad hoc] `bin/sync`: a source without its history is named as the refusal's cause, not the project's files
+
+- **The defect:** `bin/sync` refuses a tracked file that matches neither the canonical version nor any version in
+  the source's history, and says it has *local modifications*. That is earned only when the history is complete. From
+  a shallow clone or a downloaded tree it said the same of files that were merely behind: a project installed from
+  `008d656` and never edited had 9 files refused as local modifications, exit 2, by `bin/sync --source=local
+  --dry-run` from a depth-1 clone of this branch and from a `git archive` of it. `starter-kit/BOOTSTRAP.md` already
+  says a shallow clone or a tarball loses that history; the refusal did not.
+- **The fix:** before refusing, `bin/sync` asks its source what history it has. No `.git`: the refusal says the source
+  has no git history and prints the `git clone` command. `git rev-parse --is-shallow-repository` true: it says the
+  checkout is shallow and how many commits it holds, and prints `git -C <source> fetch --unshallow`. In both, the
+  header says the files *differ from the canonical version*, the `CLAUDE.md` paragraph (which presumes an edit) is
+  left out, and the exit stays 2. A source with its full history prints exactly the text it did.
+- **The `--source=github` hint:** it printed *"To inspect the drift first:"* over no lines, because its commands would
+  have named the clone, which is removed when the run ends. It now prints a clone of the source pinned to the commit
+  the run read (`git clone <url> methodology-<sha> && git -C methodology-<sha> checkout -q <sha>`) and one `diff` per
+  file against it.
+- **Tests, written red first:** Test 29 takes Test 26's fixture three ways — a depth-1 and a depth-2 clone over
+  `file://`, and a `git archive` of it — with a project holding the fixture's oldest version, merely behind. Each
+  source exits 2, names its cause (with the commit count, 1 and 3), writes nothing, and never says *local
+  modifications*; the shallow refusal prints the `fetch --unshallow` command and the tarball's the clone command. For
+  `--source=github` the test runs the printed hint after the run, from an empty directory: the clone succeeds and
+  `diff` exits 1 on the edit. The control: a full-history source upgrades the same file. Test 7 now also asserts
+  that a full-history source still says *local modifications*. On the unfixed script 9 of the 55 checks in Tests 7
+  and 26–29 fail, all of them new; the controls pass.
+- **Mutants, run:** thirteen — each cause's detection disabled, the cause ignored, each header's wording swapped, the
+  github hint's diff aimed at the removed clone, its pin wrong, the hint given the local form or dropped, the
+  `fetch --unshallow` path dropped, the commit count hard-coded, its plural forced, and the clone command dropped.
+  All thirteen fail at least one check; unmutated, 55 / 0.
+- **Live (one run each):** from the `008d656` project, the depth-1 clone and the tarball each refused its 9 files
+  with its own cause, exit 2. Against `https://github.com/KJ5HST/methodology.git`, a project with one edited file:
+  exit 2 with the full-history text, and the printed hint, run by hand, cloned `6b29d3d` and `diff` showed the edit.
+- **Not changed here:** `bin/status` from a history-less source still reads a merely-behind file as *locally
+  modified*; the `--help` text and the documents.
+
+### 2026-09-21 · [ad hoc] `bin/sync` and `bin/status`: `--source=github` clones the repository, so a file that is merely behind is recognized
+
+- **The defect:** `--source=github` read each distributed file's contents through the GitHub API and nothing else,
+  then classified the project's copy against an empty history. A file that was merely behind matched no known
+  version, so `bin/sync` refused it as a *local modification* (exit 2) and `bin/status` read it as *locally
+  modified*: the one case an update exists for. On a project installed from `008d656` and never edited, updated
+  toward `6b29d3d`, `bin/sync --source=github --dry-run` refused 9 files, exit 2, in 12.3 s (one run). The history
+  walk for this source was deferred when the full distribution was added (issue #32), with `--source=local` kept as
+  the supported update path.
+- **The fix:** `--source=github` makes a full clone of `https://github.com/KJ5HST/methodology.git` into a temporary
+  directory, or of `METHODOLOGY_SOURCE_URL` when it is set (anything `git clone` accepts), and runs exactly the
+  `--source=local` code over the clone: the same reads, the same full-history walk, the same `git describe`. The
+  directory is removed when the run ends, dry run or not. Both scripts, one mechanism. The `gh` calls are gone, so a
+  public repository needs neither the GitHub CLI nor authentication; a private mirror uses git's own credentials.
+- **What a user sees change:** the source line names the URL cloned (`source:  github (https://…)`), and `version:`
+  is the clone's `git describe` (`v3.7-68-g6b29d3d`) rather than `github:<sha>`. A distributed file the source lacks
+  (this checkout's manifest is ahead of it) is listed with every other such file before anything is written, exit 1,
+  in both scripts; `bin/sync` used to stop at the first one with a `gh auth login` hint.
+- **Tests, written red first:** Test 27 serves Test 26's fixture (both merge-hiding shapes) as a `file://` bare
+  repository through `METHODOLOGY_SOURCE_URL`, and checks every version the way Test 26 does, through
+  `--source=github`: 6 status rows and 5 sync outcomes, a real local edit still refused, plus the source and
+  version lines, a dry run that writes nothing, and no temporary clone left behind. Test 28 removes one distributed
+  file from the fixture: both scripts name it, exit 1, and nothing is written. On the unfixed scripts the two tests
+  fail 16 of their 20 checks; the 4 that pass are the controls. Test 26's fixture moved into a function the two
+  share, with its assertions unchanged. Test 9's guard is now the URL's reachability (`git ls-remote`, 30 s timeout)
+  instead of `gh auth status`.
+- **Mutants, run:** nine — a `--depth 1` clone in each script, the inventory skipped in each, the URL override
+  ignored, the temporary clone left behind by each, and the github route given no history in each. Tests 26–28
+  fail on all nine and pass unmutated (31 / 0). The two `--depth 1` mutants passed until the fixture was served as
+  `file://` rather than a plain path: git ignores `--depth` when it clones a plain path.
+- **Live, against this repository (one run):** the same project from `008d656`: `bin/sync --source=github --dry-run`
+  exit 0, 10 files would be written, `version: v3.7-68-g6b29d3d`, 1.6 s; `bin/status --source=github` 9 rows
+  *N versions behind*, 0 *locally modified*, 1.9 s.
+- **Not changed here:** the refusal text for a source that has no history of its own (a shallow clone, a downloaded
+  tarball), the *"To inspect the drift first:"* header this route prints over no lines, the `--help` text, and the
+  documents that describe the route.
+
+### 2026-09-21 · [ad hoc] `bin/status` and `bin/sync`: the history walks look up blobs in one batched call
+
+- **Why:** the full-history walk the entry below adds visits more than twice the commits the default walk did, and
+  both tools ran one `git ls-tree` subprocess per commit. Against six adopter projects, `bin/status` went from 3.0 s
+  to 10.1 s and one project's `bin/sync --dry-run` from 2.9 s to 7.5 s.
+- **The change:** one `git cat-file --batch-check` per walk, fed `<commit>:<path>` lines: `bin/status`'s new
+  `blobs_at()`, used by `history_walk()`, and `bin/sync`'s `local_history_blobs()`. A separate commit from the fix, so
+  it can be judged, or dropped, on its own.
+- **Behaviour-neutral:** on the fork where it was first measured, `bin/status` output over the six projects was
+  byte-identical to the fix's (174 rows), and `bin/sync --dry-run` output identical apart from the `version:` line,
+  with the same exit codes. Run time after: `bin/status` 4.0 s, that `bin/sync --dry-run` 2.3 s. Test 26 unchanged.
+
+### 2026-09-21 · [ad hoc] `bin/status` and `bin/sync`: a version a merge hid from git's default walk is recognized again
+
+- **The defect:** both tools listed a file's past versions with a plain `git log -- <path>`, which follows only a
+  merge's TREESAME parent. A version on the side a merge did not keep was never visited, so an unmodified copy of it
+  read *locally modified* and `bin/sync` refused it (exit 2).
+- **The fix:** `bin/sync`'s `local_history_blobs()` walks with `--full-history`; it only asks whether a version is
+  known. `bin/status` walks twice, sharing a commit → blob cache: the first-parent line (`--first-parent`) and the
+  full history. *N versions behind* counts the distinct versions newer than the project's along the first-parent
+  line, and falls back to the full walk for a version that only ever existed on a merged branch.
+- **Test 26, written red first:** a methodology repository with both hiding shapes on one tracked file (a merge that
+  takes a side branch's content, and one that keeps main's), at fixed commit dates. It proves the shapes (the walks
+  visit 4 / 8 / 4 commits), then pins 6 status rows and 3 sync outcomes, including a real local edit that must still
+  be refused.
+- **Provenance:** made and measured first on a fork of this repository, where running the fixed tools against six
+  adopter projects turned 8 misread files from *locally modified* into *N versions behind* and left the 3 genuine
+  local edits refused. Carried here with the test renumbered and three comments reworded; the logic is unchanged.
+
 ### 2026-09-16 · [ad hoc] PR #82 merged — post-merge verification on main and the first tightening
 
 - **Action:** the operator merged [PR #82](https://github.com/KJ5HST/methodology/pull/82) (quality ratchet,

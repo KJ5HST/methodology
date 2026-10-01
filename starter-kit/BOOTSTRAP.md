@@ -65,7 +65,7 @@ If you have a local `methodology/` checkout (sibling to your projects), use the 
 # Preview without writing
 ../methodology/bin/sync your-project/ --dry-run
 
-# Pull from GitHub if you don't have a sibling methodology checkout (requires gh CLI)
+# Pull from GitHub if you don't have a sibling methodology checkout (requires git and network)
 ../methodology/bin/sync your-project/ --source=github
 ```
 
@@ -82,7 +82,7 @@ Check status with `bin/status`:
 
 You'll see `current`, `N versions behind`, `locally modified`, or `missing` per file.
 
-**Updating an existing project from an earlier methodology version:** re-run `bin/sync`. Prefer `--source=local` from a *full* methodology checkout — an unmodified file that matches an older canonical version is recognized as upgradable and updated cleanly with no `--force`; a shallow clone or a downloaded tarball loses that git history, so the same files look "locally modified" and are held back. Run `bin/status` first: it shows which tracked files are `N versions behind`, and it flags any seed whose *format* predates the current methodology as `present (stale format)` (with a one-line migration note beneath the table) so the format lag is surfaced rather than silent. **Seed files do not update:** because `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, and `ROADMAP.md` are seeded-once and never overwritten, a project moving up from an earlier methodology keeps its existing copies — including their *format*. So if you are adopting the authoritative action-ledger `CHANGELOG.md` (methodology v3.1+) over an older changelog, `bin/status` marks it `present (stale format)` and sync leaves your file untouched **by design**: reconcile its header and per-entry format against the current `starter-kit/CHANGELOG.md` seed by hand, or — if it holds no history worth keeping — delete it and re-run `bin/sync` to reseed the current shape.
+**Updating an existing project from an earlier methodology version:** re-run `bin/sync`. Either source carries the git history that recognizes a file as merely behind: `--source=local` from a *full* methodology checkout, and `--source=github`, which clones the repository for the run. An unmodified file that matches an older canonical version is recognized as upgradable and updated cleanly with no `--force`. A shallow clone or a downloaded tarball is not a full checkout — it loses that history, so the same files would look "locally modified"; `bin/sync` names that missing history as the cause and prints the command that repairs it, rather than reporting it against your files. Run `bin/status` first: it shows which tracked files are `N versions behind`, and it flags any seed whose *format* predates the current methodology as `present (stale format)` (with a one-line migration note beneath the table) so the format lag is surfaced rather than silent. **Seed files do not update:** because `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, and `ROADMAP.md` are seeded-once and never overwritten, a project moving up from an earlier methodology keeps its existing copies — including their *format*. So if you are adopting the authoritative action-ledger `CHANGELOG.md` (methodology v3.1+) over an older changelog, `bin/status` marks it `present (stale format)` and sync leaves your file untouched **by design**: reconcile its header and per-entry format against the current `starter-kit/CHANGELOG.md` seed by hand, or — if it holds no history worth keeping — delete it and re-run `bin/sync` to reseed the current shape.
 
 ---
 
@@ -460,5 +460,8 @@ Say: "What was my underlying intent? Do the complete job."
 
 **`bin/sync` refuses with "locally modified".**
 A synced file has local edits. Run the suggested `diff` command to inspect, move any custom additions to CLAUDE.md's Adaptations section, then revert the local edits or pass `--force` to discard them.
+
+**`bin/sync` refuses, saying the source "cannot tell whether they are merely behind or edited here".**
+This one is about the source, not your files. The methodology checkout you synced from is either a shallow clone or has no `.git` at all, so no file can be recognized as merely behind. `bin/sync` names which of the two it found and prints the command that repairs it — `git -C <source> fetch --unshallow`, or a full `git clone` in place of a download. `--source=github` avoids the situation, since it clones the repository for the run.
 
 For more troubleshooting, see `HOW_TO_USE.md` § Troubleshooting.

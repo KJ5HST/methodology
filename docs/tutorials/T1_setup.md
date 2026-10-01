@@ -54,7 +54,7 @@ You have two ways to do this; both are first-class. The scripted path is fastest
 "$METH"/bin/sync .            # Track B — $METH is your methodology checkout
 ../methodology/bin/sync .     # Track A — a sibling checkout, per the portfolio layout
 
-# …or pull canonical contents from GitHub instead of the local checkout (needs the gh CLI):
+# …or pull canonical contents from GitHub instead of the local checkout (needs git and network):
 "$METH"/bin/sync . --source=github
 ```
 
