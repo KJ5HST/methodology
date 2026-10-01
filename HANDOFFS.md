@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S31
+date: 2026-10-01
+status: pending
+active_task: Parallel-sessions plan Phase 2 per §8A — ITERATIVE_METHODOLOGY.md ## Parallel Actors + Principle 9 paragraph + Mechanical Gates pointer + Phase 1 step clause; SESSION_RUNNER.md task row, step-6 --merges line, D6 sentence, one-writer pointer, FM #29 + Degradation row (paid by reduction); SAFEGUARDS.md D2 row (paid by reduction); starter-kit/HANDOFFS.md D5/D6 + recipe; FRAMEWORK_LEARNINGS.md Learning #17; count-claim sweep. IN PROGRESS.
+```
+
+```handoff
 session: S30
 date: 2026-10-01
 status: complete

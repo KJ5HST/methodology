@@ -44,6 +44,14 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Parallel-sessions plan Phase 2 — the prose: Parallel Actors, one writer per tree, FM #29 (in progress)
+
+- **Action:** session S31 claimed on `main`: Phase 2 of `docs/planning/parallel-sessions-plan.md` per §8A — the flight
+  manual's `## Parallel Actors` (the a–g contract) and Principle 9 paragraph, the runner's pointers, D6 and FM #29
+  *Shared-state interference* (paid by reduction), the SAFEGUARDS one-writer row, the `HANDOFFS.md` identity and
+  merge paragraphs, Learning #17, and every live count claim. Budgets measured before writing: flight manual 20,534
+  tokens (one-read cap 25,000), runner 42 tokens of headroom, SAFEGUARDS 17.
+
 ### 2026-10-01 · [ad hoc] S30 close-out — Phase 1 of the parallel-sessions plan done
 
 - **Action:** closes the S30 claim entry (*Parallel-sessions plan Phase 1 — ledger merge mechanics (in progress)*).
