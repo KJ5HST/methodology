@@ -44,6 +44,14 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] The ledger gate refuses an edit to a committed entry (in progress)
+
+- **Action:** session S29 claimed on `main`. `FRAMEWORK_APPARATUS.md` §The Action Ledger, *Lifecycle*, says a committed
+  entry is never edited, and nothing enforces it: S26 broke it twice (`746c17a`, `d1c1154`) with every gate green.
+  Deliverable: `.githooks/pre-commit` refuses a staged `CHANGELOG.md` that changes or drops a committed entry, except
+  a drop that stages an archive shard (the trimmer's commit); RED first by replaying those two commits; selftest cases.
+  Also in this commit: S28's receipt cited the archive pointer at `CHANGELOG.md:36`; it is at `:39` — corrected there.
+
 ### 2026-10-01 · [ad hoc] S28 close-out — housekeeping done; branches deleted, PR #83 notified, oversight scanner refreshed
 
 - **Action:** closes the S28 claim entry (*Housekeeping … (in progress)*). Non-commit actions this session: merged
