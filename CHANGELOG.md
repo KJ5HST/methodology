@@ -40,6 +40,34 @@ ledger's next new month, and nothing below is retrofitted (§The Action Ledger, 
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] S26 close-out — the v4.0 receipt completed
+
+- **Action:** S26's `HANDOFFS.md` receipt goes `status: pending` → `complete`. This entry closes the S26 claim entry
+  below (*v4.0 — the open pull requests merged and released*), whose `CHANGELOG: pending` line it supersedes; that
+  entry is not edited again (see the correction entry below). Gate run cited in the receipt: the one at the tag.
+
+### 2026-10-01 · [ad hoc] v4.0 tagged and released
+
+- **Action (non-commit):** annotated tag `v4.0` at `2f911c9` (tag object `64e5811`), pushed with `main`
+  (`746c17a..2f911c9`); [GitHub Release v4.0](https://github.com/KJ5HST/methodology/releases/tag/v4.0) published
+  2026-10-01T20:55:11Z, read back as Latest. Gate run at the tagged commit: `quality_ratchet: 11/11 pass · 0 fail ·
+  0 unmeasured · results 30d2a763be2b · manifest 58b9c63d75da`. The release: [`CLAUDE.md` §Versioning](CLAUDE.md#versioning)
+  v4.0 (pointer, not re-narrated).
+
+### 2026-10-01 · [ad hoc] Correction: the S26 claim entry was edited by two later commits
+
+- **What was wrong:** after PR #84's merge (`99377b3`) made *a committed entry is never edited* a rule of this ledger
+  (`FRAMEWORK_APPARATUS.md` §The Action Ledger, *Lifecycle*), S26 kept the older one-entry-per-session habit and
+  appended bullets to its own claim entry in `746c17a` (the merges and the tightening) and `d1c1154` (the §Versioning
+  archive). Those bullets are accurate and stay; editing them back out would be a third edit. From `2f911c9` on, each
+  commit and non-commit action has its own entry.
+
+### 2026-10-01 · [ad hoc] Recorded: v3.8 tagged and released by rmsharp on 2026-09-30
+
+- **Action (non-commit, not S26's):** rmsharp tagged `v3.8` at `6b29d3d` and published its GitHub Release
+  (2026-09-30T23:01:13Z) with the README and §Versioning entries deferred; no ledger held it (failure mode #27 —
+  reconcile-on-read cannot see a non-commit action). Found at S25's Orient; the deferred docs landed in `2f911c9`.
+
 ### 2026-10-01 · [ad hoc] v4.0 release documentation — `CLAUDE.md` §Versioning and `README.md` What's New for v3.8 and v4.0
 
 - **Action:** S26. `CLAUDE.md` *Current version* v3.7 → v4.0; §Versioning gains the v3.8 entry (rmsharp tagged and
