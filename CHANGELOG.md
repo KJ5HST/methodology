@@ -44,6 +44,11 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] S32 close-out — Phase 3: D9 on `main`, D8 in PR #91
+
+- **Action:** closes the S32 claim entry (*Parallel-sessions plan Phase 3 … (in progress)*). Gate run at `9565c45`:
+  `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results df965ece841e · manifest 01be7a18f6cb`.
+
 ### 2026-10-01 · [ad hoc] Ratchet: `context-budget-unit-tests` 145 → 148 after D9; PR #91 opened for D8
 
 - **Action:** S32. Measured at `5ff62ea`: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results fd8305354596 ·
