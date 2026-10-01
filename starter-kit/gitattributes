@@ -11,6 +11,9 @@
 #   git merge-file -p --union --diff3 ours base theirs > HANDOFFS.md
 # then check every receipt (the canonical bin/check-handoff --all) before committing the merge.
 # Measured: methodology docs/planning/parallel-sessions-plan.md §8A and §9A.
+#
+# GitHub's merge button does NOT apply this driver (measured 2026-10-01: a probe PR whose two
+# branches merge clean locally read CONFLICTING). Merge locally, where it applies, then push.
 CHANGELOG.md merge=union
 dashboard_history.jsonl merge=union
 .context-budget-history.jsonl merge=union

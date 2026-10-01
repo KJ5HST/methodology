@@ -44,6 +44,15 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Measured: GitHub's merge does not apply `merge=union` — probe PR #90, closed unmerged
+
+- **Action (non-commit, then this commit):** S30, the plan's Phase 1 verification item. Two scratch branches off `main`
+  (`scratch/union-base`, `scratch/union-head`), each prepending one `CHANGELOG.md` entry at the same anchor, merge
+  clean locally under the new `.gitattributes`; [PR #90](https://github.com/KJ5HST/methodology/pull/90) between them
+  read **CONFLICTING** (`mergeStateStatus` DIRTY). So GitHub's server-side merge ignores the driver; the documented
+  path is the plan's fallback — merge locally, where the driver applies, then push. PR #90 closed unmerged, both
+  branches deleted (local and remote). The seed and this repo's `.gitattributes` now say so in their comment.
+
 ### 2026-10-01 · [ad hoc] Phase 1 Layer A, checkpoint 2 — the dashboard accounts for the new `.gitattributes` seed (2.11.2)
 
 - **Action:** S30. Adding a distributed file tripped three of the dashboard's structural tests, as Learning #12
