@@ -44,6 +44,18 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Phase 5 finding fixed — `check-handoff` accepts one live pending receipt per line of sessions
+
+- **Action:** S34. The Shape B dogfood's one real defect, found independently by both concurrent sessions: the
+  merging session's pending claim (S34, committed before the lines were cut) sat below each line's newer receipt, and
+  `--allow-pending` excused only the newest block, so both branches' gate runs read 9/12 (`check-handoff-all` + Test
+  25) through no fault of their content. Neither session edited S34's record. Fix: a pending receipt is accepted when
+  it is the newest of its OWN line (bare `S<N>` = trunk, `S<N>-<seq>` = line `<seq>`); a stub superseded within its own
+  line, and the newest receipt overall without `--allow-pending`, are still refused. RED: the old checker failed the
+  merged ledger (10 findings on S34) and 3 of Test 33's 6 fixtures; GREEN 6/6; an accept-all-pending mutant fails
+  the 3 guards. The procedural alternative (claim only after the lines are cut) was rejected: real concurrent sessions
+  start in any order. `starter-kit/HANDOFFS.md` states the rule in one sentence.
+
 ### 2026-10-01 · [ad hoc] S35-alpha close-out — T5 FM #29 corollary done; gate 9/12, every fail traced to S34's inherited pending receipt
 
 - **Action:** closes the S35-alpha claim entry (*Shape B dogfood (alpha) — T5 gains a failure mode #29 example (in

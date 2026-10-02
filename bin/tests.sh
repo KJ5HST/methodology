@@ -1278,6 +1278,26 @@ rm -rf "$L"
 "$BIN/check-ledger" --all >/dev/null 2>&1 && pass "check-ledger --all: this repository's ledger and its archive shard are clean" \
     || fail "check-ledger --all: this repository's own ledger has findings"
 
+echo "== Test 33: check-handoff accepts one live pending receipt per line of sessions, and only one (RED-first) =="
+# Found by the Shape B dogfood (S34/S35): a line's newest pending receipt is its live claim, and a concurrent line's
+# receipts are prepended above it, so "--allow-pending excuses only the newest block" failed every concurrent branch.
+H33="$(mktemp -d)"
+l33_stub() { printf '```handoff\nsession: %s\ndate: 2026-10-01\nstatus: pending\nactive_task: in progress\n```\n\n' "$1"; }
+l33() { # $1 label, $2 flags, $3 wanted exit, $4.. blocks (newest first): "S6-alpha:c" complete, "S5:p" pending
+    local label="$1" flags="$2" want="$3"; shift 3
+    { printf '# Handoff Receipts\n\n---\n\n'; for b in "$@"; do
+        case "$b" in *:c) l30_rcpt "${b%:c}" 8 7 ;; *:p) l33_stub "${b%:p}" ;; esac; done; } > "$H33/HANDOFFS.md"
+    "$BIN/check-handoff" --all $flags --file "$H33/HANDOFFS.md" >/dev/null 2>&1; local got=$?
+    [ "$got" = "$want" ] && pass "check-handoff: $label" || fail "check-handoff: $label (exit $got, wanted $want)"
+}
+l33 "another line's newest pending receipt is its live claim (--allow-pending)" "--allow-pending" 0 "S6-alpha:c" "S5:p" "S4:c"
+l33 "...and close-out's --all accepts it too"                                     ""                0 "S6-alpha:c" "S5:p" "S4:c"
+l33 "two lines, each with a live claim below the other's receipts"                "--allow-pending" 0 "S6-beta:p" "S6-alpha:c" "S5:p" "S4:c"
+l33 "a pending receipt superseded within its OWN line is still refused"           "--allow-pending" 1 "S6:c" "S5:p" "S4:c"
+l33 "a branch line's stale stub under its own newer receipt is still refused"     "--allow-pending" 1 "S7-alpha:c" "S6-alpha:p" "S5:c"
+l33 "the newest receipt pending without --allow-pending is still refused"         ""                1 "S6:p" "S5:c"
+rm -rf "$H33"
+
 echo ""
 echo "== Summary: $PASS passed, $FAIL failed =="
 [ "$FAIL" = "0" ]
