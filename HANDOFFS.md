@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S37
+date: 2026-10-01
+status: pending
+active_task: Dashboard fix — dotfile names listed in CONFIG_EXTS (.gitignore, .editorconfig, .eslintrc, .prettierrc) never matched because a dotfile has no Path.suffix; categorize them as config by name; RED-first unit test; both twins; DASHBOARD_VERSION 2.11.2 → 2.11.3; then refresh the oversight-root scanner copy. IN PROGRESS.
+```
+
+```handoff
 session: S36
 date: 2026-10-01
 status: complete

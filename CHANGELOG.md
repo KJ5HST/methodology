@@ -44,6 +44,12 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Dashboard: dotfile config names are categorized as config (in progress)
+
+- **Action:** session S37 claimed on `main`. The S30 finding: `CONFIG_EXTS` lists `.gitignore`, `.editorconfig`,
+  `.eslintrc`, `.prettierrc`, but `Path.suffix` is empty for a dotfile, so none of them ever matched and every such
+  file read as `other`. Display-only (the Config row's counts); no score or risk reads the category. RED first.
+
 ### 2026-10-01 · [ad hoc] S36 close-out — v4.1 released
 
 - **Action:** closes the S36 claim entry (*Release v4.1 … (in progress)*).
