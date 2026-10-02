@@ -44,6 +44,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Ratchet: `dashboard-unit-tests` 226 → 229; the oversight scanner copy refreshed to 2.11.3
+
+- **Action:** S37. Measured at `569024b`: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 8301a4d20729 ·
+  manifest 586e28794faa`; tightened. **Non-repo action:** the oversight root's `methodology_dashboard.py` (refreshed to
+  2.11.1 in S28, stale again after 2.11.2/2.11.3) replaced by a one-file copy of the 2.11.3 twin; recorded in the
+  oversight `CHANGELOG.md`.
+
 ### 2026-10-01 · [ad hoc] Dashboard 2.11.3 — dotfile names in `CONFIG_EXTS` are matched by name
 
 - **Action:** S37. `categorize_file` now also matches a file's whole lowercased name against `CONFIG_EXTS`, so
