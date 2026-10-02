@@ -44,6 +44,18 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-02 · [ad hoc] PR #91 review: the source's manifest is read as data, and rows it cannot install safely are refused
+
+- **Action:** S38, on branch `feat/sync-manifest-at-ref`, answering rmsharp's review. New `bin/_manifest_reader.py`
+  parses the clone's `bin/_manifest.py` with `ast` instead of executing it, so nothing from the clone runs during a
+  sync or a status run, and an unreadable manifest is a one-line `error:` naming the source rather than a traceback.
+  Every row is checked before anything is written: a disposition other than this checkout's `tracked`/`seed`, or a
+  src/dest that is absolute or climbs with `..`, refuses the run and names the rows. Before this, a source with a
+  different seed label had its seeds written like tracked files: an adopter's own `CHANGELOG.md` was overwritten,
+  exit 0, no `--force`. `bin/status` had the mirror case, reading an unknown label as a seed and hiding drift. New Test
+  34 (8 checks, all RED against the branch's previous scripts). The Test 26 fixture copies the new helper with the
+  scripts. `bin/tests.sh` 254/0 after merging `main` (246 before this fix); live `--source=github` sync and status exit 0.
+
 ### 2026-10-01 · [ad hoc] Phase 3 D8 — `bin/sync`/`bin/status --source=github` use the source's own manifest (PR, for review)
 
 - **Action:** S32, on branch `feat/sync-manifest-at-ref` (not `main`: it changes #87's premise, so rmsharp reviews it

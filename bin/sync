@@ -5,7 +5,6 @@ Contract: methodology v2.2 plan §4D.
 """
 import argparse
 import hashlib
-import importlib.util
 import os
 import subprocess
 import sys
@@ -14,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _manifest import DISTRIBUTION, TRACKED, SEED  # noqa: E402  (bin/ on sys.path)
+from _manifest_reader import ManifestError, read_manifest  # noqa: E402
 
 REPO = "KJ5HST/methodology"
 # --source=github clones this URL; the variable overrides it (a private mirror, or a local bare
@@ -113,20 +113,27 @@ def clone_source(url: str, parent: Path) -> Path:
     return clone
 
 
-def source_distribution(methodology_root: Path) -> list:
+def source_distribution(methodology_root: Path, url: str) -> list:
     """The distribution manifest AT THE SOURCE: the clone's own bin/_manifest.py, so the file
     list and the file contents come from one ref (parallel-sessions plan, D8). Iterating THIS
     checkout's manifest against a clone of `main` made every branch that adds a distributed file
     unsyncable from github until it merged -- and left a stale checkout blind to files `main` has
-    added since. A source with no manifest of its own falls back to this checkout's."""
+    added since. A source with no manifest of its own falls back to this checkout's.
+
+    Read as data, never run (_manifest_reader), and every row checked before anything is written:
+    a disposition other than this checkout's TRACKED and SEED -- which sync_from tests -- or a path
+    that leaves the source or the project refuses the run, naming the rows."""
     path = methodology_root / "bin" / "_manifest.py"
     if not path.is_file():
         return DISTRIBUTION
-    spec = importlib.util.spec_from_file_location("_source_manifest", str(path))
-    module = importlib.util.module_from_spec(spec)
-    sys.dont_write_bytecode = True
-    spec.loader.exec_module(module)
-    return list(module.DISTRIBUTION)
+    try:
+        rows, _markers = read_manifest(path, (TRACKED, SEED))
+    except ManifestError as e:
+        sys.exit(f"error: the bin/_manifest.py in {url} {e}\n"
+                 f"hint: nothing was written. A source newer than this checkout may use a format this "
+                 f"bin/sync predates: update this checkout,\n"
+                 f"      or sync from a full local checkout instead — `--source=local`.")
+    return rows
 
 
 def use_distribution(dist: list) -> None:
@@ -313,7 +320,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="methodology-sync-") as parent:
         clone = clone_source(url, Path(parent))
         local = DISTRIBUTION
-        use_distribution(source_distribution(clone))
+        use_distribution(source_distribution(clone, url))
         note_local_only(local, url)
         absent_sources(clone, url)
         return sync_from(project, clone, source, url, args)

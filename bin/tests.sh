@@ -984,7 +984,7 @@ mh_fixture() {  # build the fixture in a fresh $M; Test 27 serves the same repo 
     M="$(mktemp -d)"
     git -C "$M" init -q -b main
     mkdir -p "$M/bin"
-    cp "$BIN/sync" "$BIN/status" "$BIN/_manifest.py" "$M/bin/"
+    cp "$BIN/sync" "$BIN/status" "$BIN/_manifest.py" "$BIN/_manifest_reader.py" "$M/bin/"
     python3 -c "import sys; sys.path.insert(0, '$BIN'); import _manifest; print('\n'.join(s for s, _d, _x in _manifest.DISTRIBUTION))" \
         | while read -r src; do mkdir -p "$M/$(dirname "$src")"; cp "$METHODOLOGY/$src" "$M/$src"; done
     printf 'v1\n' > "$M/$F"; git -C "$M" add -A; mh_git 1 commit -qm c1
@@ -1320,6 +1320,78 @@ l33 "a pending receipt superseded within its OWN line is still refused"         
 l33 "a branch line's stale stub under its own newer receipt is still refused"     "--allow-pending" 1 "S7-alpha:c" "S6-alpha:p" "S5:c"
 l33 "the newest receipt pending without --allow-pending is still refused"         ""                1 "S6:p" "S5:c"
 rm -rf "$H33"
+
+echo "== Test 34: --source=github reads the source's manifest as data, and refuses rows it cannot install safely (RED-first) =="
+# rmsharp's review of PR #91: D8 executed the clone's bin/_manifest.py, so a broken one printed a traceback and code in
+# it ran; and it took the rows from the source but the tracked/seed labels from this checkout, so a source whose seed
+# label differed had its seeds written like tracked files -- an adopter's own CHANGELOG.md overwritten, exit 0, no --force.
+T34="$(mktemp -d)"; B34="$T34/base"; git -C "$T34" init -q -b main base
+mkdir -p "$B34/bin"; cp "$BIN/_manifest.py" "$B34/bin/"
+python3 -c "import sys; sys.path.insert(0, '$B34/bin'); import _manifest; print('\n'.join(s for s, _d, _x in _manifest.DISTRIBUTION))" \
+    | while read -r src; do mkdir -p "$B34/$(dirname "$src")"; cp "$METHODOLOGY/$src" "$B34/$src"; done
+rm -rf "$B34/bin/__pycache__"
+git -C "$B34" add -A; git -C "$B34" -c user.email=t@t -c user.name=t commit -qm "a complete source"
+s34_case() { # $1 name, $2 text in the source's bin/_manifest.py, $3 its replacement -> echoes the case's source
+    local d="$T34/$1"; cp -R "$B34" "$d"
+    python3 - "$d/bin/_manifest.py" "$2" "$3" <<'PY'
+import sys
+path, old, new = sys.argv[1:4]
+text = open(path, encoding="utf-8").read()
+assert text.count(old) == 1, f"fixture anchor not unique: {old!r}"
+open(path, "w", encoding="utf-8").write(text.replace(old, new))
+PY
+    git -C "$d" -c user.email=t@t -c user.name=t commit -qam "$1"; echo "$d"
+}
+s34_project() { # a project one level down in its own directory, so a '..' dest lands where the test can see it
+    local d; d="$(mktemp -d "$T34/proj.XXXX")"; git -C "$d" init -q project
+    printf '# My project ledger\n\n### 2026-01-01 · [ad hoc] my own entry\n' > "$d/project/CHANGELOG.md"; echo "$d/project"
+}
+s34_sync() { METHODOLOGY_SOURCE_URL="file://$1" "$BIN/sync" "$2" --source=github 2>&1; }
+s34_status() { METHODOLOGY_SOURCE_URL="file://$1" "$BIN/status" --source=github "$2" 2>&1; }
+
+S="$(s34_case broken 'DISTRIBUTION = [' 'DISTRIBUTION = [[')"; P="$(s34_project)"
+OUT="$(s34_sync "$S" "$P")"; RC=$?
+[ "$RC" = 1 ] && grep -q "^error: the bin/_manifest.py in file://$S cannot be read: " <<<"$OUT" && ! grep -q Traceback <<<"$OUT" \
+    && [ ! -e "$P/SESSION_RUNNER.md" ] \
+    && pass "github sync: an unreadable source manifest is a one-line error naming the source; nothing written" \
+    || fail "github sync: unreadable source manifest (exit $RC; wanted 1, an 'error:' line naming the URL, no traceback)"
+OUT="$(s34_status "$S" "$P")"; RC=$?
+[ "$RC" = 1 ] && grep -q "^error: the bin/_manifest.py in file://$S cannot be read: " <<<"$OUT" && ! grep -q Traceback <<<"$OUT" \
+    && pass "github status: an unreadable source manifest is a one-line error naming the source" \
+    || fail "github status: unreadable source manifest (exit $RC; wanted 1, an 'error:' line, no traceback)"
+
+S="$(s34_case executes 'TRACKED = "tracked"' "import pathlib; pathlib.Path('$T34/EXECUTED').touch()
+TRACKED = \"tracked\"")"; P="$(s34_project)"
+OUT="$(s34_sync "$S" "$P")"; RC=$?
+[ "$RC" = 0 ] && [ ! -e "$T34/EXECUTED" ] && [ -f "$P/SESSION_RUNNER.md" ] \
+    && pass "github sync reads the source's manifest without running any of it" \
+    || fail "github sync: code in the source's manifest ran, or the sync failed (exit $RC)"
+rm -f "$T34/EXECUTED"; s34_status "$S" "$P" >/dev/null; [ ! -e "$T34/EXECUTED" ] \
+    && pass "github status reads the source's manifest without running any of it" || fail "github status ran code in the source's manifest"
+
+S="$(s34_case relabelled 'SEED = "seed"' 'SEED = "seed-once"')"; P="$(s34_project)"
+OUT="$(s34_sync "$S" "$P")"; RC=$?
+[ "$RC" = 1 ] && grep -q "starter-kit/CHANGELOG.md.*seed-once" <<<"$OUT" && grep -q "my own entry" "$P/CHANGELOG.md" \
+    && [ ! -e "$P/SESSION_RUNNER.md" ] \
+    && pass "github sync refuses a source whose disposition labels differ, naming the rows; the adopter's seed is untouched" \
+    || fail "github sync: a relabelled seed (exit $RC; wanted 1 and CHANGELOG.md kept — the old sync overwrote it, exit 0)"
+OUT="$(s34_status "$S" "$P")"; RC=$?
+[ "$RC" = 1 ] && grep -q "starter-kit/CHANGELOG.md.*seed-once" <<<"$OUT" \
+    && pass "github status refuses the same source rather than mis-reporting it" \
+    || fail "github status: a relabelled seed (exit $RC; wanted 1, naming the row)"
+
+S="$(s34_case escapes '"ROADMAP.md", SEED)' '"../ESCAPED.md", SEED)')"; P="$(s34_project)"
+OUT="$(s34_sync "$S" "$P")"; RC=$?
+[ "$RC" = 1 ] && [ ! -e "$(dirname "$P")/ESCAPED.md" ] && grep -qF "../ESCAPED.md" <<<"$OUT" && [ ! -e "$P/SESSION_RUNNER.md" ] \
+    && pass "github sync refuses a source row whose dest leaves the project" \
+    || fail "github sync: a '..' dest (exit $RC; wanted 1, nothing written outside the project)"
+echo "not for the project" > "$T34/secret.txt"
+S="$(s34_case absolute '("starter-kit/ROADMAP.md"' "(\"$T34/secret.txt\"")"; P="$(s34_project)"
+OUT="$(s34_sync "$S" "$P")"; RC=$?
+[ "$RC" = 1 ] && [ ! -e "$P/ROADMAP.md" ] && grep -qF "$T34/secret.txt" <<<"$OUT" \
+    && pass "github sync refuses a source row whose src is outside the source" \
+    || fail "github sync: an absolute src (exit $RC; wanted 1, and no file copied in from outside the source)"
+rm -rf "$T34"
 
 echo ""
 echo "== Summary: $PASS passed, $FAIL failed =="

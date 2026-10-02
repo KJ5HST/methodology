@@ -17,7 +17,6 @@ N versions behind / missing.
 Contract: methodology v2.2 plan §4E; B1 plan Phase 4.
 """
 import argparse
-import importlib.util
 import hashlib
 import os
 import subprocess
@@ -26,7 +25,8 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _manifest import DISTRIBUTION, TRACKED, SEED_FORMAT_MARKERS  # noqa: E402  (bin/ on sys.path)
+from _manifest import DISTRIBUTION, TRACKED, SEED, SEED_FORMAT_MARKERS  # noqa: E402  (bin/ on sys.path)
+from _manifest_reader import ManifestError, read_manifest  # noqa: E402
 
 REPO = "KJ5HST/methodology"
 # --source=github clones this URL; the variable overrides it, as for bin/sync.
@@ -140,16 +140,18 @@ def use_source_manifest(methodology_root: Path, url: str) -> None:
     """Compare against the manifest AT THE SOURCE -- the clone's own bin/_manifest.py -- so the
     file list and the contents come from one ref (parallel-sessions plan, D8; bin/sync does the
     same). Rows only this checkout's manifest has are named and skipped. A source with no
-    manifest of its own leaves this checkout's in place."""
+    manifest of its own leaves this checkout's in place. Read as data, never run
+    (_manifest_reader); a row whose disposition is not this checkout's TRACKED or SEED refuses
+    the run, since report() would read any other label as a seed and hide its drift."""
     global DISTRIBUTION, SEED_FORMAT_MARKERS
     path = methodology_root / "bin" / "_manifest.py"
     if not path.is_file():
         return
-    spec = importlib.util.spec_from_file_location("_source_manifest", str(path))
-    module = importlib.util.module_from_spec(spec)
-    sys.dont_write_bytecode = True
-    spec.loader.exec_module(module)
-    theirs = list(module.DISTRIBUTION)
+    try:
+        theirs, markers = read_manifest(path, (TRACKED, SEED))
+    except ManifestError as e:
+        sys.exit(f"error: the bin/_manifest.py in {url} {e}\n"
+                 f"hint: compare against a full local checkout instead — `--source=local`.")
     have = {src for src, _dest, _disp in theirs}
     mine = [src for src, _dest, _disp in DISTRIBUTION if src not in have]
     if mine:
@@ -158,7 +160,7 @@ def use_source_manifest(methodology_root: Path, url: str) -> None:
         for src in mine:
             print(f"    {src}")
     DISTRIBUTION = theirs
-    SEED_FORMAT_MARKERS = getattr(module, "SEED_FORMAT_MARKERS", SEED_FORMAT_MARKERS)
+    SEED_FORMAT_MARKERS = SEED_FORMAT_MARKERS if markers is None else markers
 
 
 def absent_sources(methodology_root: Path, url: str) -> None:
