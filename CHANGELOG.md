@@ -44,6 +44,17 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] S36 close-out — v4.1 released
+
+- **Action:** closes the S36 claim entry (*Release v4.1 … (in progress)*).
+
+### 2026-10-01 · [ad hoc] v4.1 tagged and released
+
+- **Action (non-commit):** annotated tag `v4.1` at `1e018d1`, pushed with `main`; [GitHub Release
+  v4.1](https://github.com/KJ5HST/methodology/releases/tag/v4.1) published 2026-10-02T00:19Z, read back as Latest. Gate
+  run at the tagged commit: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 124cd2ec8786 · manifest
+  586e28794faa`. The release: [`CLAUDE.md` §Versioning](CLAUDE.md#versioning) v4.1.
+
 ### 2026-10-01 · [ad hoc] v4.1 release documentation — `CLAUDE.md` §Versioning and README What's New
 
 - **Action:** S36. `CLAUDE.md` *Current version* v4.0 → v4.1 and the v4.1 §Versioning entry; `README.md` What's New in

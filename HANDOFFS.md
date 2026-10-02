@@ -10,8 +10,17 @@ This repository dogfoods its own methodology: every session records a durable, m
 ```handoff
 session: S36
 date: 2026-10-01
-status: pending
-active_task: Release v4.1 (parallel-sessions plan Phase 6): README What's New + CLAUDE.md §Versioning entry, current version v4.1, gate run at the release commit, annotated tag, GitHub Release, ledger records; D8 (PR #91) excluded pending rmsharp's review. IN PROGRESS.
+status: complete
+self_score: 8
+predecessor_score: 8
+active_task: Release v4.1 (parallel-sessions plan Phase 6). COMPLETE — tagged at 1e018d1, GitHub Release Latest; D8 (PR #91) excluded, awaiting rmsharp.
+what_was_done: Claim 20332c0 (S36 on the trunk; the concurrent lines used 35) → PR #91 still unreviewed, so D8 stays out and the notes say so → release docs 1e018d1: CLAUDE.md current version v4.1 + §Versioning v4.1 entry (the contract, FM #29 28 → 29, the ledger merge mechanics with the measured HANDOFFS and GitHub results, the checkers, tools, both dogfoods, the adopter note that the HANDOFFS seed paragraph reaches new projects only), README What's New v4.1 (updating note for an existing .gitattributes; D8 "in review") — CLAUDE.md 49,722 / 59,168 B; check-links OK → --run 12/12 at 1e018d1 → annotated tag v4.1 pushed → GitHub Release published, read back Latest → this close-out. Predecessor S34 8/10: its v4.1 content list was complete and exact; it was right that D8 should ride only if merged. Learnings: none.
+next_steps: (a) Adopters to v4.1 — ONLY clean repos on main (10: ftx1-cat, indianrivercamping, mark-down, mcarc, Morse-Trainer, nothamlib, radio-digital, radio-web, ResortApp, wsjt); for each: run methodology/bin/sync <project> --source=local, then bin/status <project>; migrate stale-format seeds by the route bin/status prints (CHANGELOG.md front matter → the pointer + ledger-format: 2; HANDOFFS.md size section + handoffs-format: 2) without rewriting any entry or receipt; commit in that project with a ledger line its own hook accepts; do NOT push other repos' remotes. The 11 dirty or feature-branch repos are another session's live state — SAFEGUARDS: do not touch. (b) When rmsharp answers PR #91: merge locally (CHANGELOG union; GitHub ignores it), --run, tighten, and D8 ships in the next patch release. (c) The operator's two parked branches.
+key_files: CLAUDE.md:122 (the v4.1 entry), :100 (current version), README.md:287 (What's New in v4.1); GitHub Release https://github.com/KJ5HST/methodology/releases/tag/v4.1
+gotchas: (1) The tag points at 1e018d1; main's tip is one commit later (this close-out), as with v4.0 — expected. (2) Seeds are never re-synced: the HANDOFFS seed's "Concurrent sequences" paragraph and the gitattributes seed reach only projects that lack those files; Step 10 covers .gitattributes, the flight manual covers the rule. (3) PR #91 will show CONFLICTING on GitHub (its branch prepends to CHANGELOG.md) — merge locally.
+runtime_smoke: n/a as an application launch — a release. Build-equivalent: quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 124cd2ec8786 · manifest 586e28794faa — run at 1e018d1 (the tagged commit). Push, tag and release read back from the remote/API.
+changelog_ref: CHANGELOG.md "2026-10-01 · [ad hoc] v4.1 tagged and released"
+commit: 20332c0 (claim) + 1e018d1 (release docs, tagged v4.1) + this commit (close-out)
 ```
 
 ```handoff
