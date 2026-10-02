@@ -44,6 +44,12 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Release v4.1 — the parallel-sessions plan shipped (in progress)
+
+- **Action:** session S36 claimed on `main` (trunk; the concurrent lines used 35). Phase 6 of the parallel-sessions
+  plan: README What's New and `CLAUDE.md` §Versioning for v4.1, tag, GitHub Release. D8 (PR #91) is not in it —
+  still awaiting rmsharp's review.
+
 ### 2026-10-01 · [ad hoc] S34 close-out — Phase 5 done: Shape B measured, its one defect fixed
 
 - **Action:** closes the S34 claim entry (*Parallel-sessions plan Phase 5 … (in progress)*). **Shape B, measured:** two

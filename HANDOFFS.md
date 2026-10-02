@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S36
+date: 2026-10-01
+status: pending
+active_task: Release v4.1 (parallel-sessions plan Phase 6): README What's New + CLAUDE.md §Versioning entry, current version v4.1, gate run at the release commit, annotated tag, GitHub Release, ledger records; D8 (PR #91) excluded pending rmsharp's review. IN PROGRESS.
+```
+
+```handoff
 session: S35-alpha
 date: 2026-10-01
 status: complete
