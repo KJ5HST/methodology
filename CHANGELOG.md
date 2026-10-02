@@ -44,6 +44,16 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Shape B dogfood (alpha) — T5 Step 4 gains a failure mode #29 corollary: many agents in one working tree
+
+- **Action:** S35-alpha. `docs/tutorials/T5_cautionary.md` Step 4 gains one corollary after the capability-tiered
+  one: who touches a deliverable is FM #26's question, *where* they write is FM #29's. The worked case is an
+  unnamed adopter's six adversarial-verify lenses in one tree, one mutating source while another's test run was in
+  flight, and the follow-up ruling (read-only lenses; every discriminating mutation made serially by one writer).
+  Links to the runner's FM table, `SAFEGUARDS.md` §Blast Radius Limits and `ITERATIVE_METHODOLOGY.md` §Parallel
+  Actors; all verified to resolve
+  (T5 is canonical-only, outside `bin/check-links`' distributed set — checked separately).
+
 ### 2026-10-01 · [ad hoc] Shape B dogfood (alpha) — T5 gains a failure mode #29 example (in progress)
 
 - **Action:** session S35-alpha claimed on branch `s35-alpha` (parallel-sessions plan Phase 5, concurrent with S35-beta): one T5 corollary for failure mode #29.
