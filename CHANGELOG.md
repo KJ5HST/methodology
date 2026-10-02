@@ -70,6 +70,32 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 ### 2026-10-01 · [ad hoc] Shape B dogfood (alpha) — T5 gains a failure mode #29 example (in progress)
 
 - **Action:** session S35-alpha claimed on branch `s35-alpha` (parallel-sessions plan Phase 5, concurrent with S35-beta): one T5 corollary for failure mode #29.
+### 2026-10-01 · [ad hoc] S35-beta close-out — the session-notes bullet landed; the merging session's early claim reddens every line
+
+- **Action:** closes the S35-beta claim entry (*Shape B dogfood (beta) — §Parallel Actors says where session notes go
+  under Shape B (in progress)*): claim `c5df4c6`, deliverable `be36fbd`. Gate, run once under the shared suite lock:
+  `quality_ratchet: 9/12 pass · 3 fail · 0 unmeasured · results bec96d9f8290 · manifest 01be7a18f6cb`. **All three
+  fails have one cause, not this line's:** S34 committed its pending claim on `main` (`92f773e`) *before* the lines
+  were cut, so each line inherits that stub, and the moment a line prepends its own claim, S34's block becomes an
+  *older* pending receipt, which `--all --allow-pending` rejects (the exemption is newest-only,
+  `bin/check-handoff:228`). That is `check-handoff-all` (1) plus `bin/tests.sh` Test 25's two live-ledger assertions
+  (`:669`, `:697`: 235/237). Proven by counterfactual: the same ledger minus S34's block passes. No concurrent line
+  can be ratchet-green until the merging session's receipt is complete, and `check-handoff --all` at close-out fails
+  on S34's block alone (10 errors, none this line's). Left for the merging session and the operator; S34's receipt is
+  not this line's to edit.
+
+### 2026-10-01 · [ad hoc] Shape B dogfood (beta) — §Parallel Actors: session notes are rewritten, not merged
+
+- **Action:** `ITERATIVE_METHODOLOGY.md` §Parallel Actors gains the Shape B bullet **Session notes are rewritten, not
+  merged** (after **The ledgers merge.**, which already carries D15's `.quality-gates.json` half): `SESSION_NOTES.md` is
+  branch-local transient state, each line keeps its own, and the integrating session rewrites it at its Phase 3D
+  close-out. D15 cited `starter-kit/SESSION_NOTES.md`; the bullet cites the seed by role instead, because the flight
+  manual ships to adopters at `docs/methodology/` (`bin/_manifest.py:57`), where no `starter-kit/` exists, and the file
+  has no `starter-kit/` reference anywhere. +295 B; still one Read (637 lines); `bin/check-links` OK (116).
+
+### 2026-10-01 · [ad hoc] Shape B dogfood (beta) — §Parallel Actors says where session notes go under Shape B (in progress)
+
+- **Action:** session S35-beta claimed on branch `s35-beta` (parallel-sessions plan Phase 5, concurrent with S35-alpha): D15's session-notes sentence in §Parallel Actors.
 
 ### 2026-10-01 · [ad hoc] Parallel-sessions plan Phase 5 — the Shape B dogfood: two concurrent sessions and one merge (in progress)
 
