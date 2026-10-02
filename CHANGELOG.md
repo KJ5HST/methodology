@@ -44,6 +44,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Dashboard 2.11.3 — dotfile names in `CONFIG_EXTS` are matched by name
+
+- **Action:** S37. `categorize_file` now also matches a file's whole lowercased name against `CONFIG_EXTS`, so
+  `.gitignore`, `.editorconfig`, `.eslintrc` and `.prettierrc` read as config, not other; an unlisted dotfile is still
+  other and suffix matching is unchanged. New `TestDotfileConfigCategory` (3 tests; the listed-dotfiles one RED before
+  the fix). Both twins byte-identical, `DASHBOARD_VERSION` 2.11.2 → 2.11.3, unit suite 226 → 229. Display only.
+
 ### 2026-10-01 · [ad hoc] Dashboard: dotfile config names are categorized as config (in progress)
 
 - **Action:** session S37 claimed on `main`. The S30 finding: `CONFIG_EXTS` lists `.gitignore`, `.editorconfig`,

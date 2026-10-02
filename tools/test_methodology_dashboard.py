@@ -2369,6 +2369,26 @@ class TestQualityGateSignals(unittest.TestCase):
         self.assertEqual(m["scores"]["health"]["testing"], m["render"]["score"])
 
 
+class TestDotfileConfigCategory(unittest.TestCase):
+    """CONFIG_EXTS lists dotfile names (.gitignore, .editorconfig, …), but categorize_file is called
+    with Path.suffix, which is "" for a dotfile — so none of them ever matched and every one read as
+    "other" (found in S30 while categorizing the .gitattributes seed). Display only: no score reads it."""
+
+    def cat(self, name):
+        return md.categorize_file(Path(name), Path(name).suffix.lower(), name)
+
+    def test_dotfiles_listed_as_config_are_config(self):
+        for name in (".gitignore", ".editorconfig", ".eslintrc", ".prettierrc"):
+            self.assertEqual(self.cat(name), "config", name)
+
+    def test_a_dotfile_not_listed_is_still_other(self):
+        self.assertEqual(self.cat(".mailmap"), "other")
+
+    def test_suffix_matching_is_unchanged(self):
+        self.assertEqual(self.cat("settings.json"), "config")
+        self.assertEqual(self.cat("notes.xyz"), "other")
+
+
 class TestFmtRatioAndTwins(unittest.TestCase):
     def test_fmt_ratio(self):
         self.assertEqual(md.fmt_ratio(0.0, 0, True), "n/a (doc-only)")    # actually doc-only
@@ -2381,10 +2401,10 @@ class TestFmtRatioAndTwins(unittest.TestCase):
                         "tools/ and starter-kit/ dashboards must be byte-identical")
 
     def test_dashboard_version(self):
-        self.assertEqual(md.DASHBOARD_VERSION, "2.11.2")
+        self.assertEqual(md.DASHBOARD_VERSION, "2.11.3")
         starter_src = Path(STARTER_PY).read_text(encoding="utf-8")
-        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.11\.2"', starter_src, re.MULTILINE),
-                        "starter-kit twin must also declare DASHBOARD_VERSION 2.11.2")
+        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.11\.3"', starter_src, re.MULTILINE),
+                        "starter-kit twin must also declare DASHBOARD_VERSION 2.11.3")
 
 
 class TestCliRemedyProportionality(unittest.TestCase):
