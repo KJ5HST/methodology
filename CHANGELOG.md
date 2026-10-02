@@ -44,6 +44,18 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] S34 close-out — Phase 5 done: Shape B measured, its one defect fixed
+
+- **Action:** closes the S34 claim entry (*Parallel-sessions plan Phase 5 … (in progress)*). **Shape B, measured:** two
+  concurrent sessions (S35-alpha, S35-beta) in linked worktrees, each claimed, delivered and closed out (3 commits
+  each), all hooks passed first try, no `--no-verify`; the suite lock serialised their gate runs (alpha waited 2m11s;
+  ~2m10s per run). Merge 1 (`93a9e0e`): exit 0 — `main` had not moved. Merge 2 (`ed38798`): exit 1, **only
+  `HANDOFFS.md`** conflicted; `CHANGELOG.md` union-merged with 0 markers; the `--diff3` recipe gave three whole
+  receipts; `check-ledger --all` OK. Receipts owed for the merge: one (this one); none per merged commit. GitHub's
+  merge was not used (PR #90 measured it ignores the driver). **The one defect** (both lines red on
+  `check-handoff-all`, the merging session's early claim) is fixed in `3c9513a`. Gate run at `40747c1`:
+  `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 124cd2ec8786 · manifest 586e28794faa`.
+
 ### 2026-10-01 · [ad hoc] Ratchet: `tests-sh-passed` 237 → 243 after Test 33
 
 - **Action:** S34. Measured on the merged `main` at `3c9513a`: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured ·
