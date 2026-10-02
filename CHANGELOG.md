@@ -44,6 +44,12 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-02 · [ad hoc] README repo tree names `bin/_manifest_reader.py`
+
+- **Action:** S38, on branch `feat/sync-manifest-at-ref`. One line under `bin/` for the helper the PR #91 fix added.
+  Swept every page that describes `--source=github` (README, BOOTSTRAP, T1, T8): none says the source's manifest is
+  executed, so nothing else went stale.
+
 ### 2026-10-02 · [ad hoc] PR #91 review: the source's manifest is read as data, and rows it cannot install safely are refused
 
 - **Action:** S38, on branch `feat/sync-manifest-at-ref`, answering rmsharp's review. New `bin/_manifest_reader.py`
