@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S38
+date: 2026-10-02
+status: pending
+active_task: Answer rmsharp's review of PR #91 (D8): read the source's bin/_manifest.py as data instead of executing it (one-line error naming the URL on failure); refuse before any write when a source row's disposition is not this checkout's tracked/seed, or its dest is absolute or climbs out of the project; RED-first tests; merge main into the branch so the PR stops showing context_budget.py (on main since 5ff62ea, shipped in v4.1); rewrite the PR description; reply point by point (operator reviews the reply before it is posted). IN PROGRESS.
+```
+
+```handoff
 session: S37
 date: 2026-10-01
 status: complete

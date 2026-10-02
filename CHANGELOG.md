@@ -44,6 +44,14 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-02 · [ad hoc] PR #91: answer rmsharp's review (in progress)
+
+- **Action:** session S38 claimed on `main`. rmsharp's three questions on PR #91 (2026-10-02T21:56Z) all reproduce:
+  the sync executes the clone's `bin/_manifest.py` (a broken one prints a traceback); a source whose seed label differs
+  has its seeds overwritten — an adopter's own `CHANGELOG.md` replaced, exit 0, no `--force`; and the PR shows the
+  `context_budget.py` change, now on `main`. Fix on the branch, RED first; the reply is shown to the operator before it
+  is posted.
+
 ### 2026-10-01 · [ad hoc] S37 close-out — dashboard 2.11.3
 
 - **Action:** closes the S37 claim entry. Gate run at `dbde928` (the tightened manifest): `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 53f8c99b071f · manifest ae81b96658ec`.
