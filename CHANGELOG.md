@@ -44,6 +44,19 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] S35-alpha close-out — T5 FM #29 corollary done; gate 9/12, every fail traced to S34's inherited pending receipt
+
+- **Action:** closes the S35-alpha claim entry (*Shape B dogfood (alpha) — T5 gains a failure mode #29 example (in
+  progress)*); the deliverable is `86a1bd5`. Gate run at `86a1bd5`, under the shared suite lock (waited 20:00:20 →
+  20:02:31 behind S35-beta; ran 2m11s): `quality_ratchet: 9/12 pass · 3 fail · 0 unmeasured · results bec96d9f8290 ·
+  manifest 01be7a18f6cb`. **All three fails have one cause, and it is a Shape B finding, not a defect in this
+  branch's content:** S34's `status: pending` receipt was committed on `main` (`92f773e`) *before* both branches were
+  cut, so once this branch prepends its own receipt, S34's is no longer the newest block — and `--allow-pending`
+  exempts only block 0 (`bin/check-handoff:228`). That fails `check-handoff-all` (1) and two `bin/tests.sh` Test 25
+  assertions (presence control; the merged-sequence negative), giving 235/237 passed, 2 failed — each reproduced by
+  hand against this file, all 10 checker findings on S34's block. The base file passes `--all --allow-pending`. S34's
+  receipt is another session's record and was not edited; the merging session's own close-out clears it.
+
 ### 2026-10-01 · [ad hoc] Shape B dogfood (alpha) — T5 Step 4 gains a failure mode #29 corollary: many agents in one working tree
 
 - **Action:** S35-alpha. `docs/tutorials/T5_cautionary.md` Step 4 gains one corollary after the capability-tiered
