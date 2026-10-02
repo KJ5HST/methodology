@@ -44,6 +44,11 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] Ratchet: `tests-sh-passed` 237 → 243 after Test 33
+
+- **Action:** S34. Measured on the merged `main` at `3c9513a`: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured ·
+  results 1b440dfb3fd4 · manifest 01be7a18f6cb` — `bin/tests.sh` 243/0. Tightening only.
+
 ### 2026-10-01 · [ad hoc] Phase 5 finding fixed — `check-handoff` accepts one live pending receipt per line of sessions
 
 - **Action:** S34. The Shape B dogfood's one real defect, found independently by both concurrent sessions: the
