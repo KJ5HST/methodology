@@ -44,6 +44,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] v4.1 release documentation — `CLAUDE.md` §Versioning and README What's New
+
+- **Action:** S36. `CLAUDE.md` *Current version* v4.0 → v4.1 and the v4.1 §Versioning entry; `README.md` What's New in
+  v4.1, with the adopter note (an existing `.gitattributes` is left alone — Step 10 gives the lines) and D8 named as
+  not yet released. `CLAUDE.md` 46,280 → 49,722 B under its 59,168 B ceiling; `check-links` OK. The release itself:
+  [`CLAUDE.md` §Versioning](CLAUDE.md#versioning) v4.1 (pointer, not re-narrated).
+
 ### 2026-10-01 · [ad hoc] Release v4.1 — the parallel-sessions plan shipped (in progress)
 
 - **Action:** session S36 claimed on `main` (trunk; the concurrent lines used 35). Phase 6 of the parallel-sessions

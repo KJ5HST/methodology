@@ -284,6 +284,20 @@ Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during develop
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
 
+### What's New in v4.1
+
+**Fan-out to many agents is now a named session shape: many hands, one closer, one writer per working tree.** Fanning out used to be safe but messy — two writers in one tree read each other's half-finished changes as defects, and two sessions running at once collided in the ledgers. This release implements the parallel-sessions plan ([#83](https://github.com/KJ5HST/methodology/pull/83)).
+
+- **The contract** — `ITERATIVE_METHODOLOGY.md` §Parallel Actors names two shapes. *One session, many hands*: one lead closes out, workers return content, the lead integrates one unit per checkpoint. *Many sessions, many closers*: concurrent sessions on their own branches or worktrees, tagged `S<N>-<seq>`, joined by a merge that is one action with one receipt. New **failure mode #29, "Shared-state interference"** (the count moves 28 → 29), a SAFEGUARDS rule — *one writer per working tree* — and Learning #17.
+- **The ledgers merge** — a new `.gitattributes` seed merges `CHANGELOG.md` by union, so two sessions' entries both survive. `HANDOFFS.md` is deliberately left out (union fuses two receipts into one block, measured); its conflicts resolve keep-both with `git merge-file --union --diff3`. GitHub's merge button ignores the driver ([#90](https://github.com/KJ5HST/methodology/pull/90), measured): merge locally. A new `bin/check-ledger` reads the result; `bin/check-handoff` now catches a fused receipt and accepts one live claim per line of sessions.
+- **The ledger gate refuses an edit to a committed entry** — a correction is a new entry.
+- **`context_budget.py --calibrate` works from a linked worktree.**
+- **Both shapes dogfooded** — the docs sweep ran as a fan-out of four read-only workers; two concurrent sessions ran in worktrees and were merged locally. The one defect they found is fixed.
+
+**Updating.** Re-run `bin/sync`. If your project already has a `.gitattributes`, sync leaves it alone — add the three lines `BOOTSTRAP.md` Step 10 gives. **Not yet:** `--source=github` using the source's own manifest is in review ([#91](https://github.com/KJ5HST/methodology/pull/91)).
+
+**No phase, quality gate, or workstream change; failure modes 28 → 29.** `bin/tests.sh` 215 → 243; declared gates 11 → 12; `bin/_manifest.py` 30 rows.
+
 ### What's New in v4.0
 
 **The ledger rules get one synced home, and the routes that update an adopter stop endangering its ledgers.** Seven pull requests, merged together on 2026-10-01. A major version: **if you adopted an earlier version, there is one manual step** — see *Updating* below.
