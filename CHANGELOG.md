@@ -52,6 +52,217 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
   where the scripts used to refuse the whole run. `absent_sources` now checks the source against its own manifest
   (Test 28's case — the source lacks a file it lists — still refuses, same wording). New Test 32 (3 checks), RED
   against `main`'s scripts (all 3 fail, exit 1). `bin/tests.sh` 240/0 on the branch.
+### 2026-10-01 · [ad hoc] S37 close-out — dashboard 2.11.3
+
+- **Action:** closes the S37 claim entry. Gate run at `dbde928` (the tightened manifest): `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 53f8c99b071f · manifest ae81b96658ec`.
+
+### 2026-10-01 · [ad hoc] Ratchet: `dashboard-unit-tests` 226 → 229; the oversight scanner copy refreshed to 2.11.3
+
+- **Action:** S37. Measured at `569024b`: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 8301a4d20729 ·
+  manifest 586e28794faa`; tightened. **Non-repo action:** the oversight root's `methodology_dashboard.py` (refreshed to
+  2.11.1 in S28, stale again after 2.11.2/2.11.3) replaced by a one-file copy of the 2.11.3 twin; recorded in the
+  oversight `CHANGELOG.md`.
+
+### 2026-10-01 · [ad hoc] Dashboard 2.11.3 — dotfile names in `CONFIG_EXTS` are matched by name
+
+- **Action:** S37. `categorize_file` now also matches a file's whole lowercased name against `CONFIG_EXTS`, so
+  `.gitignore`, `.editorconfig`, `.eslintrc` and `.prettierrc` read as config, not other; an unlisted dotfile is still
+  other and suffix matching is unchanged. New `TestDotfileConfigCategory` (3 tests; the listed-dotfiles one RED before
+  the fix). Both twins byte-identical, `DASHBOARD_VERSION` 2.11.2 → 2.11.3, unit suite 226 → 229. Display only.
+
+### 2026-10-01 · [ad hoc] Dashboard: dotfile config names are categorized as config (in progress)
+
+- **Action:** session S37 claimed on `main`. The S30 finding: `CONFIG_EXTS` lists `.gitignore`, `.editorconfig`,
+  `.eslintrc`, `.prettierrc`, but `Path.suffix` is empty for a dotfile, so none of them ever matched and every such
+  file read as `other`. Display-only (the Config row's counts); no score or risk reads the category. RED first.
+
+### 2026-10-01 · [ad hoc] S36 close-out — v4.1 released
+
+- **Action:** closes the S36 claim entry (*Release v4.1 … (in progress)*).
+
+### 2026-10-01 · [ad hoc] v4.1 tagged and released
+
+- **Action (non-commit):** annotated tag `v4.1` at `1e018d1`, pushed with `main`; [GitHub Release
+  v4.1](https://github.com/KJ5HST/methodology/releases/tag/v4.1) published 2026-10-02T00:19Z, read back as Latest. Gate
+  run at the tagged commit: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 124cd2ec8786 · manifest
+  586e28794faa`. The release: [`CLAUDE.md` §Versioning](CLAUDE.md#versioning) v4.1.
+
+### 2026-10-01 · [ad hoc] v4.1 release documentation — `CLAUDE.md` §Versioning and README What's New
+
+- **Action:** S36. `CLAUDE.md` *Current version* v4.0 → v4.1 and the v4.1 §Versioning entry; `README.md` What's New in
+  v4.1, with the adopter note (an existing `.gitattributes` is left alone — Step 10 gives the lines) and D8 named as
+  not yet released. `CLAUDE.md` 46,280 → 49,722 B under its 59,168 B ceiling; `check-links` OK. The release itself:
+  [`CLAUDE.md` §Versioning](CLAUDE.md#versioning) v4.1 (pointer, not re-narrated).
+
+### 2026-10-01 · [ad hoc] Release v4.1 — the parallel-sessions plan shipped (in progress)
+
+- **Action:** session S36 claimed on `main` (trunk; the concurrent lines used 35). Phase 6 of the parallel-sessions
+  plan: README What's New and `CLAUDE.md` §Versioning for v4.1, tag, GitHub Release. D8 (PR #91) is not in it —
+  still awaiting rmsharp's review.
+
+### 2026-10-01 · [ad hoc] S34 close-out — Phase 5 done: Shape B measured, its one defect fixed
+
+- **Action:** closes the S34 claim entry (*Parallel-sessions plan Phase 5 … (in progress)*). **Shape B, measured:** two
+  concurrent sessions (S35-alpha, S35-beta) in linked worktrees, each claimed, delivered and closed out (3 commits
+  each), all hooks passed first try, no `--no-verify`; the suite lock serialised their gate runs (alpha waited 2m11s;
+  ~2m10s per run). Merge 1 (`93a9e0e`): exit 0 — `main` had not moved. Merge 2 (`ed38798`): exit 1, **only
+  `HANDOFFS.md`** conflicted; `CHANGELOG.md` union-merged with 0 markers; the `--diff3` recipe gave three whole
+  receipts; `check-ledger --all` OK. Receipts owed for the merge: one (this one); none per merged commit. GitHub's
+  merge was not used (PR #90 measured it ignores the driver). **The one defect** (both lines red on
+  `check-handoff-all`, the merging session's early claim) is fixed in `3c9513a`. Gate run at `40747c1`:
+  `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 124cd2ec8786 · manifest 586e28794faa`.
+
+### 2026-10-01 · [ad hoc] Ratchet: `tests-sh-passed` 237 → 243 after Test 33
+
+- **Action:** S34. Measured on the merged `main` at `3c9513a`: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured ·
+  results 1b440dfb3fd4 · manifest 01be7a18f6cb` — `bin/tests.sh` 243/0. Tightening only.
+
+### 2026-10-01 · [ad hoc] Phase 5 finding fixed — `check-handoff` accepts one live pending receipt per line of sessions
+
+- **Action:** S34. The Shape B dogfood's one real defect, found independently by both concurrent sessions: the
+  merging session's pending claim (S34, committed before the lines were cut) sat below each line's newer receipt, and
+  `--allow-pending` excused only the newest block, so both branches' gate runs read 9/12 (`check-handoff-all` + Test
+  25) through no fault of their content. Neither session edited S34's record. Fix: a pending receipt is accepted when
+  it is the newest of its OWN line (bare `S<N>` = trunk, `S<N>-<seq>` = line `<seq>`); a stub superseded within its own
+  line, and the newest receipt overall without `--allow-pending`, are still refused. RED: the old checker failed the
+  merged ledger (10 findings on S34) and 3 of Test 33's 6 fixtures; GREEN 6/6; an accept-all-pending mutant fails
+  the 3 guards. The procedural alternative (claim only after the lines are cut) was rejected: real concurrent sessions
+  start in any order. `starter-kit/HANDOFFS.md` states the rule in one sentence.
+
+### 2026-10-01 · [ad hoc] S35-alpha close-out — T5 FM #29 corollary done; gate 9/12, every fail traced to S34's inherited pending receipt
+
+- **Action:** closes the S35-alpha claim entry (*Shape B dogfood (alpha) — T5 gains a failure mode #29 example (in
+  progress)*); the deliverable is `86a1bd5`. Gate run at `86a1bd5`, under the shared suite lock (waited 20:00:20 →
+  20:02:31 behind S35-beta; ran 2m11s): `quality_ratchet: 9/12 pass · 3 fail · 0 unmeasured · results bec96d9f8290 ·
+  manifest 01be7a18f6cb`. **All three fails have one cause, and it is a Shape B finding, not a defect in this
+  branch's content:** S34's `status: pending` receipt was committed on `main` (`92f773e`) *before* both branches were
+  cut, so once this branch prepends its own receipt, S34's is no longer the newest block — and `--allow-pending`
+  exempts only block 0 (`bin/check-handoff:228`). That fails `check-handoff-all` (1) and two `bin/tests.sh` Test 25
+  assertions (presence control; the merged-sequence negative), giving 235/237 passed, 2 failed — each reproduced by
+  hand against this file, all 10 checker findings on S34's block. The base file passes `--all --allow-pending`. S34's
+  receipt is another session's record and was not edited; the merging session's own close-out clears it.
+
+### 2026-10-01 · [ad hoc] Shape B dogfood (alpha) — T5 Step 4 gains a failure mode #29 corollary: many agents in one working tree
+
+- **Action:** S35-alpha. `docs/tutorials/T5_cautionary.md` Step 4 gains one corollary after the capability-tiered
+  one: who touches a deliverable is FM #26's question, *where* they write is FM #29's. The worked case is an
+  unnamed adopter's six adversarial-verify lenses in one tree, one mutating source while another's test run was in
+  flight, and the follow-up ruling (read-only lenses; every discriminating mutation made serially by one writer).
+  Links to the runner's FM table, `SAFEGUARDS.md` §Blast Radius Limits and `ITERATIVE_METHODOLOGY.md` §Parallel
+  Actors; all verified to resolve
+  (T5 is canonical-only, outside `bin/check-links`' distributed set — checked separately).
+
+### 2026-10-01 · [ad hoc] Shape B dogfood (alpha) — T5 gains a failure mode #29 example (in progress)
+
+- **Action:** session S35-alpha claimed on branch `s35-alpha` (parallel-sessions plan Phase 5, concurrent with S35-beta): one T5 corollary for failure mode #29.
+### 2026-10-01 · [ad hoc] S35-beta close-out — the session-notes bullet landed; the merging session's early claim reddens every line
+
+- **Action:** closes the S35-beta claim entry (*Shape B dogfood (beta) — §Parallel Actors says where session notes go
+  under Shape B (in progress)*): claim `c5df4c6`, deliverable `be36fbd`. Gate, run once under the shared suite lock:
+  `quality_ratchet: 9/12 pass · 3 fail · 0 unmeasured · results bec96d9f8290 · manifest 01be7a18f6cb`. **All three
+  fails have one cause, not this line's:** S34 committed its pending claim on `main` (`92f773e`) *before* the lines
+  were cut, so each line inherits that stub, and the moment a line prepends its own claim, S34's block becomes an
+  *older* pending receipt, which `--all --allow-pending` rejects (the exemption is newest-only,
+  `bin/check-handoff:228`). That is `check-handoff-all` (1) plus `bin/tests.sh` Test 25's two live-ledger assertions
+  (`:669`, `:697`: 235/237). Proven by counterfactual: the same ledger minus S34's block passes. No concurrent line
+  can be ratchet-green until the merging session's receipt is complete, and `check-handoff --all` at close-out fails
+  on S34's block alone (10 errors, none this line's). Left for the merging session and the operator; S34's receipt is
+  not this line's to edit.
+
+### 2026-10-01 · [ad hoc] Shape B dogfood (beta) — §Parallel Actors: session notes are rewritten, not merged
+
+- **Action:** `ITERATIVE_METHODOLOGY.md` §Parallel Actors gains the Shape B bullet **Session notes are rewritten, not
+  merged** (after **The ledgers merge.**, which already carries D15's `.quality-gates.json` half): `SESSION_NOTES.md` is
+  branch-local transient state, each line keeps its own, and the integrating session rewrites it at its Phase 3D
+  close-out. D15 cited `starter-kit/SESSION_NOTES.md`; the bullet cites the seed by role instead, because the flight
+  manual ships to adopters at `docs/methodology/` (`bin/_manifest.py:57`), where no `starter-kit/` exists, and the file
+  has no `starter-kit/` reference anywhere. +295 B; still one Read (637 lines); `bin/check-links` OK (116).
+
+### 2026-10-01 · [ad hoc] Shape B dogfood (beta) — §Parallel Actors says where session notes go under Shape B (in progress)
+
+- **Action:** session S35-beta claimed on branch `s35-beta` (parallel-sessions plan Phase 5, concurrent with S35-alpha): D15's session-notes sentence in §Parallel Actors.
+
+### 2026-10-01 · [ad hoc] Parallel-sessions plan Phase 5 — the Shape B dogfood: two concurrent sessions and one merge (in progress)
+
+- **Action:** session S34 claimed on `main` as the merging session. Two concurrent sessions, `S35-alpha` and
+  `S35-beta`, run in linked worktrees on branches `s35-alpha` / `s35-beta`, each with one doc-only deliverable and a
+  full close-out; S34 merges both locally and measures the result. Also: S33's receipt cited `README.md:211`; the rows
+  are at `:209` and `:221` — corrected there.
+
+### 2026-10-01 · [ad hoc] S33 close-out — Phase 4 done; the Shape A dogfood measured
+
+- **Action:** closes the S33 claim entry (*Parallel-sessions plan Phase 4 … (in progress)*). **Shape A, measured
+  (the plan's Phase 5 asks for these counts):** 4 worker units, each a read-only agent (no Edit/Write tool) returning
+  exact edits + the claims it relied on, dispatched in parallel; 1 lead unit (the shared README/CLAUDE.md, gate f);
+  2 sweep finds the plan's file list missed. Worker claims re-derived by the lead: all load-bearing ones; found
+  wrong: **0**; pre-existing defects a worker surfaced: **1** (BOOTSTRAP's "only hook" vs the ratchet). Integration:
+  one unit per checkpoint commit, `check-links` after each; no worker wrote a byte. Workers spent ~47–52k tokens each
+  in their own contexts; each report cost the lead ~2–3k. Gate run at `9b0a760`: `quality_ratchet: 12/12 pass · 0
+  fail · 0 unmeasured · results df965ece841e · manifest 01be7a18f6cb`.
+
+### 2026-10-01 · [ad hoc] Phase 4 sweep — the third campaign template and the research workstream's race example
+
+- **Action:** S33, the plan's Learning #10 whole-corpus sweep for *sub-agent / worktree / parallel*. Two sites the plan's
+  file list missed: `workstreams/INHERITED_CODEBASE_FAMILIARIZATION_CAMPAIGN.md` has the same Sub-Agent Dispatch
+  section as the two U2 updated — it gets the same one-writer sentence (lead-written, in that file's link style);
+  `RESEARCH_DOCUMENTATION_WORKSTREAM.md:121`'s parallel-download race is named as failure mode #29. The rest of the
+  hits (read-only research fan-out, the permission-asymmetry pattern) already agree with the rule.
+
+### 2026-10-01 · [ad hoc] Phase 4 U1 — HOW_TO_USE §Multi-Agent Teams names the two shapes and the one-writer rule
+
+- **Action:** S33. Worker-drafted, lead-integrated: the section states Shape A and Shape B, that each concurrent
+  session runs on its own branch or worktree, that a working tree has one writer, and points to §Parallel Actors for
+  the contract; every existing true line kept. Claims re-derived: 0 wrong.
+
+### 2026-10-01 · [ad hoc] Phase 4 U2 — both campaign templates cite the one-writer rule in their sub-agent dispatch
+
+- **Action:** S33. Worker-drafted, lead-integrated: `workstreams/TEMPLATE_CAMPAIGN.md` gains a **One writer** paragraph
+  OUTSIDE its bracketed placeholder (an adopter's fill-in would erase it inside); `RESEARCH_EXHAUSTIVE_VERIFICATION_
+  CAMPAIGN.md` closes *When to fan out* with it. Each cites failure mode #29 and §Parallel Actors in that file's own
+  link style. Claims re-derived: 0 wrong.
+
+### 2026-10-01 · [ad hoc] Phase 4 U3 — RECOMMENDED_SKILLS names the illustrative Claude Code mechanism for worker isolation
+
+- **Action:** S33. Worker-drafted, lead-integrated: after the capability-tiered paragraph, *Shape A fan-out — worker
+  isolation* — `Agent` `isolation: "worktree"`; read-only agent types make return-content mechanical (a shell tool
+  stays an instruction — the worker's own caveat, kept: the read-only type used in this very fan-out has Bash);
+  the return-content fallback when worktree isolation is refused. Brand names stay confined to this file. Harness
+  claims re-derived by the lead from this session's own tool definitions: 0 wrong.
+
+### 2026-10-01 · [ad hoc] Phase 4 U4 — BOOTSTRAP Step 10 gives existing-`.gitattributes` adopters the three union lines
+
+- **Action:** S33. Worker-drafted (read-only, returned content), lead-reviewed and integrated: a *Ledger merge driver*
+  paragraph — sync never overwrites a SEED, so a project that already had `.gitattributes` appends the three lines
+  itself; `HANDOFFS.md` excluded; GitHub's merge ignores the driver, merge locally. Worker claims re-derived by the lead
+  (`bin/sync:234` never-overwrite, the seed on `origin/main`, anchor uniqueness): 0 wrong. The worker flagged a
+  pre-existing contradiction, fixed here by the lead: `:325` "the one hook" and `:345` "the only hook it ships" vs
+  `:327` "the second hook" (the ratchet, since v3.8).
+
+### 2026-10-01 · [ad hoc] Phase 4, lead's unit (U5) — `README.md` tree and `CLAUDE.md` tables name the new seed and checker
+
+- **Action:** S33. The shared files a worker may not touch (contract gate f), written by the lead: `README.md`'s
+  repository tree gains `starter-kit/gitattributes` and `bin/check-ledger`; `CLAUDE.md`'s starter-kit table gains the
+  seed row and its Tools table a row for the three canonical-only checkers (`check-handoff`, `check-ledger`,
+  `check-learnings`) — Learning #10's sweep for the Phase 1 artifacts. `CLAUDE.md` 45,842 → 46,280 B.
+
+### 2026-10-01 · [ad hoc] Parallel-sessions plan Phase 4 — the docs sweep, run as a Shape A fan-out (in progress)
+
+- **Action:** session S33 claimed on `main`: Phase 4 of `docs/planning/parallel-sessions-plan.md` per §8A, executed as
+  the Shape A dogfood — read-only workers each draft one unit and return content; the lead integrates one unit per
+  checkpoint and owns the shared files (`README.md`, `CLAUDE.md`). Measured: units, worker claims re-derived, claims
+  found wrong. D11 is not in this phase (deferred).
+
+### 2026-10-01 · [ad hoc] S32 close-out — Phase 3: D9 on `main`, D8 in PR #91
+
+- **Action:** closes the S32 claim entry (*Parallel-sessions plan Phase 3 … (in progress)*). Gate run at `9565c45`:
+  `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results df965ece841e · manifest 01be7a18f6cb`.
+
+### 2026-10-01 · [ad hoc] Ratchet: `context-budget-unit-tests` 145 → 148 after D9; PR #91 opened for D8
+
+- **Action:** S32. Measured at `5ff62ea`: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results fd8305354596 ·
+  manifest 312cd7c405c8`; the three worktree tests raise the budget suite to 148 — tightened. **PR opened (non-commit
+  action):** [PR #91](https://github.com/KJ5HST/methodology/pull/91), `feat/sync-manifest-at-ref` → `main`, D8 for
+  rmsharp's review; not merged.
 
 ### 2026-10-01 · [ad hoc] Phase 3 D9 — `context_budget.py --calibrate` works from a linked worktree (1.3.1)
 

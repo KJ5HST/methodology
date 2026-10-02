@@ -118,7 +118,7 @@ Before retrieval, audit the corpus for:
 - **Pre-existing duplicates** in the corpus folder (same paper, different filename or format)
 - **Stub files** masquerading as content (HTML 403 pages saved as PDF, search-result pages, error responses)
 
-**Race conditions survive accurate pre-flagging.** Parallel agents sharing a download target can each retrieve the same item under different names, so a post-hoc dedup pass is required even if pre-flagging was correct. MD5 plus content-equivalence comparison is the minimum.
+**Race conditions survive accurate pre-flagging.** Parallel agents sharing a download target can each retrieve the same item under different names — shared-state interference (failure mode #29) in its retrieval form — so a post-hoc dedup pass is required even if pre-flagging was correct. MD5 plus content-equivalence comparison is the minimum.
 
 ### Step 4: Retrieve Missing Sources via the WAF Hierarchy
 

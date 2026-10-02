@@ -157,6 +157,8 @@ A review/audit session whose deliverable is the campaign-wide report.
 
 [If applicable. Many campaigns benefit from sub-agent fan-out at per-unit scale. Describe the pattern, when to fan out, and calibration rules. See `RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md` for a worked example.]
 
+**One writer.** Whatever the pattern, sub-agents read and return verdicts or content, and only the parent writes to the working tree or commits — a sub-agent never edits, builds, or runs tests in the shared tree (failure mode #29; [`ITERATIVE_METHODOLOGY.md` §Parallel Actors](../ITERATIVE_METHODOLOGY.md#parallel-actors)).
+
 ---
 
 ## Deliverable Contracts

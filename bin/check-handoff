@@ -201,14 +201,32 @@ def extract_blocks(text: str) -> list:
     return [b["content"] for b in blocks]
 
 
+SEQ_RE = re.compile(r"^S\d+(?:-(\S+))?$")
+
+
+def sequence_of(session: str) -> str:
+    """The line a receipt belongs to: bare `S<N>` is the repository's trunk, `S<N>-<seq>` is
+    line <seq> (parallel-sessions plan, D5). Any other id is treated as a line of its own."""
+    m = SEQ_RE.match(session)
+    return (m.group(1) or "") if m else "?" + session
+
+
 def validate_ledger(blocks: list, findings: list, allow_pending: bool) -> list:
     """Whole-ledger invariants across EVERY receipt, not just the newest.
 
-    `allow_pending` applies ONLY to the newest block: a just-written Phase 1B stub
-    is legitimately pending mid-session, but an OLDER receipt left pending is a
-    session that never closed out — exactly what this mode exists to surface.
+    `allow_pending` applies to the newest block: a just-written Phase 1B stub is
+    legitimately pending mid-session. An OLDER receipt left pending is a session that
+    never closed out — exactly what this mode exists to surface — with one exception:
+    the newest receipt of ANOTHER line. With two lines of sessions live at once (Shape B,
+    parallel-sessions plan), a line's newest pending receipt is that line's live claim,
+    and a concurrent line's receipts are prepended above it; refusing it failed every
+    concurrent branch's gate through no fault of its own (found by the Phase 5 dogfood).
+    A pending receipt superseded by a later receipt of its OWN line is still refused.
     """
     seen = {}
+    newest_of_line = {}
+    for idx, b in enumerate(blocks):
+        newest_of_line.setdefault(sequence_of(parse_block(b["content"]).get("session", "").strip()), idx)
     for idx, b in enumerate(blocks):
         fields = parse_block(b["content"])
         label = fields.get("session", "").strip() or "<no session>"
@@ -225,7 +243,9 @@ def validate_ledger(blocks: list, findings: list, allow_pending: bool) -> list:
                 % (prefix, ", ".join(order[:2]) or "none")
             )
 
-        for msg in validate(fields, allow_pending and idx == 0):
+        line_owner = newest_of_line.get(sequence_of(fields.get("session", "").strip())) == idx
+        pending_ok = (allow_pending and idx == 0) or (idx != 0 and line_owner)
+        for msg in validate(fields, pending_ok):
             findings.append("%s: %s" % (prefix, msg))
 
         # Identity is session + date, NOT session alone. `S<N>` is a per-sequence

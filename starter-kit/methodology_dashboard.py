@@ -83,7 +83,7 @@ from collections import defaultdict
 # Every other copy (portfolio root + per-project) is a synced copy of the canonical and must
 # carry the same value. A copy whose DASHBOARD_VERSION is older than the canonical is stale —
 # re-sync from the canonical. Bump on any change to the canonical script.
-DASHBOARD_VERSION = "2.11.2"
+DASHBOARD_VERSION = "2.11.3"
 
 ROOT = Path(__file__).parent
 EXCLUDE_DIRS = {"methodology", "BrogueCE-iOS", ".git", "__pycache__", "node_modules", ".venv", "venv"}
@@ -313,7 +313,9 @@ def categorize_file(rel_path, ext, name):
         return "source"
     if ext in DOC_EXTS or "docs/" in rel_str:
         return "docs"
-    if ext in CONFIG_EXTS or name in CONFIG_FILES:
+    # A dotfile has no Path.suffix, so the dotfile names CONFIG_EXTS lists (.gitignore, .editorconfig,
+    # .eslintrc, .prettierrc) can only match on the whole name — they never matched before 2.11.3.
+    if ext in CONFIG_EXTS or name in CONFIG_FILES or name.lower() in CONFIG_EXTS:
         return "config"
     if ext in ASSET_EXTS:
         return "assets"

@@ -88,7 +88,7 @@ corruption. `bin/check-handoff --all` keys on the pair for this reason.
 
 **Concurrent sequences in one repository** get a tag. Each repository's `main` uses bare `S<N>`; a session
 claimed on any other branch of the same repository writes `S<N>-<seq>` (`S24-ratchet`, the branch's short name
-or the agent's), so two sessions live at once never share a name. When their branches merge, `HANDOFFS.md`
+or the agent's), so two sessions live at once never share a name. Each line's newest pending receipt is that line's live claim, even when another line's receipts sit above it; a pending receipt superseded within its own line is a session that never closed out. When their branches merge, `HANDOFFS.md`
 conflicts — it is deliberately left out of the `.gitattributes` union driver, which would fuse two prepended
 receipts into one block — and the merge is resolved keep-both, ours on top, from the three index stages:
 
