@@ -44,6 +44,10 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-01 · [ad hoc] S37 close-out — dashboard 2.11.3
+
+- **Action:** closes the S37 claim entry. Gate run at `dbde928` (the tightened manifest): `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 53f8c99b071f · manifest ae81b96658ec`.
+
 ### 2026-10-01 · [ad hoc] Ratchet: `dashboard-unit-tests` 226 → 229; the oversight scanner copy refreshed to 2.11.3
 
 - **Action:** S37. Measured at `569024b`: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 8301a4d20729 ·

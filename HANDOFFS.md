@@ -10,8 +10,17 @@ This repository dogfoods its own methodology: every session records a durable, m
 ```handoff
 session: S37
 date: 2026-10-01
-status: pending
-active_task: Dashboard fix — dotfile names listed in CONFIG_EXTS (.gitignore, .editorconfig, .eslintrc, .prettierrc) never matched because a dotfile has no Path.suffix; categorize them as config by name; RED-first unit test; both twins; DASHBOARD_VERSION 2.11.2 → 2.11.3; then refresh the oversight-root scanner copy. IN PROGRESS.
+status: complete
+self_score: 8
+predecessor_score: 8
+active_task: Dashboard fix — dotfile names in CONFIG_EXTS never matched (a dotfile has no Path.suffix); categorize them as config by name; RED-first; both twins; 2.11.3; refresh the oversight scanner copy. COMPLETE.
+what_was_done: Claim d88f195 → checked first that the category is display-only (the Config row's count/LOC; no score or risk reads it) → RED: new TestDotfileConfigCategory — the listed-dotfiles test failed ('other' != 'config'), the two controls (an unlisted dotfile stays other; suffix matching unchanged) passed → fix 569024b: categorize_file also matches the whole lowercased name against CONFIG_EXTS; DASHBOARD_VERSION 2.11.2 → 2.11.3 with its pinned test; twins byte-identical; 229 OK → --run 12/12 → tightening dbde928 (dashboard-unit-tests 226 → 229) + the oversight root's scanner copy refreshed 2.11.1 → 2.11.3 by one-file copy (run exit 0; recorded in /Users/terrell/code/CHANGELOG.md) → --run 12/12 → this close-out. Between S36 and S37, the portfolio work (six adopters to v4.1) was recorded in the OVERSIGHT notes as Session 529, by the vantage rule — not here. Predecessor S36 8/10: its adopter procedure was exact and its "clean repos on main only" list correctly needed one more filter (remote divergence), applied in S529. Learnings: none.
+next_steps: Nothing in this repository is left open by this run except work that waits on someone else: (a) PR #91 (D8) — when rmsharp answers, merge locally (CHANGELOG union; GitHub ignores it), --run, tighten, and ship D8 with 2.11.3's fix in the next patch release (v4.1.1). (b) The operator's two parked local branches — docs/operator-gated-review-plan (a 2026-07-31 DRAFT plan awaiting ratification) and experimental/pocock-audit (17 commits, May): ratify, PR, or delete — operator's call. (c) Adopters not updated (oversight SESSION_NOTES Session 529 lists them and why): each one's own next session syncs it; the six updated need their local commits pushed by their own next session.
+key_files: tools/methodology_dashboard.py:318 (the name match), tools/test_methodology_dashboard.py:2372 (TestDotfileConfigCategory), /Users/terrell/code/methodology_dashboard.py:86 (oversight copy, 2.11.3)
+gotchas: (1) main is ahead of the v4.1 tag by the 2.11.3 fix — unreleased by design until D8 can ride with it. (2) The oversight scanner copy must be refreshed by ONE-FILE copy whenever DASHBOARD_VERSION moves; --sync rewrites every project.
+runtime_smoke: n/a as an application launch — the oversight scanner ran on 27 projects at 2.11.3 (exit 0). Build-equivalent: quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 53f8c99b071f · manifest ae81b96658ec — run at dbde928.
+changelog_ref: CHANGELOG.md "2026-10-01 · [ad hoc] Dashboard 2.11.3 — dotfile names in `CONFIG_EXTS` are matched by name"
+commit: d88f195 (claim) + 569024b (fix) + dbde928 (tightening) + this commit (close-out)
 ```
 
 ```handoff
