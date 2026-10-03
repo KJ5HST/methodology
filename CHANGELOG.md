@@ -44,6 +44,16 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-02 · [ad hoc] S38 close-out — PR #91 answered: branch fixed and pushed, description replaced, reply posted
+
+- **Action:** closes the S38 claim entry (*PR #91: answer rmsharp's review (in progress)*). On branch
+  `feat/sync-manifest-at-ref`, with their own ledger entries there: `46dec34` merges `main` in, `fa44be6` reads the
+  source's manifest as data and refuses rows it cannot install safely (Test 34, 8 checks RED first; 254/0), `befa755`
+  names the new helper in the README tree. **Non-commit actions:** the branch pushed to `befa755`; the PR #91
+  description replaced; the reply posted ([comment](https://github.com/KJ5HST/methodology/pull/91#issuecomment-5963355104)),
+  after the operator read it. Read back: MERGEABLE, CLEAN, 6 files. Gate run on the branch at `befa755`:
+  `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 45f064152691 · manifest ae81b96658ec`.
+
 ### 2026-10-02 · [ad hoc] PR #91: answer rmsharp's review (in progress)
 
 - **Action:** session S38 claimed on `main`. rmsharp's three questions on PR #91 (2026-10-02T21:56Z) all reproduce:
