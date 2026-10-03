@@ -44,6 +44,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-03 · [ad hoc] v4.2 release documentation — `CLAUDE.md` §Versioning and README What's New
+
+- **Action:** `CLAUDE.md` *Current version* v4.1 → v4.2 and the v4.2 §Versioning entry; `README.md` What's New in
+  v4.2 (PR #91 / D8, which v4.1 named as not yet released). Tag and GitHub Release `v4.2` were created at `f34769f`
+  (261 passed / 0 failed; ratchet 12/12). The release itself: [`CLAUDE.md` §Versioning](CLAUDE.md#versioning) v4.2
+  (pointer, not re-narrated).
+
 ### 2026-10-03 · [ad hoc] PR #91: comment to rmsharp that his three approval points were fixed before the merge
 
 - **Action (non-commit):** S39, after its close-out, with the operator's OK on the full text:
