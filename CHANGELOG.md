@@ -44,6 +44,12 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-02 · [ad hoc] `bin/_manifest.py` states the constraint PR #91 put on it
+
+- **Action:** S39. Its docstring now says why it must stay literal data with one plain assignment per name: every
+  checkout from `e107356` on reads it with `bin/_manifest_reader.py` and refuses a manifest that changes a name after
+  assigning it. Already enforced by Test 34, whose source is built from this file; the note tells the next editor why.
+
 ### 2026-10-02 · [ad hoc] Ratchet: `tests-sh-passed` 243 → 261 after PR #91 (Tests 32 and 34)
 
 - **Action:** S39. Measured on the merged `main` at `e107356`: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured ·
