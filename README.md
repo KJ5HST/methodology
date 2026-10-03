@@ -285,6 +285,19 @@ Developed by Terrell Deppe (KJ5HST) using Claude Code (Anthropic) during develop
 
 The framework is agent-independent — it works with any AI coding agent that supports persistent files and session-based interaction. It also works for human developers, though the Session Runner and known failure modes are specifically tuned for AI agent tendencies.
 
+### What's New in v4.2
+
+**`--source=github` installs from the source's own manifest.** The item v4.1 left out ([#91](https://github.com/KJ5HST/methodology/pull/91)): `bin/sync` and `bin/status` now install and compare against the manifest of the repository they clone, not this checkout's, so a source newer than your checkout is installed with its own file list.
+
+- **The manifest is read as data, never run** — new `bin/_manifest_reader.py` parses the clone's `bin/_manifest.py` with `ast` and reads its constants as literals; code in a cloned manifest no longer runs during a sync. `bin/_manifest.py` is documented as literal data, one plain assignment per name.
+- **Unsafe rows are refused before anything is written** — a row whose disposition is not `tracked` or `seed` stops the run and names the rows. This closes a defect where a source that labelled seeds differently could overwrite an adopter's own `CHANGELOG.md` with exit 0 and no `--force`; `bin/status` had the mirror-image bug and now refuses the same way.
+- **Path checks** — a `src` or `dest` that is absolute, has a drive letter, climbs out with `..`, is `.git` or `.`, or contains a NUL byte is refused, as is a manifest that changes a name it binds.
+- **Dashboard 2.11.3** — dotfile names listed in `CONFIG_EXTS` are categorized as config.
+
+**Updating.** Re-run `bin/sync`. A source whose manifest cannot be read stops with one line and a hint (`--source=local` syncs from a full checkout) and writes nothing.
+
+**No phase, failure mode, quality gate, or workstream change.** `bin/tests.sh` 243 → 261; declared gates stay at 12.
+
 ### What's New in v4.1
 
 **Fan-out to many agents is now a named session shape: many hands, one closer, one writer per working tree.** Fanning out used to be safe but messy — two writers in one tree read each other's half-finished changes as defects, and two sessions running at once collided in the ledgers. This release implements the parallel-sessions plan ([#83](https://github.com/KJ5HST/methodology/pull/83)).
