@@ -44,6 +44,17 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-02 · [ad hoc] PR #91 approval follow-ups: `.git`, `.` and NUL paths refused; a manifest that changes a name it binds is refused
+
+- **Action:** S39, on branch `feat/sync-manifest-at-ref`, fixing the three non-blocking points in rmsharp's approval.
+  A src or dest inside `.git` (any case), naming no file (`.`), or holding a NUL byte is refused with the other unsafe
+  paths; before, `.git/hooks/pre-commit` would have been written into the adopter's repository, and a NUL byte failed at
+  write time with a traceback. Every name the reader uses (`DISTRIBUTION`, `SEED_FORMAT_MARKERS`, the label strings
+  rows resolve) must be bound once by one plain assignment and never changed: `+=`, `.append(...)`, `del`, a second
+  assignment or a rebound `SEED` is refused, naming the lines, where it used to be skipped silently (rows lost, or the
+  last assignment read). Refused rows print as `repr`, so a NUL never reaches the terminal raw. Test 34 grows 8 → 15
+  checks, the 7 new ones RED first. `bin/tests.sh` 261/0.
+
 ### 2026-10-02 · [ad hoc] README repo tree names `bin/_manifest_reader.py`
 
 - **Action:** S38, on branch `feat/sync-manifest-at-ref`. One line under `bin/` for the helper the PR #91 fix added.

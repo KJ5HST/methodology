@@ -1391,6 +1391,31 @@ OUT="$(s34_sync "$S" "$P")"; RC=$?
 [ "$RC" = 1 ] && [ ! -e "$P/ROADMAP.md" ] && grep -qF "$T34/secret.txt" <<<"$OUT" \
     && pass "github sync refuses a source row whose src is outside the source" \
     || fail "github sync: an absolute src (exit $RC; wanted 1, and no file copied in from outside the source)"
+# rmsharp's approval of PR #91 named three more (S39): a dest of '.' or inside .git passed the path check, a NUL byte
+# passed it and failed at write time with a traceback, and a manifest that changed DISTRIBUTION after assigning it
+# (+=, .append, a second assignment) lost or swapped rows with no message. Each is refused before anything is written.
+s34_refused() { # $1 what, $2 case name, $3 text in the source's manifest, $4 its replacement, $5 text the error names
+    local P OUT RC; S34_SRC="$(s34_case "$2" "$3" "$4")"; P="$(s34_project)"
+    OUT="$(s34_sync "$S34_SRC" "$P")"; RC=$?
+    [ "$RC" = 1 ] && head -1 <<<"$OUT" | grep -q "^error: the bin/_manifest.py in file://$S34_SRC " \
+        && grep -qF -- "$5" <<<"$OUT" && ! grep -q Traceback <<<"$OUT" \
+        && [ ! -e "$P/SESSION_RUNNER.md" ] && [ ! -e "$P/.git/hooks/pre-commit" ] \
+        && pass "github sync refuses $1, naming it; nothing written" \
+        || fail "github sync: $1 (exit $RC; wanted 1, an 'error:' line naming '$5', no traceback, nothing written)"
+}
+s34_refused "a dest inside .git"            gitdest '"ROADMAP.md", SEED)' '".git/hooks/pre-commit", SEED)' ".git/hooks/pre-commit"
+s34_refused "a dest that names nothing ('.')" dotdest '"ROADMAP.md", SEED)' '".", SEED)'                     "dest '.'"
+s34_refused "a NUL byte in a path"          nuldest '"ROADMAP.md", SEED)' '"ROAD\x00MAP.md", SEED)'         "NUL"
+MORE='("starter-kit/BOOTSTRAP.md", "BOOTSTRAP-COPY.md", TRACKED)'
+s34_refused "DISTRIBUTION += after its assignment"      augmented 'SEED_FORMAT_MARKERS = {' "DISTRIBUTION += [$MORE]
+SEED_FORMAT_MARKERS = {" "DISTRIBUTION"
+OUT="$(s34_status "$S34_SRC" "$(s34_project)")"; RC=$?
+[ "$RC" = 1 ] && grep -q "DISTRIBUTION" <<<"$OUT" && ! grep -q Traceback <<<"$OUT" \
+    && pass "github status refuses the same source, naming DISTRIBUTION" || fail "github status: DISTRIBUTION += (exit $RC; wanted 1)"
+s34_refused "DISTRIBUTION.append(...) after its assignment" appended 'SEED_FORMAT_MARKERS = {' "DISTRIBUTION.append($MORE)
+SEED_FORMAT_MARKERS = {" "DISTRIBUTION"
+s34_refused "a second DISTRIBUTION assignment"          reassigned 'SEED_FORMAT_MARKERS = {' "DISTRIBUTION = [$MORE]
+SEED_FORMAT_MARKERS = {" "DISTRIBUTION"
 rm -rf "$T34"
 
 echo ""
