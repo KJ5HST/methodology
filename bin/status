@@ -25,7 +25,8 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _manifest import DISTRIBUTION, TRACKED, SEED_FORMAT_MARKERS  # noqa: E402  (bin/ on sys.path)
+from _manifest import DISTRIBUTION, TRACKED, SEED, SEED_FORMAT_MARKERS  # noqa: E402  (bin/ on sys.path)
+from _manifest_reader import ManifestError, read_manifest  # noqa: E402
 
 REPO = "KJ5HST/methodology"
 # --source=github clones this URL; the variable overrides it, as for bin/sync.
@@ -135,17 +136,45 @@ def clone_source(url: str, parent: Path) -> Path:
     return clone
 
 
+def use_source_manifest(methodology_root: Path, url: str) -> None:
+    """Compare against the manifest AT THE SOURCE -- the clone's own bin/_manifest.py -- so the
+    file list and the contents come from one ref (parallel-sessions plan, D8; bin/sync does the
+    same). Rows only this checkout's manifest has are named and skipped. A source with no
+    manifest of its own leaves this checkout's in place. Read as data, never run
+    (_manifest_reader); a row whose disposition is not this checkout's TRACKED or SEED refuses
+    the run, since report() would read any other label as a seed and hide its drift."""
+    global DISTRIBUTION, SEED_FORMAT_MARKERS
+    path = methodology_root / "bin" / "_manifest.py"
+    if not path.is_file():
+        return
+    try:
+        theirs, markers = read_manifest(path, (TRACKED, SEED))
+    except ManifestError as e:
+        sys.exit(f"error: the bin/_manifest.py in {url} {e}\n"
+                 f"hint: compare against a full local checkout instead — `--source=local`.")
+    have = {src for src, _dest, _disp in theirs}
+    mine = [src for src, _dest, _disp in DISTRIBUTION if src not in have]
+    if mine:
+        print(f"note: {len(mine)} file(s) in this checkout's manifest are not distributed by {url} yet "
+              f"-- skipped, the source's own manifest is what this run compares:")
+        for src in mine:
+            print(f"    {src}")
+    DISTRIBUTION = theirs
+    SEED_FORMAT_MARKERS = SEED_FORMAT_MARKERS if markers is None else markers
+
+
 def absent_sources(methodology_root: Path, url: str) -> None:
-    """Exit, naming every distributed file the cloned source lacks: with no canonical copy there
-    is nothing to compare against. bin/sync prints the same list, with its own hint."""
+    """Exit, naming every distributed file the cloned source lacks -- checked against the
+    source's own manifest: with no canonical copy there is nothing to compare against. bin/sync
+    prints the same list, with its own hint."""
     srcs = [src for src, _dest, _disp in DISTRIBUTION]
     absent = [src for src in srcs if not (methodology_root / src).is_file()]
     if absent:
         listed = "\n".join(f"    {src}" for src in absent)
         sys.exit(f"error: {len(absent)} of {len(srcs)} distributed file(s) do not exist in {url} yet:\n"
                  f"{listed}\n"
-                 f"       That repository is behind this distribution manifest, so those files "
-                 f"cannot be compared.\n"
+                 f"       That repository's own manifest names files it does not contain, so "
+                 f"those cannot be compared.\n"
                  f"hint: compare against a full local checkout instead — `--source=local`.")
 
 
@@ -240,6 +269,7 @@ def main() -> int:
     url = source_url()
     with tempfile.TemporaryDirectory(prefix="methodology-status-") as parent:
         clone = clone_source(url, Path(parent))
+        use_source_manifest(clone, url)
         absent_sources(clone, url)
         return report(args.paths, clone, source, url)
 

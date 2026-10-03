@@ -69,6 +69,43 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
   `context_budget.py` change, now on `main`. Fix on the branch, RED first; the reply is shown to the operator before it
   is posted.
 
+### 2026-10-02 · [ad hoc] PR #91 approval follow-ups: `.git`, `.` and NUL paths refused; a manifest that changes a name it binds is refused
+
+- **Action:** S39, on branch `feat/sync-manifest-at-ref`, fixing the three non-blocking points in rmsharp's approval.
+  A src or dest inside `.git` (any case), naming no file (`.`), or holding a NUL byte is refused with the other unsafe
+  paths; before, `.git/hooks/pre-commit` would have been written into the adopter's repository, and a NUL byte failed at
+  write time with a traceback. Every name the reader uses (`DISTRIBUTION`, `SEED_FORMAT_MARKERS`, the label strings
+  rows resolve) must be bound once by one plain assignment and never changed: `+=`, `.append(...)`, `del`, a second
+  assignment or a rebound `SEED` is refused, naming the lines, where it used to be skipped silently (rows lost, or the
+  last assignment read). Refused rows print as `repr`, so a NUL never reaches the terminal raw. Test 34 grows 8 → 15
+  checks, the 7 new ones RED first. `bin/tests.sh` 261/0.
+
+### 2026-10-02 · [ad hoc] README repo tree names `bin/_manifest_reader.py`
+
+- **Action:** S38, on branch `feat/sync-manifest-at-ref`. One line under `bin/` for the helper the PR #91 fix added.
+  Swept every page that describes `--source=github` (README, BOOTSTRAP, T1, T8): none says the source's manifest is
+  executed, so nothing else went stale.
+
+### 2026-10-02 · [ad hoc] PR #91 review: the source's manifest is read as data, and rows it cannot install safely are refused
+
+- **Action:** S38, on branch `feat/sync-manifest-at-ref`, answering rmsharp's review. New `bin/_manifest_reader.py`
+  parses the clone's `bin/_manifest.py` with `ast` instead of executing it, so nothing from the clone runs during a
+  sync or a status run, and an unreadable manifest is a one-line `error:` naming the source rather than a traceback.
+  Every row is checked before anything is written: a disposition other than this checkout's `tracked`/`seed`, or a
+  src/dest that is absolute or climbs with `..`, refuses the run and names the rows. Before this, a source with a
+  different seed label had its seeds written like tracked files: an adopter's own `CHANGELOG.md` was overwritten,
+  exit 0, no `--force`. `bin/status` had the mirror case, reading an unknown label as a seed and hiding drift. New Test
+  34 (8 checks, all RED against the branch's previous scripts). The Test 26 fixture copies the new helper with the
+  scripts. `bin/tests.sh` 254/0 after merging `main` (246 before this fix); live `--source=github` sync and status exit 0.
+
+### 2026-10-01 · [ad hoc] Phase 3 D8 — `bin/sync`/`bin/status --source=github` use the source's own manifest (PR, for review)
+
+- **Action:** S32, on branch `feat/sync-manifest-at-ref` (not `main`: it changes #87's premise, so rmsharp reviews it
+  first, as asked on PR #83). In github mode both scripts load the clone's `bin/_manifest.py` and iterate it, so the
+  file list and contents come from one ref; rows only this checkout's manifest has are named in a note and skipped,
+  where the scripts used to refuse the whole run. `absent_sources` now checks the source against its own manifest
+  (Test 28's case — the source lacks a file it lists — still refuses, same wording). New Test 32 (3 checks), RED
+  against `main`'s scripts (all 3 fail, exit 1). `bin/tests.sh` 240/0 on the branch.
 ### 2026-10-01 · [ad hoc] S37 close-out — dashboard 2.11.3
 
 - **Action:** closes the S37 claim entry. Gate run at `dbde928` (the tightened manifest): `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 53f8c99b071f · manifest ae81b96658ec`.

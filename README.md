@@ -220,6 +220,7 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 │   ├── check-learnings               ← Validate the Learnings table + its citations (canonical-only)
 │   ├── check-ledger                  ← Validate CHANGELOG.md's structure + archive shards (canonical-only)
 │   ├── _manifest.py                  ← Shared (src, dest, disposition) manifest — single source of truth
+│   ├── _manifest_reader.py           ← Reads a source's manifest as data for `--source=github` (never runs it)
 │   └── tests.sh                      ← Test suite for the bin/ tooling
 │
 └── tools/                            ← Portfolio-level tooling
