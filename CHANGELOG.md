@@ -44,6 +44,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-02 · [ad hoc] PR #91: rmsharp's three non-blocking points, then merge (in progress)
+
+- **Action:** session S39 claimed on `main`. rmsharp approved PR #91 at `befa755` with three non-blocking points;
+  each reproduces: a `.` or `.git/hooks/pre-commit` dest passes the path check, a NUL byte in a path passes it, and
+  `DISTRIBUTION += …` or `.append(…)` drops rows silently (and a second assignment wins, not the first). Fix on the
+  branch, RED first, then merge locally.
+
 ### 2026-10-02 · [ad hoc] S38 close-out — PR #91 answered: branch fixed and pushed, description replaced, reply posted
 
 - **Action:** closes the S38 claim entry (*PR #91: answer rmsharp's review (in progress)*). On branch

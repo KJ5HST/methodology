@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S39
+date: 2026-10-02
+status: pending
+active_task: Land PR #91 (approved by rmsharp 2026-10-03T01:05Z) with his three non-blocking points fixed first, RED-first on the branch: refuse a src/dest with a .git component, that names nothing ('.'), or holds a NUL byte; refuse a manifest that rebinds or mutates a name the reader uses (DISTRIBUTION += …, .append(…), a second assignment) instead of skipping it silently. Then merge locally into main, tests, quality_ratchet --run, tighten tests-sh-passed, push. IN PROGRESS.
+```
+
+```handoff
 session: S38
 date: 2026-10-02
 status: complete
