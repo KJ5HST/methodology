@@ -44,6 +44,12 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-03 · [ad hoc] PR #91: comment to rmsharp that his three approval points were fixed before the merge
+
+- **Action (non-commit):** S39, after its close-out, with the operator's OK on the full text:
+  [comment](https://github.com/KJ5HST/methodology/pull/91#issuecomment-5964172772), read back from the API. The S39
+  receipt's next step (a) is updated to say so.
+
 ### 2026-10-02 · [ad hoc] S39 close-out — PR #91 merged with rmsharp's three points fixed; gate 243 → 261
 
 - **Action:** closes the S39 claim entry (*PR #91: rmsharp's three non-blocking points, then merge (in progress)*).
