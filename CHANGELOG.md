@@ -44,6 +44,16 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-02 · [ad hoc] S39 close-out — PR #91 merged with rmsharp's three points fixed; gate 243 → 261
+
+- **Action:** closes the S39 claim entry (*PR #91: rmsharp's three non-blocking points, then merge (in progress)*).
+  `9ac2d4b` on the branch fixed the three (entry above, carried by the merge). **Merge of PR #91** (`e107356`, range
+  `1680539..9ac2d4b`): merged locally, `CHANGELOG.md` by union and nothing else touched by both sides, as `git
+  merge-tree` predicted; `bin/tests.sh` 261/0 on the merged tree. Every merged commit already has its ledger entry (D8,
+  the S38 review fixes, the README line, the approval follow-ups). **Non-commit actions:** the branch pushed to
+  `9ac2d4b`; `main` pushed; GitHub reads PR #91 MERGED at `e107356` (2026-10-03T01:30:45Z). No PR comment posted. Gate
+  run at `d432865`: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 10df8059439f · manifest 5986cf638fb1`.
+
 ### 2026-10-02 · [ad hoc] `bin/_manifest.py` states the constraint PR #91 put on it
 
 - **Action:** S39. Its docstring now says why it must stay literal data with one plain assignment per name: every
