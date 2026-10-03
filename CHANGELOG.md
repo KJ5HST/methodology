@@ -44,6 +44,11 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-02 · [ad hoc] Ratchet: `tests-sh-passed` 243 → 261 after PR #91 (Tests 32 and 34)
+
+- **Action:** S39. Measured on the merged `main` at `e107356`: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured ·
+  results cb0ac4297fb4 · manifest ae81b96658ec` — `bin/tests.sh` 261/0. Tightening only.
+
 ### 2026-10-02 · [ad hoc] PR #91: rmsharp's three non-blocking points, then merge (in progress)
 
 - **Action:** session S39 claimed on `main`. rmsharp approved PR #91 at `befa755` with three non-blocking points;
