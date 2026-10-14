@@ -20,14 +20,25 @@ set -u
 if [ "${1:-}" = "--selftest" ]; then
 	# Resolve $0 BEFORE anything cds: every probe runs inside a throwaway repo.
 	self=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
-	t=$(mktemp -d); fails=0; n=0
+	t=$(mktemp -d); fails=0; n=0; checks=0
+	# The ledger's path in the fixture being built: the legacy layout by default, the new one
+	# (methodology/CHANGELOG.md) for the BL-101 probes. The hook under test reads it from the index.
+	LEGACY=CHANGELOG.md                 # layout: ok -- the selftest builds the legacy layout's fixtures
+	NEWPATH=methodology/CHANGELOG.md    # layout: ok -- and the new layout's
+	TIER1=methodology/SESSION_RUNNER.md # layout: ok -- a framework file under methodology/, for the tier-1 fixture
+	ROOTRUN=SESSION_RUNNER.md           # layout: ok -- the same framework anchor at the root, for the tie fixtures
+	OLDARCH=docs/archive                # layout: ok -- the legacy shard directory, for the trim fixtures
+	LP=$LEGACY
 
 	# A throwaway repo holding exactly the shape the ledger gate exists to refuse:
 	# a tracked change staged, the ledger modified but NOT co-staged. `noledger`
-	# builds one that never tracked a CHANGELOG.md at all.
+	# builds one that never tracked a ledger at all; `newledger` builds one whose ledger sits
+	# under methodology/ (the new layout), `tier1` one whose framework files moved and whose
+	# ledger did not.
 	build() {
 		n=$((n + 1)); d=$t/r$n
 		mkdir -p "$d"
+		lp=$LP; [ "${1:-}" = newledger ] && lp=$NEWPATH
 		(
 			cd "$d" || exit 1
 			unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
@@ -37,11 +48,13 @@ if [ "${1:-}" = "--selftest" ]; then
 			git config user.email selftest@example.invalid
 			git config user.name selftest
 			printf 'one\n' > tracked.txt
-			[ "${1:-}" = noledger ] || printf '# Changelog\n' > CHANGELOG.md
+			mkdir -p "$(dirname "$lp")"
+			[ "${1:-}" = noledger ] || printf '# Changelog\n' > "$lp"
+			[ "${1:-}" = tier1 ] && { mkdir -p methodology; printf 'runner\n' > "$TIER1"; }
 			git add -A
 			git commit -q -m init
 			printf 'two\n' > tracked.txt
-			[ "${1:-}" = noledger ] || printf '# Changelog\n\n### entry\n' > CHANGELOG.md
+			[ "${1:-}" = noledger ] || printf '# Changelog\n\n### entry\n' > "$lp"
 			git add tracked.txt
 		) >/dev/null 2>&1
 		# Prove the fixture, not just the guard: a probe run against a repo that
@@ -52,7 +65,7 @@ if [ "${1:-}" = "--selftest" ]; then
 	}
 
 	expect() { # $1 label, $2 wanted exit -- $d is the repo build() just made
-		label=$1; want=$2
+		label=$1; want=$2; checks=$((checks + 1))
 		( cd "$d" && unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE && sh "$self" ) >/dev/null 2>&1
 		got=$?
 		if [ "$got" -eq "$want" ]; then
@@ -64,19 +77,19 @@ if [ "${1:-}" = "--selftest" ]; then
 
 	# The gate itself, with no operation in progress.
 	build;          expect "no markers, ledger not co-staged -> refused"        1
-	build; ( cd "$d" && git add CHANGELOG.md >/dev/null 2>&1 )
+	build; ( cd "$d" && git add "$LEGACY" >/dev/null 2>&1 )
 	                expect "ledger co-staged -> pass"                           0
 	build; ( cd "$d" && git reset -q >/dev/null 2>&1 )
 	                expect "empty index -> pass"                                0
 	build noledger; expect "no tracked ledger -> pass (never block a repo without one)" 0
 
-	# Git LEAVES REBASE_HEAD BEHIND after a rebase that stopped (a conflict, or -i
-	# at `edit`) completes -- measured on git 2.50.1 -- so a hook that reads it as
-	# "rebase in progress" disarms itself for the life of the clone. It is also the
+	# BL-76. Git LEAVES REBASE_HEAD BEHIND after a rebase that stopped (a conflict,
+	# or -i at `edit`) completes -- measured on git 2.50.1 -- so a hook that reads it
+	# as "rebase in progress" disarms itself for the life of the clone. It is also the
 	# ONLY marker in the list that leaks: MERGE_HEAD, CHERRY_PICK_HEAD, rebase-merge
 	# and rebase-apply are all removed when their operation ends or is aborted.
 	build; ( cd "$d" && : > .git/REBASE_HEAD )
-	                expect "stale REBASE_HEAD -> STILL REFUSED"                 1
+	                expect "stale REBASE_HEAD -> STILL REFUSED (BL-76)"         1
 
 	# ...and the skip must still fire for every state that is genuinely in progress.
 	# REBASE_HEAD is redundant for this: a stopped rebase always carries a DIRECTORY
@@ -99,7 +112,7 @@ if [ "${1:-}" = "--selftest" ]; then
 	B='### 2026-01-02 · [ad hoc] B\n\n- b body\n\n'
 	A='### 2026-01-01 · [ad hoc] A\n\n- a body\n\n'
 	Z='---\n\nfooter\n'
-	lbuild() { # $1 = the staged ledger (printf format); $2 = "archive" to stage a shard too
+	lbuild() { # $1 = the staged ledger (printf format) at $LP; $2 = "archive" (the legacy shard directory) or "newarchive" to stage a shard too
 		n=$((n + 1)); d=$t/r$n
 		mkdir -p "$d"
 		(
@@ -108,13 +121,35 @@ if [ "${1:-}" = "--selftest" ]; then
 			git init -q -b main --template= .
 			git config user.email selftest@example.invalid
 			git config user.name selftest
-			printf "$F$B$A$Z" > CHANGELOG.md
+			mkdir -p "$(dirname "$LP")"
+			printf "$F$B$A$Z" > "$LP"
 			printf 'one\n' > tracked.txt
 			git add -A
 			git commit -q -m init
 			printf 'two\n' > tracked.txt
-			printf "$1" > CHANGELOG.md
-			if [ "${2:-}" = archive ]; then mkdir -p docs/archive && printf "$A" > docs/archive/shard.md; fi
+			printf "$1" > "$LP"
+			if [ "${2:-}" = archive ]; then mkdir -p "$OLDARCH" && printf "$A" > "$OLDARCH/shard.md"; fi
+			if [ "${2:-}" = newarchive ]; then mkdir -p methodology/archive && printf "$A" > methodology/archive/shard.md; fi
+			git add -A
+		) >/dev/null 2>&1
+		git -C "$d" rev-parse --verify -q HEAD >/dev/null 2>&1 \
+			|| { echo "  FAIL: fixture r$n did not build"; fails=$((fails + 1)); }
+	}
+	mbuild() { # $1 = the ledger as the move commit stages it (printf format), renamed to $NEWPATH
+		n=$((n + 1)); d=$t/r$n
+		mkdir -p "$d"
+		(
+			cd "$d" || exit 1
+			unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+			git init -q -b main --template= .
+			git config user.email selftest@example.invalid
+			git config user.name selftest
+			printf "$F$B$A$Z" > "$LEGACY"
+			printf 'one\n' > tracked.txt
+			git add -A
+			git commit -q -m init
+			mkdir -p methodology && git mv "$LEGACY" "$NEWPATH"
+			printf "$1" > "$NEWPATH"
 			git add -A
 		) >/dev/null 2>&1
 		git -C "$d" rev-parse --verify -q HEAD >/dev/null 2>&1 \
@@ -133,10 +168,100 @@ if [ "${1:-}" = "--selftest" ]; then
 	lbuild "$F$B$Z"
 	                expect "ledger: a committed entry dropped, no archive shard -> REFUSED" 1
 	lbuild "$F$B$Z" archive
-	                expect "ledger: entries dropped with a docs/archive/ shard staged (a trim) -> pass" 0
+	                expect "ledger: entries dropped with a shard in the legacy archive directory staged (a trim) -> pass" 0
+
+	# BL-101 P2 (plan 4.3, C5). The ledger may live under methodology/, and the gate must follow it:
+	# measured at S273, after the move a later commit that left the ledger out PASSED, because the
+	# hook found no tracked CHANGELOG.md and took its "no ledger, never block" branch. X2 is the first
+	# probe below; it is the reason this block exists and the one to keep when the rest is rewritten.
+	build newledger; expect "new layout: ledger not co-staged -> REFUSED (X2, the gate follows the ledger)" 1
+	build newledger; ( cd "$d" && git add "$NEWPATH" >/dev/null 2>&1 )
+	                 expect "new layout: ledger co-staged -> pass"              0
+	build tier1;     expect "framework files under methodology/, ledger still at the root -> the root ledger gates" 1
+	build; ( cd "$d" && mkdir -p methodology && printf '# Changelog\n' > "$NEWPATH" && git add "$NEWPATH" "$LEGACY" >/dev/null 2>&1 )
+	                 expect "a ledger in both places, both co-staged (half-migrated) -> REFUSED, never guessed" 1
+	build; ( cd "$d" && mkdir -p docs && printf 'x\n' > "docs/$LEGACY" && git add "docs/$LEGACY" >/dev/null 2>&1 )
+	                 expect "a same-named file elsewhere does not stand in for the ledger -> REFUSED" 1
+	build; ( cd "$d" && git rm -q --cached "$LEGACY" >/dev/null 2>&1 )
+	                 expect "the ledger deleted from the index (the documented opt-out) -> pass" 0
+	# The first commit of a repository has no HEAD at all, so there is no committed ledger to compare with.
+	n=$((n + 1)); d=$t/r$n; mkdir -p "$d"
+	( cd "$d" && unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE && git init -q -b main --template= . \
+		&& git config user.email selftest@example.invalid && git config user.name selftest \
+		&& printf 'one\n' > tracked.txt && printf '# Changelog\n' > "$LEGACY" && git add -A ) >/dev/null 2>&1
+	                 expect "the very first commit of a repository, ledger included -> pass" 0
+	LP=$NEWPATH
+	lbuild "$F### 2026-01-03 · [ad hoc] C\n\n- c body\n\n$B$A$Z"
+	                expect "new layout, ledger: a new entry prepended -> pass"  0
+	lbuild "$F### 2026-01-02 · [ad hoc] B\n\n- b body\n- a bullet appended later\n\n$A$Z"
+	                expect "new layout, ledger: a committed entry's body edited -> REFUSED" 1
+	lbuild "$F$B$Z"
+	                expect "new layout, ledger: a committed entry dropped, no archive shard -> REFUSED" 1
+	lbuild "$F$B$Z" archive
+	                expect "new layout, ledger: entries dropped with a legacy-directory shard staged -> pass" 0
+	lbuild "$F$B$Z" newarchive
+	                expect "new layout, ledger: entries dropped with a shard under methodology/ staged (a trim) -> pass" 0
+	LP=$LEGACY
+	lbuild "$F$B$Z" newarchive
+	                expect "legacy layout, ledger: entries dropped with a shard under methodology/ staged -> pass" 0
+	mbuild "$F$B$A$Z"
+	                expect "the move commit: the ledger renamed, entries untouched -> pass" 0
+	mbuild "$F### 2026-01-03 · [ad hoc] C\n\n- c body\n\n$B$A$Z"
+	                expect "the move commit that also prepends an entry -> pass" 0
+	mbuild "$F$B$Z"
+	                expect "the move commit that drops an entry -> REFUSED (the never-edit gate crosses the move)" 1
+	mbuild "$F### 2026-01-02 · [ad hoc] B\n\n- b body\n- a bullet appended later\n\n$A$Z"
+	                expect "the move commit that rewrites an entry -> REFUSED" 1
+
+
+	# BL-101 P3 (decided 2026-10-06, plan 7.2a): a ledger in BOTH places is a tie, and the framework anchor
+	# decides it. A project whose runner is tracked under methodology/, and not at the root, keeps its
+	# ledger there; the root file is the project's own product changelog and the gate leaves it alone.
+	# Any other tie is still half-migrated and refused. The init commit holds both ledgers, as a real
+	# project does, so the tie is in HEAD and the index and not made by the probe.
+	tbuild() { # $1 = where the runner is tracked: methodology | root | both | none
+		n=$((n + 1)); d=$t/r$n
+		mkdir -p "$d"
+		(
+			cd "$d" || exit 1
+			unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE
+			git init -q -b main --template= .
+			git config user.email selftest@example.invalid
+			git config user.name selftest
+			mkdir -p methodology
+			printf "$F$B$A$Z" > "$NEWPATH"
+			printf '# Product changelog\n\n## 1.0\n\n- shipped\n' > "$LEGACY"
+			case "$1" in methodology|both) printf 'runner\n' > "$TIER1" ;; esac
+			case "$1" in root|both) printf 'runner\n' > "$ROOTRUN" ;; esac
+			printf 'one\n' > tracked.txt
+			git add -A
+			git commit -q -m init
+			printf 'two\n' > tracked.txt
+			git add tracked.txt
+		) >/dev/null 2>&1
+		git -C "$d" rev-parse --verify -q HEAD >/dev/null 2>&1 \
+			|| { echo "  FAIL: fixture r$n did not build"; fails=$((fails + 1)); }
+	}
+	NEWENTRY="$F### 2026-01-03 · [ad hoc] C\n\n- c body\n\n$B$A$Z"
+	tbuild methodology; ( cd "$d" && printf "$NEWENTRY" > "$NEWPATH" && git add "$NEWPATH" >/dev/null 2>&1 )
+	                expect "a tie, the runner under methodology/: the methodology ledger co-staged with a new entry -> pass" 0
+	tbuild methodology
+	                expect "a tie, the runner under methodology/: no ledger staged -> REFUSED" 1
+	tbuild methodology; ( cd "$d" && printf '# Product changelog\n\n## 1.1\n\n- shipped again\n' > "$LEGACY" && git add "$LEGACY" >/dev/null 2>&1 )
+	                expect "a tie, the runner under methodology/: only the root product changelog staged -> REFUSED (it is not the ledger)" 1
+	tbuild methodology; ( cd "$d" && printf "$NEWENTRY" > "$NEWPATH" && printf '# Product changelog\n\n## 1.1\n\n- reworded\n' > "$LEGACY" && git add "$NEWPATH" "$LEGACY" >/dev/null 2>&1 )
+	                expect "a tie, the runner under methodology/: the root product changelog rewritten beside a ledger entry -> pass (the never-edit rule is the ledger's)" 0
+	tbuild methodology; ( cd "$d" && printf "$F### 2026-01-02 · [ad hoc] B\n\n- b body\n- a bullet appended later\n\n$A$Z" > "$NEWPATH" && git add "$NEWPATH" >/dev/null 2>&1 )
+	                expect "a tie, the runner under methodology/: a committed ledger entry edited -> REFUSED (the never-edit rule follows the ledger)" 1
+	tbuild none; ( cd "$d" && printf 'runner\n' > "$TIER1" && printf "$NEWENTRY" > "$NEWPATH" && git add "$NEWPATH" >/dev/null 2>&1 )
+	                expect "a tie, a runner under methodology/ that is on disk but NOT tracked -> REFUSED (the anchor is read from the index)" 1
+	for where in none root both; do
+		tbuild "$where"; ( cd "$d" && printf "$NEWENTRY" > "$NEWPATH" && git add "$NEWPATH" >/dev/null 2>&1 )
+	                expect "a tie, runner tracked: $where -> REFUSED, still half-migrated (a ledger entry does not make it pass)" 1
+	done
 
 	rm -rf "$t"
-	[ "$fails" -eq 0 ] && echo "pre-commit selftest: OK (17 checks)" || { echo "pre-commit selftest: $fails FAILED"; exit 1; }
+	[ "$fails" -eq 0 ] && echo "pre-commit selftest: OK ($checks checks)" || { echo "pre-commit selftest: $fails FAILED"; exit 1; }
 	exit 0
 fi
 
@@ -145,19 +270,17 @@ git_dir=$(git rev-parse --git-dir)
 # Skip merge/rebase/cherry-pick/am: they replay commits already in the ledger's
 # history; forcing a fresh entry onto a replayed commit would double-log.
 #
-# REBASE_HEAD IS DELIBERATELY ABSENT FROM THIS LIST. Git leaves it behind when a
-# rebase that STOPPED -- a conflict, or `-i` parked at `edit` -- completes, so
-# listing it let a single rebase disarm this hook for the life of the clone,
-# taking the quality ratchet below it along: both gates read as green because
-# neither ran. It is the only marker that leaks -- MERGE_HEAD, CHERRY_PICK_HEAD
-# and both directories are removed when their operation ends or is aborted -- and
-# it is redundant besides: a rebase in progress always carries a DIRECTORY too,
-# rebase-merge on the merge backend, rebase-apply on --apply and `git am`, so
-# dropping it costs no in-progress coverage. Measured by running every operation
-# in this list to completion on git 2.50.1 and observing the markers at each
-# stage; `--selftest` asserts both halves. A CLEAN rebase leaks nothing, which is
-# why the trap only arms after a rebase that stopped. Use `-e`, not `-f`/`-d`:
-# the list mixes files and directories.
+# REBASE_HEAD IS DELIBERATELY ABSENT FROM THIS LIST (BL-76). Git leaves it behind
+# when a rebase that STOPPED -- a conflict, or `-i` parked at `edit` -- completes,
+# so listing it let a single rebase disarm this hook for the life of the clone,
+# taking the quality ratchet below it along. It is the only marker that leaks:
+# MERGE_HEAD, CHERRY_PICK_HEAD and both directories are removed when their
+# operation ends or is aborted. It is also redundant -- a rebase in progress always
+# carries a DIRECTORY too, rebase-merge on the merge backend, rebase-apply on
+# --apply and `git am` -- so dropping it costs no in-progress coverage. Measured on
+# git 2.50.1; `--selftest` asserts both halves, and a clean rebase leaks nothing,
+# which is why this went five weeks unnoticed here. Use `-e`, not `-f`/`-d`: the
+# list mixes files and directories.
 for marker in MERGE_HEAD CHERRY_PICK_HEAD rebase-merge rebase-apply; do
 	if [ -e "$git_dir/$marker" ]; then
 		exit 0
@@ -173,30 +296,62 @@ done
 # guard on the worktree alone let `git rm .quality-gates.json` through untested (PR #82
 # review, 2a). Note the merge/rebase skip above runs first: the ratchet inherits it.
 top=$(git rev-parse --show-toplevel)
-if [ -f "$top/starter-kit/quality_ratchet.py" ] && {
-	[ -f "$top/.quality-gates.json" ] || git cat-file -e HEAD:.quality-gates.json 2>/dev/null; }; then
-	python3 "$top/starter-kit/quality_ratchet.py" --precommit || exit $?
+# Where the tool and the manifest are: the tool under starter-kit/ here, at the root or under
+# methodology/ in a project; the manifest at the root or under methodology/ (BL-101 P2, plan C4).
+# A guard that named one place skipped the ratchet SILENTLY for every project that moved.
+mfile=.quality-gates.json   # layout: ok -- the manifest's name; both places are tried below
+rtool=quality_ratchet.py    # layout: ok -- the tool's name; the three places are tried below
+ratchet=
+for t in "starter-kit/$rtool" "methodology/$rtool" "$rtool"; do
+	if [ -f "$top/$t" ]; then ratchet=$t; break; fi
+done
+if [ -n "$ratchet" ] && {
+	[ -f "$top/$mfile" ] || [ -f "$top/methodology/$mfile" ] \
+		|| git cat-file -e "HEAD:$mfile" 2>/dev/null \
+		|| git cat-file -e "HEAD:methodology/$mfile" 2>/dev/null; }; then
+	python3 "$top/$ratchet" --precommit || exit $?
 fi
 
 staged=$(git diff --cached --name-only)
 
-# Lifecycle — a committed entry is never edited (FRAMEWORK_APPARATUS.md §The Action Ledger):
-# a correction is a NEW entry that names what was wrong. Compares the staged ledger with
+# The ledger lives at the root (legacy) or under methodology/ (new): BL-101, plan 4.3. The Python
+# tools read that from tools/layout_resolver.py; a git hook is sh and cannot call it, so the same
+# four-row table, anchored on the ledger, is read here from the INDEX with git. It has to be the
+# index and not the worktree: the hook judges what is staged, and a move is staged as a rename.
+# Measured at S273 (plan C5): with the gate naming only the root file, a ledger moved under
+# methodology/ left the gate on its "no ledger exists, never block" branch, so every later commit
+# passed without a ledger entry -- the gate that enforces failure mode #27 failing open, silently.
+legacy_ledger=CHANGELOG.md                # layout: ok -- the legacy half of the table this hook resolves
+new_ledger=methodology/CHANGELOG.md       # layout: ok -- the new half
+legacy_runner=SESSION_RUNNER.md           # layout: ok -- the framework anchor, root half: it decides a tie (plan 7.2a)
+new_runner=methodology/SESSION_RUNNER.md  # layout: ok -- the framework anchor, new half
+legacy_archive=docs/archive               # layout: ok -- where a trim writes its shard today
+new_archive=methodology/archive           # layout: ok -- where it will write it once the archive moves (D5)
+indexed() { git ls-files --error-unmatch -- "$1" >/dev/null 2>&1; }
+
+# Lifecycle — a committed entry is never edited (the Action Ledger section of the framework
+# apparatus): a correction is a NEW entry that names what was wrong. Compares the staged ledger with
 # HEAD's, entry by entry. An entry is a `### ` heading through the line before the next
 # `#`/`##`/`###` heading or `---` rule, outside fenced blocks, trailing blank lines ignored —
 # so a prepended entry, a new month heading, or the footer a trim moves up under the last
 # retained entry never reads as an edit. A committed entry whose heading or body changed
-# is refused. One that disappears is refused too, unless the same commit stages a
-# docs/archive/ shard: that is the trimmer's commit, and the shard's verify.sh proves the
-# move lossless. Needs python3; without it the check is skipped (the fast path, never the
-# guarantee). A deliberate removal — a credential, personal data — is the one exception:
-# commit it with --no-verify and record the removal in an entry of its own.
+# is refused. One that disappears is refused too, unless the same commit stages a shard under an
+# archive directory: that is the trimmer's commit, and the shard's verify.sh proves the move
+# lossless. The comparison crosses a move: HEAD's copy is read from wherever HEAD kept the ledger,
+# so a commit that renames the ledger and rewrites an entry is refused too. Needs python3; without
+# it the check is skipped (the fast path, never the guarantee). A deliberate removal — a
+# credential, personal data — is the one exception: commit it with --no-verify and record the
+# removal in an entry of its own.
 ledger_entries_intact() {
 	command -v python3 >/dev/null 2>&1 || return 0
-	git cat-file -e HEAD:CHANGELOG.md 2>/dev/null || return 0
+	head_ledger=
+	for p in "$ledger" "$legacy_ledger" "$new_ledger"; do
+		if git cat-file -e "HEAD:$p" 2>/dev/null; then head_ledger=$p; break; fi
+	done
+	[ -n "$head_ledger" ] || return 0   # HEAD has no ledger: this is the first ledger commit
 	archive=0
-	printf '%s\n' "$staged" | grep -q '^docs/archive/' && archive=1
-	python3 - "$archive" <<'PY'
+	printf '%s\n' "$staged" | grep -Eq "^($legacy_archive|$new_archive)/" && archive=1
+	python3 - "$archive" "$head_ledger" "$ledger" <<'PY'
 import subprocess, sys
 
 def show(spec):
@@ -221,25 +376,26 @@ def entries(text):
     close()
     return out
 
-head, staged = entries(show("HEAD:CHANGELOG.md")), entries(show(":CHANGELOG.md"))
+head_path, staged_path = sys.argv[2], sys.argv[3]
+head, staged = entries(show("HEAD:" + head_path)), entries(show(":" + staged_path))
 archive = sys.argv[1] == "1"
 edited = [k[0] for k, body in head.items() if k in staged and staged[k] != body]
 removed = [k[0] for k in head if k not in staged]
 bad = [("edited", h) for h in edited] + ([] if archive else [("removed", h) for h in removed])
 if not bad:
     sys.exit(0)
-sys.stderr.write("✗ CHANGELOG.md: a committed entry was changed — %d entr%s:\n"
-                 % (len(bad), "y" if len(bad) == 1 else "ies"))
+sys.stderr.write("✗ %s: a committed entry was changed — %d entr%s:\n"
+                 % (staged_path, len(bad), "y" if len(bad) == 1 else "ies"))
 for kind, h in bad[:5]:
     sys.stderr.write("    %-8s %s\n" % (kind, h[:100]))
 if len(bad) > 5:
     sys.stderr.write("    … and %d more\n" % (len(bad) - 5))
 sys.stderr.write("""
-A committed entry is never edited (FRAMEWORK_APPARATUS.md §The Action Ledger, Lifecycle).
+A committed entry is never edited (the Action Ledger section of the framework apparatus, Lifecycle).
 Leave it as written and prepend a NEW entry that names what was wrong. A claim's
 (in progress) entry is closed by the close-out's own entry, not by rewriting it.
-  * Removing records? That is methodology_trim.py's job: its commit stages a
-    docs/archive/ shard, and this check lets it through.
+  * Removing records? That is the trimmer's job: its commit stages a shard under
+    an archive directory, and this check lets it through.
   * Removing a credential or personal data:  git commit --no-verify, then record
     the removal in an entry of its own.
 """)
@@ -252,36 +408,63 @@ if [ -z "$staged" ]; then
 	exit 0
 fi
 
-# CHANGELOG.md co-staged (this also covers the very first ledger commit): pass.
-# -F: match the literal path, not a regex — an unescaped '.' would let a
+# Which file is the ledger? Both tracked is a tie. The framework anchor decides it (decided
+# 2026-10-06, plan 7.2a): a project whose runner is tracked under methodology/, and not at the
+# root, keeps its ledger there, and the root file is the project's own product changelog, which
+# this gate leaves alone. Any other tie is a half-migrated tree: the table says stop, name both,
+# never guess (plan 4.3). Refused loudly, and bypassable like every gate here.
+ledger=
+if indexed "$new_ledger"; then
+	if indexed "$legacy_ledger" && ! { indexed "$new_runner" && ! indexed "$legacy_runner"; }; then
+		cat >&2 <<MSG
+✗ Two ledgers are tracked: $legacy_ledger and $new_ledger — a half-migrated tree.
+
+The ledger gate will not guess which one is the authoritative action ledger
+(the layout table in the BL-101 plan: stop, name both). Finish the move (the
+older one is renamed onto the newer, or removed) or revert it, then re-commit.
+
+  * If the one at the root is the project's own product changelog, say so by
+    the framework anchor: track $new_runner and not $legacy_runner, and this
+    gate follows $new_ledger and leaves the root file alone. Otherwise bypass
+    once with git commit --no-verify and say so in the commit message.
+MSG
+		exit 1
+	fi
+	ledger=$new_ledger
+elif indexed "$legacy_ledger"; then
+	ledger=$legacy_ledger
+fi
+
+# No ledger tracked in either place: self-provisioning is the session runner's job (decision D3,
+# Phase 0), not the hook's. Never block a repo that legitimately has no ledger — an adopter
+# mid-bootstrap, or one that opted out. Reconcile-on-read catches the commit either way.
+if [ -z "$ledger" ]; then
+	exit 0
+fi
+
+# The ledger co-staged (this also covers the very first ledger commit, and a move, which stages
+# the ledger as a rename): pass, once its committed entries are shown intact.
+# -F, -x: match the literal path as a whole line, not a regex — an unescaped '.' would let a
 # same-length sibling (CHANGELOGxmd, CHANGELOG-md) satisfy the gate.
-if printf '%s\n' "$staged" | grep -qxF 'CHANGELOG.md'; then
+if printf '%s\n' "$staged" | grep -qxF "$ledger"; then
 	ledger_entries_intact || exit 1
 	exit 0
 fi
 
-# No ledger has ever been committed and none is staged now: self-provisioning is
-# the session runner's job (decision D3, Phase 0), not the hook's. Never block a
-# repo that legitimately has no ledger — an adopter mid-bootstrap, or one that
-# opted out. Reconcile-on-read catches the commit either way.
-if ! git ls-files --error-unmatch CHANGELOG.md >/dev/null 2>&1; then
-	exit 0
-fi
-
 # A tracked ledger exists but this action does not touch it.
-cat >&2 <<'MSG'
-✗ CHANGELOG.md not staged — failure mode #27 (unrecorded action).
+cat >&2 <<MSG
+✗ $ledger not staged — failure mode #27 (unrecorded action).
 
 This commit changes tracked content but does not update the authoritative
-ledger. Prepend one dated, source-tagged entry to CHANGELOG.md — exactly one of
+ledger. Prepend one dated, source-tagged entry to $ledger — exactly one of
 [issue #<N>] | [BL-<id>] | [ad hoc] — newest on top, then stage it and re-commit.
 
   * Bypass this once:  git commit --no-verify
       Phase 0 reconcile-on-read backfills anything bypassed, so the ledger is
       true again on the next session's Orient. The hook is the fast path, not
       the guarantee.
-  * Opt out for good:  delete CHANGELOG.md and record the decision in CLAUDE.md.
+  * Opt out for good:  delete $ledger and record the decision in CLAUDE.md.
 
-"Too small to log" is the failure mode, not an exception (SESSION_RUNNER.md FM #27).
+"Too small to log" is the failure mode, not an exception (the session runner's FM #27).
 MSG
 exit 1

@@ -943,9 +943,16 @@ qr = importlib.util.module_from_spec(spec); spec.loader.exec_module(qr)
 cfg = json.load(open(root + "/.quality-gates.json"))
 sys.exit(0 if cfg["gates"] and not qr.config_defects(cfg) else 1)
 PY
-grep -q 'quality_ratchet.py" --precommit' "$METHODOLOGY/.githooks/pre-commit" \
+# The chain names the tool through variables since BL-101 P2 (it is found under starter-kit/, under
+# methodology/ or at the root), so the old one-line grep for the literal path no longer matches. What
+# the assertion means is: the hook runs the ratchet, names the tool, and does it BEFORE the ledger gate
+# (the order the label always claimed and the grep never checked). Test 37 runs the chain for real.
+HK37="$METHODOLOGY/.githooks/pre-commit"
+CHAIN37="$(grep -nF 'python3 "$top/$ratchet" --precommit' "$HK37" | head -1 | cut -d: -f1)"
+GATE37="$(grep -n '^staged=\$(git diff --cached' "$HK37" | head -1 | cut -d: -f1)"
+[ -n "$CHAIN37" ] && [ -n "$GATE37" ] && [ "$CHAIN37" -lt "$GATE37" ] && grep -q '^rtool=quality_ratchet.py' "$HK37" \
     && pass ".githooks/pre-commit chains the quality ratchet before the ledger gate" \
-    || fail ".githooks/pre-commit does not run quality_ratchet.py --precommit"
+    || fail ".githooks/pre-commit does not run the ratchet before the ledger gate (chain line [$CHAIN37], gate line [$GATE37])"
 
 # D9: check-handoff's gate-run citation lint, observed silent / failing / passing.
 P="$(mktemp -d)"
@@ -1645,6 +1652,199 @@ else
     fail "scanner control mutation DID NOT APPLY -- no converted \`grep -q PAT <<< \"\$VAR\" && fail\` site left to revert"
 fi
 rm -f "$SCAN45" "$FIX45" "$M45"
+
+echo "== Test 37: the ledger hook and the ratchet chain follow the files under methodology/ (BL-101 P2, X2, RED-first) =="
+# Plan C5 measured it: once the ledger moved under methodology/, a LATER commit that left the ledger
+# out PASSED, because the hook found no tracked CHANGELOG.md and took its "no ledger, never block"
+# branch -- the gate that enforces failure mode #27 failing open, silently. The same fail-open sat in
+# the ratchet chain: its guard named the root manifest only, so a moved manifest was never ratcheted.
+# X2 is kept here as a permanent test, through the real hook and real git, in both layouts, with the
+# controls that prove each assertion can fail.
+t37_repo() { # $1 legacy|new, $2 the hook file to install, $3 the ratchet to install (default: the shipped one) -- setup commits bypass it
+    local u pre=""; u="$(mktemp -d)"; [ "$1" = new ] && pre="methodology/"
+    git -C "$u" init -q -b main; git -C "$u" config user.email t@t; git -C "$u" config user.name t
+    mkdir -p "$u/.githooks" "$u/${pre}"
+    cp "$2" "$u/.githooks/pre-commit"; chmod +x "$u/.githooks/pre-commit"
+    cp "${3:-$STARTER/quality_ratchet.py}" "$u/${pre}quality_ratchet.py"
+    printf '{"version": 1, "gates": [{"name": "cov", "direction": "min", "threshold": 80}]}\n' > "$u/${pre}.quality-gates.json"
+    printf '# Changelog\n\n### 2026-01-01 · [ad hoc] base\n\n- body\n\n' > "$u/${pre}CHANGELOG.md"
+    printf 'one\n' > "$u/tracked.txt"
+    git -C "$u" add -A; git -C "$u" commit -q --no-verify -m base
+    git -C "$u" config core.hooksPath .githooks
+    echo "$u"
+}
+t37_try() { git -C "$1" add -A; OUT37="$(git -C "$1" commit -q -m t 2>&1)"; RC37=$?; }
+t37_entry() { # $1 ledger file: prepend one entry
+    printf '# Changelog\n\n### 2026-02-01 · [ad hoc] new\n\n- body\n\n### 2026-01-01 · [ad hoc] base\n\n- body\n\n' > "$1"
+}
+t37_floor() { printf '{"version": 1, "gates": [{"name": "cov", "direction": "min", "threshold": %s}]}\n' "$2" > "$1"; }
+HOOK37="$METHODOLOGY/.githooks/pre-commit"
+
+for L37 in legacy new; do
+    PRE37=""; [ "$L37" = new ] && PRE37="methodology/"
+    U="$(t37_repo "$L37" "$HOOK37")"
+    printf 'two\n' > "$U/tracked.txt"; t37_try "$U"
+    [ "$RC37" = 1 ] && grep -qF "${PRE37}CHANGELOG.md not staged" <<< "$OUT37" \
+        && pass "$L37 layout: a later commit that leaves the ledger out is refused, naming ${PRE37}CHANGELOG.md (X2)" \
+        || fail "$L37 layout: X2 -- exit $RC37, wanted 1 naming ${PRE37}CHANGELOG.md; got: $OUT37"
+    rm -rf "$U"
+    U="$(t37_repo "$L37" "$HOOK37")"
+    printf 'two\n' > "$U/tracked.txt"; t37_entry "$U/${PRE37}CHANGELOG.md"; t37_try "$U"
+    [ "$RC37" = 0 ] && pass "$L37 layout: the same commit with a ledger entry passes" \
+        || fail "$L37 layout: a commit with its ledger entry was refused (exit $RC37): $OUT37"
+    rm -rf "$U"
+    U="$(t37_repo "$L37" "$HOOK37")"
+    t37_floor "$U/${PRE37}.quality-gates.json" 70; t37_entry "$U/${PRE37}CHANGELOG.md"; t37_try "$U"
+    [ "$RC37" != 0 ] && grep -qF "floor lowered 80 -> 70" <<< "$OUT37" \
+        && pass "$L37 layout: the ratchet chain refuses a loosened floor even with the ledger co-staged" \
+        || fail "$L37 layout: a loosened floor was not refused (exit $RC37): $OUT37"
+    rm -rf "$U"
+done
+
+# The MOVE commit, through the real hook: ledger, manifest and tool renamed under methodology/.
+U="$(t37_repo legacy "$HOOK37")"
+mkdir "$U/methodology"; git -C "$U" mv CHANGELOG.md .quality-gates.json quality_ratchet.py methodology/
+t37_try "$U"
+[ "$RC37" = 0 ] && pass "the move commit (a pure rename of ledger, manifest and tool) passes the hook" \
+    || fail "the move commit was refused (exit $RC37): $OUT37"
+rm -rf "$U"
+U="$(t37_repo legacy "$HOOK37")"
+mkdir "$U/methodology"; git -C "$U" mv CHANGELOG.md .quality-gates.json quality_ratchet.py methodology/
+t37_floor "$U/methodology/.quality-gates.json" 70; t37_try "$U"
+[ "$RC37" != 0 ] && grep -qF "floor lowered 80 -> 70" <<< "$OUT37" \
+    && pass "a move that lowers a floor is refused, for the lowering and not as 'manifest removed'" \
+    || fail "a move that lowers a floor was not refused as such (exit $RC37): $OUT37"
+rm -rf "$U"
+U="$(t37_repo legacy "$HOOK37")"
+mkdir "$U/methodology"; git -C "$U" mv CHANGELOG.md .quality-gates.json quality_ratchet.py methodology/
+printf '# Changelog\n\n### 2026-01-01 · [ad hoc] base\n\n- body, reworded in the move\n\n' > "$U/methodology/CHANGELOG.md"; t37_try "$U"
+[ "$RC37" != 0 ] && grep -qF "a committed entry was changed" <<< "$OUT37" \
+    && pass "a move that rewrites a committed ledger entry is refused (the never-edit gate crosses the move)" \
+    || fail "a move that rewrote a ledger entry was not refused (exit $RC37): $OUT37"
+rm -rf "$U"
+
+# Two ledgers tracked: a half-migrated tree. Refused, naming both.
+U="$(t37_repo new "$HOOK37")"
+printf '# Changelog\n' > "$U/CHANGELOG.md"; printf 'x\n' > "$U/tracked.txt"; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+[ "$RC37" = 1 ] && grep -qF "Two ledgers are tracked" <<< "$OUT37" && grep -qF "methodology/CHANGELOG.md" <<< "$OUT37" \
+    && pass "two tracked ledgers (half-migrated) are refused, naming both" \
+    || fail "half-migrated tree: exit $RC37, wanted 1 naming both: $OUT37"
+rm -rf "$U"
+
+# A tie the framework anchor decides (BL-101 P3, decided 2026-10-06, plan 7.2a): the project's own
+# product changelog sits at the root beside a ledger that moved, and the runner is tracked under
+# methodology/. The gate follows the ledger there and leaves the root file alone; a tie the anchor
+# does not decide (the runner at the root, or at both) is still refused naming both.
+t37_tie() { # $1 where the runner is tracked: methodology | both
+    local u; u="$(t37_repo new "$HOOK37")"
+    printf '# Product changelog\n\n## 1.0\n\n- shipped\n' > "$u/CHANGELOG.md"
+    printf 'runner\n' > "$u/methodology/SESSION_RUNNER.md"
+    [ "$1" = both ] && printf 'runner\n' > "$u/SESSION_RUNNER.md"
+    git -C "$u" add -A; git -C "$u" commit -q --no-verify -m tie
+    echo "$u"
+}
+U="$(t37_tie methodology)"
+printf 'two\n' > "$U/tracked.txt"; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+[ "$RC37" = 0 ] && pass "a tie the framework anchor decides (runner under methodology/): the ledger entry passes, the root product changelog is left alone" \
+    || fail "tie decided by the anchor: a commit with its ledger entry was refused (exit $RC37): $OUT37"
+rm -rf "$U"
+U="$(t37_tie methodology)"
+printf 'two\n' > "$U/tracked.txt"; printf '# Product changelog\n\n## 1.1\n\n- shipped again\n' > "$U/CHANGELOG.md"; t37_try "$U"
+[ "$RC37" = 1 ] && grep -qF "methodology/CHANGELOG.md not staged" <<< "$OUT37" \
+    && pass "a tie the anchor decides: a commit that touches only the root product changelog is refused, naming methodology/CHANGELOG.md" \
+    || fail "tie decided by the anchor: X2 -- exit $RC37, wanted 1 naming methodology/CHANGELOG.md; got: $OUT37"
+rm -rf "$U"
+U="$(t37_tie both)"
+printf 'two\n' > "$U/tracked.txt"; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+[ "$RC37" = 1 ] && grep -qF "Two ledgers are tracked" <<< "$OUT37" \
+    && pass "a tie the anchor cannot decide (runner at the root and under methodology/) is refused, naming both" \
+    || fail "tie with two runners: exit $RC37, wanted 1 naming both: $OUT37"
+rm -rf "$U"
+
+# A manifest tie (BL-101 P4, decided 2026-10-07 at the S276 picker, plan 7.2b): the tie rule is not
+# opt-in. A project whose runner is tracked under methodology/ keeps its ratchet manifest there; a
+# .quality-gates.json at the root is the project's own and the chain leaves it alone. A tie the runner
+# cannot decide (the runner at the root, or at both) is still refused by the ratchet, naming both.
+t37_mtie() { # $1 where the runner is tracked: methodology | root | both; $2 the ratchet to install; a root manifest of someone else's
+    local u; u="$(t37_repo new "$HOOK37" "${2:-}")"
+    # The suite runs under set -u: an unset "$2" aborts the substitution and leaves u empty, and then
+    # git -C "" acts on the CURRENT directory, which is this repository. A fixture that did not build stops here.
+    [ -n "$u" ] && [ -d "$u/.git" ] || { echo "t37_mtie: the fixture did not build" >&2; return 1; }
+    t37_floor "$u/.quality-gates.json" 10
+    case "$1" in methodology|both) printf 'runner\n' > "$u/methodology/SESSION_RUNNER.md" ;; esac
+    case "$1" in root|both) printf 'runner\n' > "$u/SESSION_RUNNER.md" ;; esac
+    git -C "$u" add -A; git -C "$u" commit -q --no-verify -m mtie
+    echo "$u"
+}
+U="$(t37_mtie methodology)"
+t37_floor "$U/methodology/.quality-gates.json" 70; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+[ "$RC37" != 0 ] && grep -qF "floor lowered 80 -> 70" <<< "$OUT37" && ! grep -qF "half-migrated" <<< "$OUT37" \
+    && pass "a manifest tie the framework anchor decides: a loosened methodology/ floor is refused for the loosening, not as half-migrated" \
+    || fail "manifest tie decided by the anchor: exit $RC37, wanted a refusal naming 'floor lowered 80 -> 70' and not half-migrated; got: $OUT37"
+rm -rf "$U"
+U="$(t37_mtie methodology)"
+t37_floor "$U/.quality-gates.json" 5; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+[ "$RC37" = 0 ] && pass "a manifest tie the framework anchor decides: a change to the root manifest, which is someone else's, passes" \
+    || fail "manifest tie decided by the anchor: a root manifest edit was refused (exit $RC37): $OUT37"
+rm -rf "$U"
+for W37 in root both; do
+    U="$(t37_mtie "$W37")"
+    t37_floor "$U/methodology/.quality-gates.json" 85; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+    [ "$RC37" != 0 ] && grep -qF "half-migrated" <<< "$OUT37" && grep -qF "methodology/.quality-gates.json" <<< "$OUT37" \
+        && pass "a manifest tie the anchor cannot decide (runner tracked: $W37) is refused, naming both" \
+        || fail "manifest tie, runner tracked $W37: exit $RC37, wanted a half-migrated refusal naming both; got: $OUT37"
+    rm -rf "$U"
+done
+
+# CONTROLS: each assertion above must be able to fail. Mutate a COPY of the hook, never the live one.
+M37="$(mktemp)"; chmod +x "$M37"
+t37_mutant() { # $1 what, $2 python expression, $3 the selftest probe that must go red ('' = none, a git scenario instead)
+    local OUTM RCM
+    if mutate "$HOOK37" "$M37" "$2"; then
+        chmod +x "$M37"
+        if [ -n "$3" ]; then
+            OUTM="$("$M37" --selftest 2>&1)"; RCM=$?
+            [ "$RCM" != 0 ] && grep -qF "FAIL: $3" <<< "$OUTM" \
+                && pass "control: $1 turns the selftest red on '$3'" \
+                || fail "control: $1 -- selftest rc=$RCM, expected FAIL: $3"
+        fi
+    else
+        fail "control mutation DID NOT APPLY: $1"
+    fi
+}
+t37_mutant "the new-layout ledger branch disabled" 's.replace("if indexed \"$new_ledger\"; then", "if false; then", 1)' "new layout: ledger not co-staged -> REFUSED (X2"
+t37_mutant "the half-migrated refusal disabled"    's.replace("\tif indexed \"$legacy_ledger\" && ! { indexed \"$new_runner\" && ! indexed \"$legacy_runner\"; }; then", "\tif false; then", 1)' "a ledger in both places"
+t37_mutant "the framework anchor never decides a tie" 's.replace("\tif indexed \"$legacy_ledger\" && ! { indexed \"$new_runner\" && ! indexed \"$legacy_runner\"; }; then", "\tif indexed \"$legacy_ledger\"; then", 1)' "a tie, the runner under methodology/: the methodology ledger co-staged with a new entry -> pass"
+t37_mutant "a root runner beside the methodology one still decides the tie" 's.replace("indexed \"$new_runner\" && ! indexed \"$legacy_runner\"", "indexed \"$new_runner\"", 1)' "a tie, runner tracked: both -> REFUSED"
+t37_mutant "the framework anchor read from the worktree" 's.replace("indexed \"$new_runner\" && ! indexed \"$legacy_runner\"", "[ -f \"$new_runner\" ] && [ ! -f \"$legacy_runner\" ]", 1)' "a tie, a runner under methodology/ that is on disk but NOT tracked"
+t37_mutant "HEAD read from the new path only (no crossing the move)" 's.replace("for p in \"$ledger\" \"$legacy_ledger\" \"$new_ledger\"; do", "for p in \"$ledger\"; do", 1)' "the move commit that drops an entry"
+t37_mutant "the archive under methodology/ not recognised" 's.replace("^($legacy_archive|$new_archive)/", "^($legacy_archive)/", 1)' "new layout, ledger: entries dropped with a shard under methodology/ staged"
+# The ratchet chain guard, as a git scenario (the selftest's repos carry no ratchet).
+if mutate "$HOOK37" "$M37" 's.replace("[ -f \"$top/methodology/$mfile\" ]", "false", 1).replace("\"HEAD:methodology/$mfile\"", "\"HEAD:$mfile\"", 1)'; then
+    chmod +x "$M37"
+    U="$(t37_repo new "$M37")"
+    t37_floor "$U/methodology/.quality-gates.json" 70; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+    [ "$RC37" = 0 ] \
+        && pass "control: a chain guard that names the root manifest only PASSES a loosened floor in the new layout (the fail-open the real hook refuses)" \
+        || fail "control: the legacy-only chain guard still refused the loosening (exit $RC37): $OUT37"
+    rm -rf "$U"
+else
+    fail "control mutation DID NOT APPLY: the chain guard"
+fi
+# The manifest tie, as a git scenario: a ratchet that never lets the runner decide refuses the root-manifest
+# edit the shipped tool passes, so the assertion above can fail.
+MR37="$(mktemp)"
+if mutate "$STARTER/quality_ratchet.py" "$MR37" 's.replace("if len(out) == 2 and framework_under_methodology(root, ref):", "if False:", 1)'; then
+    U="$(t37_mtie methodology "$MR37")"
+    t37_floor "$U/.quality-gates.json" 5; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+    [ "$RC37" != 0 ] && grep -qF "half-migrated" <<< "$OUT37" \
+        && pass "control: a ratchet that never lets the runner decide refuses the root-manifest edit the shipped tool passes" \
+        || fail "control: the tie-blind ratchet still passed the root-manifest edit (exit $RC37): $OUT37"
+    rm -rf "$U"
+else
+    fail "control mutation DID NOT APPLY: the manifest tie"
+fi
+rm -f "$M37" "$MR37"
 
 echo "== Summary: $PASS passed, $FAIL failed, $SKIP skipped =="
 [ "$FAIL" = "0" ]

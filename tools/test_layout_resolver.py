@@ -206,7 +206,7 @@ class TestEveryEmbeddedCopyIsByteIdentical(unittest.TestCase):
     A copy that drifted is a second resolver with its own answers. P2 embeds it in the ratchet; each
     later phase appends the tool it touches to COPIES (the dashboard, the trimmer, the budget gate)."""
 
-    COPIES = ()   # no tool embeds the block at this layer; each later layer appends the tools it carries
+    COPIES = ("starter-kit/quality_ratchet.py",)   # the gate layer; each later layer appends the tools it carries
 
     def test_each_copy_equals_the_modules_block_and_carries_exactly_one(self):
         block = lr.embedded_block((HERE / "layout_resolver.py").read_text(encoding="utf-8"))
@@ -627,7 +627,7 @@ class TestToolsAlreadyResolvedStayAtZero(unittest.TestCase):
     scanner is not a gate until P6, so this is what stops a later edit putting a root literal back.
     Each phase appends the tools it resolved; P6 replaces the list with the gate."""
 
-    RESOLVED = ()   # no tool has been worked at this layer; each later layer appends the tools it resolves
+    RESOLVED = (".githooks/pre-commit", "starter-kit/quality_ratchet.py")   # the gate layer; each later layer appends the tools it resolves
 
     def test_each_resolved_tool_reports_no_site(self):
         for rel in self.RESOLVED:
