@@ -45,7 +45,7 @@
     {
       "name": "ratchet-unit-tests",
       "direction": "min",
-      "threshold": 81,
+      "threshold": 120,
       "command": "python3 tools/test_quality_ratchet.py",
       "extract": "Ran (\\d+) tests"
     },
