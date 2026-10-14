@@ -18,8 +18,14 @@ Part of B1 / issue #32 (Phase 2 added this checker; Phase 3 moved the
 DISTRIBUTION map to bin/_manifest.py — the single source of truth now shared with
 bin/sync, plan Decision 5).
 
-Usage:  ./bin/check-links            # run from anywhere
-Exit:   0 = all relative links resolve; 1 = one or more dangling links.
+A project keeps its methodology files at its root (the legacy layout, the manifest's `dest` column) or one
+level down in methodology/ (the new layout, its NEW_LAYOUT table): BL-101 phase P6. `--layout` chooses which
+adopter tree is simulated, `legacy` (the default, so the gate and the message are unchanged), `new` or `both`.
+Since phase P9 the documents resolve in both: a reference that cannot be one relative link in both layouts is a
+bare name in a code span, not a link, and `--layout both` is green (bin/tests.sh holds it).
+
+Usage:  ./bin/check-links [--layout legacy|new|both] [--tree <adopter-project-dir>]
+Exit:   0 = all relative links resolve; 1 = one or more dangling links; 2 = usage, or a tree with no layout.
 Python 3 stdlib only; cross-platform.
 """
 import os
@@ -29,9 +35,38 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _manifest import DISTRIBUTION  # noqa: E402  (bin/ is on sys.path above)
+from _manifest import DISTRIBUTION, NEW_LAYOUT  # noqa: E402  (bin/ is on sys.path above)
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# A project keeps its methodology files at its root (legacy) or under methodology/ (new): the plan's
+# section 4.3. This block is the resolver, embedded byte for byte; the canonical suite asserts that.
+
+# --- layout resolver: BEGIN ---
+import os as _os
+from pathlib import Path as _Path
+
+
+def resolve_layout(root, anchor="SESSION_RUNNER.md"):
+    """Return (kind, directory, found): kind is new|legacy|half|none, directory a Path or None,
+    found the anchor paths that exist. A half-migrated tree has no directory, by design.
+    A file found in both places is the framework's under methodology/ when the runner is under
+    methodology/ and not at the root: the root copy is the project's own and is left alone, kind new,
+    and found still names both. Any other tie stays half, and the runner cannot decide a tie about itself."""
+    root = _Path(root)
+    new, old = root / "methodology" / anchor, root / anchor
+    found = tuple(p for p in (new, old) if _os.path.isfile(p))
+    if len(found) == 2:
+        if _os.path.isfile(root / "methodology" / "SESSION_RUNNER.md") and not _os.path.isfile(root / "SESSION_RUNNER.md"):
+            return "new", new.parent, found
+        return "half", None, found
+    if not found:
+        return "none", None, ()
+    return ("new", new.parent, found) if found[0] == new else ("legacy", root, found)
+# --- layout resolver: END ---
+
+USAGE = "usage: check-links [--layout legacy|new|both] [--tree <adopter-project-dir>]"
+LAYOUTS = ("legacy", "new", "both")
 
 # Legitimate link targets that are NOT part of the distribution: files an adopter
 # creates locally (instances / overflow valves) and intentional template
@@ -39,16 +74,50 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # accepted without an existence check (they may legitimately not exist yet),
 # rather than fabricated in the tree. Keep this list tight — every entry is a
 # real adopter-layout file, so an unexpected dangling link still fails rather
-# than being masked.
+# than being masked. These are the PROJECT'S own files, so they sit at its root
+# in either layout (CLAUDE.md is where Claude Code loads it from; the others are
+# the project's, not the methodology's).
 ADOPTER_LOCAL_FILES = [
     "CONTEXT.md",            # instance of CONTEXT_TEMPLATE.md (adopter-owned)
     "CLAUDE.md",             # instance of CLAUDE_TEMPLATE.md (adopter-owned)
     "BACKLOG.md",            # adopter-created task list
-    "PROJECT_LEARNINGS.md",  # CLAUDE.md overflow valve (BOOTSTRAP.md)
-    # Template placeholder inside TEMPLATE_CAMPAIGN.md — the adopter replaces it
-    # with their actual parent-workstream filename.
-    "docs/methodology/workstreams/PARENT_WORKSTREAM.md",
 ]
+# A project's own file that goes where its methodology files go when the project moves (bin/migrate-layout's
+# COMPANIONS): the project root in the legacy layout, methodology/ in the new one, so it sits beside
+# FRAMEWORK_LEARNINGS.md in both. Allowed-absent at that place only: a link up to the root dangles once the project
+# has moved.
+COMPANION_FILES = [
+    "PROJECT_LEARNINGS.md",  # CLAUDE.md overflow valve (BOOTSTRAP.md)
+]
+COMPANION_NEIGHBOUR = "starter-kit/FRAMEWORK_LEARNINGS.md"
+# Template placeholder inside TEMPLATE_CAMPAIGN.md — the adopter replaces it with their actual
+# parent-workstream filename. It is a methodology file's neighbour, so it follows the template into
+# whichever layout is simulated: (the source of the template, the placeholder's name).
+PLACEHOLDER = ("workstreams/TEMPLATE_CAMPAIGN.md", "PARENT_WORKSTREAM.md")
+
+
+def dest_in(layout, src, dest):
+    """Where the distributed file `src` lands in an adopter tree of `layout` (legacy|new)."""
+    return dest if layout == "legacy" else NEW_LAYOUT[src]
+
+
+def beside_in(layout, neighbour, name):
+    """`name` as a neighbour of the distributed file `neighbour`, relative to the adopter tree, in `layout`."""
+    for src, dest, _disp in DISTRIBUTION:
+        if src == neighbour:
+            return os.path.join(os.path.dirname(dest_in(layout, src, dest)), name)
+    raise SystemExit("check-links: the manifest does not distribute %s" % neighbour)
+
+
+def placeholder_in(layout):
+    """The placeholder's path, relative to the adopter tree, in `layout`."""
+    template, name = PLACEHOLDER
+    return beside_in(layout, template, name)
+
+
+def companions_in(layout):
+    """The companions' paths, relative to the adopter tree, in `layout`."""
+    return [beside_in(layout, COMPANION_NEIGHBOUR, name) for name in COMPANION_FILES]
 
 # Markdown inline link target: the (...) after ](. Targets in these docs contain
 # no ')'; an optional ' "title"' is stripped below.
@@ -64,23 +133,23 @@ def is_external(target):
     return target.startswith(("http://", "https://", "mailto:", "#"))
 
 
-def materialize_distribution(tree):
-    """Copy every distributed file to its adopter destination (simulated tree)."""
+def materialize_distribution(tree, layout="legacy"):
+    """Copy every distributed file to its adopter destination in `layout` (simulated tree)."""
     for src, dest, _disp in DISTRIBUTION:
-        dpath = os.path.join(tree, dest)
+        dpath = os.path.join(tree, dest_in(layout, src, dest))
         os.makedirs(os.path.dirname(dpath) or tree, exist_ok=True)
         shutil.copyfile(os.path.join(REPO, src), dpath)
 
 
-def check(tree):
+def check(tree, layout="legacy"):
     failures = []
     checked = 0
     # Adopter-owned files (instances, overflow valves, template placeholders) are
     # allowed to be absent: accept links to them without an existence check rather
     # than fabricating them, so validating a real tree never writes to it (#36).
     allowed_absent = {os.path.normpath(os.path.join(tree, rel))
-                      for rel in ADOPTER_LOCAL_FILES}
-    md_files = [(s, d) for s, d, _disp in DISTRIBUTION if d.endswith(".md")]
+                      for rel in ADOPTER_LOCAL_FILES + companions_in(layout) + [placeholder_in(layout)]}
+    md_files = [(s, dest_in(layout, s, d)) for s, d, _disp in DISTRIBUTION if d.endswith(".md")]
     for _src, dest in md_files:
         dpath = os.path.join(tree, dest)
         if not os.path.exists(dpath):
@@ -114,21 +183,62 @@ def check(tree):
     return checked, failures, len(md_files)
 
 
-def main():
-    argv = sys.argv[1:]
-    if argv and argv[0] in ("-h", "--help"):
-        print("usage: check-links [--tree <adopter-project-dir>]\n"
-              "  (no args)      validate a freshly simulated adopter tree\n"
-              "  --tree <dir>   validate an existing tree, e.g. one bin/sync produced")
-        return 0
-
-    tree_arg = None
-    if argv:
-        if argv[0] == "--tree" and len(argv) == 2:
-            tree_arg = argv[1]
+def parse(argv):
+    """(layout, tree) from the command line, or None after printing why not. layout is None when not given."""
+    layout = tree = None
+    args = list(argv)
+    while args:
+        arg = args.pop(0)
+        if arg in ("-h", "--help"):
+            print(USAGE + "\n"
+                  "  (no args)          validate a freshly simulated adopter tree, in the legacy layout\n"
+                  "  --layout L         legacy (default), new (methodology/), or both: simulate that layout\n"
+                  "  --tree <dir>       validate an existing tree, e.g. one bin/sync produced, in the layout\n"
+                  "                     it has (read, never guessed); --layout legacy|new overrides that")
+            raise SystemExit(0)
+        if arg == "--layout" and args and args[0] in LAYOUTS and layout is None:
+            layout = args.pop(0)
+        elif arg == "--tree" and args and tree is None:
+            tree = args.pop(0)
         else:
-            print("usage: check-links [--tree <adopter-project-dir>]", file=sys.stderr)
-            return 2
+            print(USAGE, file=sys.stderr)
+            return None
+    if tree is not None and layout == "both":
+        print("check-links: --layout both cannot be used with --tree: a tree has one layout", file=sys.stderr)
+        print(USAGE, file=sys.stderr)
+        return None
+    return layout, tree
+
+
+def report(checked, failures, n_files, where):
+    if failures:
+        print("check-links: FAIL — %d dangling link(s) in %s:" % (len(failures), where))
+        for dest, lineno, target in failures:
+            print("  %s:%d  ->  %s" % (dest, lineno, target))
+        print("\nDistributed files author cross-references for the ADOPTER "
+              "layout (B1 plan section 4). Fix the target above, not the layout.")
+        return 1
+    print("check-links: OK — %d relative link(s) across %d distributed markdown "
+          "files resolve in %s." % (checked, n_files, where))
+    return 0
+
+
+def simulate(layout, suffix):
+    """Check a freshly simulated adopter tree of `layout`; the suffix names the layout in the report."""
+    tree = tempfile.mkdtemp(prefix="methodology-adopter-tree-")
+    try:
+        materialize_distribution(tree, layout)
+        checked, failures, n_files = check(tree, layout)
+    finally:
+        shutil.rmtree(tree, ignore_errors=True)
+    return report(checked, failures, n_files, "the simulated adopter tree" + suffix)
+
+
+def main():
+    parsed = parse(sys.argv[1:])
+    if parsed is None:
+        return 2
+    layout, tree_arg = parsed
 
     if tree_arg:
         # Validate a real, caller-owned tree (e.g. bin/sync output) in place. The
@@ -139,28 +249,21 @@ def main():
         if not os.path.isdir(tree):
             print("check-links: --tree path is not a directory: %s" % tree, file=sys.stderr)
             return 2
-        checked, failures, n_files = check(tree)
-        where = "the tree at %s" % tree
-    else:
-        tree = tempfile.mkdtemp(prefix="methodology-adopter-tree-")
-        try:
-            materialize_distribution(tree)
-            checked, failures, n_files = check(tree)
-        finally:
-            shutil.rmtree(tree, ignore_errors=True)
-        where = "the simulated adopter tree"
+        kind, _directory, found = resolve_layout(tree)
+        if kind == "half":
+            print("check-links: this tree holds %s in both places, so it has no layout to check:" % os.path.basename(found[0]),
+                  file=sys.stderr)
+            for path in found:
+                print("  %s" % path, file=sys.stderr)
+            return 2
+        layout = layout or ("new" if kind == "new" else "legacy")
+        checked, failures, n_files = check(tree, layout)
+        return report(checked, failures, n_files, "the tree at %s%s" % (tree, " (new layout)" if layout == "new" else ""))
 
-    if failures:
-        print("check-links: FAIL — %d dangling link(s) in %s:" % (len(failures), where))
-        for dest, lineno, target in failures:
-            print("  %s:%d  ->  %s" % (dest, lineno, target))
-        print("\nDistributed files author cross-references for the ADOPTER "
-              "layout (B1 plan section 4). Fix the target above, not the layout.")
-        return 1
-
-    print("check-links: OK — %d relative link(s) across %d distributed markdown "
-          "files resolve in %s." % (checked, n_files, where))
-    return 0
+    if layout == "both":
+        results = [simulate("legacy", " (legacy layout)"), simulate("new", " (new layout)")]
+        return 1 if any(results) else 0
+    return simulate(layout or "legacy", " (new layout)" if layout == "new" else "")
 
 
 if __name__ == "__main__":

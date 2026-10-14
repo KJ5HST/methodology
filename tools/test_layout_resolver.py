@@ -207,7 +207,8 @@ class TestEveryEmbeddedCopyIsByteIdentical(unittest.TestCase):
     later phase appends the tool it touches to COPIES (the dashboard, the trimmer, the budget gate)."""
 
     COPIES = ("starter-kit/context_budget.py", "starter-kit/methodology_dashboard.py", "starter-kit/methodology_trim.py",
-              "starter-kit/quality_ratchet.py")   # the gate layer, the trimmer, the budget gate and the dashboard (its tools/ twin is asserted below); each later layer appends the tools it carries
+              "starter-kit/quality_ratchet.py",   # the gate layer, the trimmer, the budget gate and the dashboard (its tools/ twin is asserted below)
+              "bin/sync", "bin/status", "bin/check-links")   # the sync layer; each later layer appends the tools it carries
 
     def test_each_copy_equals_the_modules_block_and_carries_exactly_one(self):
         block = lr.embedded_block((HERE / "layout_resolver.py").read_text(encoding="utf-8"))

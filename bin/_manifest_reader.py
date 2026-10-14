@@ -17,6 +17,13 @@ overwriting an adopter's own copy. A src or dest that is absolute, carries a dri
 '..', names no file ('.'), lies inside .git, or holds a NUL byte is refused too: the source's
 manifest now decides where files are read and written, and a write into .git/hooks would run.
 
+The second table, NEW_LAYOUT (BL-101), is read the same way by read_new_layout: a dict literal from each
+distributed file's src to the dest it takes in a project that keeps its methodology files under
+methodology/. It must name every file DISTRIBUTION names and no other, once each; no two may share a
+destination; each must pass the same path-safety test and lie under methodology/, where the layout
+resolver looks; and nothing may change it after its one assignment. A manifest without one is a source
+that predates the new layout (None), which is a fact about the source and not an error.
+
 Python 3 stdlib only.
 """
 import ast
@@ -89,13 +96,9 @@ def _literal(node: ast.expr, strings: dict, used: set):
         raise ManifestError(f"is not literal data (line {node.lineno}): {e}") from None
 
 
-def read_manifest(path: Path, dispositions: tuple) -> tuple:
-    """(rows, seed_format_markers) from the manifest at path, read as data.
-
-    rows is its DISTRIBUTION list of (src, dest, disposition); seed_format_markers is its
-    SEED_FORMAT_MARKERS dict, or None when it defines none. dispositions are the labels the
-    calling checkout acts on -- its own TRACKED and SEED. Raises ManifestError, whose message
-    completes the sentence "the bin/_manifest.py in <source> ...", naming every row refused."""
+def _parse(path: Path) -> tuple:
+    """(tree, assigned, strings) for the manifest at path: the module's AST, every plain module-level
+    assignment as name -> value node, and the names bound to a string constant (TRACKED, SEED)."""
     try:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     except SyntaxError as e:
@@ -107,6 +110,17 @@ def read_manifest(path: Path, dispositions: tuple) -> tuple:
                 and isinstance(node.targets[0], ast.Name)}
     strings = {name: value.value for name, value in assigned.items()
                if isinstance(value, ast.Constant) and isinstance(value.value, str)}
+    return tree, assigned, strings
+
+
+def read_manifest(path: Path, dispositions: tuple) -> tuple:
+    """(rows, seed_format_markers) from the manifest at path, read as data.
+
+    rows is its DISTRIBUTION list of (src, dest, disposition); seed_format_markers is its
+    SEED_FORMAT_MARKERS dict, or None when it defines none. dispositions are the labels the
+    calling checkout acts on -- its own TRACKED and SEED. Raises ManifestError, whose message
+    completes the sentence "the bin/_manifest.py in <source> ...", naming every row refused."""
+    tree, assigned, strings = _parse(path)
     if "DISTRIBUTION" not in assigned:
         raise ManifestError("defines no DISTRIBUTION list")
     _bound_once(tree, "DISTRIBUTION")
@@ -143,3 +157,47 @@ def read_manifest(path: Path, dispositions: tuple) -> tuple:
         raise ManifestError(f"has {len(refused)} of {len(rows)} row(s) this checkout cannot act "
                             f"on safely:\n" + "\n".join(refused))
     return rows, markers
+
+
+def read_new_layout(path: Path, rows: list):
+    """The manifest's NEW_LAYOUT at path, read as data: {src: dest in the new layout}, or None when
+    the manifest defines none (a source that predates the new layout). rows are the DISTRIBUTION rows
+    read_manifest returned from the same file. Raises ManifestError, whose message completes the
+    sentence "the bin/_manifest.py in <source> ...", naming every entry refused."""
+    tree, assigned, strings = _parse(path)
+    if "NEW_LAYOUT" not in assigned:
+        return None
+    _bound_once(tree, "NEW_LAYOUT")
+    node = assigned["NEW_LAYOUT"]
+    table = _literal(node, strings, set())
+    if not (isinstance(table, dict)
+            and all(isinstance(k, str) and isinstance(v, str) for k, v in table.items())):
+        raise ManifestError("has a NEW_LAYOUT that is not a dict of strings")
+    problems = []
+    keys = [ast.literal_eval(k) for k in node.keys if isinstance(k, ast.Constant)]
+    for key in sorted({k for k in keys if keys.count(k) > 1}):
+        problems.append(f"    {key!r}: written more than once, so the last would win without a word")
+    srcs = [src for src, _dest, _disp in rows]
+    for src in srcs:
+        if src not in table:
+            problems.append(f"    {src!r}: no destination in the new layout")
+    for key in table:
+        if key not in srcs:
+            problems.append(f"    {key!r}: not a file DISTRIBUTION names")
+    for src, dest in table.items():
+        why = _path_problem(dest)
+        parts = PureWindowsPath(dest).parts
+        if not why and not (len(parts) > 1 and parts[0] == "methodology"):
+            why = "is outside methodology/, where the layout resolver looks"
+        if why:
+            problems.append(f"    {src!r} -> {dest!r}: dest {why}")
+    owners = {}
+    for src, dest in table.items():
+        owners.setdefault(dest, []).append(src)
+    for dest, who in owners.items():
+        if len(who) > 1:
+            problems.append(f"    {dest!r}: the destination of {' and '.join(map(repr, who))}")
+    if problems:
+        raise ManifestError(f"has a NEW_LAYOUT this checkout cannot act on safely "
+                            f"({len(problems)} problem(s)):\n" + "\n".join(problems))
+    return table

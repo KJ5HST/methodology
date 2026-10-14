@@ -14,6 +14,12 @@ migration note — never as drift, and sync never auto-overwrites it (BL-6 item 
 TRACKED files are compared against canonical and may report current / locally modified /
 N versions behind / missing.
 
+A project keeps its methodology files at its root (legacy) or under methodology/ (new): BL-101 phase P6,
+docs/planning/methodology-subdirectory-plan.md section 5A. Each project's layout is read, never guessed, and
+named on a `layout:` line before the table; its rows are the files at the places that layout puts them. A
+project that holds the runner in both places is one `half-migrated` row, not a table in either layout. A seed
+that sits at the root of a migrated project is the project's own and is read where it is.
+
 Contract: methodology v2.2 plan §4E; B1 plan Phase 4.
 """
 import argparse
@@ -25,8 +31,35 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _manifest import DISTRIBUTION, TRACKED, SEED, SEED_FORMAT_MARKERS  # noqa: E402  (bin/ on sys.path)
-from _manifest_reader import ManifestError, read_manifest  # noqa: E402
+from _manifest import DISTRIBUTION, TRACKED, SEED, SEED_FORMAT_MARKERS, NEW_LAYOUT  # noqa: E402  (bin/ on sys.path)
+from _manifest_reader import ManifestError, read_manifest, read_new_layout  # noqa: E402
+
+# A project keeps its methodology files at its root (legacy) or under methodology/ (new): the plan's
+# section 4.3. This block is the resolver, embedded byte for byte; the canonical suite asserts that.
+
+# --- layout resolver: BEGIN ---
+import os as _os
+from pathlib import Path as _Path
+
+
+def resolve_layout(root, anchor="SESSION_RUNNER.md"):
+    """Return (kind, directory, found): kind is new|legacy|half|none, directory a Path or None,
+    found the anchor paths that exist. A half-migrated tree has no directory, by design.
+    A file found in both places is the framework's under methodology/ when the runner is under
+    methodology/ and not at the root: the root copy is the project's own and is left alone, kind new,
+    and found still names both. Any other tie stays half, and the runner cannot decide a tie about itself."""
+    root = _Path(root)
+    new, old = root / "methodology" / anchor, root / anchor
+    found = tuple(p for p in (new, old) if _os.path.isfile(p))
+    if len(found) == 2:
+        if _os.path.isfile(root / "methodology" / "SESSION_RUNNER.md") and not _os.path.isfile(root / "SESSION_RUNNER.md"):
+            return "new", new.parent, found
+        return "half", None, found
+    if not found:
+        return "none", None, ()
+    return ("new", new.parent, found) if found[0] == new else ("legacy", root, found)
+# --- layout resolver: END ---
+
 
 REPO = "KJ5HST/methodology"
 # --source=github clones this URL; the variable overrides it, as for bin/sync.
@@ -143,12 +176,13 @@ def use_source_manifest(methodology_root: Path, url: str) -> None:
     manifest of its own leaves this checkout's in place. Read as data, never run
     (_manifest_reader); a row whose disposition is not this checkout's TRACKED or SEED refuses
     the run, since report() would read any other label as a seed and hide its drift."""
-    global DISTRIBUTION, SEED_FORMAT_MARKERS
+    global DISTRIBUTION, SEED_FORMAT_MARKERS, NEW_LAYOUT
     path = methodology_root / "bin" / "_manifest.py"
     if not path.is_file():
         return
     try:
         theirs, markers = read_manifest(path, (TRACKED, SEED))
+        table = read_new_layout(path, theirs)
     except ManifestError as e:
         sys.exit(f"error: the bin/_manifest.py in {url} {e}\n"
                  f"hint: compare against a full local checkout instead — `--source=local`.")
@@ -160,6 +194,7 @@ def use_source_manifest(methodology_root: Path, url: str) -> None:
         for src in mine:
             print(f"    {src}")
     DISTRIBUTION = theirs
+    NEW_LAYOUT = table   # None for a source that predates the new layout: it can serve a legacy project only
     SEED_FORMAT_MARKERS = SEED_FORMAT_MARKERS if markers is None else markers
 
 
@@ -205,11 +240,11 @@ STALE_SEED = "present (stale format)"
 # size section that carries its marker, and replacing its front matter would delete what a trimmer wrote there — a
 # pointer block, a regenerated count. A file with no route here gets the general rule.
 MIGRATION_ROUTES = {
-    "CHANGELOG.md": (
+    "CHANGELOG.md": (  # layout: ok -- a key naming the seed (its legacy destination, as SEED_FORMAT_MARKERS keys it), never opened
         "replace the rules text or old header above the first entry with the current starter-kit seed's "
         "header, keeping any archive-pointer block and month heading a trimmer wrote there"
     ),
-    "HANDOFFS.md": (
+    "HANDOFFS.md": (  # layout: ok -- a key naming the seed, never opened
         "bring across the current starter-kit seed's '## Size, and when to archive' section, which carries "
         "its format marker, above the first receipt (replacing any older copy of that section), and keep the "
         "rest of the front matter"
@@ -218,26 +253,35 @@ MIGRATION_ROUTES = {
 GENERAL_ROUTE = "bring across whatever the current starter-kit seed has above the first record"
 
 
-def seed_status(project: Path, dest: str) -> str:
-    """SEED files are adopter-owned; only existence matters and an absent seed is
-    NOT drift (B1 plan Phase 4 DONE criterion).
+def seed_status(project: Path, dest: str, key: str = None, beside: str = None) -> tuple:
+    """(path, state) of a SEED file. SEED files are adopter-owned; only existence matters and an absent
+    seed is NOT drift (B1 plan Phase 4 DONE criterion).
+
+    `dest` is where the project's layout puts the seed; `beside` is its legacy place, which a migrated
+    project may still use (tier 1), or hold a file of its own at: a seed there and not at `dest` is read
+    where it is, and the path returned says where. `key` is the seed's canonical name, its legacy
+    destination, which is how SEED_FORMAT_MARKERS and MIGRATION_ROUTES are keyed wherever the file sits.
 
     A present seed that carries a known SEED_FORMAT_MARKERS entry but whose content
     lacks the marker predates the current seed format. That is reported advisory-only
     as STALE_SEED, never as drift and never acted on — sync leaves adopter-owned seeds
     untouched (BL-6 item 2)."""
-    target = project / dest
+    key = dest if key is None else key
+    shown = dest
+    if not (project / dest).exists() and beside is not None and (project / beside).exists():
+        shown = beside
+    target = project / shown
     if not target.exists():
-        return "absent"
-    marker = SEED_FORMAT_MARKERS.get(dest)
+        return shown, "absent"
+    marker = SEED_FORMAT_MARKERS.get(key)
     if marker:
         try:
             content = target.read_text(encoding="utf-8", errors="replace")
         except OSError:
-            return "present"  # unreadable → don't guess the format
+            return shown, "present"  # unreadable → don't guess the format
         if marker not in content:
-            return STALE_SEED
-    return "present"
+            return shown, STALE_SEED
+    return shown, "present"
 
 
 def render_table(headers: tuple, rows: list) -> str:
@@ -288,31 +332,51 @@ def report(paths: list, methodology_root: Path, source: str, origin: str) -> int
         history[src] = local_history(methodology_root, src)
 
     rows = []
+    layouts = []  # one `layout:` line per project that is a directory
+    stale = []    # (canonical key, path shown) of each seed that predates the current format
     for raw in paths:
         project = Path(raw).resolve()
         if not project.is_dir():
             rows.append((raw, "-", "-", "missing-dir"))
             continue
-        for src, dest, disp in DISTRIBUTION:
+        kind, _directory, found = resolve_layout(project)
+        if kind == "half":
+            where = " and ".join(p.relative_to(project).as_posix() for p in reversed(found))
+            layouts.append(f"layout: {project.name}  half-migrated: {where}")
+            rows.append((project.name, "-", "-", "half-migrated"))
+            continue
+        layout = "new" if kind == "new" else "legacy"
+        layouts.append(f"layout: {project.name}  " + (kind if kind != "none"
+                       else "none (no methodology files yet; rows read at the legacy places)"))
+        if layout == "new" and NEW_LAYOUT is None:
+            rows.append((project.name, "-", "-", "source-predates-new-layout"))
+            continue
+        for src, legacy_dest, disp in DISTRIBUTION:
+            dest = legacy_dest if layout == "legacy" else NEW_LAYOUT[src]
             if disp == TRACKED:
-                state = file_status(project, dest, canonical[src], history[src])
+                shown, state = dest, file_status(project, dest, canonical[src], history[src])
             else:  # SEED
-                state = seed_status(project, dest)
-            rows.append((project.name, dest, disp, state))
+                shown, state = seed_status(project, dest, legacy_dest, legacy_dest if layout == "new" else None)
+                if state == STALE_SEED:
+                    stale.append((legacy_dest, shown))
+            rows.append((project.name, shown, disp, state))
 
     print(f"source: {source} ({origin})")
+    for line in layouts:
+        print(line)
     print(render_table(HEADERS, rows))
 
-    stale_rows = [dest for _proj, dest, _disp, state in rows if state == STALE_SEED]
+    stale_rows = [shown for _key, shown in stale]
     if stale_rows:
         dests = sorted(set(stale_rows))  # count instances (one per project), list distinct files
         noun = "seed predates" if len(stale_rows) == 1 else "seeds predate"
-        routes = "; ".join(f"for {dest}, {MIGRATION_ROUTES.get(dest, GENERAL_ROUTE)}" for dest in dests)
+        keys = {shown: key for key, shown in stale}
+        routes = "; ".join(f"for {dest}, {MIGRATION_ROUTES.get(keys[dest], GENERAL_ROUTE)}" for dest in dests)
         print(
             f"\nnote: {len(stale_rows)} {noun} the current format ({', '.join(dests)}, marked "
             f"'{STALE_SEED}'). These are adopter-owned and are never auto-overwritten. To migrate, "
             f"{routes}; leave every entry and receipt as written. Delete the file and re-run bin/sync "
-            f"to reseed only if it holds no history (see BOOTSTRAP.md \"Updating an existing project "
+            f"to reseed only if it holds no history (see BOOTSTRAP.md \"Updating an existing project "  # layout: ok -- a document named in a message, never opened; the name is the same in either layout
             f"from an earlier methodology version\")."
         )
     return 0
