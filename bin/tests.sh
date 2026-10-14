@@ -279,6 +279,14 @@ if python3 "$METHODOLOGY/tools/test_quality_ratchet.py" >/dev/null 2>&1; then
 else
     fail "quality ratchet unit tests failed"
 fi
+# The methodology/ directory move: the layout resolver, the fixture trees in both layouts and the literal
+# scanner's own behaviour, on scratch trees. Canonical-only. It tests the scanner; it does NOT run the
+# scanner over this repository.
+if python3 "$METHODOLOGY/tools/test_layout_resolver.py" >/dev/null 2>&1; then
+    pass "layout resolver, fixture trees and literal scanner unit tests green"
+else
+    fail "layout resolver, fixture trees and literal scanner unit tests failed"
+fi
 
 echo "== Test 19: dashboard twins byte-identical + same DASHBOARD_VERSION =="
 diff -q "$METHODOLOGY/tools/methodology_dashboard.py" "$STARTER/methodology_dashboard.py" >/dev/null \

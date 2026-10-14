@@ -1,0 +1,299 @@
+#!/usr/bin/env python3
+"""check-layout-literals — list every line of a shipped tool that names a methodology file's root path.
+
+BL-101 phase P1 (docs/planning/methodology-subdirectory-plan.md section 7.1). The move to a
+methodology/ directory is only safe if no shipped tool reads a methodology file by a literal root
+path: a green suite does not see a literal, and the plan's C5 measured the worst case, the ledger hook
+passing every commit after the ledger moved. This tool finds them. It was RED on purpose from P1 and its
+list was the to-do list of phases P2-P6; P6 (S279) took it to zero and declared it a quality gate,
+`layout-literals`, in .quality-gates.json, so a literal that comes back is a red gate and not a
+surprise after the move. Canonical-only (not in bin/_manifest.py), like the other bin/check-* tools.
+
+What counts as a SITE: a string constant in executable code (Python, read with ast) or a non-comment
+part of a shell line that holds
+  bare         a methodology file's name with no directory in front of it, or behind a variable
+               ($top/CHANGELOG.md): a read relative to the project root;
+  layout-path  docs/methodology, today's directory for the framework documents, or docs/archive,
+               where a trim writes its shards (the plan moves it in tier 2, decision D5);
+  new-path     methodology/<a methodology file>, the new directory hard-coded.
+A name behind a canonical-source directory (starter-kit/, tools/, workstreams/, docs/planning/) is that
+repository's own layout, not a project's, and is not a site. Written as a join, / "starter-kit" / "NAME", the
+directory is a separate constant and is read the same way.
+Each site is shaped `path` (a constant with no whitespace: a read or a key) or `text` (a message, a
+command or a pattern that names the file). The shape is a triage hint, not a verdict.
+
+What does not fail: prose (a name inside a comment or a docstring), the resolver's marked block
+(tools/layout_resolver.py), and a site acknowledged by a same-line marker with a reason:
+
+    LABEL = "CHANGELOG.md"  # layout: ok -- printed in a report, never opened
+
+A marker without a reason after the ` -- ` acknowledges nothing. Not scanned: bin/_manifest.py (the
+table itself) and bin/tests.sh (the suite encodes the layout, plan C13), and tools/ tests.
+
+Scanned: starter-kit/*.py, bin/* (a script with a shebang), .githooks/*, and tools/methodology_dashboard.py
+only where it is not byte-identical to its starter-kit twin.
+
+Exit: 0 no site · 1 sites listed · 2 nothing scanned, a file that does not parse, or usage.
+"""
+import argparse
+import ast
+import importlib.util
+import io
+import re
+import sys
+import tokenize
+from collections import namedtuple
+from pathlib import Path
+
+sys.dont_write_bytecode = True
+
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parent
+
+Site = namedtuple("Site", "file line shape kinds names text note")
+
+# Where a name is the canonical repository's own source path, not a project's root path.
+CANONICAL_PREFIXES = ("starter-kit/", "tools/", "workstreams/", "docs/planning/", "docs/tutorials/", "docs/audits/")
+NOT_SCANNED_ALWAYS = {
+    "bin/_manifest.py": "the manifest is the table of paths itself",
+    "bin/tests.sh": "the suite encodes the layout and is parameterised over both (plan C13)",
+}
+# ... and the same directories written as separate constants of a join: / "starter-kit" / "NAME"
+CANONICAL_JOIN_RE = re.compile(r"(?:%s)[\"']\)?\s*[,/]\s*[\"']$" % "|".join(
+    re.escape(p.rstrip("/")) for p in CANONICAL_PREFIXES))
+MARKER_RE = re.compile(r"#\s*layout:\s*ok\b(?P<reason>\s+--\s+\S)?")
+
+
+def _load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+_manifest = _load("_manifest", HERE / "_manifest.py")
+_resolver = _load("layout_resolver", REPO / "tools" / "layout_resolver.py")
+_fixtures = _load("layout_fixtures", REPO / "tools" / "layout_fixtures.py")
+
+NAMES = sorted({Path(dest).name for _, dest, _ in _manifest.DISTRIBUTION} | set(_fixtures.GENERATED))
+# a name may be written escaped inside a regular expression: CHANGELOG\.md
+NAME_RE = re.compile(r"(?<![\w.-])(?:%s)(?!\w)" % "|".join(re.escape(n).replace(r"\.", r"\\?\.") for n in NAMES))
+DOCS_RE = re.compile(r"(?<![\w.-])docs/(?:methodology|archive)(?![\w])")  # layout: ok -- the pattern this tool searches for
+
+
+def matches(line, lead=""):
+    """(kinds, names) for the methodology-file names written on one physical line. ``lead`` is the text
+    before it on the same source line, so a join like / "starter-kit" / "NAME" can be read across constants."""
+    kinds, names = set(), []
+    for m in NAME_RE.finditer(line):
+        before = line[:m.start()]
+        if before.endswith(CANONICAL_PREFIXES) or re.search(r"://\S*$", before) \
+                or CANONICAL_JOIN_RE.search(lead + before):
+            continue  # the canonical repository's own layout, or a URL
+        name = m.group(0).replace("\\", "")
+        if before.endswith(("docs/methodology/", "docs/archive/")):  # layout: ok -- the patterns this tool searches for
+            kind = "layout-path"
+        elif before.endswith("methodology/"):
+            if re.search(r"[\w.-]/methodology/$", before):
+                continue  # another repository's methodology/ directory: a sibling checkout, a clone
+            kind = "new-path"
+        else:
+            kind = "bare"
+        names.append(name)
+        kinds.add(kind)
+    if DOCS_RE.search(line):
+        kinds.add("layout-path")
+    return kinds, names
+
+
+def _kind_order(kinds):
+    return tuple(k for k in ("bare", "layout-path", "new-path") if k in kinds)
+
+
+def _block_lines(lines):
+    """The 1-based line numbers inside the resolver's marked block, markers included."""
+    begin = [i for i, l in enumerate(lines, 1) if _resolver.BEGIN in l]
+    end = [i for i, l in enumerate(lines, 1) if _resolver.END in l]
+    if len(begin) != len(end) or len(begin) > 1 or (begin and end[0] < begin[0]):
+        raise ValueError("the layout-resolver markers are unbalanced or repeated")
+    return set(range(begin[0], end[0] + 1)) if begin else set()
+
+
+def _segment(raw, node):
+    """The physical source lines a node spans, cut at its columns. (ast.get_source_segment splits the
+    whole file on every call, which made a scan of the 5,000-line dashboard take a minute.)"""
+    first, last = node.lineno - 1, node.end_lineno - 1
+    if first == last:
+        return [raw[first][node.col_offset:node.end_col_offset].decode("utf-8")]
+    return ([raw[first][node.col_offset:].decode("utf-8")]
+            + [l.decode("utf-8") for l in raw[first + 1:last]]
+            + [raw[last][:node.end_col_offset].decode("utf-8")])
+
+
+def _python(rel, text, lines):
+    tree = ast.parse(text)
+    bare = {id(n.value) for n in ast.walk(tree)
+            if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant) and isinstance(n.value.value, str)}
+    code, prose = {}, {}   # line -> (kinds, names, shape)
+    raw = [l.encode("utf-8") for l in lines]   # ast columns are UTF-8 byte offsets
+    for n in ast.walk(tree):
+        if not (isinstance(n, ast.Constant) and isinstance(n.value, str)):
+            continue
+        for i, part in enumerate(_segment(raw, n)):
+            kinds, names = matches(part, raw[n.lineno - 1][:n.col_offset].decode("utf-8") if i == 0 else "")
+            if not kinds and not names:
+                continue
+            line = n.lineno + i
+            if id(n) in bare:
+                prose[line] = (kinds, names, "text")
+                continue
+            shape = "text" if re.search(r"\s", n.value) else "path"
+            old = code.get(line)
+            if old:
+                shape = "path" if "path" in (old[2], shape) else "text"
+                kinds, names = old[0] | kinds, old[1] + [x for x in names if x not in old[1]]
+            code[line] = (kinds, names, shape)
+    for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+        if tok.type == tokenize.COMMENT:
+            kinds, names = matches(tok.string)
+            if kinds or names:
+                prose[tok.start[0]] = (kinds, names, "text")
+    return code, prose
+
+
+def _shell_split(line):
+    """(code, comment) of one shell line: the first # outside quotes, at a word start, opens a comment."""
+    quote = None
+    for i, ch in enumerate(line):
+        if quote:
+            if ch == quote:
+                quote = None
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "#" and (i == 0 or line[i - 1] in " \t;"):
+            return line[:i], line[i:]
+    return line, ""
+
+
+def _shell(rel, text, lines):
+    code, prose = {}, {}
+    for i, line in enumerate(lines, 1):
+        body, comment = _shell_split(line)
+        kinds, names = matches(comment)
+        if kinds or names:
+            prose[i] = (kinds, names, "text")
+        kinds, names = matches(body)
+        if kinds or names:
+            hit = NAME_RE.search(body) or DOCS_RE.search(body)
+            word = next((w.group(0) for w in re.finditer(r"\S+", body) if w.start() <= hit.start() < w.end()), "")
+            alone = re.fullmatch(r"(?:[\w.-]+[/:])*(?:%s)" % "|".join(re.escape(n) for n in NAMES), re.sub(r"[\"'${}()]", "", word))
+            code[i] = (kinds, names, "path" if alone else "text")
+    return code, prose
+
+
+def scan_text(rel, text):
+    """(sites, acknowledged, prose, problems) for one file's text; ``rel`` picks the language."""
+    lines = text.split("\n")
+    try:
+        block = _block_lines(lines)
+        is_py = rel.endswith(".py") or (lines[0].startswith("#!") and "python" in lines[0])
+        code, prose = (_python if is_py else _shell)(rel, text, lines)
+    except (SyntaxError, ValueError) as exc:
+        return [], [], [], ["%s: cannot be scanned: %s" % (rel, exc)]
+    sites, acked = [], []
+    for line in sorted(code):
+        if line in block:
+            continue
+        kinds, names, shape = code[line]
+        marker = MARKER_RE.search(lines[line - 1])
+        note = ""
+        if marker and not marker.group("reason"):
+            note = "a `layout: ok` marker needs a reason after ` -- `, so it acknowledges nothing"
+        site = Site(rel, line, shape, _kind_order(kinds), tuple(names), lines[line - 1].strip(), note)
+        (acked if marker and marker.group("reason") else sites).append(site)
+    prose_sites = [Site(rel, line, "text", _kind_order(p[0]), tuple(p[1]), lines[line - 1].strip(), "")
+                   for line, p in sorted(prose.items()) if line not in block]
+    return sites, acked, prose_sites, []
+
+
+def scan_root(root):
+    root = Path(root)
+    report = {"files": [], "sites": [], "acknowledged": [], "prose": [], "problems": [], "not_scanned": {}}
+    candidates = sorted((root / "starter-kit").glob("*.py")) if (root / "starter-kit").is_dir() else []
+    for d in ("bin", ".githooks"):
+        if (root / d).is_dir():
+            candidates += sorted(p for p in (root / d).iterdir() if p.is_file() and p.suffix != ".pyc")
+    twin, original = root / "tools" / "methodology_dashboard.py", root / "starter-kit" / "methodology_dashboard.py"
+    if twin.is_file():
+        if original.is_file() and twin.read_bytes() == original.read_bytes():
+            report["not_scanned"]["tools/methodology_dashboard.py"] = \
+                "byte-identical twin of starter-kit/methodology_dashboard.py, scanned once"
+        else:
+            candidates.append(twin)
+    for path in candidates:
+        rel = path.relative_to(root).as_posix()
+        if rel in NOT_SCANNED_ALWAYS:
+            report["not_scanned"][rel] = NOT_SCANNED_ALWAYS[rel]
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            report["problems"].append("%s: cannot be read: %s" % (rel, exc))
+            continue
+        sites, acked, prose, problems = scan_text(rel, text)
+        report["files"].append(rel)
+        report["sites"] += sites
+        report["acknowledged"] += acked
+        report["prose"] += prose
+        report["problems"] += problems
+    return report
+
+
+def _n(count, word):
+    return "%d %s%s" % (count, word, "" if count == 1 else "s")
+
+
+def _row(s):
+    shown = s.text if len(s.text) <= 110 else s.text[:107] + "..."
+    note = ("  [%s]" % s.note) if s.note else ""
+    return "  %s:%d [%s %s] %s  -> %s%s" % (s.file, s.line, s.shape, "+".join(s.kinds), shown, ", ".join(s.names), note)
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description="List every line of a shipped tool that names a methodology file's root path.")
+    ap.add_argument("--root", default=str(REPO), help="the repository to scan (default: this one)")
+    ap.add_argument("--all", action="store_true", help="also list prose lines and acknowledged sites")
+    args = ap.parse_args(argv)
+    report = scan_root(args.root)
+    for p in report["problems"]:
+        print("error: " + p)
+    if not report["files"]:
+        print("error: scanned 0 files under %s; is --root a methodology repository?" % args.root)
+        return 2
+    sites = report["sites"]
+    by_file = {}
+    for s in sites:
+        by_file.setdefault(s.file, []).append(s)
+    for f in sorted(by_file):
+        print("%s: %s" % (f, _n(len(by_file[f]), "site")))
+        for s in by_file[f]:
+            print(_row(s))
+    if args.all:
+        for title, rows in (("acknowledged", report["acknowledged"]), ("prose (a name in a comment or docstring)", report["prose"])):
+            if rows:
+                print("%s:" % title)
+                for s in rows:
+                    print(_row(s))
+    for rel, why in sorted(report["not_scanned"].items()):
+        print("not scanned: %s (%s)" % (rel, why))
+    shapes = [s.shape for s in sites]
+    print("check-layout-literals: scanned %s; %s (%d path, %d text); %d acknowledged; %d prose not counted" % (
+        _n(len(report["files"]), "file"), _n(len(sites), "site"), shapes.count("path"), shapes.count("text"),
+        len(report["acknowledged"]), len(report["prose"])))
+    if report["problems"]:
+        return 2
+    return 1 if sites else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
