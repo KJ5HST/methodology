@@ -2576,7 +2576,7 @@ class TestWritePathIsActuallyGated(unittest.TestCase):
         """The defect: assertions were wired to records[:k] + records[k:] == records, an identity.
         A shard body missing its oldest record was written with [L1_OK] [L2_OK] [L3_OK] [WROTE]."""
         real = mod.build_shard
-        drop = lambda spec, live, shard, recs, span, key: real(spec, live, shard, recs[:-1], span, key)
+        drop = lambda spec, live, shard, recs, span, key, **kw: real(spec, live, shard, recs[:-1], span, key, **kw)
         with tempfile.TemporaryDirectory() as tmp:
             p = make_repo(tmp)
             r = self._run_in_proc(p, build_shard=drop)
@@ -4233,6 +4233,524 @@ class TestAFailedHistoryWalkIsNotAnUncommittedTrim(unittest.TestCase):
             self.assertIn("did not finish", v.stdout)
             self.assertNotIn("OK:", v.stdout, "a proof that compared nothing must not say OK")
             self.assertNotIn("not yet committed", v.stdout, "and must not pretend the trim is uncommitted")
+
+
+# =============================================================================================
+# BL-101 P3 -- a ledger under methodology/ (plan sections 4.3, 4.8, 7.2 row P3; coupling C7).
+#
+# The trimmer derives where a shard goes, and how a link is rebased, from the DIRECTORY the trimmed
+# ledger sits in. Legacy (a root ledger): shards in docs/archive/, links climb two levels. New (a
+# ledger under methodology/): shards in methodology/archive/ (decision D5), links climb one, and a
+# link that already starts with ../ is now ordinary, because the ledger is one level down and a
+# project file is exactly such a link. The legacy output must stay byte-for-byte what it was.
+# =============================================================================================
+
+import posixpath
+
+LEGACY_RECORDS = ["### 2026-01-01 · [ad hoc] one\n\nsee [a](a.md), [b](docs/b.md), [u](https://x.org/y), "
+                  "[f](#f) and `[c](c.md)`\n\n"]
+LEGACY_SHARD = "docs/archive/CHANGELOG-through-2026-01-01.md"
+LEGACY_SPAN = ("2026-01-01", "2026-01-01")
+GOLD_SHARD = '# CHANGELOG.md — archive: 2026-01-01 → 2026-01-01\n\nRetired records from [`CHANGELOG.md`](../../CHANGELOG.md), moved here so the live ledger stays small enough to read\nin one pass. Same format, same newest-on-top order — this is the same ledger, continued.\n\nHolds **1 record(s), 2026-01-01 → 2026-01-01**. Cut key: `2026-01-01`. Counts here are computed from the file\nitself, never carried forward. This shard is frozen: it states no forward-looking rule,\nbecause the live file owns those and a copy of one was wrong a day after it was written.\n\n---\n\n### 2026-01-01 · [ad hoc] one\n\nsee [a](../../a.md), [b](../../docs/b.md), [u](https://x.org/y), [f](#f) and `[c](c.md)`\n\n'
+GOLD_POINTER = '**Archived 1 record(s), 2026-01-01 → 2026-01-01** into [`docs/archive/CHANGELOG-through-2026-01-01.md`](docs/archive/CHANGELOG-through-2026-01-01.md) — same format, same order, frozen.\nLosslessness is proved by [`docs/archive/CHANGELOG-through-2026-01-01.md.verify.sh`](docs/archive/CHANGELOG-through-2026-01-01.md.verify.sh), which re-derives L1/L2/L3 from git; run it rather\nthan trusting this sentence. Written by `methodology_trim.py` v@VER@.\n\n'
+GOLD_ENTRY = "### 2026-02-01 · [ad hoc] Ledger trim: `CHANGELOG.md` → `docs/archive/CHANGELOG-through-2026-01-01.md` (1 record(s), 1,000 B → 500 B)\n\n**Written by:** `methodology_trim.py` v@VER@ — a tool action, not a session's judgment.\nMoved the oldest **1** record(s) (2026-01-01 → 2026-01-01) out of [`CHANGELOG.md`](CHANGELOG.md) into\n[`docs/archive/CHANGELOG-through-2026-01-01.md`](docs/archive/CHANGELOG-through-2026-01-01.md). Losslessness is asserted by L1 (records-zone concatenation), L2 (zone\npinning) and L3 (record partition), and is **re-derivable** — run [`docs/archive/CHANGELOG-through-2026-01-01.md.verify.sh`](docs/archive/CHANGELOG-through-2026-01-01.md.verify.sh)\nrather than trusting a digest printed here. Live file 1,000 B → 500 B (−50.0%).\n\n"
+GOLD_REBASED = '### 2026-01-01 · [ad hoc] one\n\nsee [a](../../a.md), [b](../../docs/b.md), [u](https://x.org/y), [f](#f) and `[c](c.md)`\n\n'
+FIXTURE_PROOF_TEMPLATE = REPO / "tools" / "fixtures" / "trim-verify-template-1.8.2.sh"
+
+
+def to_new_layout(p, runner=True, product=False):
+    """Move a make_repo() / make_handoff_repo() tree under methodology/ the way the migration will: the
+    ledgers in one commit that touches the new ledger path, so the ledger frontier is that commit and
+    the undocumented set is empty. The runner file is what makes the resolver read the tree as `new`.
+    `product` adds the project's own changelog at the root in that same commit."""
+    (p / "methodology" / "archive").mkdir(parents=True, exist_ok=True)
+    for name in ("CHANGELOG.md", "HANDOFFS.md"):
+        if (p / name).exists():
+            sh(p, "git", "mv", name, "methodology/" + name)
+    for d in (p / "docs" / "archive", p / "docs"):    # make_repo() pre-creates the legacy directory; a real tree has none
+        if d.is_dir() and not any(d.iterdir()):
+            d.rmdir()
+    if runner:
+        (p / "methodology" / "SESSION_RUNNER.md").write_text("the runner\n", encoding="utf-8")
+    if product:
+        (p / "CHANGELOG.md").write_text("# Product changelog\n\n## 1.0\n\n- shipped, see [docs](docs/x.md)\n",
+                                        encoding="utf-8")
+    sh(p, "git", "add", "-A")
+    sh(p, "git", "commit", "-qm", "move the ledgers under methodology/")
+    return p
+
+
+def with_parent_link(p, rel="methodology/CHANGELOG.md"):
+    """Add one entry-level link that climbs out of methodology/ -- the convention the plan gives a new
+    ledger for a link to a project file (C6) -- to EVERY record, in a commit of its own."""
+    f = p / rel
+    f.write_text(f.read_text(encoding="utf-8").replace("[abs](https://example.com/a)",
+                                                       "[up](../docs/x.md), [abs](https://example.com/a)"),
+                 encoding="utf-8")
+    sh(p, "git", "add", "-A")
+    sh(p, "git", "commit", "-qm", "links to a project file")
+    return p
+
+
+def new_repo(tmp, **kw):
+    p = make_repo(tmp, **{k: v for k, v in kw.items() if k in ("n_records", "body", "footer")})
+    to_new_layout(p, runner=kw.get("runner", True), product=kw.get("product", False))
+    if kw.get("parent_link", True):
+        with_parent_link(p)
+    return p
+
+
+def trim_new(p, *extra, rel="methodology/CHANGELOG.md"):
+    return run_trim(p, "--file", rel, "--today", "2026-02-01", *extra)
+
+
+def written_shard(p, stem="CHANGELOG", where="methodology/archive"):
+    found = sorted((p / where).glob(stem + "-through-*.md"))
+    return found[-1] if found else None
+
+
+class TestTheLayoutIsDerivedFromTheLedgersDirectory(unittest.TestCase):
+
+    def test_a_root_ledger_is_legacy_and_one_under_methodology_is_new(self):
+        for rel in ("CHANGELOG.md", "HANDOFFS.md", "starter-kit/CHANGELOG.md", "docs/methodology/CHANGELOG.md"):
+            self.assertEqual(mod.layout_for(rel), mod.LEGACY, rel)
+        for rel in ("methodology/CHANGELOG.md", "methodology/HANDOFFS.md"):
+            self.assertEqual(mod.layout_for(rel), mod.NEW, rel)
+
+    def test_the_two_layouts_say_what_the_plan_says(self):
+        self.assertEqual((mod.LEGACY.archive_dir, mod.LEGACY.rebase_prefix, mod.LEGACY.parent_links),
+                         ("docs/archive", "../../", False))
+        self.assertEqual((mod.NEW.archive_dir, mod.NEW.rebase_prefix, mod.NEW.parent_links),
+                         ("methodology/archive", "../", True))
+
+    def test_the_prefix_is_the_climb_from_the_archive_to_the_ledgers_directory(self):
+        for lay, ledger_dir in ((mod.LEGACY, ""), (mod.NEW, "methodology")):
+            self.assertEqual(lay.rebase_prefix, posixpath.relpath(ledger_dir or ".", lay.archive_dir) + "/")
+
+    def test_the_old_constants_still_name_the_legacy_halves(self):
+        self.assertEqual((mod.ARCHIVE_DIR, mod.REBASE_PREFIX), (mod.LEGACY.archive_dir, mod.LEGACY.rebase_prefix))
+
+    def test_a_ledger_is_what_the_resolver_finds_not_a_fixed_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp)
+            self.assertEqual(mod.ledger_rel_for(p), "CHANGELOG.md", "no ledger yet: the legacy default, as before")
+            (p / "CHANGELOG.md").write_text("x\n")
+            self.assertEqual(mod.ledger_rel_for(p), "CHANGELOG.md")
+            (p / "methodology").mkdir()
+            (p / "methodology" / "CHANGELOG.md").write_text("x\n")
+            self.assertIsNone(mod.ledger_rel_for(p), "both, with no runner under methodology/: half-migrated")
+            (p / "methodology" / "SESSION_RUNNER.md").write_text("x\n")
+            self.assertEqual(mod.ledger_rel_for(p), "methodology/CHANGELOG.md", "the framework anchor decides the tie")
+            (p / "SESSION_RUNNER.md").write_text("x\n")
+            self.assertIsNone(mod.ledger_rel_for(p), "a runner in both places does not decide it")
+            (p / "CHANGELOG.md").unlink()
+            self.assertEqual(mod.ledger_rel_for(p), "methodology/CHANGELOG.md",
+                             "no tie any more: the ledger is where it is, whatever else is half-moved")
+
+
+class TestTheLinkRebaseIsInvertibleInBothLayouts(unittest.TestCase):
+
+    LINKS = ("x.md", "docs/x.md", "../x.md", "../../x.md", "../docs/x.md", "./x.md", "a/../b.md", "x.md#frag",
+             "#frag", "/abs.md", "https://u.org/p", "mailto:a@b.org", "x%20y.md")
+
+    def rec(self, target):
+        return "### 2026-01-01 · [ad hoc] r\n\nsee [t](%s) and `[c](%s)`\n\n" % (target, target)
+
+    def test_the_new_layout_round_trips_every_link_including_one_that_climbs(self):
+        for t in self.LINKS:
+            r = self.rec(t)
+            self.assertEqual(mod.invert_record(mod.transform_record(r, mod.NEW), mod.NEW), r, t)
+
+    def test_the_new_layout_adds_exactly_one_level_to_a_relative_link_and_nothing_to_the_rest(self):
+        for t in self.LINKS:
+            out = mod.transform_record(self.rec(t), mod.NEW)
+            rel = not (t.startswith(("#", "/")) or mod._SCHEME.match(t))
+            self.assertIn("[t](%s)" % (("../" + t) if rel else t), out, t)
+            self.assertIn("`[c](%s)`" % t, out, "an inline code span is never rewritten")
+
+    def test_a_target_that_starts_with_the_prefix_is_a_refusal_in_the_legacy_layout_and_ordinary_in_the_new(self):
+        recs = [self.rec("../../already.md")]
+        legacy = mod.Result("x")
+        self.assertFalse(mod.check_invertible(recs, legacy))
+        self.assertIn("TRANSFORM_NOT_INVERTIBLE", legacy.codes)
+        new = mod.Result("x")
+        self.assertTrue(mod.check_invertible(recs, new, mod.NEW))
+        self.assertNotIn("TRANSFORM_NOT_INVERTIBLE", new.codes)
+
+    def test_a_target_that_climbs_is_left_alone_in_the_legacy_layout_and_rebased_in_the_new(self):
+        rec = self.rec("../docs/x.md")
+        self.assertEqual(mod.transform_record(rec), rec, "legacy: out of the domain, byte for byte as it was")
+        self.assertIn("[t](../../docs/x.md)", mod.transform_record(rec, mod.NEW))
+
+    def test_a_link_resolves_to_the_same_file_from_the_shard_as_from_the_ledger(self):
+        for t in ("SESSION_RUNNER.md", "../docs/x.md", "workstreams/A.md", "../../x.md"):
+            there = posixpath.normpath(posixpath.join("methodology", t))
+            moved = mod.transform_record(self.rec(t), mod.NEW)
+            got = re.findall(r"\]\(([^)\s]*)\)", moved)[0]
+            self.assertEqual(posixpath.normpath(posixpath.join("methodology/archive", got)), there, t)
+        for t in ("SESSION_RUNNER.md", "docs/x.md"):
+            got = re.findall(r"\]\(([^)\s]*)\)", mod.transform_record(self.rec(t)))[0]
+            self.assertEqual(posixpath.normpath(posixpath.join("docs/archive", got)), posixpath.normpath(t), t)
+
+
+class TestALedgerUnderMethodology(unittest.TestCase):
+
+    NEW = "methodology/CHANGELOG.md"
+
+    def test_a_dry_run_names_a_shard_under_methodology_archive_and_writes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp)
+            r = trim_new(p)
+            self.assertIn("[DRY_RUN]", r.stdout, r.stdout)
+            self.assertIn("methodology/archive/CHANGELOG-through-", r.stdout)
+            self.assertNotIn("docs/archive", r.stdout)
+            self.assertEqual(sh(p, "git", "status", "--porcelain").stdout.strip(), "")
+
+    def test_write_puts_the_shard_its_proof_and_the_entry_under_methodology_and_nothing_elsewhere(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp)
+            r = trim_new(p, "--write")
+            for code in ("[L1_OK]", "[L2_OK]", "[L3_OK]", "[P1A_OK]", "[WROTE]"):
+                self.assertIn(code, r.stdout, r.stdout)
+            shard = written_shard(p)
+            self.assertIsNotNone(shard, r.stdout)
+            self.assertTrue((shard.parent / (shard.name + ".verify.sh")).is_file())
+            self.assertFalse((p / "CHANGELOG.md").exists(), "a root ledger must not appear beside the moved one")
+            self.assertFalse((p / "docs").exists(), "nothing may be written under docs/ for a methodology/ ledger")
+            self.assertEqual(len(re.findall(r"(?m)^### .*Ledger trim:", (p / self.NEW).read_text(encoding="utf-8"))), 1)
+            self.assertEqual(sh(p, "git", "log", "--oneline").stdout.count("\n"), 3, "the trimmer must never commit")
+
+    def test_the_pointer_block_and_the_entry_link_relative_to_the_ledgers_own_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp)
+            trim_new(p, "--write")
+            name = written_shard(p).name
+            live = (p / self.NEW).read_text(encoding="utf-8")
+            self.assertEqual(live.count("](archive/%s)" % name), 2, "the pointer block and the ledger entry each link the shard")
+            self.assertEqual(live.count("](archive/%s.verify.sh)" % name), 2, "...and its proof")
+            self.assertEqual(live.count("[`methodology/CHANGELOG.md`](CHANGELOG.md)"), 1, "the entry links the live ledger itself")
+            self.assertIn("[`methodology/archive/%s`]" % name, live, "the displayed path stays repository-rooted")
+            self.assertNotIn("](methodology/", live, "a link written for a root ledger is dead from one level down")
+            shard = written_shard(p).read_text(encoding="utf-8")
+            self.assertIn("[`methodology/CHANGELOG.md`](../CHANGELOG.md)", shard)
+
+    def test_every_relative_link_in_the_shard_resolves_to_the_file_it_named_in_the_ledger(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp)
+            trim_new(p, "--write")
+            body = written_shard(p).read_text(encoding="utf-8").split("\n---\n", 1)[1]
+            seen = set()
+            for t in re.findall(r"\]\(([^)\s]*)\)", body):
+                if t.startswith("#") or mod._SCHEME.match(t):
+                    continue
+                seen.add(posixpath.normpath(posixpath.join("methodology/archive", t)))
+            self.assertEqual(seen, {"methodology/SESSION_RUNNER.md", "docs/x.md"}, seen)
+
+    def test_the_generated_proof_passes_before_the_commit_after_it_and_from_a_clone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp)
+            trim_new(p, "--write")
+            v = str(written_shard(p)) + ".verify.sh"
+            pre = sh(p, "bash", v)
+            self.assertIn("OK: L1, L2/front-matter, L3 hold", pre.stdout, pre.stdout)
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim")
+            post = sh(p, "bash", v)
+            self.assertIn("OK: L1, L2/front-matter, L3 hold", post.stdout, post.stdout)
+            self.assertIn("the trim commit", post.stdout)
+            clone = Path(tmp) / "clone"
+            self.assertEqual(sh(tmp, "git", "clone", "-q", "--no-local", str(p), str(clone)).returncode, 0)
+            from_clone = sh(clone, "bash", "methodology/archive/" + written_shard(p).name + ".verify.sh")
+            self.assertEqual(from_clone.returncode, 0, from_clone.stdout)
+            self.assertIn("OK: L1, L2/front-matter, L3 hold", from_clone.stdout)
+
+    def test_the_proof_goes_RED_when_a_shard_is_tampered_with_or_a_climbing_link_is_rebased_wrongly(self):
+        """The proof compares MODULO the uniform prefix, in both layouts, so a link left un-rebased in the shard
+        is not something it can see (the inverse leaves it alone and it equals the original). That is why
+        test_every_relative_link_in_the_shard_resolves... exists. What it CAN see, and must: an edited record, and
+        a rebase that is one level short on a link that already climbed."""
+        edits = (("a tampered record", lambda t: re.sub(r"(\[ad hoc\] entry \d+)", r"\1 TAMPERED", t, count=1)),
+                 ("a climbing link rebased one level short", lambda t: t.replace("](../../docs/x.md)", "](../docs/x.md)", 1)))
+        for what, edit in edits:
+            with self.subTest(what):
+                with tempfile.TemporaryDirectory() as tmp:
+                    p = new_repo(tmp)
+                    trim_new(p, "--write")
+                    shard = written_shard(p)
+                    before = shard.read_text(encoding="utf-8")
+                    after = edit(before)
+                    self.assertNotEqual(after, before, "control: the edit must change the shard")
+                    shard.write_text(after, encoding="utf-8")
+                    v = sh(p, "bash", str(shard) + ".verify.sh")
+                    self.assertIn("FAIL:", v.stdout, v.stdout)
+                    self.assertNotEqual(v.returncode, 0)
+
+    def test_trimming_handoffs_writes_its_entry_into_the_moved_changelog(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            to_new_layout(p)
+            r = run_trim(p, "--file", "methodology/HANDOFFS.md", "--write", "--today", "2026-02-01")
+            self.assertIn("[WROTE]", r.stdout, r.stdout)
+            self.assertIsNotNone(written_shard(p, "HANDOFFS"), r.stdout)
+            cl = (p / self.NEW).read_text(encoding="utf-8")
+            self.assertIn("Ledger trim: `methodology/HANDOFFS.md` → `methodology/archive/HANDOFFS-through-", cl)
+            self.assertFalse((p / "CHANGELOG.md").exists())
+            v = sh(p, "bash", str(written_shard(p, "HANDOFFS")) + ".verify.sh")
+            self.assertIn("OK: L1, L2/front-matter, L3 hold", v.stdout, v.stdout)
+
+    def test_a_link_that_starts_with_the_legacy_prefix_is_ordinary_in_the_new_layout(self):
+        """A project in a subdirectory of a bigger repository links a sibling project with ../../ . In the legacy
+        layout that is a refusal (it begins with the prefix, so the rebase would not invert); under methodology/ the
+        prefix is one level, the link is ordinary, and the trim must write it and prove it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp)
+            f = p / self.NEW
+            f.write_text(f.read_text(encoding="utf-8").replace("[abs](https://example.com/a)",
+                                                               "[shared](../../shared/y.md), [abs](https://example.com/a)"),
+                         encoding="utf-8")
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "a link into a sibling project")
+            r = trim_new(p, "--write")
+            self.assertIn("[WROTE]", r.stdout, r.stdout)
+            self.assertNotIn("TRANSFORM_NOT_INVERTIBLE", r.stdout)
+            self.assertIn("](../../../shared/y.md)", written_shard(p).read_text(encoding="utf-8"))
+            v = sh(p, "bash", str(written_shard(p)) + ".verify.sh")
+            self.assertIn("OK: L1, L2/front-matter, L3 hold", v.stdout, v.stdout)
+
+    def test_the_ledger_under_methodology_gets_the_class_a_arm(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp)
+            out = run_trim(p, "--file", self.NEW, "--check").stdout
+            self.assertIn("Class A archive threshold", out, out)
+
+    def test_the_rollback_line_keeps_the_live_files_and_the_shard_files_apart(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp)
+            r = trim_new(p, "--write")
+            name = written_shard(p).name
+            self.assertIn("Rollback:  git checkout -- methodology/CHANGELOG.md && rm -f "
+                          "methodology/archive/%s methodology/archive/%s.verify.sh" % (name, name), r.stdout)
+
+
+class TestALayoutTheTrimmerWillNotGuess(unittest.TestCase):
+
+    def test_a_ledger_in_both_places_with_no_runner_under_methodology_is_refused_naming_both(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp, runner=False, product=True)
+            before = sh(p, "git", "status", "--porcelain").stdout
+            r = trim_new(p, "--write")
+            self.assertIn("[LAYOUT_HALF_MIGRATED]", r.stdout, r.stdout)
+            self.assertIn("methodology/CHANGELOG.md", r.stdout)
+            self.assertNotIn("[WROTE]", r.stdout)
+            self.assertEqual(sh(p, "git", "status", "--porcelain").stdout, before)
+
+    def test_a_tie_the_framework_anchor_decides_trims_the_methodology_ledger_and_leaves_the_root_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp, product=True)
+            root_before = (p / "CHANGELOG.md").read_bytes()
+            r = trim_new(p, "--write")
+            self.assertIn("[WROTE]", r.stdout, r.stdout)
+            self.assertNotIn("[LAYOUT_HALF_MIGRATED]", r.stdout)
+            self.assertEqual((p / "CHANGELOG.md").read_bytes(), root_before, "the project's own changelog is not the ledger")
+            self.assertIsNotNone(written_shard(p))
+
+    def test_a_runner_at_the_root_and_under_methodology_does_not_decide_the_tie(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp, product=True)
+            (p / "SESSION_RUNNER.md").write_text("the old runner\n", encoding="utf-8")
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "a stale root runner")
+            r = trim_new(p, "--write")
+            self.assertIn("[LAYOUT_HALF_MIGRATED]", r.stdout, r.stdout)
+            self.assertNotIn("[WROTE]", r.stdout)
+
+
+class TestTheHistoryAcrossTwoArchiveDirectories(unittest.TestCase):
+    """D5 moves the archive LAST: a project whose ledger already moved still holds the shards its legacy
+    trims wrote under docs/archive/. They are its history, and a new shard's name must not reuse theirs."""
+
+    def legacy_then_moved(self, tmp):
+        p = make_repo(tmp)
+        r = run_trim(p, "--file", "CHANGELOG.md", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        sh(p, "git", "add", "-A")
+        sh(p, "git", "commit", "-qm", "legacy trim")
+        to_new_layout(p)
+        with_parent_link(p)
+        return p
+
+    def test_the_trigger_counts_the_shards_of_both_directories_oldest_first(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self.legacy_then_moved(tmp)
+            self.assertEqual(len(mod.archive_events(p, CL, mod.NEW)), 1, "the legacy shard is this ledger's history")
+            self.assertEqual(len(mod.archive_events(p, CL)), 1, "the legacy view still reads docs/archive")
+            r = trim_new(p, "--write", "--cut", "5", "--force")
+            self.assertIn("[WROTE]", r.stdout, r.stdout)
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "new trim")
+            ev = mod.archive_events(p, CL, mod.NEW)
+            self.assertEqual([e[3].split("/")[:2] for e in ev], [["docs", "archive"], ["methodology", "archive"]])
+
+    def test_the_trigger_reads_a_shard_the_new_layout_wrote(self):
+        """evaluate_trigger asks archive_events with the ledger's own layout; with the legacy view only the shard a
+        new-layout trim wrote would be invisible, and SRF would read 'no prior archive' forever."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp)
+            self.assertIn("[SRF_UNDEFINED]", run_trim(p, "--file", "methodology/CHANGELOG.md", "--check").stdout)
+            trim_new(p, "--write")
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim")
+            out = run_trim(p, "--file", "methodology/CHANGELOG.md", "--check").stdout
+            self.assertNotIn("[SRF_UNDEFINED]", out, out)
+            self.assertIn("[SRF]", out, out)
+
+    def test_a_shard_name_taken_in_its_own_directory_is_disambiguated_as_before(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp)
+            name = re.search(r"(methodology/archive/CHANGELOG-through-[0-9-]+\.md)", trim_new(p).stdout).group(1)
+            (p / name).write_text("a frozen shard\n", encoding="utf-8")
+            r = trim_new(p)
+            self.assertIn("[SHARD_NAME_DISAMBIGUATED]", r.stdout, r.stdout)
+            self.assertRegex(r.stdout, r"CHANGELOG-through-[0-9-]+-2\.md")
+
+    def test_a_shard_name_taken_in_the_other_directory_is_not_reused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp)
+            name = re.search(r"(methodology/archive/CHANGELOG-through-[0-9-]+\.md)", trim_new(p).stdout).group(1)
+            old = p / "docs" / "archive" / posixpath.basename(name)
+            old.parent.mkdir(parents=True, exist_ok=True)
+            old.write_text("a frozen shard of the legacy layout\n", encoding="utf-8")   # on disk is the test: no commit, so no P1 finding
+            r = trim_new(p)
+            self.assertIn("[SHARD_NAME_DISAMBIGUATED]", r.stdout, r.stdout)
+            self.assertIn("methodology/archive/CHANGELOG-through-", r.stdout)
+            self.assertRegex(r.stdout, r"CHANGELOG-through-[0-9-]+-2\.md")
+
+    def test_the_legacy_directory_is_untouched_by_a_trim_in_the_new_layout(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self.legacy_then_moved(tmp)
+            before = {f.name: f.read_bytes() for f in (p / "docs" / "archive").iterdir()}
+            self.assertTrue(before, "control: the legacy shard and its proof exist")
+            trim_new(p, "--write", "--cut", "5", "--force")
+            self.assertEqual({f.name: f.read_bytes() for f in (p / "docs" / "archive").iterdir()}, before)
+
+
+class TestZonePinningInTheNewLayout(unittest.TestCase):
+    """L2 must still see the footer when a shard carries it, and in the new layout the footer arrives there
+    rebased by ONE level: a check that inverts with the legacy prefix would not recognise it."""
+
+    def test_a_footer_swept_into_a_new_layout_shard_is_found_and_the_legacy_inversion_would_miss_it(self):
+        z = mod.classify_zones(SYNTHETIC_CHANGELOG, CL, mod.Result("x"))
+        self.assertIn("](docs/RELEASE_HISTORY.md)", z.footer, "control: a rebasable link in the footer")
+        shard = "shard body\n" + mod.transform_record(z.footer, mod.NEW)
+        self.assertIn("](../docs/RELEASE_HISTORY.md)", shard)
+        r = mod.Result("x")
+        self.assertFalse(mod.assert_L2(z, z.front + "PTR\n", z.footer, shard, ["PTR\n"], [], r, mod.NEW))
+        self.assertIn("L2_FOOTER_MOVED", r.codes)
+        legacy = mod.Result("x")
+        self.assertTrue(mod.assert_L2(z, z.front + "PTR\n", z.footer, shard, ["PTR\n"], [], legacy),
+                        "narrowed: read with the legacy prefix, the same shard is not recognised")
+
+
+class TestReverifyAcrossTheLayouts(unittest.TestCase):
+
+    def test_a_committed_shard_in_the_new_layout_is_re_derived(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp)
+            trim_new(p, "--write")
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim")
+            ok = run_trim(p, "--reverify", written_shard(p).relative_to(p).as_posix())
+            self.assertEqual(ok.returncode, 0, ok.stdout)
+            self.assertIn("[REVERIFY_VERDICT] exit 0", ok.stdout)
+            self.assertIn("ledger methodology/CHANGELOG.md", ok.stdout)
+
+    def test_a_tampered_shard_in_the_new_layout_is_not(self):
+        """Before the commit: after it the proof reads the COMMITTED shard from the trim commit."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp)
+            trim_new(p, "--write")
+            shard = written_shard(p)
+            rel = shard.relative_to(p).as_posix()
+            self.assertEqual(run_trim(p, "--reverify", rel).returncode, 0, "control: untampered, it re-derives")
+            shard.write_text(re.sub(r"(\[ad hoc\] entry \d+)", r"\1 TAMPERED", shard.read_text(encoding="utf-8"), count=1),
+                             encoding="utf-8")
+            bad = run_trim(p, "--reverify", rel)
+            self.assertNotEqual(bad.returncode, 0, bad.stdout)
+
+    def test_a_prefix_of_the_other_layouts_depth_is_refused_by_name(self):
+        """The refusal of a frozen proof whose PREFIX is not the one this tool writes asks the ledger's own
+        layout: under methodology/ the climb is "../", so "../../" there is the legacy depth."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = new_repo(tmp)
+            trim_new(p, "--write")
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim")
+            shard = written_shard(p)
+            proof = shard.with_name(shard.name + ".verify.sh")
+            text = proof.read_text(encoding="utf-8")
+            self.assertIn('PREFIX = "../"', text)
+            proof.write_text(text.replace('PREFIX = "../"', 'PREFIX = "../../"'), encoding="utf-8")
+            r = run_trim(p, "--reverify", shard.relative_to(p).as_posix())
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+            self.assertIn('PREFIX is "../../"', r.stdout)
+            self.assertIn('writes "../"', r.stdout)
+            self.assertNotIn("[REVERIFY_VERDICT]", r.stdout, "a refusal is not a verdict")
+
+    def test_a_legacy_shard_is_still_re_derived_with_the_legacy_prefix(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            run_trim(p, "--file", "CHANGELOG.md", "--write", "--today", "2026-02-01")
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim")
+            rel = written_shard(p, where="docs/archive").relative_to(p).as_posix()
+            ok = run_trim(p, "--reverify", rel)
+            self.assertEqual(ok.returncode, 0, ok.stdout)
+
+
+class TestTheLegacyLayoutIsByteForByteWhatItWas(unittest.TestCase):
+    """The shard head, the pointer block and the ledger entry were captured from the 1.7.0 tool and hold on
+    this one; the proof template is compared with a frozen copy of 1.8.2's, the tool this phase changed.
+    Frozen proofs are never touched; this is the guarantee that a trim in the layout every adopter has
+    today writes what it always wrote."""
+
+    SPAN = LEGACY_SPAN
+    P = LEGACY_SHARD
+
+    def test_the_shard_head_and_its_rebased_records(self):
+        got = mod.build_shard(CL, "CHANGELOG.md", self.P, LEGACY_RECORDS, self.SPAN, "2026-01-01")
+        self.assertEqual(got, GOLD_SHARD)
+        self.assertEqual(mod.transform_record(LEGACY_RECORDS[0]), GOLD_REBASED)
+        self.assertEqual(mod.transform_record(LEGACY_RECORDS[0], mod.LEGACY), GOLD_REBASED)
+
+    def test_the_pointer_block_links_are_repository_rooted(self):
+        got = mod.build_pointer_block(CL, self.P, self.P + ".verify.sh", 1, self.SPAN, "CHANGELOG.md")
+        self.assertEqual(got, GOLD_POINTER.replace("@VER@", mod.TRIM_VERSION))
+
+    def test_the_ledger_entry(self):
+        got = mod.build_ledger_entry("CHANGELOG.md", self.P, self.P + ".verify.sh", 1, self.SPAN, 1000, 500, "2026-02-01")
+        self.assertEqual(got, GOLD_ENTRY.replace("@VER@", mod.TRIM_VERSION))
+
+    def test_the_proof_template_differs_from_1_8_2_in_its_parameter_lines_only(self):
+        old = FIXTURE_PROOF_TEMPLATE.read_text(encoding="utf-8")
+        new = mod.build_verify(CL, "CHANGELOG.md", self.P)
+
+        def norm(t):
+            t = t.replace("methodology_trim.py v1.8.2", "methodology_trim.py vX")
+            t = t.replace("methodology_trim.py v%s" % mod.TRIM_VERSION, "methodology_trim.py vX")
+            t = re.sub(r'(?m)^PREFIX = .*$', "PREFIX = <parameter>", t)
+            t = re.sub(r'(?m)^PARENT_LINKS = .*\n', "", t)
+            t = re.sub(r'(?m)^(def indomain\(t\):\n)    return .*$', r"\1    return <parameter>", t)
+            return t
+        self.assertEqual(norm(new), norm(old))
+        self.assertIn('PREFIX = "../../"', new)
+        self.assertIn("PARENT_LINKS = False", new)
+
+    def test_a_new_layout_proof_carries_the_new_parameters(self):
+        new = mod.build_verify(CL, "methodology/CHANGELOG.md", "methodology/archive/CHANGELOG-through-2026-01-01.md")
+        self.assertIn('PREFIX = "../"', new)
+        self.assertIn("PARENT_LINKS = True", new)
+        self.assertNotIn('PREFIX = "../../"', new)
 
 
 if __name__ == "__main__":
