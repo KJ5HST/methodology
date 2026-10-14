@@ -222,7 +222,9 @@ echo "$OUT" | grep -q "tracked" && pass "status: tracked disposition shown" || f
 echo "$OUT" | grep -q "seed" && pass "status: seed disposition shown" || fail "status: no seed rows"
 # One data row per manifest entry (full Option-B corpus, not a fixed three)
 EXPECTED="$(python3 -c "import sys; sys.path.insert(0, '$BIN'); import _manifest; print(len(_manifest.DISTRIBUTION))")"
-GOT="$(echo "$OUT" | grep -c "$(basename "$P")")"
+# A table row STARTS with the project's name; the `layout: <name>  <kind>` line P6 added before the table names it too,
+# and is not a row (counting every line that mentions the name read 31 for 30 files).
+GOT="$(echo "$OUT" | grep -c "^$(basename "$P") ")"
 [ "$GOT" = "$EXPECTED" ] && pass "status: one row per manifest file ($GOT == $EXPECTED)" || fail "status: row count $GOT != manifest $EXPECTED"
 # Freshly-synced tree: every tracked file current, nothing flagged as drift
 echo "$OUT" | grep -q "current" && pass "status: fresh tree shows current" || fail "status: fresh tree missing current"
