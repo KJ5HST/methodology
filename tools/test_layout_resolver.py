@@ -628,9 +628,15 @@ class TestTheScanSet(Scratch):
     def test_this_repository_scans_the_tools_it_names_and_parses_cleanly(self):
         report = cll.scan_root(REPO)
         for name in ("starter-kit/methodology_dashboard.py", "starter-kit/methodology_trim.py",
-                     ".githooks/pre-commit", "bin/check-handoff"):
+                     ".githooks/pre-commit", "bin/sync", "bin/status", "bin/check-links"):
             self.assertIn(name, report["files"])
         self.assertEqual(report["problems"], [])
+
+    def test_the_two_checkers_that_do_not_read_the_layout_are_not_scanned_and_say_why(self):
+        report = cll.scan_root(REPO)
+        for name in ("bin/check-handoff", "bin/check-ledger"):
+            self.assertNotIn(name, report["files"])
+            self.assertIn("canonical-only", report["not_scanned"][name])
 
 
 class TestToolsAlreadyResolvedStayAtZero(unittest.TestCase):

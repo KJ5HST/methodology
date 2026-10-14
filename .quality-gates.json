@@ -7,7 +7,7 @@
     {
       "name": "tests-sh-passed",
       "direction": "min",
-      "threshold": 298,
+      "threshold": 299,
       "command": "bash bin/tests.sh",
       "extract": "== Summary: (\\d+) passed",
       "why": "the framework's build equivalent; the passed count is a ratchet — every suite it wires in (dashboard, trim, budget, ratchet units) reports through it"
@@ -52,10 +52,25 @@
     {
       "name": "layout-unit-tests",
       "direction": "min",
-      "threshold": 75,
+      "threshold": 76,
       "command": "python3 tools/test_layout_resolver.py",
       "extract": "Ran (\\d+) tests",
       "why": "the layout resolver, the fixture trees in both layouts and the literal scanner's own behaviour on scratch trees. Count never drops; green/red is carried by tests-sh-passed. 74 is measured (Ran 74 tests, OK)."
+    },
+    {
+      "name": "sync-layout-unit-tests",
+      "direction": "min",
+      "threshold": 82,
+      "command": "python3 tools/test_sync_layouts.py",
+      "extract": "Ran (\\d+) tests",
+      "why": "the manifest's second table (NEW_LAYOUT) and its reader, bin/sync --layout auto|legacy|new (a legacy project is never given the new layout, seeds are not shadowed, ignore mode, --source=github), bin/status and bin/check-links in both layouts, each driven as a command in scratch projects, and the literal scanner over this repository. Count never drops; green/red is carried by tests-sh-passed. 82 is measured (Ran 82 tests, OK)."
+    },
+    {
+      "name": "layout-literals",
+      "direction": "max",
+      "threshold": 0,
+      "command": "bin/check-layout-literals",
+      "why": "exit code: no shipped tool names a methodology file by a root path (a string constant in a bin/ script, a starter-kit/ tool or a hook), so the methodology/ move cannot be passed silently by a gate that reads the wrong place. A site is acknowledged only by a same-line marker with a reason. bin/check-handoff and bin/check-ledger are not scanned: they are canonical-only checkers that adopters never run, and this change does not give them the layout reading."
     },
     {
       "name": "check-links",

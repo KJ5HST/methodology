@@ -290,6 +290,16 @@ else
     fail "layout resolver, fixture trees and literal scanner unit tests failed"
 fi
 
+# The sync layer in both layouts (BL-101 P6): the manifest's second table and its reader, bin/sync, bin/status and
+# bin/check-links, each run as a command in scratch projects (a legacy tree, a migrated one, an empty one, a
+# half-migrated one, and --source=github against sources with and without the table), and the literal scanner over
+# this repository at zero. Canonical-only. Test 34 still holds the reader's refusals of a source's manifest.
+if python3 "$METHODOLOGY/tools/test_sync_layouts.py" >/dev/null 2>&1; then
+    pass "sync layer (manifest table, bin/sync, bin/status, bin/check-links) in both layouts unit tests green"
+else
+    fail "sync layer in both layouts unit tests failed"
+fi
+
 echo "== Test 19: dashboard twins byte-identical + same DASHBOARD_VERSION =="
 diff -q "$METHODOLOGY/tools/methodology_dashboard.py" "$STARTER/methodology_dashboard.py" >/dev/null \
     && pass "dashboard twins byte-identical" || fail "dashboard twins differ"
