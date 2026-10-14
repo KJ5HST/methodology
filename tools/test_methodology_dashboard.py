@@ -2506,11 +2506,13 @@ class TestFmtRatioAndTwins(unittest.TestCase):
         2.11.x line, is described in git: `git log -S'2.18.0'` on this file.) 2.20.0 is the 2026-10
         resync (BL-95, D5): the `.gitattributes` seed becomes installed content -- changed output
         on a distributed tool, so MINOR. 2.21.0 is BL-99: the manifest-history walk is first-parent,
-        so a merged lineage no longer prints loosenings nobody caused -- changed output, so MINOR."""
-        self.assertEqual(md.DASHBOARD_VERSION, "2.21.0")
+        so a merged lineage no longer prints loosenings nobody caused -- changed output, so MINOR.
+        2.22.0 is BL-101 P5: the dashboard reads a project that keeps its methodology files under
+        methodology/ as it reads one that keeps them at the root -- changed output, so MINOR."""
+        self.assertEqual(md.DASHBOARD_VERSION, "2.22.0")
         starter_src = Path(STARTER_PY).read_text(encoding="utf-8")
-        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.21\.0"', starter_src, re.MULTILINE),
-                        "starter-kit twin must also declare DASHBOARD_VERSION 2.21.0")
+        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.22\.0"', starter_src, re.MULTILINE),
+                        "starter-kit twin must also declare DASHBOARD_VERSION 2.22.0")
 
     # NOTE: upstream's `TestCliRemedyProportionality` (issue #67 / PR #73) is deliberately not
     # merged here -- this fork's own, earlier issue-#67 fix (S62) took a different, more general
@@ -6383,6 +6385,595 @@ class TestBL88P2TrimmerSourceProbe(unittest.TestCase):
                 self.assertTrue(rows_by["none"], "control: the row exists at this size")
                 self.assertEqual(rows_by["declared"], rows_by["none"])
                 self.assertFalse(any("HAS A REMEDY" in d for _, d in rows_by["declared"]))
+
+
+# === BL-101 P5: the dashboard understands both layouts (plan section 7.2, row P5; C8, C15) ===========
+#
+# A project keeps its methodology files at its root (legacy) or one level down in methodology/ (new);
+# tools/layout_resolver.py answers which. Every test below builds a real tree with tools/layout_fixtures.py,
+# in every shape the plan names (legacy, new, tier1, half, empty), puts a real git history under it, and
+# asserts a VALUE the dashboard computed: a score, a path, a risk row. Written RED-first (each class was
+# run against the unpatched dashboard before any change to it, and the layers below name what failed).
+
+_LF_SPEC = importlib.util.spec_from_file_location("layout_fixtures_under_test", os.path.join(HERE, "layout_fixtures.py"))
+lf = importlib.util.module_from_spec(_LF_SPEC)
+_LF_SPEC.loader.exec_module(lf)
+
+
+def layout_project(case, layout, *, contents=None, extra_commits=0, remove=(), extra=None, backlog=True,
+                   name="proj", archive=False, generated=False):
+    """A git repository holding the ``layout`` shape of the methodology's files (plus the project's own
+    BACKLOG.md, which the manifest does not distribute and the checklist scores). ``remove`` deletes
+    files from the tree before the first commit, ``extra`` adds {relative path: text}."""
+    td = tempfile.TemporaryDirectory()
+    case.addCleanup(td.cleanup)
+    p = Path(td.name) / name
+    lf.build_tree(p, layout, contents=contents, archive=archive, generated=generated)
+    if backlog:
+        (p / "BACKLOG.md").write_text("# Backlog\n", encoding="utf-8")
+    for rel in remove:
+        (p / rel).unlink()
+    for rel, text in (extra or {}).items():
+        (p / rel).parent.mkdir(parents=True, exist_ok=True)
+        (p / rel).write_text(text, encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(p)], check=True)
+    git = ["git", "-C", str(p), "-c", "user.email=t@t", "-c", "user.name=t"]
+    subprocess.run(git + ["add", "-A"], check=True)
+    subprocess.run(git + ["commit", "-q", "-m", "init"], check=True)
+    for i in range(extra_commits):
+        subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", "filler %d" % i], check=True)
+    return p
+
+
+def risk_texts(project):
+    return [(r["severity"], r["description"]) for r in md.collect_all(project)["scores"]["risks"]]
+
+
+class TestBL101P5Checklist(unittest.TestCase):
+    """C8: the compliance checklist, the adoption test and the role test read the project through the
+    resolver, so a project that moved its files scores what it scored before it moved."""
+
+    def test_a_complete_adopter_scores_the_full_checklist_in_every_layout(self):
+        for layout in ("legacy", "new", "tier1"):
+            with self.subTest(layout=layout):
+                m = md.collect_methodology_metrics(layout_project(self, layout))
+                self.assertEqual(m["compliance_score"], md.METHODOLOGY_MAX)
+                self.assertEqual(m["missing_files"], [])
+                self.assertEqual(m["compliance_pct"], 100)
+
+    def test_the_item_labels_are_the_same_names_in_every_layout(self):
+        # Portfolio aggregation, the JSON export and the card's glyph row all key on these names.
+        want = [item for item, _w, _k in md.METHODOLOGY_ITEMS]
+        for layout in ("legacy", "new", "tier1"):
+            with self.subTest(layout=layout):
+                m = md.collect_methodology_metrics(layout_project(self, layout))
+                self.assertEqual(list(m["items"]), want)
+
+    def test_a_missing_file_is_missing_in_the_layout_it_would_have_lived_in(self):
+        # The probe must not be satisfied by a file of the same name in the OTHER place's namesake path.
+        for layout, gone in (("legacy", "SAFEGUARDS.md"), ("new", "methodology/SAFEGUARDS.md"),
+                             ("tier1", "methodology/SAFEGUARDS.md")):
+            with self.subTest(layout=layout):
+                m = md.collect_methodology_metrics(layout_project(self, layout, remove=(gone,)))
+                self.assertEqual(m["missing_files"], ["SAFEGUARDS.md"])
+                self.assertEqual(m["compliance_score"], md.METHODOLOGY_MAX - 20)
+
+    def test_the_metrics_name_the_layout_they_read(self):
+        want = {"legacy": ("legacy", "."), "new": ("new", "methodology"), "tier1": ("new", "methodology"),
+                "empty": ("none", None)}
+        for layout, (kind, directory) in want.items():
+            with self.subTest(layout=layout):
+                lay = md.collect_methodology_metrics(layout_project(self, layout))["layout"]
+                self.assertEqual((lay["kind"], lay["directory"]), (kind, directory))
+
+    def test_a_half_migrated_tree_is_a_high_risk_naming_both_runners(self):
+        p = layout_project(self, "half")
+        lay = md.collect_methodology_metrics(p)["layout"]
+        self.assertEqual(lay["kind"], "half")
+        self.assertEqual(sorted(lay["found"]), ["SESSION_RUNNER.md", "methodology/SESSION_RUNNER.md"])
+        rows = [(s, d) for s, d in risk_texts(p) if "half-migrated" in d.lower()]
+        self.assertEqual(len(rows), 1, rows)
+        severity, text = rows[0]
+        self.assertEqual(severity, "high")
+        self.assertIn("methodology/SESSION_RUNNER.md", text)
+        self.assertIn(" SESSION_RUNNER.md", text.replace("methodology/SESSION_RUNNER.md", ""))
+
+    def test_a_half_migrated_tree_is_scored_for_what_is_there_not_zeroed(self):
+        # Never guess which copy is live: a file present at either place counts, and the risk row carries the defect.
+        m = md.collect_methodology_metrics(layout_project(self, "half"))
+        self.assertEqual(m["compliance_score"], md.METHODOLOGY_MAX)
+
+    def test_a_half_migrated_tree_counts_a_file_held_only_under_methodology(self):
+        # The union cuts both ways: the half fixture holds everything at the root, so this one moves a single
+        # file to the OTHER place and removes it from the root. A mutant that dropped the methodology copy
+        # from the half answer survived every other test (found by the S278 mutation pass).
+        p = layout_project(self, "half", remove=("SAFEGUARDS.md",), extra={"methodology/SAFEGUARDS.md": "# safeguards\n"})
+        m = md.collect_methodology_metrics(p)
+        self.assertEqual(m["layout"]["kind"], "half")
+        self.assertTrue(m["items"]["SAFEGUARDS.md"])
+        self.assertEqual(m["compliance_score"], md.METHODOLOGY_MAX)
+
+    def test_no_other_shape_raises_the_half_migrated_row(self):
+        for layout in ("legacy", "new", "tier1", "empty"):
+            with self.subTest(layout=layout):
+                rows = [d for _s, d in risk_texts(layout_project(self, layout)) if "half-migrated" in d.lower()]
+                self.assertEqual(rows, [])
+
+    def test_a_ledger_held_in_both_places_with_the_runner_at_the_root_is_half_migrated(self):
+        # The runner cannot decide a tie about a state file when the runner itself is at the root (plan 4.3).
+        p = layout_project(self, "legacy", extra={"methodology/CHANGELOG.md": "# a second ledger\n"})
+        lay = md.collect_methodology_metrics(p)["layout"]
+        self.assertEqual(lay["kind"], "half")
+        self.assertIn("methodology/CHANGELOG.md", lay["found"])
+
+    def test_an_adopter_that_moved_is_still_owed_a_ledger(self):
+        # The gate that notices a missing action ledger keyed on the root runner: in the new layout it went quiet.
+        for layout, gone in (("legacy", "CHANGELOG.md"), ("new", "methodology/CHANGELOG.md")):
+            with self.subTest(layout=layout):
+                p = layout_project(self, layout, remove=(gone,), extra_commits=md.LEDGER_REAL_HISTORY_MIN + 2)
+                rows = [d for _s, d in risk_texts(p) if "action ledger" in d]
+                self.assertEqual(len(rows), 1, rows)
+
+    def test_a_vendored_framework_is_still_an_adopter_when_its_runner_is_under_methodology(self):
+        # bin/_manifest.py + starter-kit/SESSION_RUNNER.md and NO root runner is how the PUBLISHER is recognised;
+        # a project that vendors those and installs its own runner under methodology/ is not the publisher.
+        vendored = {"bin/_manifest.py": "DISTRIBUTION = []\n", "starter-kit/SESSION_RUNNER.md": "# runner\n"}
+        for layout, role in (("legacy", "adopter"), ("new", "adopter")):
+            with self.subTest(layout=layout):
+                p = layout_project(self, layout, extra=vendored)
+                self.assertEqual(md.detect_repo_role(p)["role"], role)
+        publisher = layout_project(self, "empty", extra=vendored)
+        self.assertEqual(md.detect_repo_role(publisher)["role"], "framework")
+
+
+QUARTO_BOOK = {
+    "_quarto.yml": "project:\n  type: book\n",
+    "ch1.qmd": "# Ch1\n" + "prose\n" * 200,
+    "ch2.qmd": "# Ch2\n" + "prose\n" * 200,
+    "README.md": "# Monograph\n\nA Quarto book.\n" * 4,
+}
+
+
+def installed_tool_contents():
+    """What `bin/sync` writes for the four executables: each carries the constant its own predicate reads."""
+    body = "".join("def gen_%d():\n    return %d\n" % (i, i) for i in range(800))
+    return {"methodology_dashboard.py": installed_scanner(), "methodology_trim.py": installed_trimmer(),
+            "context_budget.py": 'VERSION = "1.0.0"\n' + body, "quality_ratchet.py": 'VERSION = "1.0.0"\n' + body}
+
+
+def card_projection(project):
+    """What the scores and the file inventory say about a project, with every layout-dependent PATH removed:
+    two projects that differ only in where their methodology files live must project identically."""
+    m = md.collect_all(project)
+    cat = {k: v for k, v in m["files"]["by_category"].items()}
+    return {
+        "health": m["scores"]["health"],
+        "doc_only": m["doc_only"]["is_doc_only"],
+        "categories": cat,
+        "framework_docs": m["files"]["framework_docs"],
+        "total_files": m["files"]["total_files"],
+        "compliance": (m["methodology"]["compliance_score"], m["methodology"]["compliance_pct"]),
+        "risks": sorted((r["severity"], r["description"].replace("methodology/", "")) for r in m["scores"]["risks"]),
+        "ledger": (m["changelog"]["present"], m["changelog"]["ledger_present"], m["changelog"]["unlogged_commits"]),
+        "trim_tool": m["trim"]["tool_present"],
+    }
+
+
+class TestBL101P5Walk(unittest.TestCase):
+    """C8, the installed-source fingerprint and the read-cap watch: a methodology file is recognised by
+    the name the tables hold, wherever the layout put it, and a file of the same name that is the
+    PROJECT's own (a root CHANGELOG.md beside the framework's under methodology/) is never read as ours."""
+
+    def test_installing_the_methodology_leaves_a_doc_repo_doc_only_in_every_layout(self):
+        for layout in ("legacy", "new", "tier1"):
+            with self.subTest(layout=layout):
+                p = layout_project(self, layout, contents=installed_tool_contents(), extra=QUARTO_BOOK)
+                m = md.collect_all(p)
+                self.assertTrue(m["doc_only"]["is_doc_only"])
+                self.assertEqual(m["tests"]["source_loc"], 0, "the adopter wrote no source; the four tools are ours")
+                self.assertGreater(m["files"]["by_category"]["vendor"]["loc"], 5000)
+
+    def test_the_card_projects_the_same_in_every_layout(self):
+        # Both trees get a docs/ of their own: see the next test for why that is part of the comparison.
+        own = dict(QUARTO_BOOK, **{"docs/index.md": "# Docs\n\nThe project's own documentation.\n"})
+        projections = {layout: card_projection(layout_project(self, layout, contents=installed_tool_contents(),
+                                                              extra=own, extra_commits=12))
+                       for layout in ("legacy", "new", "tier1")}
+        self.assertEqual(projections["new"], projections["legacy"])
+        self.assertEqual(projections["tier1"], projections["legacy"])
+
+    def test_the_docs_directory_point_belongs_to_the_projects_own_docs_not_to_the_methodologys(self):
+        # PINNED ON PURPOSE, not an accident. `has_docs_dir` is a bare presence check, and a legacy adopter
+        # satisfies it with docs/methodology/ alone, so every synced project has earned 4 documentation points
+        # for a directory the methodology put there. In the new layout nothing of ours is under docs/, so a
+        # project with no docs/ of its own loses them when it migrates. Recorded in the plan's section 7.2d:
+        # parity would mean rewarding methodology/ as documentation, or changing every legacy score.
+        want = {"legacy": True, "new": False, "tier1": False}
+        for layout, has in want.items():
+            with self.subTest(layout=layout):
+                self.assertIs(md.collect_all(layout_project(self, layout))["docs"]["has_docs_dir"], has)
+        own = layout_project(self, "new", extra={"docs/index.md": "# Docs\n"})
+        self.assertIs(md.collect_all(own)["docs"]["has_docs_dir"], True)
+
+    def test_a_projects_own_root_changelog_is_not_the_frameworks_ledger(self):
+        product = "# Release notes\n\n" + "- shipped a thing\n" * 300
+        p = layout_project(self, "new", extra={"CHANGELOG.md": product})
+        m = md.collect_all(p)
+        watched = sorted(w["path"] for w in m["files"]["read_cap_watch"])
+        self.assertEqual(watched, ["BACKLOG.md", "methodology/CHANGELOG.md", "methodology/HANDOFFS.md",
+                                   "methodology/SESSION_NOTES.md"])
+        self.assertEqual(md._find_action_ledger(p), p / "methodology" / "CHANGELOG.md")
+        control = layout_project(self, "new")
+        self.assertEqual(m["files"]["framework_docs"]["loc"], md.collect_all(control)["files"]["framework_docs"]["loc"],
+                         "the project's own 300-line changelog must not be discounted as ours")
+
+    def test_a_generated_proof_under_methodology_archive_is_not_the_adopters_source(self):
+        proof = "#!/bin/sh\n# generated by methodology_trim.py\n" + "echo step\n" * 220
+        for layout, shard_dir in (("legacy", "docs/archive"), ("new", "methodology/archive")):
+            with self.subTest(layout=layout):
+                p = layout_project(self, layout, contents=installed_tool_contents(),
+                                   extra={shard_dir + "/CHANGELOG-through-2026-01-01.md.verify.sh": proof})
+                files = md.collect_all(p)["files"]["by_category"]
+                self.assertEqual(files["source"]["loc"], 0)
+                self.assertGreaterEqual(files["vendor"]["loc"], 220 + 5000)
+
+    def test_a_script_that_only_sits_in_an_archive_directory_is_still_source(self):
+        # Anti-laundering: all three conditions stay required (the directory, the suffix, the banner).
+        banner = "#!/bin/sh\n# generated by methodology_trim.py\n" + "echo step\n" * 220
+        plain = "#!/bin/sh\n" + "echo step\n" * 220
+        for rel, text in (("methodology/archive/x.md.verify.sh", plain),      # no banner
+                          ("methodology/archive/x.sh", banner),               # no suffix
+                          ("elsewhere/archive/x.md.verify.sh", banner)):      # not an archive directory of the layout
+            with self.subTest(rel=rel):
+                p = layout_project(self, "new", contents=installed_tool_contents(), extra={rel: text})
+                self.assertGreaterEqual(md.collect_all(p)["files"]["by_category"]["source"]["loc"], 220)
+
+    def test_the_ledger_is_measured_where_it_lives(self):
+        for layout, rel in (("legacy", "CHANGELOG.md"), ("new", "methodology/CHANGELOG.md"), ("tier1", "CHANGELOG.md")):
+            with self.subTest(layout=layout):
+                p = layout_project(self, layout, extra_commits=12)
+                cl = md.collect_all(p)["changelog"]
+                self.assertTrue(cl["present"])
+                self.assertTrue(cl["ledger_present"])
+                self.assertEqual(cl["unlogged_commits"], 12)
+                self.assertTrue(any(d.startswith(rel + ": 12 commits since it was last updated") for _s, d in cl["signals"]),
+                                cl["signals"])
+
+    def test_the_trim_row_finds_the_trimmer_and_the_ledger_where_they_live(self):
+        big = "# Handoffs\n\n" + "x" * (md.CLASS_A_FIRE_BYTES + 1000)
+        want = {"legacy": ("methodology_trim.py", "HANDOFFS.md"),
+                "new": ("methodology/methodology_trim.py", "methodology/HANDOFFS.md"),
+                "tier1": ("methodology/methodology_trim.py", "HANDOFFS.md")}
+        for layout, (tool, ledger) in want.items():
+            with self.subTest(layout=layout):
+                p = layout_project(self, layout, contents={"HANDOFFS.md": big, "methodology_trim.py": installed_trimmer()})
+                trim = md.collect_all(p)["trim"]
+                self.assertTrue(trim["tool_present"])
+                self.assertEqual(trim["tool_path"], tool)
+                self.assertEqual([e["path"] for e in trim["ledgers"] if e["fires"]], [ledger])
+                self.assertTrue(any("python3 %s --file %s --check" % (tool, ledger) in d for _s, d in trim["signals"]),
+                                trim["signals"])
+
+    def test_the_read_cap_rows_classify_a_file_by_its_name_not_its_directory(self):
+        # 100 kB: past the one-read budget, short of the Class A archive threshold; the row says which class.
+        ledger = "# Handoffs\n\n" + "x" * 100000
+        notes = "# Notes\n\n" + "x" * 60000
+        for layout, prefix in (("legacy", ""), ("new", "methodology/")):
+            with self.subTest(layout=layout):
+                p = layout_project(self, layout, contents={"HANDOFFS.md": ledger, "SESSION_NOTES.md": notes})
+                rows = {d.split(" is ")[0]: (s, d) for s, d in risk_texts(p) if " one-read budget " in d}
+                self.assertEqual(sorted(rows), [prefix + "HANDOFFS.md", prefix + "SESSION_NOTES.md"])
+                self.assertIn("CLASS A", rows[prefix + "HANDOFFS.md"][1])
+                self.assertIn("CLASS B", rows[prefix + "SESSION_NOTES.md"][1])
+
+
+class TestBL101P5Sync(unittest.TestCase):
+    """C15: `--sync` is a second sync channel, outside the manifest. Each target's layout is resolved, so a
+    migrated project gets `methodology/methodology_dashboard.py` and never a second copy at its root, and a
+    copy that lives in methodology/ finds its project, writes beside itself and warns with the project's path."""
+
+    CANON_TEXT = None
+
+    def _portfolio(self, projects):
+        """A portfolio root holding the canonical authoring repo and one git project per {name: layout}.
+        Every project ignores methodology_dashboard.py, so a create is not gated by the --force rule."""
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        root = Path(td.name)
+        canon = root / "methodology" / "starter-kit" / "methodology_dashboard.py"
+        canon.parent.mkdir(parents=True)
+        canon.write_text(Path(TOOLS_PY).read_text(encoding="utf-8"), encoding="utf-8")
+        subprocess.run(["git", "init", "-q", str(root / "methodology")], check=True)
+        made = {}
+        for name, layout in projects.items():
+            p = root / name
+            lf.build_tree(p, layout, generated=False)
+            for rel in ("methodology_dashboard.py", "methodology/methodology_dashboard.py"):
+                if (p / rel).exists():
+                    (p / rel).write_text("# a stale copy\n", encoding="utf-8")
+            (p / ".gitignore").write_text("methodology_dashboard.py\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(p)], check=True)
+            made[name] = p
+        return root, canon, made
+
+    def _run_sync(self, canon, **kw):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            written = md.sync_dashboards(canon, **kw)
+        return written, out.getvalue(), err.getvalue()
+
+    def test_a_portfolio_sync_writes_each_project_in_the_layout_it_is_in(self):
+        root, canon, p = self._portfolio({"legacy": "legacy", "migrated": "new", "half": "half", "empty": "empty"})
+        text = canon.read_text(encoding="utf-8")
+        written, out, err = self._run_sync(canon)
+        self.assertEqual((p["legacy"] / "methodology_dashboard.py").read_text(encoding="utf-8"), text)
+        self.assertEqual((p["migrated"] / "methodology" / "methodology_dashboard.py").read_text(encoding="utf-8"), text)
+        self.assertFalse((p["migrated"] / "methodology_dashboard.py").exists(),
+                         "a migrated project must never get a second dashboard at its root")
+        self.assertEqual((p["empty"] / "methodology_dashboard.py").read_text(encoding="utf-8"), text,
+                         "an empty project gets the default layout's place (the legacy root, until the contract stage)")
+        # The portfolio root is not a git repository, so a new copy there is gated without --force (issue #67):
+        # three writes, the half-migrated project refused, and nothing created at the portfolio root.
+        self.assertFalse((root / "methodology_dashboard.py").exists())
+        self.assertEqual(written, 3, out)       # legacy, migrated, empty
+
+    def test_a_half_migrated_project_is_refused_by_name_and_left_untouched(self):
+        root, canon, p = self._portfolio({"half": "half"})
+        written, out, err = self._run_sync(canon)
+        self.assertEqual((p["half"] / "methodology_dashboard.py").read_text(encoding="utf-8"), "# a stale copy\n")
+        self.assertFalse((p["half"] / "methodology" / "methodology_dashboard.py").exists())
+        self.assertTrue(any("half-migrated" in l for l in out.splitlines()), out)
+        self.assertIn("methodology/SESSION_RUNNER.md", out)
+
+    def test_a_dry_run_names_the_resolved_path_and_writes_nothing(self):
+        root, canon, p = self._portfolio({"migrated": "new"})
+        before = (p["migrated"] / "methodology" / "methodology_dashboard.py").read_text(encoding="utf-8")
+        written, out, err = self._run_sync(canon, dry_run=True)
+        self.assertEqual(written, 0)
+        self.assertEqual((p["migrated"] / "methodology" / "methodology_dashboard.py").read_text(encoding="utf-8"), before)
+        lines = [l for l in out.splitlines() if "migrated" in l]
+        self.assertEqual(len(lines), 1, out)
+        self.assertIn("migrated/methodology/methodology_dashboard.py", lines[0])
+
+    def test_a_single_target_resolves_its_layout_too(self):
+        root, canon, p = self._portfolio({"migrated": "new", "legacy": "legacy"})
+        written, out, err = self._run_sync(canon, target=str(p["migrated"]))
+        self.assertEqual(written, 1)
+        self.assertEqual((p["migrated"] / "methodology" / "methodology_dashboard.py").read_text(encoding="utf-8"),
+                         canon.read_text(encoding="utf-8"))
+        self.assertFalse((p["migrated"] / "methodology_dashboard.py").exists())
+        self.assertEqual((p["legacy"] / "methodology_dashboard.py").read_text(encoding="utf-8"), "# a stale copy\n")
+
+    def test_a_single_half_migrated_target_is_refused_without_writing(self):
+        root, canon, p = self._portfolio({"half": "half"})
+        written, out, err = self._run_sync(canon, target=str(p["half"]))
+        self.assertEqual(written, 0)
+        self.assertIn("half-migrated", err)
+        self.assertEqual((p["half"] / "methodology_dashboard.py").read_text(encoding="utf-8"), "# a stale copy\n")
+
+
+class TestBL101P5CopyInsideMethodology(unittest.TestCase):
+    """A dashboard that sits in <project>/methodology/ is one level below the project it scans. The two
+    names tried are an ordinary project and a project literally NAMED methodology (this repository is one:
+    S277's check-overhead and check-ledger --all each took such a directory for a subdirectory)."""
+
+    NAMES = ("proj", "methodology")
+
+    def _project(self, name, layout="new", **kw):
+        text = Path(TOOLS_PY).read_text(encoding="utf-8")
+        return layout_project(self, layout, name=name, contents={"methodology_dashboard.py": text}, **kw)
+
+    def test_the_project_root_is_found_from_the_copy_in_methodology(self):
+        for name in self.NAMES:
+            with self.subTest(name=name):
+                p = self._project(name)
+                self.assertEqual(md.resolve_single_project_root(p / "methodology"), p)
+
+    def test_it_is_not_found_when_nothing_beside_the_copy_says_it_is_a_methodology_directory(self):
+        p = self._project("proj")
+        (p / "methodology" / "SESSION_RUNNER.md").unlink()
+        self.assertEqual(md.resolve_single_project_root(p / "methodology"), p / "methodology")
+        loose = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, loose, True)
+        (loose / "methodology").mkdir()
+        (loose / "methodology" / "SESSION_RUNNER.md").write_text("# runner\n", encoding="utf-8")
+        self.assertEqual(md.resolve_single_project_root(loose / "methodology"), loose / "methodology",
+                         "no .git above it: a directory named methodology is not a project's subdirectory")
+
+    def test_a_copy_at_the_project_root_is_unchanged(self):
+        for name in self.NAMES:
+            with self.subTest(name=name):
+                p = self._project(name, "legacy")
+                self.assertEqual(md.resolve_single_project_root(p), p)
+
+    def _run(self, p):
+        return subprocess.run([sys.executable, "-B", str(p / "methodology" / "methodology_dashboard.py"), "--no-open"],
+                              cwd=str(p.parent), capture_output=True, text=True, timeout=60)
+
+    def test_the_copy_scans_its_project_and_writes_beside_itself(self):
+        for name in self.NAMES:
+            with self.subTest(name=name):
+                p = self._project(name, extra_commits=3)
+                r = self._run(p)
+                self.assertNotIn("No projects found", r.stdout + r.stderr)
+                self.assertIn("1 projects", r.stdout)
+                self.assertTrue((p / "methodology" / "dashboard.html").is_file())
+                self.assertTrue((p / "methodology" / "dashboard_history.jsonl").is_file())
+                self.assertFalse((p / "dashboard.html").exists(), "the project root stays clean")
+                self.assertFalse((p / "dashboard_history.jsonl").exists())
+                again = self._run(p)
+                self.assertRegex(re.sub(r"\x1b\[[0-9;]*m", "", again.stdout), r"History: 2 snapshots")
+
+    def test_the_stale_copy_warning_names_the_project_not_its_methodology_directory(self):
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        root = Path(td.name)
+        canon = root / "methodology" / "starter-kit" / "methodology_dashboard.py"
+        canon.parent.mkdir(parents=True)
+        canon.write_text(re.sub(r'DASHBOARD_VERSION = "[^"]+"', 'DASHBOARD_VERSION = "9.9.9"',
+                                Path(TOOLS_PY).read_text(encoding="utf-8"), count=1), encoding="utf-8")
+        adopter = root / "adopter"
+        lf.build_tree(adopter, "new", generated=False, contents={"methodology_dashboard.py": Path(TOOLS_PY).read_text(encoding="utf-8")})
+        subprocess.run(["git", "init", "-q", str(adopter)], check=True)
+        driver = ("import importlib.util, sys\n"
+                  "spec = importlib.util.spec_from_file_location('m', sys.argv[1])\n"
+                  "m = importlib.util.module_from_spec(spec)\n"
+                  "spec.loader.exec_module(m)\n"
+                  "m.check_stale_version()\n")
+        r = subprocess.run([sys.executable, "-B", "-c", driver, str(adopter / "methodology" / "methodology_dashboard.py")],
+                           capture_output=True, text=True, timeout=30)
+        shown = adopter.resolve()      # the copy reports its own real path (macOS: /var is /private/var)
+        self.assertIn("--sync %s\n" % shown, r.stderr)
+        self.assertNotIn("--sync %s" % (shown / "methodology"), r.stderr)
+
+
+class TestBL101P5Gates(unittest.TestCase):
+    """The quality-gate read (collect_gate_metrics) finds the manifest where it lives and follows its history
+    across the move that took it there. Without that a migrated project silently loses its gate signals, and a
+    floor lowered INSIDE the move commit is invisible: the plan's E2, the same class as 'a gate fails open when
+    its file moves' (S273)."""
+
+    G = TestQualityGateSignals
+
+    def _repo(self):
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        p = Path(td.name)
+        subprocess.run(["git", "init", "-q", str(p)], check=True)
+        return p
+
+    def _commit(self, p, msg):
+        subprocess.run(["git", "-C", str(p), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(p), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", msg], check=True)
+
+    def _manifest(self, floor, name="suite"):
+        return self.G._manifest(self.G._gate(name, "min", floor))
+
+    def _moved(self, before, after, then_delete=False):
+        """Commit 1 holds the manifest at the root, commit 2 moves it under methodology/ (and may change it)."""
+        p = self._repo()
+        (p / ".quality-gates.json").write_text(self._manifest(before), encoding="utf-8")
+        self._commit(p, "init")
+        (p / "methodology").mkdir()
+        subprocess.run(["git", "-C", str(p), "mv", ".quality-gates.json", "methodology/.quality-gates.json"], check=True)
+        (p / "methodology" / ".quality-gates.json").write_text(self._manifest(after), encoding="utf-8")
+        self._commit(p, "move")
+        if then_delete:
+            subprocess.run(["git", "-C", str(p), "rm", "-q", "methodology/.quality-gates.json"], check=True)
+            self._commit(p, "delete")
+        return p
+
+    def test_the_manifest_is_read_where_it_lives(self):
+        for rel in (".quality-gates.json", "methodology/.quality-gates.json"):
+            with self.subTest(rel=rel):
+                p = self._repo()
+                (p / rel).parent.mkdir(exist_ok=True)
+                (p / rel).write_text(self._manifest(5), encoding="utf-8")
+                self._commit(p, "init")
+                m = md.collect_gate_metrics(p)
+                self.assertTrue(m["manifest_present"])
+                self.assertEqual(m["declared"], 1)
+
+    def test_the_results_file_beside_the_manifest_is_read(self):
+        p = self._repo()
+        cfg = json.loads(self._manifest(5))
+        digest = hashlib.sha256(json.dumps(cfg["gates"], sort_keys=True).encode()).hexdigest()[:12]
+        (p / "methodology").mkdir()
+        (p / "methodology" / ".quality-gates.json").write_text(json.dumps(cfg), encoding="utf-8")
+        (p / "methodology" / ".quality-gates-results.json").write_text(
+            json.dumps({"ran_at": "2026-10-07T00:00:00", "manifest": digest,
+                        "gates": [{"name": "suite", "status": "pass"}]}), encoding="utf-8")
+        self._commit(p, "init")
+        m = md.collect_gate_metrics(p)
+        self.assertTrue(m["results_present"])
+        self.assertFalse(m["results_stale"])
+        self.assertEqual(m["summary"]["pass"], 1)
+
+    def test_a_floor_lowered_in_place_is_a_loosening_control(self):
+        p = self._repo()
+        (p / ".quality-gates.json").write_text(self._manifest(100), encoding="utf-8")
+        self._commit(p, "init")
+        (p / ".quality-gates.json").write_text(self._manifest(90), encoding="utf-8")
+        self._commit(p, "lower")
+        self.assertEqual([(l["kind"], l["from"], l["to"]) for l in md.collect_gate_metrics(p)["loosened"]],
+                         [("floor lowered", 100.0, 90.0)])
+
+    def test_a_floor_lowered_in_the_move_commit_is_still_seen(self):
+        m = md.collect_gate_metrics(self._moved(100, 90))
+        self.assertEqual([(l["name"], l["kind"], l["from"], l["to"]) for l in m["loosened"]],
+                         [("suite", "floor lowered", 100.0, 90.0)])
+
+    def test_a_pure_move_loosens_nothing(self):
+        m = md.collect_gate_metrics(self._moved(100, 100))
+        self.assertEqual((m["loosened"], m["commands_changed"]), ([], []))
+
+    def test_a_manifest_deleted_after_the_move_is_still_a_removal(self):
+        m = md.collect_gate_metrics(self._moved(100, 100, then_delete=True))
+        self.assertTrue(m["manifest_deleted"])
+        self.assertEqual([(l["name"], l["kind"]) for l in m["loosened"]], [("suite", "removed")])
+
+
+class TestBL101P5TheFrameworkRepoItself(unittest.TestCase):
+    """The PUBLISHER's checklist asks whether the repo OPERATES what it publishes: its own CHANGELOG.md and
+    HANDOFFS.md. When this repository's own instance files move (the plan's P8 rehearsal and G-B), those two
+    are under methodology/ while its sources (ITERATIVE_METHODOLOGY.md, workstreams/, bin/, starter-kit/)
+    stay where they are; the framework checklist must follow the first and not the second."""
+
+    def _framework(self, moved):
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        p = Path(td.name) / "framework"
+        full_framework_tree(p)
+        if moved:
+            (p / "methodology").mkdir()
+            for name in ("CHANGELOG.md", "HANDOFFS.md"):
+                (p / name).rename(p / "methodology" / name)
+        subprocess.run(["git", "init", "-q", str(p)], check=True)
+        git = ["git", "-C", str(p), "-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run(git + ["add", "-A"], check=True)
+        subprocess.run(git + ["commit", "-q", "-m", "init"], check=True)
+        for i in range(md.LEDGER_REAL_HISTORY_MIN + 2):
+            subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", "filler %d" % i], check=True)
+        return p
+
+    def test_the_framework_checklist_scores_the_same_with_its_ledgers_moved(self):
+        for moved in (False, True):
+            with self.subTest(moved=moved):
+                m = md.collect_methodology_metrics(self._framework(moved), role="framework")
+                self.assertEqual(m["compliance_score"], md.FRAMEWORK_MAX)
+                self.assertEqual(m["missing_files"], [])
+
+    def test_a_moved_framework_ledger_is_not_reported_missing_and_the_card_agrees(self):
+        for moved in (False, True):
+            with self.subTest(moved=moved):
+                p = self._framework(moved)
+                m = md.collect_all(p)
+                self.assertEqual(m["methodology"]["role"], "framework")
+                self.assertTrue(m["changelog"]["ledger_present"])
+                self.assertEqual([d for _s, d in risk_texts(p) if "action ledger" in d], [])
+
+
+class TestBL101P5NameTables(unittest.TestCase):
+    """The dashboard is one distributed file and cannot import the manifest, so it carries its own tables of the
+    names the layout moves. This is the canonical-only test that holds them to bin/_manifest.py, which
+    LAYOUT_MOVED's own comment names as its guard."""
+
+    def test_the_names_the_layout_moves_are_the_manifests_destinations_and_the_two_directories(self):
+        m = lf._manifest()
+        dests = {dest for _s, dest, _d in m.DISTRIBUTION}
+        self.assertEqual(len(dests), 30)
+        self.assertEqual(md.LAYOUT_MOVED - {"docs/methodology", "docs/methodology/workstreams"}, dests)
+
+    def test_the_state_files_are_exactly_the_manifests_seeds(self):
+        m = lf._manifest()
+        seeds = {dest for _s, dest, disp in m.DISTRIBUTION if disp == m.SEED}
+        self.assertEqual(set(md.LAYOUT_STATE_NAMES), seeds)
+
+    def test_a_destination_lands_where_the_manifests_table_puts_it(self):
+        m = lf._manifest()
+        for src, dest, _d in m.DISTRIBUTION:
+            with self.subTest(dest=dest):
+                self.assertEqual(md.new_layout_rel(dest), m.NEW_LAYOUT[src])
 
 
 if __name__ == "__main__":

@@ -206,7 +206,8 @@ class TestEveryEmbeddedCopyIsByteIdentical(unittest.TestCase):
     A copy that drifted is a second resolver with its own answers. P2 embeds it in the ratchet; each
     later phase appends the tool it touches to COPIES (the dashboard, the trimmer, the budget gate)."""
 
-    COPIES = ("starter-kit/context_budget.py", "starter-kit/methodology_trim.py", "starter-kit/quality_ratchet.py")   # the gate layer, the trimmer and the budget gate; each later layer appends the tools it carries
+    COPIES = ("starter-kit/context_budget.py", "starter-kit/methodology_dashboard.py", "starter-kit/methodology_trim.py",
+              "starter-kit/quality_ratchet.py")   # the gate layer, the trimmer, the budget gate and the dashboard (its tools/ twin is asserted below); each later layer appends the tools it carries
 
     def test_each_copy_equals_the_modules_block_and_carries_exactly_one(self):
         block = lr.embedded_block((HERE / "layout_resolver.py").read_text(encoding="utf-8"))
@@ -214,6 +215,15 @@ class TestEveryEmbeddedCopyIsByteIdentical(unittest.TestCase):
             text = (REPO / rel).read_text(encoding="utf-8")
             self.assertEqual(text.count(lr.BEGIN), 1, rel + ": one BEGIN marker")
             self.assertEqual(lr.embedded_block(text), block, rel + ": the block differs from tools/layout_resolver.py")
+
+    def test_the_dashboards_canonical_only_twin_carries_the_same_block(self):
+        # tools/methodology_dashboard.py is scanned for the markers by no directory walk below (that one reads
+        # starter-kit/ and bin/), and the dashboard suite loads THIS copy, so a block that reached only the
+        # starter-kit/ copy would pass the list above and leave the tested file without a resolver.
+        block = lr.embedded_block((HERE / "layout_resolver.py").read_text(encoding="utf-8"))
+        text = (HERE / "methodology_dashboard.py").read_text(encoding="utf-8")
+        self.assertEqual(text.count(lr.BEGIN), 1, "tools/methodology_dashboard.py: one BEGIN marker")
+        self.assertEqual(lr.embedded_block(text), block, "tools/methodology_dashboard.py: the block differs")
 
     def test_every_tool_that_carries_the_markers_is_listed(self):
         def carries(p):
@@ -629,7 +639,8 @@ class TestToolsAlreadyResolvedStayAtZero(unittest.TestCase):
 
     RESOLVED = (".githooks/pre-commit", "starter-kit/quality_ratchet.py",   # the gate layer
                 "starter-kit/methodology_trim.py",   # the trimmer
-                "starter-kit/context_budget.py")   # the budget gate; each later layer appends the tools it resolves
+                "starter-kit/context_budget.py",   # the budget gate
+                "starter-kit/methodology_dashboard.py")   # the dashboard: its tools/ twin is the same bytes; each later layer appends the tools it resolves
 
     def test_each_resolved_tool_reports_no_site(self):
         for rel in self.RESOLVED:
