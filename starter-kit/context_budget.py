@@ -39,9 +39,39 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-VERSION = "1.3.1"
-CONFIG_NAME = ".context-budget.json"
-HISTORY_NAME = ".context-budget-history.jsonl"
+VERSION = "1.4.0"   # 1.4.0: BL-101 P4 -- the config and its history file live at the root or under methodology/
+CONFIG_NAME = ".context-budget.json"  # layout: ok -- the config's own name; where it lives is resolved below
+HISTORY_NAME = ".context-budget-history.jsonl"  # layout: ok -- the history file's own name; it lives beside the config
+TOOL_NAME = "context_budget.py"  # layout: ok -- this tool's own name, cited in messages and found by the hook it installs
+NEW_DIR = "methodology"
+RUNNER_NAME = "SESSION_RUNNER.md"  # layout: ok -- the framework anchor: where it is tracked decides a config held in both places
+
+# === LAYOUT ===
+# A project keeps its methodology files at its root (legacy) or under methodology/ (new): the plan's
+# section 4.3. This block is the resolver, embedded byte for byte; the canonical suite asserts that.
+
+# --- layout resolver: BEGIN ---
+import os as _os
+from pathlib import Path as _Path
+
+
+def resolve_layout(root, anchor="SESSION_RUNNER.md"):
+    """Return (kind, directory, found): kind is new|legacy|half|none, directory a Path or None,
+    found the anchor paths that exist. A half-migrated tree has no directory, by design.
+    A file found in both places is the framework's under methodology/ when the runner is under
+    methodology/ and not at the root: the root copy is the project's own and is left alone, kind new,
+    and found still names both. Any other tie stays half, and the runner cannot decide a tie about itself."""
+    root = _Path(root)
+    new, old = root / "methodology" / anchor, root / anchor
+    found = tuple(p for p in (new, old) if _os.path.isfile(p))
+    if len(found) == 2:
+        if _os.path.isfile(root / "methodology" / "SESSION_RUNNER.md") and not _os.path.isfile(root / "SESSION_RUNNER.md"):
+            return "new", new.parent, found
+        return "half", None, found
+    if not found:
+        return "none", None, ()
+    return ("new", new.parent, found) if found[0] == new else ("legacy", root, found)
+# --- layout resolver: END ---
 
 R = "\033[0m"; B = "\033[1m"; D = "\033[2m"
 RED = "\033[31m"; YEL = "\033[33m"; GRN = "\033[32m"; CYN = "\033[36m"
@@ -317,16 +347,57 @@ def expand(root, p):
     return p if os.path.isabs(p) else os.path.join(root, p)
 
 
+def config_location(root):
+    """(kind, relative path) of the config in the WORKTREE: the resolver's table with the config as the
+    anchor. kind is new | legacy | half | none; the path is None unless the answer is one place. A tree
+    with the config in both places is half-migrated and the tool never guesses between them, unless the
+    runner is under methodology/ and not at the root: then the methodology copy is the config and the
+    root one is the project's own (plan 7.2b)."""
+    kind, _directory, _found = resolve_layout(root, CONFIG_NAME)
+    if kind == "new":
+        return kind, f"{NEW_DIR}/{CONFIG_NAME}"
+    if kind == "legacy":
+        return kind, CONFIG_NAME
+    return kind, None
+
+
+def config_dir(root):
+    """The directory the config, and the history file beside it, live in."""
+    kind, _rel = config_location(root)
+    return os.path.join(root, NEW_DIR) if kind == "new" else root
+
+
+def history_path(root):
+    return os.path.join(config_dir(root), HISTORY_NAME)
+
+
+def _project_above(d):
+    """The project root for a directory that holds the config. Normally d itself. When d is the
+    methodology/ directory of a new-layout project the project is its parent, which git names: a
+    repository that is merely called methodology (the authoring one) is its own toplevel and stays itself."""
+    if os.path.basename(d) != NEW_DIR:
+        return d
+    rc, out, _ = run(["git", "rev-parse", "--show-toplevel"], cwd=d)
+    top = os.path.abspath(out) if rc == 0 and out else None
+    inner = os.path.join(top, NEW_DIR, CONFIG_NAME) if top else None
+    if top and top != d and os.path.exists(inner) and os.path.samefile(inner, os.path.join(d, CONFIG_NAME)):
+        return top
+    return d
+
+
 def find_root(start=None):
     d = Path(start or os.getcwd()).resolve()
     for c in [d, *d.parents]:
-        if (c / CONFIG_NAME).exists() or (c / ".git").exists():
+        if (c / CONFIG_NAME).exists():
+            return _project_above(str(c))
+        if (c / NEW_DIR / CONFIG_NAME).exists() or (c / ".git").exists():
             return str(c)
     return str(d)
 
 
 def load_config(root):
-    path = os.path.join(root, CONFIG_NAME)
+    _kind, rel = config_location(root)
+    path = os.path.join(root, rel or CONFIG_NAME)
     if not os.path.exists(path):
         return None, path
     try:
@@ -335,6 +406,28 @@ def load_config(root):
     except (OSError, ValueError) as e:
         print(f"{RED}config unreadable: {path}: {e}{R}")
         sys.exit(USAGE)
+
+
+def framework_under_methodology(root, ref):
+    """True when ``ref`` (a revision, or "" for the index) tracks the runner under methodology/ and not
+    at the root: the framework anchor, read from git as the ledger hook reads it from the index."""
+    def tracked(path):
+        rc, _out, _err = run(["git", "cat-file", "-e", f"{ref}:{path}"], cwd=root)
+        return rc == 0
+    return tracked(f"{NEW_DIR}/{RUNNER_NAME}") and not tracked(RUNNER_NAME)
+
+
+def head_config_text(root):
+    """The config HEAD declares, wherever HEAD kept it (at the root, or under methodology/), or None when
+    HEAD has none, or holds two that the framework anchor does not decide between."""
+    found = []
+    for rel in (CONFIG_NAME, f"{NEW_DIR}/{CONFIG_NAME}"):
+        rc, out, _ = run(["git", "show", f"HEAD:{rel}"], cwd=root)
+        if rc == 0:
+            found.append(out)
+    if len(found) == 2 and framework_under_methodology(root, "HEAD"):
+        return found[1]
+    return found[0] if len(found) == 1 else None
 
 
 # === MEASUREMENT ===
@@ -507,7 +600,7 @@ def _behind(canonical_path, local_blob):
 # === HISTORY / GROWTH RUN ===
 
 def load_history(root):
-    p = os.path.join(root, HISTORY_NAME)
+    p = history_path(root)
     if not os.path.exists(p):
         return []
     rows = []
@@ -528,7 +621,7 @@ def append_history(root, snapshot, history):
     consecutive measurements carry no signal."""
     if history and history[-1].get("files") == snapshot["files"]:
         return False
-    with open(os.path.join(root, HISTORY_NAME), "a") as f:
+    with open(history_path(root), "a") as f:
         f.write(json.dumps(snapshot, sort_keys=True) + "\n")
     return True
 
@@ -560,7 +653,7 @@ REMEDIES = {
   ("Archive", "git already conserves every byte. Cut the content and leave "
               "`git show <sha>:<file>` — retrieval by original line number, zero new bytes."),
   ("Delete", "If another file says the same thing, delete this copy and link to it."),
-  ("Raise the ceiling", "Edit .context-budget.json. This is last for a reason — see "
+  ("Raise the ceiling", f"Edit {CONFIG_NAME}. This is last for a reason — see "
                         "the cost of growth below."),
  ],
  "lines":      [("Split", "One note per record in a sibling directory; keep an index here.")],
@@ -1007,10 +1100,35 @@ def calibrate(root, cfg):
 # === HOOK ===
 
 HOOK = """#!/bin/sh
-# installed by context_budget.py — refuses a commit that GROWS a budgeted file past
-# its ceiling. A commit that shrinks such a file always passes.
-exec python3 "$(git rev-parse --show-toplevel)/context_budget.py" --precommit
+# installed by {name} — refuses a commit that GROWS a budgeted file past its ceiling. A commit
+# that shrinks such a file always passes. The tool is looked for where it was installed and at its
+# twin in the other layout (the root, or methodology/), so a project that moves its methodology
+# files does not leave a hook that cannot find it.
+top=$(git rev-parse --show-toplevel)
+for t in {tools}; do
+    if [ -f "$top/$t" ]; then
+        exec python3 "$top/$t" --precommit
+    fi
+done
+echo "context-budget: {name} not found under $top (looked for: {tools}) -- refusing, not passing." >&2
+echo "  Re-run the tool's install-hook from where it now lives." >&2
+exit 2
 """
+
+
+def layout_twin(rel):
+    """The same file in the other layout (root <-> methodology/), or None for a path in neither."""
+    head, _, base = rel.rpartition("/")
+    if head == "":
+        return f"{NEW_DIR}/{base}"
+    return base if head == NEW_DIR else None
+
+
+def hook_text(tool_relpath):
+    """The hook execs the copy that installed it, then that copy's twin in the other layout."""
+    rel = tool_relpath.replace(os.sep, "/")
+    tools = " ".join(f'"{t}"' for t in (rel, layout_twin(rel)) if t)
+    return HOOK.format(tools=tools, name=rel.rpartition("/")[2])
 
 
 def install_hook(root):
@@ -1033,11 +1151,16 @@ def install_hook(root):
         via = ""
     os.makedirs(hooks, exist_ok=True)
     p = os.path.join(hooks, "pre-commit")
-    if os.path.exists(p) and "context_budget.py" not in open(p, errors="ignore").read():
+    rc3, top, _ = run(["git", "rev-parse", "--show-toplevel"], cwd=root)
+    # realpath on BOTH sides: git names the toplevel by its real path, and a checkout under a symlinked path
+    # (macOS's /var -> /private/var) makes abspath(__file__) climb out of the repository.
+    tool = os.path.relpath(os.path.realpath(__file__), os.path.realpath(top if rc3 == 0 and top else root))
+    if os.path.exists(p) and TOOL_NAME not in open(p, errors="ignore").read():
         print(f"{YEL}a pre-commit hook already exists at {p} and is not ours.{R}")
-        print(f"  Add this line to it yourself:\n    {HOOK.strip().splitlines()[-1]}")
+        print(f"  Add this line to it yourself:\n"
+              f"    python3 \"$(git rev-parse --show-toplevel)/{tool}\" --precommit || exit $?")
         return WARN
-    open(p, "w").write(HOOK)
+    open(p, "w").write(hook_text(tool))
     os.chmod(p, 0o755)
     print(f"  installed {p}{via}")
     print(f"  {D}bypass with `git commit --no-verify`; the cost of doing so is printed "
@@ -1106,9 +1229,9 @@ def precommit(root, cfg):
     # refused. Falls back to the current list when HEAD has no config (the first commit that
     # adds one), which is the only case where there is no prior declaration to consult.
     head = {}
-    rc_cfg, head_cfg_raw, _ = run(["git", "show", f"HEAD:{CONFIG_NAME}"], cwd=root)
+    head_cfg_raw = head_config_text(root)
     head_files = cfg.get("files", [])
-    if rc_cfg == 0:
+    if head_cfg_raw is not None:
         try:
             head_files = (json.loads(head_cfg_raw) or {}).get("files", head_files)
         except ValueError:
@@ -1363,9 +1486,9 @@ def refusal_hint(arg):
 
 
 def print_usage():
-    print(f"context_budget.py v{VERSION} — size budgets for session-resident documents")
+    print(f"{TOOL_NAME} v{VERSION} — size budgets for session-resident documents")
     print("")
-    print("Usage: python3 context_budget.py [command] [options]")
+    print(f"Usage: python3 {TOOL_NAME} [command] [options]")
     print("")
     print("Commands:")
     print("  (default)      Measure every budgeted file, append one history line when a")
@@ -1404,6 +1527,11 @@ def main():
         print_usage()
         return USAGE
     root = find_root()
+    if config_location(root)[0] == "half":
+        print(f"{RED}half-migrated: {CONFIG_NAME} exists at the root AND under {NEW_DIR}/ — "
+              f"the tool will not guess which is the config{R}")
+        print(f"  {RED}{CONFIG_NAME}{R} and {RED}{NEW_DIR}/{CONFIG_NAME}{R}: finish or revert the move, then re-run.")
+        return USAGE
     cfg, cfg_path = load_config(root)
     if cfg is None:
         print(f"{RED}no {CONFIG_NAME} found at or above {os.getcwd()}{R}")
