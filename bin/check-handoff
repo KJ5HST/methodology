@@ -59,8 +59,8 @@ import sys
 from pathlib import Path
 
 # === LAYOUT ===
-# A project keeps its methodology files at its root (legacy) or under methodology/ (new): the plan's
-# section 4.3. This block is the resolver, embedded byte for byte; the canonical suite asserts that.
+# A project keeps its methodology files at its root (legacy) or under methodology/ (new).
+# This block is the resolver, embedded byte for byte; the canonical suite asserts that.
 
 # --- layout resolver: BEGIN ---
 import os as _os

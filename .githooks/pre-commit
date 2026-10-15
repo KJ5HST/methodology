@@ -22,7 +22,7 @@ if [ "${1:-}" = "--selftest" ]; then
 	self=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
 	t=$(mktemp -d); fails=0; n=0; checks=0
 	# The ledger's path in the fixture being built: the legacy layout by default, the new one
-	# (methodology/CHANGELOG.md) for the BL-101 probes. The hook under test reads it from the index.
+	# (methodology/CHANGELOG.md) for the new-layout probes. The hook under test reads it from the index.
 	LEGACY=CHANGELOG.md                 # layout: ok -- the selftest builds the legacy layout's fixtures
 	NEWPATH=methodology/CHANGELOG.md    # layout: ok -- and the new layout's
 	TIER1=methodology/SESSION_RUNNER.md # layout: ok -- a framework file under methodology/, for the tier-1 fixture
@@ -83,7 +83,7 @@ if [ "${1:-}" = "--selftest" ]; then
 	                expect "empty index -> pass"                                0
 	build noledger; expect "no tracked ledger -> pass (never block a repo without one)" 0
 
-	# BL-76. Git LEAVES REBASE_HEAD BEHIND after a rebase that stopped (a conflict,
+	# Git LEAVES REBASE_HEAD BEHIND after a rebase that stopped (a conflict,
 	# or -i at `edit`) completes -- measured on git 2.50.1 -- so a hook that reads it
 	# as "rebase in progress" disarms itself for the life of the clone. It is also the
 	# ONLY marker in the list that leaks: MERGE_HEAD, CHERRY_PICK_HEAD, rebase-merge
@@ -170,9 +170,9 @@ if [ "${1:-}" = "--selftest" ]; then
 	lbuild "$F$B$Z" archive
 	                expect "ledger: entries dropped with a shard in the legacy archive directory staged (a trim) -> pass" 0
 
-	# BL-101 P2 (plan 4.3, C5). The ledger may live under methodology/, and the gate must follow it:
-	# measured at S273, after the move a later commit that left the ledger out PASSED, because the
-	# hook found no tracked CHANGELOG.md and took its "no ledger, never block" branch. X2 is the first
+	# The ledger may live under methodology/, and the gate must follow it:
+	# measured after a move: a later commit that left the ledger out PASSED, because the
+	# hook found no tracked CHANGELOG.md and took its "no ledger, never block" branch. The first
 	# probe below; it is the reason this block exists and the one to keep when the rest is rewritten.
 	build newledger; expect "new layout: ledger not co-staged -> REFUSED (X2, the gate follows the ledger)" 1
 	build newledger; ( cd "$d" && git add "$NEWPATH" >/dev/null 2>&1 )
@@ -214,7 +214,7 @@ if [ "${1:-}" = "--selftest" ]; then
 	                expect "the move commit that rewrites an entry -> REFUSED" 1
 
 
-	# BL-101 P3 (decided 2026-10-06, plan 7.2a): a ledger in BOTH places is a tie, and the framework anchor
+	# A ledger in BOTH places is a tie, and the framework anchor
 	# decides it. A project whose runner is tracked under methodology/, and not at the root, keeps its
 	# ledger there; the root file is the project's own product changelog and the gate leaves it alone.
 	# Any other tie is still half-migrated and refused. The init commit holds both ledgers, as a real
@@ -270,7 +270,7 @@ git_dir=$(git rev-parse --git-dir)
 # Skip merge/rebase/cherry-pick/am: they replay commits already in the ledger's
 # history; forcing a fresh entry onto a replayed commit would double-log.
 #
-# REBASE_HEAD IS DELIBERATELY ABSENT FROM THIS LIST (BL-76). Git leaves it behind
+# REBASE_HEAD IS DELIBERATELY ABSENT FROM THIS LIST. Git leaves it behind
 # when a rebase that STOPPED -- a conflict, or `-i` parked at `edit` -- completes,
 # so listing it let a single rebase disarm this hook for the life of the clone,
 # taking the quality ratchet below it along. It is the only marker that leaks:
@@ -297,7 +297,7 @@ done
 # review, 2a). Note the merge/rebase skip above runs first: the ratchet inherits it.
 top=$(git rev-parse --show-toplevel)
 # Where the tool and the manifest are: the tool under starter-kit/ here, at the root or under
-# methodology/ in a project; the manifest at the root or under methodology/ (BL-101 P2, plan C4).
+# methodology/ in a project; the manifest at the root or under methodology/.
 # A guard that named one place skipped the ratchet SILENTLY for every project that moved.
 mfile=.quality-gates.json   # layout: ok -- the manifest's name; both places are tried below
 rtool=quality_ratchet.py    # layout: ok -- the tool's name; the three places are tried below
@@ -314,11 +314,11 @@ fi
 
 staged=$(git diff --cached --name-only)
 
-# The ledger lives at the root (legacy) or under methodology/ (new): BL-101, plan 4.3. The Python
+# The ledger lives at the root (legacy) or under methodology/ (new). The Python
 # tools read that from tools/layout_resolver.py; a git hook is sh and cannot call it, so the same
 # four-row table, anchored on the ledger, is read here from the INDEX with git. It has to be the
 # index and not the worktree: the hook judges what is staged, and a move is staged as a rename.
-# Measured at S273 (plan C5): with the gate naming only the root file, a ledger moved under
+# Measured on a moved ledger: with the gate naming only the root file, a ledger moved under
 # methodology/ left the gate on its "no ledger exists, never block" branch, so every later commit
 # passed without a ledger entry -- the gate that enforces failure mode #27 failing open, silently.
 legacy_ledger=CHANGELOG.md                # layout: ok -- the legacy half of the table this hook resolves
@@ -408,11 +408,11 @@ if [ -z "$staged" ]; then
 	exit 0
 fi
 
-# Which file is the ledger? Both tracked is a tie. The framework anchor decides it (decided
-# 2026-10-06, plan 7.2a): a project whose runner is tracked under methodology/, and not at the
+# Which file is the ledger? Both tracked is a tie. The framework anchor decides it: a
+# project whose runner is tracked under methodology/, and not at the
 # root, keeps its ledger there, and the root file is the project's own product changelog, which
 # this gate leaves alone. Any other tie is a half-migrated tree: the table says stop, name both,
-# never guess (plan 4.3). Refused loudly, and bypassable like every gate here.
+# never guess. Refused loudly, and bypassable like every gate here.
 ledger=
 if indexed "$new_ledger"; then
 	if indexed "$legacy_ledger" && ! { indexed "$new_runner" && ! indexed "$legacy_runner"; }; then
@@ -435,8 +435,8 @@ elif indexed "$legacy_ledger"; then
 	ledger=$legacy_ledger
 fi
 
-# No ledger tracked in either place: self-provisioning is the session runner's job (decision D3,
-# Phase 0), not the hook's. Never block a repo that legitimately has no ledger — an adopter
+# No ledger tracked in either place: self-provisioning is the session runner's job (Phase 0),
+# not the hook's. Never block a repo that legitimately has no ledger — an adopter
 # mid-bootstrap, or one that opted out. Reconcile-on-read catches the commit either way.
 if [ -z "$ledger" ]; then
 	exit 0

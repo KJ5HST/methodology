@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """check-layout-literals — list every line of a shipped tool that names a methodology file's root path.
 
-BL-101 phase P1 (docs/planning/methodology-subdirectory-plan.md section 7.1). The move to a
+The move to a
 methodology/ directory is only safe if no shipped tool reads a methodology file by a literal root
-path: a green suite does not see a literal, and the plan's C5 measured the worst case, the ledger hook
-passing every commit after the ledger moved. This tool finds them. It was RED on purpose from P1 and its
-list was the to-do list of phases P2-P6; P6 (S279) took it to zero and declared it a quality gate,
+path: a green suite does not see a literal, and the worst case measured was the ledger hook
+passing every commit after the ledger moved. This tool finds them. It was RED on purpose when it was written and its
+list was the to-do list of the layers that followed; the last of them took it to zero and declared it a quality gate,
 `layout-literals`, in .quality-gates.json, so a literal that comes back is a red gate and not a
 surprise after the move. Canonical-only (not in bin/_manifest.py), like the other bin/check-* tools.
 
@@ -14,7 +14,7 @@ part of a shell line that holds
   bare         a methodology file's name with no directory in front of it, or behind a variable
                ($top/CHANGELOG.md): a read relative to the project root;
   layout-path  docs/methodology, today's directory for the framework documents, or docs/archive,
-               where a trim writes its shards (the plan moves it in tier 2, decision D5);
+               where a trim writes its shards (which move in tier 2 of bin/migrate-layout);
   new-path     methodology/<a methodology file>, the new directory hard-coded.
 A name behind a canonical-source directory (starter-kit/, tools/, workstreams/, docs/planning/) is that
 repository's own layout, not a project's, and is not a site. Written as a join, / "starter-kit" / "NAME", the
@@ -28,7 +28,7 @@ What does not fail: prose (a name inside a comment or a docstring), the resolver
     LABEL = "CHANGELOG.md"  # layout: ok -- printed in a report, never opened
 
 A marker without a reason after the ` -- ` acknowledges nothing. Not scanned: bin/_manifest.py (the
-table itself) and bin/tests.sh (the suite encodes the layout, plan C13), and tools/ tests.
+table itself) and bin/tests.sh (the suite encodes the layout), and tools/ tests.
 
 Scanned: starter-kit/*.py, bin/* (a script with a shebang), .githooks/*, and tools/methodology_dashboard.py
 only where it is not byte-identical to its starter-kit twin.

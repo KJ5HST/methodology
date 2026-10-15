@@ -16,7 +16,7 @@ fail() { echo "  FAIL: $*"; FAIL=$((FAIL+1)); }
 # An assertion that could not be BUILT, as distinct from one that ran and held. It is counted
 # and named in the summary, never folded into PASS: routing an unbuildable assertion to pass()
 # converts a real check into a green no-op, which is the failure this primitive exists to
-# prevent (BL-40). A skip does not fail the suite -- it states what was not exercised.
+# prevent. A skip does not fail the suite -- it states what was not exercised.
 skip() { echo "  SKIP: $*"; SKIP=$((SKIP+1)); }
 
 mktemp_project() {
@@ -34,7 +34,7 @@ diff -q "$P/SAFEGUARDS.md" "$STARTER/SAFEGUARDS.md" >/dev/null && pass "SAFEGUAR
 diff -q "$P/methodology_dashboard.py" "$STARTER/methodology_dashboard.py" >/dev/null && pass "dashboard matches canonical" || fail "dashboard drift"
 # Exec bit, DERIVED from the manifest rather than named. This assertion was hardcoded to
 # methodology_dashboard.py and was the only exec-bit check over a synced file in the suite, so
-# the trimmer would have shipped with zero coverage (S39'). Proven by mutation: narrowing
+# the trimmer would have shipped with zero coverage. Proven by mutation: narrowing
 # bin/sync's `if dest.endswith(".py")` to `if dest == "methodology_dashboard.py"` leaves the old
 # single-name assertion PASSING while the trimmer lands 0644. Derived, so a third executable is
 # covered with no edit.
@@ -230,7 +230,7 @@ echo "$OUT" | grep -q "tracked" && pass "status: tracked disposition shown" || f
 echo "$OUT" | grep -q "seed" && pass "status: seed disposition shown" || fail "status: no seed rows"
 # One data row per manifest entry (full Option-B corpus, not a fixed three)
 EXPECTED="$(python3 -c "import sys; sys.path.insert(0, '$BIN'); import _manifest; print(len(_manifest.DISTRIBUTION))")"
-# A table row STARTS with the project's name; the `layout: <name>  <kind>` line P6 added before the table names it too,
+# A table row STARTS with the project's name; the `layout: <name>  <kind>` line added before the table names it too,
 # and is not a row (counting every line that mentions the name read 31 for 30 files).
 GOT="$(echo "$OUT" | grep -c "^$(basename "$P") ")"
 [ "$GOT" = "$EXPECTED" ] && pass "status: one row per manifest file ($GOT == $EXPECTED)" || fail "status: row count $GOT != manifest $EXPECTED"
@@ -298,17 +298,17 @@ else
     fail "layout resolver, fixture trees and literal scanner unit tests failed"
 fi
 
-# The canonical checkers in both layouts (BL-101 P4): check-ledger and check-handoff,
+# The canonical checkers in both layouts: check-ledger and check-handoff,
 # each run as a command in a scratch project with its file at the root, under methodology/, in a
 # tie the runner decides and in a half-migrated tree. Canonical-only, like the checkers. It drives the tools;
-# it does not run them over this repository (the real-tree check is the evidence script of the P4 session).
+# it does not run them over this repository (the real-tree check is a separate run).
 if python3 "$METHODOLOGY/tools/test_checker_layouts.py" >/dev/null 2>&1; then
     pass "canonical checkers (ledger, receipts) in both layouts unit tests green"
 else
     fail "canonical checkers in both layouts unit tests failed"
 fi
 
-# The sync layer in both layouts (BL-101 P6): the manifest's second table and its reader, bin/sync, bin/status and
+# The sync layer in both layouts: the manifest's second table and its reader, bin/sync, bin/status and
 # bin/check-links, each run as a command in scratch projects (a legacy tree, a migrated one, an empty one, a
 # half-migrated one, and --source=github against sources with and without the table), and the literal scanner over
 # this repository at zero. Canonical-only. Test 34 still holds the reader's refusals of a source's manifest.
@@ -984,7 +984,7 @@ qr = importlib.util.module_from_spec(spec); spec.loader.exec_module(qr)
 cfg = json.load(open(root + "/.quality-gates.json"))
 sys.exit(0 if cfg["gates"] and not qr.config_defects(cfg) else 1)
 PY
-# The chain names the tool through variables since BL-101 P2 (it is found under starter-kit/, under
+# The chain names the tool through variables (it is found under starter-kit/, under
 # methodology/ or at the root), so the old one-line grep for the literal path no longer matches. What
 # the assertion means is: the hook runs the ratchet, names the tool, and does it BEFORE the ledger gate
 # (the order the label always claimed and the grep never checked). Test 37 runs the chain for real.
@@ -1502,7 +1502,7 @@ BS="$STARTER/BOOTSTRAP.md"
 # Anchor on the TABLE ROW, not on the phrase. 'never overwrite' also appears in the surrounding
 # prose, and an earlier draft of this test grepped the first match -- so it read the prose line,
 # found no filenames in it, and reported all four seeds missing from a row that was in fact fine.
-# An assertion that cannot see its own artifact fails for the wrong reason (fork Learning #16).
+# An assertion that cannot see its own artifact fails for the wrong reason.
 NOOVERWRITE="$(grep -n '^| \*\*Adopter-owned\*\*' "$BS" | head -1 | cut -d: -f1)"
 [ -n "$NOOVERWRITE" ] && pass "bootstrap: a 'never overwrite' rule exists in the update path" \
     || fail "bootstrap: no 'never overwrite' rule found — the URL update path can destroy history"
@@ -1510,7 +1510,7 @@ if [ -n "$NOOVERWRITE" ]; then
     ROWTEXT="$(sed -n "${NOOVERWRITE}p" "$BS")"
     MISSING=""
     while IFS= read -r seed; do
-        # A here-string, not a pipe -- BL-43: the producer is a row of the real BOOTSTRAP.md.
+        # A here-string, not a pipe: the producer is a row of the real BOOTSTRAP.md.
         grep -qF "$seed" <<< "$ROWTEXT" || MISSING="$MISSING $seed"
     done < <(python3 -c "import sys; sys.path.insert(0, '$BIN'); import _manifest; \
         print('\n'.join(d for _s, d, x in _manifest.DISTRIBUTION if x == _manifest.SEED))")
@@ -1520,7 +1520,7 @@ if [ -n "$NOOVERWRITE" ]; then
     # the adopter's old version forever, and no sync would ever correct it.
     WRONG=""
     while IFS= read -r t; do
-        # A here-string, not a pipe -- BL-43, and this arm is the SILENT direction: a pipeline
+        # A here-string, not a pipe, and this arm is the SILENT direction: a pipeline
         # scored failed on a match drops a real finding instead of raising it.
         grep -qF "$t" <<< "$ROWTEXT" && WRONG="$WRONG $t"
     done < <(python3 -c "import sys; sys.path.insert(0, '$BIN'); import _manifest; \
@@ -1533,7 +1533,7 @@ echo "== Test 36: no early-exiting consumer decides a fail arm, so a flake canno
 # `:5` sets `pipefail`. A consumer that exits at its first match (`grep -q`, `grep -m`, `head`,
 # `sed q`) can leave its producer with bytes still to write; the producer takes SIGPIPE and the
 # MATCHED pipeline is scored FAILED. Measured at 1.5 KB: `echo "$(cat f)" | grep -q PAT` failed
-# 10 of 3,000 runs, `grep -q PAT <<< "$(cat f)"` 0 of 3,000 (BL-97). Which way the flake points is
+# 10 of 3,000 runs, `grep -q PAT <<< "$(cat f)"` 0 of 3,000. Which way the flake points is
 # decided by the ARM the pipeline guards: on `&& pass || fail` it is a loud false red, but on
 # `&& fail || pass` (or an `if` whose THEN arm fails) it turns "pattern found, so fail" into
 # "pipeline failed, so pass" -- a real defect reads green and nothing anywhere goes red. A sibling lint (not carried here)
@@ -1695,11 +1695,11 @@ fi
 rm -f "$SCAN45" "$FIX45" "$M45"
 
 echo "== Test 37: the ledger hook and the ratchet chain follow the files under methodology/ (BL-101 P2, X2, RED-first) =="
-# Plan C5 measured it: once the ledger moved under methodology/, a LATER commit that left the ledger
+# It was measured: once the ledger moved under methodology/, a LATER commit that left the ledger
 # out PASSED, because the hook found no tracked CHANGELOG.md and took its "no ledger, never block"
 # branch -- the gate that enforces failure mode #27 failing open, silently. The same fail-open sat in
 # the ratchet chain: its guard named the root manifest only, so a moved manifest was never ratcheted.
-# X2 is kept here as a permanent test, through the real hook and real git, in both layouts, with the
+# The ledger case is kept here as a permanent test, through the real hook and real git, in both layouts, with the
 # controls that prove each assertion can fail.
 t37_repo() { # $1 legacy|new, $2 the hook file to install, $3 the ratchet to install (default: the shipped one) -- setup commits bypass it
     local u pre=""; u="$(mktemp -d)"; [ "$1" = new ] && pre="methodology/"
@@ -1772,7 +1772,7 @@ printf '# Changelog\n' > "$U/CHANGELOG.md"; printf 'x\n' > "$U/tracked.txt"; t37
     || fail "half-migrated tree: exit $RC37, wanted 1 naming both: $OUT37"
 rm -rf "$U"
 
-# A tie the framework anchor decides (BL-101 P3, decided 2026-10-06, plan 7.2a): the project's own
+# A tie the framework anchor decides: the project's own
 # product changelog sits at the root beside a ledger that moved, and the runner is tracked under
 # methodology/. The gate follows the ledger there and leaves the root file alone; a tie the anchor
 # does not decide (the runner at the root, or at both) is still refused naming both.
@@ -1802,7 +1802,7 @@ printf 'two\n' > "$U/tracked.txt"; t37_entry "$U/methodology/CHANGELOG.md"; t37_
     || fail "tie with two runners: exit $RC37, wanted 1 naming both: $OUT37"
 rm -rf "$U"
 
-# A manifest tie (BL-101 P4, decided 2026-10-07 at the S276 picker, plan 7.2b): the tie rule is not
+# A manifest tie: the tie rule is not
 # opt-in. A project whose runner is tracked under methodology/ keeps its ratchet manifest there; a
 # .quality-gates.json at the root is the project's own and the chain leaves it alone. A tie the runner
 # cannot decide (the runner at the root, or at both) is still refused by the ratchet, naming both.
