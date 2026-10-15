@@ -3781,7 +3781,7 @@ def assess_risks(metrics):
         risks.append({"severity": "high",
                       "description": "Half-migrated methodology layout: " + " and ".join(lay["found"])
                                      + " both exist and nothing says which is live, so the tools refuse "
-                                       "to guess (BL-101). Move or remove one copy"})
+                                       "to guess. Move or remove one copy"})
     cl = metrics.get("changelog", {})
     owes_ledger = (metrics["methodology"]["items"].get("SESSION_RUNNER.md", False)  # layout: ok -- the checklist key of the runner; its location was resolved when the item was probed
                    or role == "framework")

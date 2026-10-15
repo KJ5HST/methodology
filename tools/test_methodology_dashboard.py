@@ -198,7 +198,7 @@ class TestBL34LanguageAndDocExtensions(unittest.TestCase):
         self.assertIn("R", m["by_language"], "an .R file must appear in Code by Language")
         self.assertEqual(m["by_language"]["R"]["count"], 1)
         self.assertEqual(m["by_category"]["source"]["count"], 1,
-                         "R must still count as Source -- BL-34 only adds the missing language row")
+                         "R must still count as Source -- the change only adds the missing language row")
 
     def test_r_extension_is_case_insensitive(self):
         # collect_file_metrics lowercases fpath.suffix, so the conventional uppercase ".R" and a
@@ -3678,12 +3678,12 @@ class TestD4ReadCapTruncation(unittest.TestCase):
         mdb = re.search(r"^DEFAULT_BUDGET_BYTES\s*=\s*(\d+)\s*\*\s*(\d+)", trim_src, re.MULTILINE)
         self.assertIsNotNone(mdb, "methodology_trim.py must declare DEFAULT_BUDGET_BYTES")
         self.assertEqual(int(mdb.group(1)) * int(mdb.group(2)), md.CLASS_A_FIRE_BYTES,
-                         "option C1 raised the byte budget to MEET the Class A arm; if they have "
+                         "the budget change raised the byte budget to MEET the Class A arm; if they have "
                          "drifted apart, one of the two arms is pre-empting the other again and "
-                         "that is the inertness plan §5 warns about")
+                         "that is the inertness to guard against")
         self.assertLess(md.CLASS_A_STOP_BYTES, md.CLASS_A_FIRE_BYTES,
                         "hysteresis: the stop must be below the fire, or a trim re-fires on the "
-                        "next record (ledger-trimmer-design.md §5.2)")
+                        "next record")
 
     def test_the_line_denominated_cap_is_gone_from_both_tools(self):
         """Phase B DELETED it rather than re-tuning it, and a deletion is only durable if
@@ -4388,7 +4388,7 @@ class TestIssue67ScopedSync(unittest.TestCase):
                          "# stale content, not canonical\n", "dry-run must never write")
 
         written, out, err = self._run_sync(canon, target=str(target), dry_run=True, force=True)
-        self.assertEqual(written, 0, "D6: a dry run always returns 0, even with --force")
+        self.assertEqual(written, 0, "a dry run always returns 0, even with --force")
         self.assertNotIn("SKIPPED", out)
         self.assertIn("Would change 1 of 1", out)
         self.assertEqual((target / "methodology_dashboard.py").read_text(),
@@ -4655,7 +4655,7 @@ class TestS38TrimTriggerRow(unittest.TestCase):
                         "present branch is not under test at all")
         if not descs:
             self.skipTest("this repo's own trim trigger is not currently firing on either "
-                          "ledger (S64 cleared HANDOFFS.md's; CHANGELOG.md's was already clear) "
+                          "ledger (one was cleared; the other was already clear) "
                           "-- this test's fixture precondition needs a live over-budget ledger "
                           "and will run again once one exists")
         cmds = [c for d in descs for c in re.findall(r"`([^`]+)`", d)]
@@ -4678,7 +4678,7 @@ class TestS38TrimTriggerRow(unittest.TestCase):
         descs, _ = self._descs(self.REPO, expect_role="framework")
         if not descs:
             self.skipTest("this repo's own trim trigger is not currently firing on either "
-                          "ledger (S64 cleared HANDOFFS.md's; CHANGELOG.md's was already clear) "
+                          "ledger (one was cleared; the other was already clear) "
                           "-- this test's fixture precondition needs a live over-budget ledger "
                           "and will run again once one exists")
         for d in descs:
@@ -5271,7 +5271,7 @@ class TestS38TrimTriggerRow(unittest.TestCase):
         self.assertFalse(led["read_fires"],
                          "a Class A ledger in this band must NOT fire -- if it does, the "
                          "collector is still keying on READ_CAP_BYTES")
-        self.assertFalse(led["fires"], "and the byte arm must not fire here either, or option C1 "
+        self.assertFalse(led["fires"], "and the byte arm must not fire here either, or the budget change "
                                        "was not applied and the trigger is inert")
 
     def test_size_exactly_at_the_budget_does_not_fire(self):
@@ -5501,7 +5501,7 @@ class TestS38TrimTriggerRow(unittest.TestCase):
         descs = {r["description"] for r in m["scores"]["risks"]}
         if not m["trim"]["signals"]:
             self.skipTest("this repo's own trim trigger is not currently firing on either "
-                          "ledger (S64 cleared HANDOFFS.md's; CHANGELOG.md's was already clear) "
+                          "ledger (one was cleared; the other was already clear) "
                           "-- this test's fixture precondition needs a live over-budget ledger "
                           "and will run again once one exists")
         for _sev, d in m["trim"]["signals"]:
@@ -5635,7 +5635,7 @@ class TestPhaseC1ReadCapClasses(unittest.TestCase):
                          sorted(trim.LEDGERS),
                          "Class A IS the set of watched names the trimmer can act on. If LEDGERS "
                          "gained or lost a key, move the name between the classes here "
-                         "deliberately -- and re-read plan section 10 dragon 6 first")
+                         "deliberately -- and re-read the design first")
 
     def test_class_b_is_exactly_the_set_the_trimmer_refuses(self):
         """The other half of the pin, and it fails independently. Without it, a name added to BOTH
@@ -5799,7 +5799,7 @@ class TestPhaseC1ReadCapClasses(unittest.TestCase):
                          "changed, its disposition is no longer 'by analogy'")
         self.assertEqual(hits["docs/planning/BACKLOG.md"], [],
                          "docs/planning/BACKLOG.md is named nowhere in the distributed corpus since "
-                         "fork Learning #26 left it (S176); if that has changed, revisit the comment "
+                         "the learning left it; if that has changed, revisit the comment "
                          "beside READ_CAP_CLASS_A")
 
     # --- the phase's own boundary -----------------------------------------------------------------
@@ -5828,7 +5828,7 @@ class TestPhaseC1ReadCapClasses(unittest.TestCase):
         # `int(READ_CAP_TOKENS * MIN_BYTES_PER_TOKEN)`, so asserting that identity would assert
         # nothing.
         self.assertEqual(md.READ_CAP_BYTES, 56_750,
-                         "C2 did NOT move the one-read budget. It is a measured harness fact, not "
+                         "the threshold change did NOT move the one-read budget. It is a measured harness fact, not "
                          "a policy knob; the Class A arm is a separate constant beside it")
         self.assertEqual(md.READ_REFUSE_BYTES, 262_144, "the hard refusal did not move either")
         self.assertEqual(md.READ_CAP_TOKENS, 25_000)
@@ -5836,7 +5836,7 @@ class TestPhaseC1ReadCapClasses(unittest.TestCase):
         self.assertEqual(md.CLASS_A_FIRE_BYTES, 196_608, "192 KiB, ratified at Phase C2")
         self.assertEqual(md.CLASS_A_STOP_BYTES, 98_304, "96 KiB, ratified at Phase C2")
         self.assertLess(md.CLASS_A_FIRE_BYTES, md.READ_REFUSE_BYTES,
-                        "plan §3 caveat 1: the Class A arm fires BELOW the hard refusal, never at "
+                        "the Class A arm fires BELOW the hard refusal, never at "
                         "it — a trigger set at the refusal parks the file on the cliff edge")
         self.assertGreater(md.CLASS_A_FIRE_BYTES, md.READ_CAP_BYTES,
                            "control: the Class A arm must be LOOSER than the one-read cap, or the "
@@ -6332,12 +6332,12 @@ class TestBL88P2TrimmerSourceProbe(unittest.TestCase):
         self.assertEqual(len(rows), 1, "%r" % rows)
         self.assertEqual(rows[0]["severity"], "low",
                          "a Class B file whose project CAN act on it drops to the Class A "
-                         "severity (plan §8 P2)")
+                         "severity")
         self.assertEqual(rows[0]["description"],
                          _P1_CLASS_B_ROWS[self.NOTES]
                          + _P2_REMEDY.format(tool="methodology_trim.py", base=self.NOTES,
                                              path=self.NOTES),
-                         "P2 APPENDS a sentence to P1's row; it rewrites nothing P1 said")
+                         "the probe APPENDS a sentence to the unprobed row; it rewrites nothing that row said")
 
     def test_NO_CONFIG_LOAD_FAILURE_and_ABSENT_leave_the_row_byte_identical_to_P1(self):
         """THE CRITERION. Compared to the frozen literal, never to each other: three arms that
