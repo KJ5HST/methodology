@@ -152,6 +152,14 @@ else
     "$BIN/check-links" 2>&1 | sed 's/^/    /'
     fail "check-links: dangling link(s) in adopter layout (see above)"
 fi
+# The documents resolve in BOTH layouts. A reference that cannot be a relative link in both is a bare name in a
+# code span, so one new docs/methodology/ link turns this red.
+if "$BIN/check-links" --layout both >/dev/null 2>&1; then
+    pass "check-links --layout both: the distributed documents resolve in the legacy and the methodology/ layout"
+else
+    "$BIN/check-links" --layout both 2>&1 | sed 's/^/    /'
+    fail "check-links --layout both: dangling link(s) in one of the layouts (see above)"
+fi
 
 echo "== Test 11: sync produces the full manifest tree (faithful, per-file) =="
 P="$(mktemp_project)"
