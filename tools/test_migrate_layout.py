@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Unit tests for bin/migrate-layout (BL-101, phase P7).
+"""Unit tests for bin/migrate-layout.
 
 CANONICAL-ONLY, like tools/test_sync_layouts.py: bin/migrate-layout is not in bin/_manifest.py, so adopters
-do not receive it. The contract is docs/planning/methodology-subdirectory-plan.md section 4.7 and section 7.3
-row P7: a dry run by default; a refusal of a dirty tree, a half-migrated tree, a destination that exists and a
+do not receive it. The contract is a dry run by default; a refusal of a dirty tree, a half-migrated tree, a destination that
+exists and a
 tree where bin/status does not read every TRACKED file current; the plan printed as data; the apply as ONE
 commit with every moved file at 90% similarity or better; a committed ledger entry or a frozen shard never
 rewritten.
@@ -167,7 +167,7 @@ def customise(project):
     (p / "docs" / "methodology" / "PROJECT_CONVENTIONS.md").write_text("# Conventions\n\nThis project's own.\n", encoding="utf-8")
     for name in ("dashboard_history.jsonl", ".context-budget-history.jsonl"):
         (p / name).write_text('{"timestamp": "2026-09-01T00:00:00"}\n', encoding="utf-8")
-    # places that name a moved file and that the tool reports and does not edit (plan 4.7.1)
+    # places that name a moved file and that the tool reports and does not edit
     (p / ".github" / "workflows").mkdir(parents=True)
     (p / ".github" / "workflows" / "ci.yml").write_text(
         "on:\n  push:\n    paths-ignore:\n      - 'CHANGELOG.md'\n      - 'SESSION_NOTES.md'\n      - 'docs/methodology/**'\njobs: {}\n", encoding="utf-8")
@@ -345,7 +345,7 @@ class TestThePureRules(unittest.TestCase):
         self.assertNotIn("SENTINEL", got)
         self.assertTrue(got.endswith("<!-- Entries go below. -->\n\n" + self.ENTRY), got)
 
-    # --- the entry never lands in a fenced example (F21) ---
+    # --- the entry never lands in a fenced example ---
     SEEDED = ("# Changelog\n\nintro\n\n## How to add an entry\n\n"
               "```\n### YYYY-MM-DD · [SOURCE] summary\n```\n\n"
               "```\n### 2026-01-15 · [ad hoc] Ship the export-retry fix\n- **Change:** x\n```\n\n"
@@ -537,7 +537,7 @@ class TestThePureRules(unittest.TestCase):
             self.assertEqual(self.m.hit_category(path), cat, path)
 
     def test_a_machine_read_file_is_sorted_by_what_a_machine_does_with_it(self):
-        """BL-101 F5 (plan 7.6): the report used to put a project's tests, scripts and proofs in `other` with its prose. The
+        """The report used to put a project's tests, scripts and proofs in `other` with its prose. The
         text is the file's own, read for a first line; a prose extension under tests/ is prose (the survey's prototype
         sorted tests/eval/PHASE_E_AGREEMENT_REPORT.md as a test, because its directory rule ran first)."""
         want = [("tests/test_read_budget.py", "", "tests"), ("tests/testthat/test-x.R", "", "tests"), ("src/foo_test.go", "", "tests"),
@@ -559,7 +559,7 @@ class TestThePureRules(unittest.TestCase):
         self.assertEqual(self.m.MACHINE_READ, ("ci", "hooks", "tests", "proofs", "scripts", "config"))
 
     def test_a_pattern_list_a_program_reads_is_config_except_the_gitignore(self):
-        """BL-101 F11 (register, S290): `.vscodeignore` carried 26 mentions of moved names (21 on code lines) and was filed under
+        """`.vscodeignore` carried 26 mentions of moved names (21 on code lines) and was filed under
         `other` with the prose, 26 of that adopter's 254 mentions there. vsce 3.6.0 matches each line with minimatch and no `matchBase`, so a bare name is the project root's
         and `methodology/SESSION_RUNNER.md` is packaged. A `.gitignore` stays prose: git matches a bare name at any depth,
         so an entry the tool does not anchor-rewrite still ignores the moved file."""
@@ -570,7 +570,7 @@ class TestThePureRules(unittest.TestCase):
         for path, cat in want:
             self.assertEqual(self.m.hit_category(path), cat, path)
 
-    # --- the pattern rule (BL-101 F10) ---
+    # --- the pattern rule ---
     PATTERN_MAP = {"SESSION_RUNNER.md": "methodology/SESSION_RUNNER.md", "CHANGELOG.md": "methodology/CHANGELOG.md",
                    "docs/methodology/HOW_TO_USE.md": "methodology/HOW_TO_USE.md", "dashboard.html": "methodology/dashboard.html"}
 
@@ -643,9 +643,9 @@ class TestThePureRules(unittest.TestCase):
     def test_nothing_moves_so_nothing_is_exposed(self):
         self.assertEqual(self.m.pattern_exposure("^SESSION_RUNNER.*\\.md$\n", {})["exposed"], [])
 
-    # --- the vsce rule (BL-101 F24) ---
+    # --- the vsce rule ---
     # Each row is (pattern, path, answer) as minimatch 10.2.5 with `{ dot: true }` gave it, the call vsce 3.9.2 makes
-    # (`package.js` `collectFiles`), measured in S299: `f24-oracle.py` re-runs this table through node and compares.
+    # (`package.js` `collectFiles`); the rows were measured by running minimatch through node.
     VSCE_ORACLE = [
         ("a/**", "a", False), ("a/**", "a/b", True), ("a/**", "a/b/c", True), ("**", "a", True), ("**", "a/b", True), ("**", ".x", True),
         ("**/*.map", "x.map", True), ("**/*.map", "a/b/x.map", True), ("**/*.map", "a.map/b", False),
@@ -689,7 +689,7 @@ class TestThePureRules(unittest.TestCase):
 
     def test_a_bare_name_is_the_project_roots_and_not_the_new_directorys(self):
         """vsce 3.9.2 matches `SESSION_RUNNER.md` against `methodology/SESSION_RUNNER.md` as false: the move leaves the file
-        packaged. The same row of the probe in S290 read vsce 3.6.0 (`vsce ls`): the file was listed after the move."""
+        packaged. The same row of the probe read vsce 3.6.0 (`vsce ls`): the file was listed after the move."""
         e = self.vsce("SESSION_RUNNER.md\nREADME.md\n")
         self.assertEqual(e["exposed"], ["SESSION_RUNNER.md"])
         self.assertEqual(e["lines"][0], {"line": 1, "text": "SESSION_RUNNER.md", "files": ["SESSION_RUNNER.md"]})
@@ -744,7 +744,7 @@ class TestThePureRules(unittest.TestCase):
 
     def test_vsces_own_default_list_is_part_of_the_answer(self):
         """The root `.gitattributes` is on vsce's default list and `methodology/.gitattributes` is not: `bin/migrate-layout`
-        moves it, and 1 of the 36 files the P17 move put into the adopter's `.vsix` was this one."""
+        moves it, and 1 of the 36 files a real move put into an adopter's `.vsix` was this one."""
         e = self.vsce("", {".gitattributes": "methodology/.gitattributes"})
         self.assertEqual(e["exposed"], [".gitattributes"])
         self.assertEqual(e["lines"], [{"line": 0, "text": "(vsce default) .gitattributes", "files": [".gitattributes"]}])
@@ -960,7 +960,7 @@ class TestUsageAndNothingToDo(unittest.TestCase):
 
 
 class TestTheDryRun(Adopter):
-    """Dry run is the default (plan 4.7): it reads, prints the plan as data and writes nothing."""
+    """Dry run is the default: it reads, prints the plan as data and writes nothing."""
 
     def test_it_writes_nothing(self):
         before = tree_state(self.project)
@@ -1021,7 +1021,7 @@ class TestTheDryRun(Adopter):
 
 
 class TestRefusals(Adopter):
-    """Plan 4.7: a dirty tree, a half-migrated tree, a destination that exists and a tree where bin/status does
+    """A dirty tree, a half-migrated tree, a destination that exists and a tree where bin/status does
     not read every TRACKED file current are each refused, under a dry run and under --apply, and nothing is written."""
 
     def refused(self, code, *args):
@@ -1131,7 +1131,7 @@ def configs_rewritten_by_layer_3(path):
 
 
 class TestApply(Adopter):
-    """--apply writes the migration as ONE commit (plan 4.7.2): every tracked move a rename git can follow."""
+    """--apply writes the migration as ONE commit: every tracked move a rename git can follow."""
 
     def apply(self, *args):
         before = git(self.project, "rev-parse", "HEAD").strip()
@@ -1245,7 +1245,7 @@ class TestApply(Adopter):
 
 
 class TestTheTiers(Adopter):
-    """Plan 4.6: tier 1 is the framework's files, tier 2 the project's state; tier 1 alone is a stopping point."""
+    """Tier 1 is the framework's files, tier 2 the project's state; tier 1 alone is a stopping point."""
 
     def test_tier_1_moves_the_tracked_files_and_nothing_of_the_projects_state(self):
         r = run_migrate(self.project, "--apply", "--tier", "1")
@@ -1371,7 +1371,7 @@ Not a methodology file: SESSION_RUNNER.mdx, MY_CHANGELOG.md, NOTES-CHANGELOG.md.
 
 class TestTheRewriteOfClaudeMd(Adopter):
     """CLAUDE.md is loaded from the project root, so a name in it is relative to the root: the paths of the files
-    that moved are rewritten (plan C11, 4.4) and a name with a directory in front of it, or inside a longer name,
+    that moved are rewritten and a name with a directory in front of it, or inside a longer name,
     is not a methodology file of the project's and is left."""
 
     def test_a_moved_path_or_bare_name_is_rewritten_and_nothing_else_changes(self):
@@ -1408,7 +1408,7 @@ class TestTheRewriteOfClaudeMd(Adopter):
 
 
 class TestTheRewriteOfTheConfigs(Adopter):
-    """The two JSON configs move with the project's state and name paths in their values (plan C9): the path a file
+    """The two JSON configs move with the project's state and name paths in their values: the path a file
     is read at, the results file, a gate's command. They are rewritten as text, so the rest of the file is the bytes
     it was; a prose key (one that starts with an underscore) and the `canonical` path (the sibling checkout, which
     does not move) are left."""
@@ -1495,7 +1495,7 @@ def entry_split(text):
 
 
 class TestTheLedgerEntry(Adopter):
-    """Plan 4.7.2: the migration commit carries ONE new ledger entry, and 4.7.3: it never rewrites a committed one."""
+    """The migration commit carries ONE new ledger entry, and it never rewrites a committed one."""
 
     def ledger(self, rel="methodology/CHANGELOG.md"):
         return (self.project / rel).read_text(encoding="utf-8")
@@ -1515,7 +1515,7 @@ class TestTheLedgerEntry(Adopter):
         self.assertEqual(removed, [], "the migration removed or rewrote a line of the ledger")
 
     def test_an_example_in_a_fenced_block_of_the_ledger_header_does_not_take_the_entry(self):
-        # F21: chat_verification's ledger kept the v3.7 seed text, whose 'How to add an entry' section shows an example
+        # A ledger that kept the v3.7 seed text has a 'How to add an entry' section that shows an example
         # heading in a fence; the tool's entry sat at line 48 of the moved ledger, inside that fence.
         example = "```\n### 2026-01-15 · [ad hoc] Ship the export-retry fix\n- **Change:** exports retry once\n```\n\n"
         marker = "<!-- Entries go below"
@@ -1619,12 +1619,12 @@ class TestTheLedgerEntry(Adopter):
 
 
 class TestTheHitsItWillNotRewrite(Adopter):
-    """Plan 4.7.1: the tool lists every hit it will not rewrite and why: CI workflows, `.claude/` rules, `.githooks/`
-    copies, ledger links (a committed ledger entry is never edited, C6) and anything else that names a moved file."""
+    """The tool lists every hit it will not rewrite and why: CI workflows, `.claude/` rules, `.githooks/`
+    copies, ledger links (a committed ledger entry is never edited) and anything else that names a moved file."""
 
     PLACES = {"ci": ".github/workflows/ci.yml", "harness": ".claude/settings.json", "hooks": ".githooks/pre-commit",
               "other": "README.md"}
-    CATEGORIES = ["ci", "hooks", "tests", "proofs", "scripts", "config", "harness", "ledger", "other"]  # BL-101 F5: nine, was five
+    CATEGORIES = ["ci", "hooks", "tests", "proofs", "scripts", "config", "harness", "ledger", "other"]  # nine categories
 
     def test_each_category_counts_its_mentions_and_names_the_files_and_lines(self):
         nr = run_migrate(self.project).report["not_rewritten"]
@@ -1694,7 +1694,7 @@ class TestTheHitsItWillNotRewrite(Adopter):
 
 
 class TestTheMachineReadFilesAreListedApartFromProse(Adopter):
-    """BL-101 F5 (plan 7.6, findings-register.md). At P11 every check the tool runs passed and the adopter's own CI broke,
+    """On a real migration every check the tool runs passed and the adopter's own CI broke,
     because the report put the tests and proofs that read a moved path in `other` with its prose, showed 25 sites of 2,647
     mentions in 73 files, and none of the four files that broke was among them. A machine-read file is now listed, every
     one, under its own kind. The scan rule itself is unchanged: only the sorting and the listing are new."""
@@ -1832,12 +1832,12 @@ class TestTheMachineReadFilesAreListedApartFromProse(Adopter):
 
 
 class TestAPatternThatStopsMatchingIsListed(Adopter):
-    """BL-101 F10 and F11 (plan 7.6, findings-register.md; S290). F5's list reads whole names, so a root `.Rbuildignore` of
+    """The list of machine-read files reads whole names, so a root `.Rbuildignore` of
     regular expressions (`^SESSION_RUNNER.*\\.md$`) was listed only for the comment lines that spelled a name out, and the
     row a person read was the harmless one. The file is now read as the program reads it: every non-empty line a
     case-insensitive regular expression, a line that matches a path or a directory above it covers it, and a moved file is
     exposed when a line covers it where it is and none covers it where it goes. A candidate, never a verdict: Python's `re`,
-    not R's engine. F11: a packager's ignore file (`.vscodeignore`) is config, not prose."""
+    not R's engine. A packager's ignore file (`.vscodeignore`) is config, not prose."""
 
     LINES = "^SESSION_RUNNER.*\\.md$\n^methodology_trim\\.py$\n^dashboard\\.html$\n"
     REMARKED = "# keep the framework files out of the build\n" + LINES
@@ -1969,7 +1969,7 @@ class TestAPatternThatStopsMatchingIsListed(Adopter):
         self.assertEqual((self.project / ".Rbuildignore").read_bytes(), before)
         self.assertIn(".Rbuildignore:1", r.out, "an apply prints the list too")
 
-    # --- F11 ---
+    # --- a packager's ignore file ---
     def test_a_packagers_ignore_file_that_names_a_moved_file_is_config_not_prose(self):
         self.put("SESSION_RUNNER.md\nCHANGELOG.md\n", rel=".vscodeignore")
         nr = self.report()
@@ -1989,8 +1989,8 @@ class TestAPatternThatStopsMatchingIsListed(Adopter):
 
 
 class TestAPackagersIgnoreFileIsEvaluated(Adopter):
-    """BL-101 F24 (plan 7.6, findings register; S299). F11 listed a root `.vscodeignore` as config and never judged it, so a
-    move that put 36 files into `vscode_quarto_ext`'s `.vsix` passed every check the tool prints and only the adopter's own
+    """Listing a root `.vscodeignore` as config and never judging it let a
+    move that put 36 files into an adopter's `.vsix` pass every check the tool prints; only the adopter's own
     `release-gate` (78 files against 42) saw it. The file is now read as vsce reads it (`package.js` `collectFiles`, vsce
     3.9.2: each line a minimatch pattern with `{ dot: true }` and no `matchBase`, `/**` added to a directory name, vsce's own
     default list, any negation brings a file back) and a moved file is exposed when it is ignored where it is and packaged
@@ -2120,7 +2120,7 @@ class TestAPackagersIgnoreFileIsEvaluated(Adopter):
 
 
 class TestTheChecks(Adopter):
-    """Plan 4.7.4: an apply verifies itself, before and after, with the read-only checks: bin/status, the two ledger
+    """An apply verifies itself, before and after, with the read-only checks: bin/status, the two ledger
     checkers, check-links, every shard's proof (the exit histogram must not change) and the ledger's history across the
     move. A difference does not undo a commit that is made; it is reported, with the way back, and the exit is 4."""
 
@@ -2267,7 +2267,7 @@ test -f docs/archive/HANDOFFS-through-2026-08-02.md || { echo "FAIL: docs/archiv
 
 
 class TestTheShardRehearsal(Adopter):
-    """Real data (vscode_quarto_ext): an older-format proof reads its shard by its working-tree path, so it exits 2 once
+    """Real data (an adopter's project): an older-format proof reads its shard by its working-tree path, so it exits 2 once
     the shard moves, while the trimmer's current proofs read git history and survive. The tool rehearses the shard moves
     in a throwaway clone, before the plan is shown, and leaves a shard whose proof would regress where it is."""
 
@@ -2328,7 +2328,7 @@ class TestTheShardRehearsal(Adopter):
         r = run_migrate(self.project)
         self.assertEqual(r.report["rehearsal"], {"ran": True, "proofs": 2, "excluded": []})
 
-    # --- F32 (BL-105 build phase 4, vscode_quarto_ext): the shard proofs run only on a run that can go on, so the list
+    # --- the shard proofs run only on a run that can go on, so the list
     # a REFUSED run prints is the plan before them (3 moves listed refused, 1 once the refusal cleared). It says so. ---
 
     def test_a_refused_runs_moves_are_labelled_unrehearsed_in_both_modes(self):
@@ -2385,7 +2385,7 @@ class TestTheShardRehearsal(Adopter):
 
 
 class TestWhatTheHitsSayAboutHooksAndDirectories(Adopter):
-    """Real data: wsfct's pre-commit hook runs context_budget.py from the root, so it refuses the migration commit; and a
+    """Real data: an adopter's pre-commit hook runs context_budget.py from the root, so it refuses the migration commit; and a
     CLAUDE.md that says `docs/methodology/` as a directory still says it after the paths in it are rewritten."""
 
     def test_a_hook_that_runs_a_moved_tool_is_flagged_and_one_that_only_names_a_file_is_not(self):
@@ -2400,7 +2400,7 @@ class TestWhatTheHitsSayAboutHooksAndDirectories(Adopter):
         self.assertIn("refuse the migration commit", text)
 
     def test_a_hook_line_that_says_it_tries_every_place_is_not_flagged_as_running_a_moved_tool(self):
-        """Real data (church_growth, register F15): the layout-aware ledger hook assigns the tool's name on a line marked
+        """Real data (an adopter's hook): the layout-aware ledger hook assigns the tool's name on a line marked
         `# layout: ok -- ...` and tries three places for it, so it works after the move; the warning that it would refuse the
         migration commit was false (the apply exited 0 in every arm). The site is still listed: a person may want to see it."""
         (self.project / ".githooks" / "pre-push").write_text(
@@ -2423,7 +2423,7 @@ class TestWhatTheHitsSayAboutHooksAndDirectories(Adopter):
         self.assertEqual(r.report["not_rewritten"]["hooks"]["runs_moved_tool"], 1)
 
     def test_this_repositorys_own_ledger_hook_raises_no_warning(self):
-        """The F15 reproduction: the hook register row F2 tells an adopter to install, copied into a project as it is."""
+        """The reproduction: the hook an adopter is told to install, copied into a project as it is."""
         shutil.copy(REPO / ".githooks" / "pre-commit", self.project / ".githooks" / "pre-commit")
         self.commit("the layout-aware ledger hook")
         r = run_migrate(self.project)
@@ -2437,7 +2437,7 @@ class TestWhatTheHitsSayAboutHooksAndDirectories(Adopter):
         self.assertEqual(m.MARKER_RE.pattern, literals.MARKER_RE.pattern)
 
     def test_a_hook_in_the_hooks_directory_that_git_does_not_track_is_found_and_flagged(self):
-        """Real data (wsfct): context_budget.py install-hook writes .git/hooks/pre-commit, which is per clone and not
+        """Real data (an adopter's project): context_budget.py install-hook writes .git/hooks/pre-commit, which is per clone and not
         tracked, and which runs $top/context_budget.py: the scan of tracked files could not see the hook that refused."""
         hook = self.project / ".git" / "hooks" / "pre-commit"
         hook.write_text('#!/bin/sh\n# installed by context_budget.py\nexec python3 "$(git rev-parse --show-toplevel)/context_budget.py" --precommit\n', encoding="utf-8")
@@ -2514,7 +2514,7 @@ class TestALedgerSoSmallThatGitSeesNoRenameAtAll(Adopter):
 
 
 class TestASmallLedgerIsRefusedWithAReason(Adopter):
-    """Real data (claude_work): a ledger that is only the seed cannot take its entry and stay a rename at 90%."""
+    """Real data (an adopter's project): a ledger that is only the seed cannot take its entry and stay a rename at 90%."""
 
     def test_the_rollback_says_the_ledger_is_too_small_and_how_big_it_is(self):
         seed = (REPO / "starter-kit" / "CHANGELOG.md").read_text(encoding="utf-8")
@@ -2527,7 +2527,7 @@ class TestASmallLedgerIsRefusedWithAReason(Adopter):
         self.assertIn("%d bytes" % len(seed.encode("utf-8")), error)
 
 
-# --- BL-105 build phase 2: PROJECT_LEARNINGS.md joins the move as a companion (plan D10; the rehearsal record, section 7) ---
+# --- PROJECT_LEARNINGS.md joins the move as a companion ---
 
 LEARNINGS = "PROJECT_LEARNINGS.md"
 LEARNINGS_DEST = "methodology/PROJECT_LEARNINGS.md"
@@ -2538,7 +2538,7 @@ POINTER = "Project learnings are kept in `PROJECT_LEARNINGS.md`.\n"
 
 class WithALearningsFile(Adopter):
     """An adopter that keeps a PROJECT_LEARNINGS.md of its own at the root, names it in CLAUDE.md, in the budget config
-    and in a gate: the three places the rehearsal (S302) found a project pointing at it."""
+    and in a gate: the three places a real project was found pointing at it."""
 
     def config(self, name):
         """A config where this tree keeps it: under methodology/ once migrated, at the root before."""
@@ -2564,14 +2564,14 @@ class WithALearningsFile(Adopter):
         self.commit("the project keeps learnings of its own")
 
     def migrate_then_give_the_file(self):
-        """A tree the tool calls migrated, with the file still at the root: nprcgenekeepr's state at P15."""
+        """A tree the tool calls migrated, with the file still at the root: a real project's state."""
         r = run_migrate(self.project, "--apply")
         self.assertEqual(r.returncode, 0, r.out)
         self.give_the_project_a_learnings_file()
 
 
 class TestTheCompanionRule(WithALearningsFile):
-    """Plan D10: the file joins the move with no manifest entry. It is the project's own state, so tier 2's."""
+    """The file joins the move with no manifest entry. It is the project's own state, so tier 2's."""
 
     def setUp(self):
         super().setUp()
@@ -2675,9 +2675,9 @@ class TestTheCompanionRule(WithALearningsFile):
 
 
 class TestATopUpOnAMigratedTree(WithALearningsFile):
-    """Plan D10, record section 7: a tree the tool calls migrated has the file still at the root (nprcgenekeepr,
-    model_project_constructor, vscode_quarto_ext); today the tool says `nothing to migrate`. The configs are under
-    methodology/ there, and the rewrite reads them where the layout puts them (F29)."""
+    """A tree the tool calls migrated has the file still at the root (the state of three real projects);
+    before the top-up existed the tool said `nothing to migrate`. The configs are under
+    methodology/ there, and the rewrite reads them where the layout puts them."""
 
     def setUp(self):
         super().setUp()
@@ -2810,7 +2810,7 @@ class TestATopUpOnAMigratedTree(WithALearningsFile):
 
 
 class TestTheLinkRules(unittest.TestCase):
-    """BL-101 F30: the links a move breaks are read as the pure rules say, before any project is involved."""
+    """The links a move breaks are read as the pure rules say, before any project is involved."""
 
     @classmethod
     def setUpClass(cls):
@@ -2861,7 +2861,7 @@ DOC = ("# Guide\n"                                                              
 
 
 class TestTheLiveLinksAMoveBreaks(WithALearningsFile):
-    """BL-101 F30 (his call, S303: LIST ONLY). A link from a project's live document to a file the move takes breaks and
+    """A link from a project's live document to a file the move takes breaks and
     nothing read it: the tool lists each one, every one, and rewrites none."""
 
     def setUp(self):

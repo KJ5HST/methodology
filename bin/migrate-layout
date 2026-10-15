@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Move a project's methodology files under methodology/ (BL-101, phase P7).
+"""Move a project's methodology files under methodology/.
 
 CANONICAL-ONLY, like bin/sync and bin/status: it is not in bin/_manifest.py, so adopters do not receive it.
-Contract: docs/planning/methodology-subdirectory-plan.md section 4.7 and section 7.3 row P7.
 
 A project keeps its methodology files at its root and under docs/methodology/ (the legacy layout, the manifest's
 `dest` column) or in one directory, methodology/ (the new layout, its NEW_LAYOUT table). This tool moves a
@@ -12,16 +11,16 @@ prints the plan, and writes nothing.
 It REFUSES, before writing anything, a project that is not a git repository with a commit, one with a dirty tree,
 a half-migrated one (a runner at the root and under methodology/), one where a destination already exists, one
 that keeps its methodology files out of git (ignore mode), and one where bin/status does not read every TRACKED
-file current: sync first (plan 5A.2), because a tool that cannot find the ledger fails open (plan C5). Every
+file current: sync first, because a tool that cannot find the ledger fails open. Every
 refusal is reported together.
 
-Tiers (plan 4.6): tier 1 moves the framework's own files (the manifest's TRACKED rows); tier 2 the project's state
+Tiers: tier 1 moves the framework's own files (the manifest's TRACKED rows); tier 2 the project's state
 (the SEED rows, the files the tools generate, the ledger shards the trimmer wrote, and the companions: a file of the
-project's own that joins the move with no manifest entry, PROJECT_LEARNINGS.md, plan D10). The default, all, is both.
+project's own that joins the move with no manifest entry, PROJECT_LEARNINGS.md). The default, all, is both.
 
 A tree that is already migrated, with a companion still at its root, is topped up: the plan is the companion's move and
 the rewrites of the names that point at it (CLAUDE.md, and the two configs where the layout keeps them), one commit and
-one ledger entry (BL-105). Every link in a live document to a file the move takes is listed, none rewritten (F30).
+one ledger entry. Every link in a live document to a file the move takes is listed, none rewritten.
 
 Exit: 0 a dry run or a migration done, or nothing to do · 1 refused · 2 usage or a failure · 3 an apply that was
 rolled back.
@@ -44,8 +43,8 @@ from urllib.parse import unquote
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _manifest import DISTRIBUTION, TRACKED, SEED, NEW_LAYOUT  # noqa: E402  (bin/ on sys.path)
 
-# A project keeps its methodology files at its root (legacy) or under methodology/ (new): the plan's
-# section 4.3. This block is the resolver, embedded byte for byte; the canonical suite asserts that.
+# A project keeps its methodology files at its root (legacy) or under methodology/ (new).
+# This block is the resolver, embedded byte for byte; the canonical suite asserts that.
 
 # --- layout resolver: BEGIN ---
 import os as _os
@@ -72,7 +71,7 @@ def resolve_layout(root, anchor="SESSION_RUNNER.md"):
 
 
 NEW_DIR = "methodology"
-# What the tools write beside the methodology files (plan section 2.1, "Generated beside them"). They are not in
+# What the tools write beside the methodology files. They are not in
 # the manifest, so the table is here; tools/layout_fixtures.GENERATED is the test suite's copy of it.
 GENERATED = ("dashboard.html", "dashboard_history.jsonl", ".context-budget-history.jsonl",  # layout: ok -- the files the tools generate; this tool moves them
              ".quality-gates-results.json")  # layout: ok -- same
@@ -83,10 +82,10 @@ OLD_FRAMEWORK_DIR = "docs/methodology"  # layout: ok -- today's directory for th
 # directory is the project's own and stays.
 SHARD_RE = re.compile(r"^(?:CHANGELOG|HANDOFFS|SESSION_NOTES)-through-[^/]+\.md(?:\.verify\.sh)?$")  # layout: ok -- the shard names the trimmer writes
 GITATTRIBUTES = ".gitattributes"  # layout: ok -- the seed that moves, when it is only the seed's rules
-# BL-105 (plan D10): a file of the project's own that joins the move with no manifest entry. It is the project's state, so
+# A file of the project's own that joins the move with no manifest entry. It is the project's state, so
 # tier 2's, and it moves only when git tracks it and the project has adopted the methodology (a runner, in either layout).
 COMPANIONS = ("PROJECT_LEARNINGS.md",)
-# The two configs whose path values the tool rewrites. BL-105 F29: they are read where the layout puts them.
+# The two configs whose path values the tool rewrites: they are read where the layout puts them.
 CONFIG_FILES = (".context-budget.json", ".quality-gates.json")  # layout: ok -- the two seeds the tool edits the values of
 
 HERE = Path(__file__).resolve().parent
@@ -284,7 +283,7 @@ class Unsafe(Exception):
 
 
 def is_top_up(moves):
-    """BL-105: a run whose every move is a companion is a top-up of a tree that is already migrated: the framework files
+    """A run whose every move is a companion is a top-up of a tree that is already migrated: the framework files
     and the generated ones are where they belong, so it rewrites the names of the companions and nothing else."""
     return bool(moves) and all(m.get("kind") == "companion" for m in moves)
 
@@ -385,7 +384,7 @@ def ledger_location(root, moves):
 
 def config_location(root, moves, name):
     """(path now, path once the moves are done) of one of the two configs, or (None, None) when the project has none.
-    BL-105 F29: where the layout puts it, not at the root only. A config this run moves is read at its place before the
+    Where the layout puts it, not at the root only. A config this run moves is read at its place before the
     move; otherwise a tree whose runner is under methodology/ keeps it there (or still at the root, after a tier-1 run)."""
     for m in moves:
         if m["src"] == name:
@@ -408,7 +407,7 @@ def first_heading(text):
     """(offset, match) of the first month heading or dated entry heading that is not inside a fenced block, or None.
     A fence is read as methodology_trim.py's fence_scan reads one: a line of three or more backticks or tildes at the
     start of a line opens it, and only a line of the same character, at least as long and with nothing after it,
-    closes it. So the example heading in a ledger header's 'How to add an entry' fence is not an entry (F21). A fence
+    closes it. So the example heading in a ledger header's 'How to add an entry' fence is not an entry. A fence
     still open when the text ends, with no heading outside a fence before it, is Unsafe: whatever follows it is code."""
     fence, offset = None, 0
     for line in text.split("\n"):
@@ -504,7 +503,7 @@ LEDGER_FILES = ("CHANGELOG.md", "HANDOFFS.md", "SESSION_NOTES.md")  # layout: ok
 CI_PREFIXES = (".github/", ".circleci/")
 CI_FILES = (".gitlab-ci.yml", ".travis.yml", "Jenkinsfile", "azure-pipelines.yml")
 SITES_SHOWN = 25
-# BL-101 F5 (plan 7.6, findings register): a project's tests, proofs, scripts and configs read a moved path as a machine
+# A project's tests, proofs, scripts and configs read a moved path as a machine
 # does, so each is listed, every one, under its own kind and apart from prose. `harness` is a permission string a prompt
 # reads, `ledger` is counted and never listed, and `other` is prose and whatever is left.
 MACHINE_READ = ("ci", "hooks", "tests", "proofs", "scripts", "config")
@@ -513,7 +512,7 @@ HOOK_DIRS = (".githooks/", ".husky/")
 HOOK_FILES = (".pre-commit-config.yaml",)
 # A comment-only line cannot change what a machine does; this is a heuristic by first character, not a parse.
 COMMENT_STARTS = ("#", "//", "<!--", "/*", "*", ";", "%")
-# BL-101 F15: a hook line that says why it names a moved tool and still works (`# layout: ok -- <reason>`: the layout-aware
+# A hook line that says why it names a moved tool and still works (`# layout: ok -- <reason>`: the layout-aware
 # ledger hook tries three places for it) is not a line that runs the tool at its old place. The grammar is the one
 # bin/check-layout-literals reads, a test holds the two equal: a marker with no reason acknowledges nothing.
 MARKER_RE = re.compile(r"#\s*layout:\s*ok\b(?P<reason>\s+--\s+\S)?")
@@ -526,7 +525,7 @@ CONFIG_NAMES = (".rbuildignore", ".dockerignore", "makefile", "description", "na
 
 
 def is_pattern_list(low):
-    """BL-101 F11: a dot-file whose name ends in `ignore` is a list of patterns a program reads (`.vscodeignore`, `.npmignore`,
+    """A dot-file whose name ends in `ignore` is a list of patterns a program reads (`.vscodeignore`, `.npmignore`,
     `.vercelignore`, `.railwayignore`), so it is config and not prose. vsce 3.6.0 matches each line with minimatch and no
     `matchBase`: a bare name is the project root's, and `methodology/SESSION_RUNNER.md` is packaged. A `.gitignore` is the
     exception: git matches a bare name at any depth, and the tool rewrites the anchored entries of the root one."""
@@ -566,7 +565,7 @@ POSIX_CLASS_RE = re.compile(r"\[:\^?[a-z]+:\]")
 
 
 def pattern_exposure(text, mapping):
-    """BL-101 F10 (plan 7.6, findings register): which moved files a `.Rbuildignore` stops covering. The scan reads whole names,
+    """Which moved files a `.Rbuildignore` stops covering. The scan reads whole names,
     and a list of regular expressions (`^SESSION_RUNNER.*\\.md$`) names none, so it read the 3 comment lines of a real one and
     listed the harmless row. Read as R reads it (measured on R 4.6.1 with a probe package): every non-empty line is a
     case-insensitive regular expression, a line starting with # included (`# |ALPHA` left ALPHA.md out of the build); a line
@@ -605,10 +604,9 @@ def pattern_exposure(text, mapping):
     return {"exposed": sorted(exposed), "lines": lines, "unread": unread}
 
 
-# BL-101 F24 (plan 7.6, findings register): a root `.vscodeignore` is read as vsce reads it. vsce 3.9.2 (`out/package.js`,
+# A root `.vscodeignore` is read as vsce reads it. vsce 3.9.2 (`out/package.js`,
 # `collectFiles`, the same call as in 3.6.0) keeps a file when no line of the ignore list matches it or any negation does,
-# each line a minimatch pattern with `{ dot: true }` and no `matchBase`. Measured against minimatch 10.2.5 in S299 (the
-# adopter's own checkout; `f24-oracle.py`, `f24-differential.py`).
+# each line a minimatch pattern with `{ dot: true }` and no `matchBase`. Measured against minimatch 10.2.5.
 VSCE_PINNED = "vsce 3.9.2, minimatch 10.2.5"
 VSCE_DEFAULT_IGNORE = (  # `defaultIgnore` of vsce 3.9.2, in its order; none of them gets the `/**` a line of the file gets
     ".vscodeignore", "package-lock.json", "npm-debug.log", "yarn.lock", "yarn-error.log", "npm-shrinkwrap.json", ".editorconfig",
@@ -760,7 +758,7 @@ def vsce_ignore_list(text):
 
 
 def vscodeignore_exposure(text, mapping):
-    """BL-101 F24: which moved files a `.vscodeignore` stops covering, read as vsce reads it (`vsce_ignore_list`). A moved file
+    """Which moved files a `.vscodeignore` stops covering, read as vsce reads it (`vsce_ignore_list`). A moved file
     is exposed when it is ignored where it is and packaged where it goes. Same shape as `pattern_exposure`; vsce's default
     list is reported as line 0, last, and a line this tool does not read is counted."""
     covering, unread = vsce_ignore_list(text)
@@ -785,15 +783,15 @@ def scan_hits(root, moves, rewrites, tier):
     documents) are not hits; a file it rewrites is read as it will be once rewritten, so a directory it names in prose
     (`docs/methodology/`, which a rewrite of the paths in it leaves) is a hit and a path it has rewritten is not. A hook
     line that runs a moved tool is marked: that hook will refuse the migration commit. A line carrying `# layout: ok -- <reason>`
-    (BL-101 F15: the layout-aware ledger hook names the tool that way and tries three places for it) is listed, not marked.
+    (the layout-aware ledger hook names the tool that way and tries three places for it) is listed, not marked.
 
-    BL-101 F5: a file in a machine-read category (tests, proofs, scripts, config, and the CI and hook files) is also listed
+    A file in a machine-read category (tests, proofs, scripts, config, and the CI and hook files) is also listed
     in `paths`, every one, with its mentions, the mentions on non-comment lines, the names it carries and its first
     mention on a code line, because the 25 sites a category shows are the first 25 lines and one file can use them all.
     These are candidates: the scan reads names, never runs a file, so a name on a code line is necessary, not sufficient.
 
-    BL-101 F10: a root `.Rbuildignore` is also read for what its regular expressions cover (`pattern_exposure`), since a pattern
-    names no file the scan could find, and its row gains `patterns`. BL-101 F24: so is a root `.vscodeignore`, for what vsce's
+    A root `.Rbuildignore` is also read for what its regular expressions cover (`pattern_exposure`), since a pattern
+    names no file the scan could find, and its row gains `patterns`. So is a root `.vscodeignore`, for what vsce's
     glob matching covers (`vscodeignore_exposure`); a pattern list for any other program is listed and never judged."""
     root = Path(root)
     mapping = logical_map(moves, tier)
@@ -879,7 +877,7 @@ def scan_hits(root, moves, rewrites, tier):
                 visit(rel, f.read_text(encoding="utf-8", errors="replace"), "hooks", untracked=True)
             except OSError:
                 continue
-    # BL-101 F10, F24: the root .Rbuildignore (as R reads it) and the root .vscodeignore (as vsce reads it) are read for what
+    # The root .Rbuildignore (as R reads it) and the root .vscodeignore (as vsce reads it) are read for what
     # their patterns cover, whether or not they spell a name out; the row a file already has (from a name it spells out)
     # keeps its fields and gains `patterns`.
     root_tracked = tracked_files(root)
@@ -905,7 +903,7 @@ def scan_hits(root, moves, rewrites, tier):
     return out
 
 
-# BL-101 F30 (his call, S303: list only): a link from a project's live document to a file the move takes breaks, and the
+# A link from a project's live document to a file the move takes breaks, and the
 # tool's other lists name a moved path as text and never read a link as a link. Inline links, images and reference
 # definitions of the Markdown family are read; a fenced block is an example, not a link. Not seen: an HTML href, a link built
 # in code, a link in a document that is not Markdown (their paths are in the lists above when they name the file).
@@ -983,7 +981,7 @@ def live_links(root, moves, rewrites):
 
 def rehearse_shards(root, moves):
     """Move the shards in a throwaway clone and run each proof there, before and after: an older-format proof reads its
-    shard by a working-tree path and exits 2 once the shard moves (vscode_quarto_ext), while the trimmer's current proofs
+    shard by a working-tree path and exits 2 once the shard moves, while the trimmer's current proofs
     read git history and hold. A shard whose proof changes its exit code stays, with its proof. Returns (moves, left in
     place, what the rehearsal did)."""
     proofs = [m for m in moves if m["kind"] == "shard" and m["src"].endswith(".verify.sh")]
@@ -1066,7 +1064,7 @@ def build_report(project, tier, apply_mode):
         moves, more_left, report["rehearsal"] = rehearse_shards(root, moves)
         left += more_left
     elif moves:
-        # F32: the shard proofs run only on a run that can go on, so a REFUSED run's lists are the plan before them. `ran`
+        # The shard proofs run only on a run that can go on, so a REFUSED run's lists are the plan before them. `ran`
         # alone cannot say so (it is also False when there was nothing to rehearse), hence the marker; a refusal that comes
         # later (rewrite-unsafe) leaves the lists rehearsed and leaves no marker.
         report["rehearsal"]["skipped"] = "refused"
@@ -1199,7 +1197,7 @@ def links_cell(code, text):
 
 
 def run_checks(root, proofs, ledger):
-    """The read-only checks of plan 4.7.4, as data: bin/status, the two ledger checkers, check-links, every shard proof
+    """The read-only checks, as data: bin/status, the two ledger checkers, check-links, every shard proof
     (the exit histogram), and how far `git log --follow` reaches back from the ledger. Run from the project's root."""
     root = Path(root)
     out = {}
