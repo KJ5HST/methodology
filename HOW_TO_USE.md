@@ -743,7 +743,7 @@ Workstream prompts          ← Mission procedures (EXECUTE these)
 
 | Layer | Document | Read it to... | Length |
 |-------|----------|---------------|--------|
-| **Operating procedure** | `SESSION_RUNNER.md` (project root) | Know what to do RIGHT NOW, step by step | ~400 lines |
+| **Operating procedure** | `SESSION_RUNNER.md` (project root, or `methodology/`) | Know what to do RIGHT NOW, step by step | ~400 lines |
 | **Master framework** | `ITERATIVE_METHODOLOGY.md` | Understand WHY the steps exist | ~580 lines |
 | **Reference apparatus** | `FRAMEWORK_APPARATUS.md` | Fill in a session document, validate a scope, score a claim, write a ledger entry | ~535 lines |
 | **Workstream prompts** | e.g., `DEVELOPMENT_WORKSTREAM.md` | Know HOW to execute for a specific domain | Varies |
@@ -823,19 +823,20 @@ This mirrors a well-known finding in aviation safety: pilots who understand aero
 
 To use the session runner in your own project:
 
-1. **Place `SESSION_RUNNER.md` at the project root** (alongside your CLAUDE.md or equivalent agent instructions file).
+1. **Place `SESSION_RUNNER.md` at the project root** (alongside your CLAUDE.md or equivalent agent instructions file), or in a `methodology/` directory with the rest of the methodology files (`BOOTSTRAP.md` §Two layouts).
 
 2. **Reference it at the top of your agent instructions:**
    ```
    ## SESSION PROTOCOL — FOLLOW BEFORE DOING ANYTHING
    Read and follow SESSION_RUNNER.md step by step.
    ```
+   (In a `methodology/` project, write `methodology/SESSION_RUNNER.md`.)
 
 3. **Update the task-to-workstream mapping table** (Phase 1) to match your project's workstream prompts.
 
 4. **Update the failure modes table** with any tendencies specific to your project. The 27 documented modes are common to most AI agent work, but your project may surface additional ones.
 
-5. **Put the methodology framework in a known location** (e.g., `docs/methodology/`) so the session runner can reference it.
+5. **Put the methodology framework in a known location** (e.g., `docs/methodology/`, or `methodology/` beside the runner) so the session runner can reference it.
 
 The session runner is project-independent. The 4 phases and the failure modes table apply to any project using the iterative methodology. What changes per project is the task-to-workstream mapping and any project-specific failure modes.
 

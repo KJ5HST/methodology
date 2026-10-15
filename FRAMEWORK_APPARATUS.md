@@ -484,6 +484,10 @@ lossless. The tool's trigger is the only statement of *when* — these rules nam
 python3 methodology_trim.py --file CHANGELOG.md --check
 ```
 
+In a project that keeps its methodology files under `methodology/`, write
+`python3 methodology/methodology_trim.py --file methodology/CHANGELOG.md --check`
+(`SESSION_RUNNER.md` §Where the files are).
+
 `--check` evaluates the trigger, reports whether it fires, and never writes. For a project that has
 chosen not to archive, its report is information, not a fault. `--write` performs the trim; a dry
 run is the default. **It neither commits nor stages** — it leaves the live file modified and the new

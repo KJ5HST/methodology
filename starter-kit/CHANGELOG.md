@@ -8,7 +8,7 @@ out-of-band session missed. Taking an action — any commit, or any non-commit a
 not recording it is failure mode #27. Old entries may be archived, never deleted.
 
 **The rules** — how to add an entry, source tags, reading and archiving — are in
-[§The Action Ledger](docs/methodology/FRAMEWORK_APPARATUS.md#the-action-ledger), which `bin/sync`
+`FRAMEWORK_APPARATUS.md` §The Action Ledger, which `bin/sync`
 keeps current. ledger-format: 2 — keep this marker; `bin/status` reads it.
 
 <!-- METHODOLOGY-SEED-SENTINEL: fresh ledger, no entries yet. While this line is present AND
