@@ -14,8 +14,8 @@ migration note — never as drift, and sync never auto-overwrites it (BL-6 item 
 TRACKED files are compared against canonical and may report current / locally modified /
 N versions behind / missing.
 
-A project keeps its methodology files at its root (legacy) or under methodology/ (new): BL-101 phase P6,
-docs/planning/methodology-subdirectory-plan.md section 5A. Each project's layout is read, never guessed, and
+A project keeps its methodology files at its root (legacy) or under methodology/ (new). Each project's
+layout is read, never guessed, and
 named on a `layout:` line before the table; its rows are the files at the places that layout puts them. A
 project that holds the runner in both places is one `half-migrated` row, not a table in either layout. A seed
 that sits at the root of a migrated project is the project's own and is read where it is.
@@ -34,8 +34,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _manifest import DISTRIBUTION, TRACKED, SEED, SEED_FORMAT_MARKERS, NEW_LAYOUT  # noqa: E402  (bin/ on sys.path)
 from _manifest_reader import ManifestError, read_manifest, read_new_layout  # noqa: E402
 
-# A project keeps its methodology files at its root (legacy) or under methodology/ (new): the plan's
-# section 4.3. This block is the resolver, embedded byte for byte; the canonical suite asserts that.
+# A project keeps its methodology files at its root (legacy) or under methodology/ (new).
+# This block is the resolver, embedded byte for byte; the canonical suite asserts that.
 
 # --- layout resolver: BEGIN ---
 import os as _os

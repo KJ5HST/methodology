@@ -27,9 +27,9 @@ TRACKED), and the instance simply never appears as a dest, so it can never be a
 sync target — no special-case guard needed (B1 plan Decision 2).
 
 A project keeps its methodology files either where ``dest`` puts them (the legacy layout above) or one
-level down in ``methodology/`` (the new layout, BL-101). NEW_LAYOUT is the second table: for each ``src`` the
-``dest`` it takes in the new layout, flat under ``methodology/`` with ``workstreams/`` the one subdirectory
-(plan section 4.1). It is a table of literals, not a function, for the reason below.
+level down in ``methodology/`` (the new layout). NEW_LAYOUT is the second table: for each ``src`` the
+``dest`` it takes in the new layout, flat under ``methodology/`` with ``workstreams/`` the one subdirectory.
+It is a table of literals, not a function, for the reason below.
 
 Python 3 stdlib only; data-only module (no imports, no side effects).
 
@@ -89,7 +89,7 @@ DISTRIBUTION = [
      "docs/methodology/workstreams/TEMPLATE_CAMPAIGN.md", TRACKED),
 ]
 
-# The new layout (BL-101): where each file above lands in a project that keeps its methodology files under
+# The new layout: where each file above lands in a project that keeps its methodology files under
 # methodology/. Keyed by ``src``, which is unique. Every distributed file has exactly one entry, no two share a
 # destination, and every destination is under methodology/ (bin/_manifest_reader.py refuses a table that breaks
 # any of that, and a source with no table at all is read as one that predates the new layout).

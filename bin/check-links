@@ -19,9 +19,9 @@ DISTRIBUTION map to bin/_manifest.py — the single source of truth now shared w
 bin/sync, plan Decision 5).
 
 A project keeps its methodology files at its root (the legacy layout, the manifest's `dest` column) or one
-level down in methodology/ (the new layout, its NEW_LAYOUT table): BL-101 phase P6. `--layout` chooses which
+level down in methodology/ (the new layout, its NEW_LAYOUT table). `--layout` chooses which
 adopter tree is simulated, `legacy` (the default, so the gate and the message are unchanged), `new` or `both`.
-Since phase P9 the documents resolve in both: a reference that cannot be one relative link in both layouts is a
+The documents resolve in both: a reference that cannot be one relative link in both layouts is a
 bare name in a code span, not a link, and `--layout both` is green (bin/tests.sh holds it).
 
 Usage:  ./bin/check-links [--layout legacy|new|both] [--tree <adopter-project-dir>]
@@ -39,8 +39,8 @@ from _manifest import DISTRIBUTION, NEW_LAYOUT  # noqa: E402  (bin/ is on sys.pa
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# A project keeps its methodology files at its root (legacy) or under methodology/ (new): the plan's
-# section 4.3. This block is the resolver, embedded byte for byte; the canonical suite asserts that.
+# A project keeps its methodology files at its root (legacy) or under methodology/ (new).
+# This block is the resolver, embedded byte for byte; the canonical suite asserts that.
 
 # --- layout resolver: BEGIN ---
 import os as _os

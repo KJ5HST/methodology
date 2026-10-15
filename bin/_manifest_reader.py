@@ -17,7 +17,7 @@ overwriting an adopter's own copy. A src or dest that is absolute, carries a dri
 '..', names no file ('.'), lies inside .git, or holds a NUL byte is refused too: the source's
 manifest now decides where files are read and written, and a write into .git/hooks would run.
 
-The second table, NEW_LAYOUT (BL-101), is read the same way by read_new_layout: a dict literal from each
+The second table, NEW_LAYOUT, is read the same way by read_new_layout: a dict literal from each
 distributed file's src to the dest it takes in a project that keeps its methodology files under
 methodology/. It must name every file DISTRIBUTION names and no other, once each; no two may share a
 destination; each must pass the same path-safety test and lie under methodology/, where the layout
