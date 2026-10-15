@@ -115,7 +115,7 @@ class TestDetection(unittest.TestCase):
         self.assertEqual(r["reason"], "heuristic")
 
     def test_pure_latex_research_via_toolchain(self):
-        # .tex isn't counted as docs (BL-34 added .qmd/.rmd to DOC_EXTS, but .tex stays out), so
+        # .tex isn't counted as docs (.qmd/.rmd are in DOC_EXTS, but .tex stays out), so
         # doc_loc≈0; only toolchain_present rescues it. Real-scan proof: TestFrameworkInstalledExclusion
         # .test_a_pure_quarto_repo_below_doc_thresholds_still_doc_only_via_toolchain.
         r = md.detect_doc_only(self.p, files(src=0, docs_loc=0, docs_count=0),
@@ -174,14 +174,14 @@ class TestDetection(unittest.TestCase):
 
 
 class TestBL34LanguageAndDocExtensions(unittest.TestCase):
-    """BL-34 — found while answering an operator question about `nprcgenekeepr`'s "Code by
+    """Found while answering a question about an adopter project's "Code by
     Language" card. Two independent gaps in the same three constants:
     - `.r` was already in SOURCE_EXTS (R always counted toward Source LOC) but had no LANG_MAP
       entry, so it never got its own "Code by Language" row (603 files / 77,773 LOC, invisible).
     - `.qmd`/`.rmd` were in neither SOURCE_EXTS nor DOC_EXTS, so a file with either extension
       outside a `docs/` path fell through categorize_file's whole ladder to "other" — not source,
       not docs, not even LOC-counted (LOC is skipped entirely for "other").
-    RED-first (Learning #12): both gaps confirmed by direct execution against `../nprcgenekeepr`
+    RED-first (Learning #12): both gaps confirmed by direct execution against an adopter project
     before either constant was touched.
     """
 
@@ -2354,7 +2354,7 @@ class TestQualityGateSignals(unittest.TestCase):
         return p, self._git(p, "rev-parse", "--short", "HEAD")
 
     def test_a_merged_lineage_is_not_read_as_one_line(self):
-        # BL-99. `git log -- <manifest>` without --first-parent follows BOTH parents of a merge whose
+        # `git log -- <manifest>` without --first-parent follows BOTH parents of a merge whose
         # manifest matches neither, so it lists the two lineages interleaved by commit date, and the
         # fold compares each row with the next older ROW: the newer of two sibling commits was
         # compared with a commit that is not its ancestor. Here the mainline (120, tightened from
@@ -2499,29 +2499,27 @@ class TestFmtRatioAndTwins(unittest.TestCase):
 
     def test_dashboard_version(self):
         """⚠ PINNED TWICE ON PURPOSE — the module attribute AND the starter-kit source text. Bump
-        BOTH or this goes red; S115 lost a run to changing one. 2.19.0 is BL-88: the Class B
-        read-cap row asserts only what it evaluated (P1) and names a remedy it has read from the
-        project's own trimmer source (P2) -- changed output on a distributed tool, so MINOR. P1
-        shipped without a bump; this one carries both. (2.18.0, the resync's merge of upstream's
-        2.11.x line, is described in git: `git log -S'2.18.0'` on this file.) 2.20.0 is the 2026-10
-        resync (BL-95, D5): the `.gitattributes` seed becomes installed content -- changed output
-        on a distributed tool, so MINOR. 2.21.0 is BL-99: the manifest-history walk is first-parent,
+        BOTH or this goes red. 2.19.0: the Class B
+        read-cap row asserts only what it evaluated and names a remedy it has read from the
+        project's own trimmer source -- changed output on a distributed tool, so MINOR.
+        2.20.0: the `.gitattributes` seed becomes installed content -- changed output
+        on a distributed tool, so MINOR. 2.21.0: the manifest-history walk is first-parent,
         so a merged lineage no longer prints loosenings nobody caused -- changed output, so MINOR.
-        2.22.0 is BL-101 P5: the dashboard reads a project that keeps its methodology files under
+        2.22.0: the dashboard reads a project that keeps its methodology files under
         methodology/ as it reads one that keeps them at the root -- changed output, so MINOR."""
         self.assertEqual(md.DASHBOARD_VERSION, "2.22.0")
         starter_src = Path(STARTER_PY).read_text(encoding="utf-8")
         self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.22\.0"', starter_src, re.MULTILINE),
                         "starter-kit twin must also declare DASHBOARD_VERSION 2.22.0")
 
-    # NOTE: upstream's `TestCliRemedyProportionality` (issue #67 / PR #73) is deliberately not
-    # merged here -- this fork's own, earlier issue-#67 fix (S62) took a different, more general
-    # design (a `--sync [DIR]` single-project scope, not a bare `cp`), and its behavior is already
+    # NOTE: `TestCliRemedyProportionality` (issue #67 / PR #73) is deliberately not carried here --
+    # the `--sync [DIR]` single-project scope took a different, more general
+    # design (not a bare `cp`), and its behavior is already
     # covered more thoroughly by the existing Row 13/14 tests below (`test_sync_accepts_a_single_
     # target_directory`, `test_bare_dry_run_without_sync_errors_and_writes_nothing`,
-    # `test_sync_end_to_end_via_main_writes_only_the_target`, etc.). Upstream's own
+    # `test_sync_end_to_end_via_main_writes_only_the_target`, etc.). The earlier
     # `test_stale_warning_leads_with_the_project_scoped_remedy` asserts a literal `"cp "` in the
-    # stale-copy message, which this fork's `--sync [DIR]`-based message does not contain by
+    # stale-copy message, which the `--sync [DIR]`-based message does not contain by
     # design -- porting that assertion would fail against a correct, already-tested design, not
     # catch a real defect.
 
@@ -2639,7 +2637,7 @@ def installed_scanner(loc=3070, version="2.10.0", marker=True):
 
 
 def installed_trimmer(loc=1600, version="1.0.0", marker=True):
-    """Text that stands in for the ledger trimmer `bin/sync` installs at an adopter's root (S39').
+    """Text that stands in for the ledger trimmer `bin/sync` installs at an adopter's root.
 
     The SECOND executable adopters receive, and it proves itself by a DIFFERENT constant than the
     scanner does. Measured against the real tool rather than assumed:
@@ -2649,7 +2647,7 @@ def installed_trimmer(loc=1600, version="1.0.0", marker=True):
                  'def assess_risks' https://github.com/KJ5HST/methodology; do \\
           grep -c -- "$s" starter-kit/methodology_trim.py; done                        -> 0 0 0 0 0
 
-    So the pre-S39' predicate answered False for this file on BOTH of its arms, and putting the
+    So the earlier predicate answered False for this file on BOTH of its arms, and putting the
     name on the exclusion tuple alone would not have changed that — the content gate is the work.
 
     Those two are ZERO-counts, which is why they are quoted and the tool's line count and the
@@ -2691,13 +2689,13 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
                         "commit", "-q", "-m", "init"], check=True)
         return p
 
-    # The synced doc corpus: a Quarto book. Before BL-34, .qmd files were NOT doc-extensions, so
-    # the render-toolchain arm of the disjunction was the ONLY thing that could carry this fixture
-    # — the exact source_loc≈0 research repo BL-5 exists for. BL-34 added .qmd/.rmd to DOC_EXTS, so
+    # The synced doc corpus: a Quarto book. If .qmd files were NOT doc-extensions,
+    # the render-toolchain arm of the disjunction would be the ONLY thing that could carry this fixture
+    # — the exact source_loc≈0 research repo the doc-only rule exists for. Since .qmd/.rmd are in DOC_EXTS,
     # this two-chapter fixture's own doc_loc (~400) now ALSO clears DOC_ONLY_DOC_LOC_MIN on its
     # own — it still proves is_doc_only stays True, just no longer in isolation from the corpus
     # arm. `test_a_pure_quarto_repo_below_doc_thresholds_still_doc_only_via_toolchain` below is the
-    # fixture that isolates the toolchain arm post-BL-34.
+    # fixture that isolates the toolchain arm.
     QUARTO = {
         "_quarto.yml": "project:\n  type: book\n",
         "ch1.qmd": "# Ch1\n" + "prose\n" * 200,
@@ -2705,8 +2703,8 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
         "README.md": "# Monograph\n\nA Quarto book.\n" * 4,
     }
 
-    # A single short chapter — doc_loc and doc_files both stay under BL-5's thresholds even with
-    # .qmd counted as docs (BL-34), so is_doc_only can ONLY be reached via render.toolchain_present.
+    # A single short chapter — doc_loc and doc_files both stay under the thresholds even with
+    # .qmd counted as docs, so is_doc_only can ONLY be reached via render.toolchain_present.
     QUARTO_MINIMAL = {
         "_quarto.yml": "project:\n  type: book\n",
         "index.qmd": "# Index\none line of prose\n",
@@ -2724,7 +2722,7 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
                            "the excluded LOC must remain visible, not vanish from the inventory")
 
     def test_a_pure_quarto_repo_below_doc_thresholds_still_doc_only_via_toolchain(self):
-        """BL-34 guard-the-guard: adding .qmd to DOC_EXTS must not make the toolchain arm of the
+        """Guard-the-guard: adding .qmd to DOC_EXTS must not make the toolchain arm of the
         corpus disjunction unreachable through real scanning. QUARTO_MINIMAL's own doc_loc/doc_files
         are asserted BELOW both thresholds, so is_doc_only=True here can only be explained by
         render.toolchain_present — the same real-scan proof QUARTO used to carry alone."""
@@ -2898,9 +2896,9 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
         hardcoding it here would re-introduce exactly the duplicated cross-reference the
         manifest-agreement test exists to prevent."""
         src_for = {dest: src for src, dest, _d in self._manifest().DISTRIBUTION}
-        # 6 since the resync's stage M2 (S177): upstream's quality ratchet ships quality_ratchet.py
+        # 6 once upstream's quality ratchet ships quality_ratchet.py
         # and its .quality-gates.json seed, and the loop below checks both against their real files.
-        # 7 since the 2026-10 resync (BL-95 R1): upstream's v4.1 `.gitattributes` seed.
+        # 7 with upstream's v4.1 `.gitattributes` seed.
         self.assertEqual(len(md.FRAMEWORK_INSTALLED_SOURCE), 7,
                          "population guard: update this test's expectations deliberately when a "
                          "further executable ships, rather than letting the loop silently cover less")
@@ -2937,11 +2935,11 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
             Path("methodology_dashboard.py"), p / "methodology_dashboard.py"))
         self.assertGreater(md.collect_all(p)["tests"]["source_loc"], 200)
 
-    # --- S39': the SECOND installed executable ------------------------------------------------
+    # --- The SECOND installed executable ------------------------------------------------
     #
-    # Layer 7 fixed this defect for the scanner. Shipping the trimmer re-opens it for a file that
+    # The scanner's own exclusion fixed this defect for the scanner. Shipping the trimmer re-opens it for a file that
     # proves itself by a different constant, so the fix does not generalize for free: the two
-    # RED-first tests below were driven against the pre-S39' scanner and watched to FAIL
+    # RED-first tests below were driven against the earlier scanner and watched to FAIL
     # (doc_only=False, source_loc=1632, the HIGH "No test infrastructure" risk back).
 
     def test_a_synced_doc_repo_with_the_trimmer_is_still_doc_only(self):
@@ -2978,7 +2976,7 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
 
     def test_a_lookalike_trimmer_without_its_version_constant_is_not_excluded(self):
         """GUARD-THE-GUARD, and green before the fix as well as after — it constrains the fix, it
-        does not prove it (S37 gotcha 4: an absence assertion is trivially true before the name
+        does not prove it (an absence assertion is trivially true before the name
         exists). It earns its place by producer mutation: deleting the trimmer's content check
         makes it fail. An adopter's own 1,000-line `methodology_trim.py` is THEIRS."""
         app = ("# our own ledger trimmer\n" + "y = 2\n" * 1000)
@@ -3535,16 +3533,15 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
 
 
 class TestD4ReadCapTruncation(unittest.TestCase):
-    """Plan D4(b) (`docs/planning/framework-context-cost-plan.md:391`), and the one defect of the
-    three that is NOT a mechanical edit.
+    """The agent-read-cap check: the one of three defects that is NOT a mechanical edit.
 
     The literal reading — put `.md` into `SOURCE_EXTS` so the existing "Large files detected" risk
-    can see it — regresses BL-5, whose ratified `test_large_file_ext_filter` (below, untouched)
+    can see it — regresses the large-file check, whose ratified `test_large_file_ext_filter` (below, untouched)
     asserts a 2,500-line chapter must NOT trip it, and whose narrowing was earned by measurement.
     A SECOND risk is used instead, because the two share only the adjective:
 
-      BL-5's question       "is this MODULE unwieldy?"   — structure; false for a chapter
-      D4(b)'s question      "does a file a session must read IN FULL still fit in one read?"
+      code-smell question   "is this MODULE unwieldy?"   — structure; false for a chapter
+      read-cap question     "does a file a session must read IN FULL still fit in one read?"
                                                         — harness behaviour; true or false
                                                           whatever the file is for
 
@@ -3619,16 +3616,16 @@ class TestD4ReadCapTruncation(unittest.TestCase):
         self.assertLess(md.READ_CAP_BYTES, md.READ_REFUSE_BYTES,
                         "the soft cap must sit below the hard refusal, or the refusal branch is "
                         "unreachable and its row is dead code")
-        # PHASE C2 pins the Class A pair the same way, by parsing the OTHER tool's source. Same
+        # The Class A pair is pinned the same way, by parsing the OTHER tool's source. Same
         # discipline, same limit: this keeps the two copies CONSISTENT and says nothing about
-        # whether the pair is right, which only plan Appendix A can answer.
+        # whether the pair is right, which only a fresh measurement can answer.
         mf = re.search(r"^CLASS_A_FIRE_BYTES\s*=\s*(\d+)\s*\*\s*(\d+)", trim_src, re.MULTILINE)
         self.assertIsNotNone(mf, "methodology_trim.py must declare CLASS_A_FIRE_BYTES")
         self.assertEqual(md.CLASS_A_FIRE_BYTES, int(mf.group(1)) * int(mf.group(2)))
         ms = re.search(r"^CLASS_A_STOP_BYTES\s*=\s*(\d+)\s*\*\s*(\d+)", trim_src, re.MULTILINE)
         self.assertIsNotNone(ms, "methodology_trim.py must declare CLASS_A_STOP_BYTES")
         self.assertEqual(md.CLASS_A_STOP_BYTES, int(ms.group(1)) * int(ms.group(2)))
-        # AND THE BUDGET, which is the half option C1 moved. It is written `192 * 1024`, so a
+        # AND THE BUDGET, which is the half the later change moved. It is written `192 * 1024`, so a
         # digits-only regex would miss it -- the same trap _parse_trim_budget exists for. Reusing
         # that parser here would make this an identity against the module under test, so the
         # arithmetic is redone independently.
@@ -3664,7 +3661,7 @@ class TestD4ReadCapTruncation(unittest.TestCase):
         install them and keep them current. Flagging one would re-earn Layer 7's narrowing at
         fleet scale — a single canonical breach lighting up every adopter at once over a file they
         cannot edit. Asserted against `bin/_manifest.py` itself, so the two sides are genuinely
-        independent (fork Learning #16) rather than two spellings of one comprehension."""
+        independent rather than two spellings of one comprehension."""
         manifest_src = (Path(STARTER_PY).parent.parent / "bin" / "_manifest.py").read_text(
             encoding="utf-8")
         tracked = set(re.findall(r'\(\s*"[^"]+"\s*,\s*"([^"]+)"\s*,\s*TRACKED\s*\)', manifest_src))
@@ -3724,7 +3721,7 @@ class TestD4ReadCapTruncation(unittest.TestCase):
     def test_boundary_is_exactly_the_cap(self):
         """Pins the comparison itself, both sides. Without this the `>` -> `>=` producer mutant
         survived the entire suite: nothing exercised a file of exactly the cap, so the boundary
-        was free to move by one in either direction undetected. Fork Learning #16's lesson one level
+        was free to move by one in either direction undetected. The same lesson one level
         down — the predicate was covered, its EDGE was not.
 
         Phase B moved the axis, and BOTH boundaries now need this treatment: the soft cap and the
@@ -3786,7 +3783,7 @@ class TestD4ReadCapTruncation(unittest.TestCase):
         self.assertFalse(any("read cap" in r["description"] for r in m["scores"]["risks"]))
 
     def test_one_row_per_breaching_file(self):
-        """PHASE C2 SPLIT THE SEVERITY, NOT THE POPULATION. Still one row per file — that half is
+        """THE SEVERITY WAS SPLIT, NOT THE POPULATION. Still one row per file — that half is
         untouched and is what this test was written for. What changed is the blanket
         `all(... == "high")`, which stopped being true the moment the rows became per-class: a
         Class A ledger over the one-read cap is the adjudicated case and reports `low`.
@@ -3817,7 +3814,7 @@ class TestD4ReadCapTruncation(unittest.TestCase):
     def test_bl5_code_smell_row_is_untouched_and_independent(self):
         """Guard-the-guard, from the NEW signal's side. The two risks must coexist without either
         suppressing the other, and their strings must share no substring, so the diagnostic trail
-        that produced BL-5's and Layer 7's narrowings survives in `dashboard_history.jsonl`."""
+        that produced the large-file check's narrowings survives in `dashboard_history.jsonl`."""
         m = md.collect_all(self._repo({"CHANGELOG.md": self._bytes(md.READ_CAP_BYTES + 2),
                                        "app.py": "x = 1\n" * 2500}))
         descs = [r["description"] for r in m["scores"]["risks"]]
@@ -3857,7 +3854,7 @@ class TestD4ReadCapTruncation(unittest.TestCase):
 
 
 class TestD4RootCommitDate(unittest.TestCase):
-    """Plan D4(a) (`docs/planning/framework-context-cost-plan.md:391`).
+    """The root-commit-date fix.
 
     `git log --reverse --format=%ai -1` looks like "the oldest commit" and is not: git applies
     `-n1` while walking, BEFORE `--reverse` re-orders what survived, so it returns the NEWEST
@@ -3871,7 +3868,7 @@ class TestD4RootCommitDate(unittest.TestCase):
     def _dated_repo(self, dates):
         """A repo with one commit per date, in the order given. Dates are pinned through the
         environment, so the fixture's own history is a REAL git history and the assertion reads
-        it back through the scanner rather than being handed it (fork Learning #16)."""
+        it back through the scanner rather than being handed it."""
         td = tempfile.TemporaryDirectory()
         self.addCleanup(td.cleanup)
         p = Path(td.name)
@@ -3968,7 +3965,7 @@ class TestD4RootCommitDate(unittest.TestCase):
 
 
 class TestD4SelfExclusion(unittest.TestCase):
-    """Plan D4(c): `EXCLUDE_DIRS` contained the literal `"methodology"`, so in portfolio mode the
+    """`EXCLUDE_DIRS` contained the literal `"methodology"`, so in portfolio mode the
     instrument was structurally blind to its own home — the one repo whose methodology signals it
     is best placed to check, and the subject of upstream issue #59.
 
@@ -4039,7 +4036,7 @@ class TestD4SelfExclusion(unittest.TestCase):
 
 
 class TestBL29SelfScanRoot(unittest.TestCase):
-    """BL-29: D4(c) fixed the PORTFOLIO-mode self-scan (TestD4SelfExclusion above) but left a
+    """The PORTFOLIO-mode self-scan was fixed (TestD4SelfExclusion above) but left a
     different self-scan gap open. `ROOT = Path(__file__).parent` is the script's own directory --
     correct for every adopter-installed copy and the portfolio-root copy, which all sit exactly
     where `bin/_manifest.py` / `sync_dashboards()` place them, at the root of what they scan. The
@@ -4122,12 +4119,11 @@ class TestBL29SelfScanRoot(unittest.TestCase):
 
 
 class TestIssue67ScopedSync(unittest.TestCase):
-    """Upstream issue #67 (docs/planning/issue67-fork-side-fix-plan.md, S57 proposed / S58
-    ratified): `check_stale_version()`'s only remedy was a portfolio-wide `--sync` for a one-file
+    """Upstream issue #67: `check_stale_version()`'s only remedy was a portfolio-wide `--sync` for a one-file
     problem, `sync_dashboards()` had no target scope and no confirm-before-overwrite gate, and a
     bare `--dry-run` silently fell through to a full scan-and-write. RED-FIRST throughout
     (Learning #12): every assertion below was run against the unpatched functions and watched to
-    fail for the reason named in its own docstring, matching the plan's own SS7 test table by row
+    fail for the reason named in its own docstring, matching the design's own test table by row
     number. Fixture idiom matches the existing TestD4SelfExclusion precedent
     (test_sync_does_not_target_the_authoring_repo): a real temp directory tree + real `git init`,
     never a stubbed discover_projects."""
@@ -4328,10 +4324,10 @@ class TestIssue67ScopedSync(unittest.TestCase):
                          canon.read_text(encoding="utf-8"))
         self.assertNotIn("SKIPPED", out)
 
-    # --- Row 12: D4, dry-run must preview the gate honestly --------------------------------------
+    # --- Row 12: dry-run must preview the gate honestly --------------------------------------
 
     def test_sync_dry_run_previews_skips_accurately(self):
-        """Row 12: the D4 fix. Every design candidate's own dry-run computed the gate INSIDE the
+        """Row 12: the fix. Every design candidate's own dry-run computed the gate INSIDE the
         dry_run branch, so a preview never showed [SKIPPED] and a later real run without --force
         wrote less than the preview promised. RED with TypeError against unpatched code (no
         `target`/`force` kwargs to exercise the gate through in the first place)."""
@@ -4433,10 +4429,10 @@ TRIM_PY = os.path.join(os.path.dirname(HERE), "starter-kit", "methodology_trim.p
 def _load_trimmer():
     """The trimmer as a module, for use as an INDEPENDENT operand only.
 
-    The dashboard never imports it -- that is the whole architecture (§7.1: interrogate by
+    The dashboard never imports it -- that is the whole architecture (interrogate by
     regex, without importing). These tests do, precisely so that the value the dashboard parsed
     out of the tool's SOURCE TEXT can be compared against the value the tool itself defines.
-    Two spellings of one comprehension would assert nothing (fork Learning #16)."""
+    Two spellings of one comprehension would assert nothing."""
     spec = importlib.util.spec_from_file_location("methodology_trim_under_test", TRIM_PY)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -4444,15 +4440,15 @@ def _load_trimmer():
 
 
 class TestS38TrimTriggerRow(unittest.TestCase):
-    """Queue item S38 -- the conditional trim-trigger row (design §7, §11 Phase 3).
+    """The conditional trim-trigger row.
 
     RED-FIRST, and watched: every assertion below was run against the pre-change scanner
     (`git show HEAD:tools/methodology_dashboard.py`) and observed to fail -- the collector,
     the constants and the metrics key do not exist there, so each fails with AttributeError or
     KeyError rather than passing vacuously.
 
-    The design says (§1.3) that the dashboard "reads the number rather than re-deriving it" and
-    in the same paragraph makes this session owe an AGREEMENT TEST against `--check`. Those two
+    The design says that the dashboard "reads the number rather than re-deriving it" and
+    in the same paragraph owes an AGREEMENT TEST against `--check`. Those two
     cannot both be honoured: a number obtained BY parsing `--check` makes the agreement test an
     identity that cannot fail. The dashboard therefore computes independently, and
     test_headroom_agrees_with_a_real_check_run is a test that can actually go red.
@@ -4563,7 +4559,7 @@ class TestS38TrimTriggerRow(unittest.TestCase):
     def test_no_rate_threshold_survives_in_either_tool(self):
         """WHAT THIS REPLACED, and why the replacement is an absence. This used to pin
         `md.TRIM_LINE_FIRE_BELOW` against the trimmer's `LINE_FIRE_BELOW` -- a SECOND distributed
-        copy of design §5.2's rate rule. Phase B deleted the rule from both tools rather than
+        copy of the design's rate rule. The rule was deleted from both tools rather than
         re-tuning it, so the agreement to assert is that neither has re-grown one: a reporter
         advertising a threshold the remedy no longer has is exactly the drift the original pin
         existed to catch, one level up."""
@@ -4649,7 +4645,7 @@ class TestS38TrimTriggerRow(unittest.TestCase):
         nothing checks that it says anything useful. It must name the FILE it was computed
         against (a generic noun in this position once misdirected an adopter) and must not name
         a command the adopter does not have."""
-        # PHASE C2: sized off CLASS_A_FIRE_BYTES, not READ_CAP_BYTES. This is a Class A ledger and
+        # Sized off CLASS_A_FIRE_BYTES, not READ_CAP_BYTES. This is a Class A ledger and
         # that is now the arm that fires it; at the old size the branch stays silent and the
         # "must still speak" assertion below fails on a fixture precondition rather than on the
         # behaviour it is guarding.
@@ -4668,7 +4664,7 @@ class TestS38TrimTriggerRow(unittest.TestCase):
     def test_the_silent_watched_ledger_state_can_no_longer_OCCUR(self):
         """WHAT THIS REPLACED. Two tests used to guard a `low` advisory -- "watched but
         unmeasured" -- that fired where NEITHER half spoke: no archive, so the RATE had no
-        baseline, and no trimmer, so no budget. Decision D4 forbids reporting a 0 from an unread
+        baseline, and no trimmer, so no budget. The design forbids reporting a 0 from an unread
         source as a clean state, and that was the state which met the description.
 
         Phase B removed the STATE, not just the row, so the honest assertion is that the
@@ -4731,10 +4727,10 @@ class TestS38TrimTriggerRow(unittest.TestCase):
                          "asserts nothing")
         self.assertNotIn("is not installed", "\n".join(descs))
 
-    # --- §1.3's owed agreement test -------------------------------------------------------------
+    # --- The owed agreement test -------------------------------------------------------------
 
     def test_read_verdict_agrees_with_a_real_check_run(self):
-        """§1.3's owed agreement test, re-pointed by Phase B onto the metric that replaced the
+        """The owed agreement test, re-pointed onto the metric that replaced the
         rate. The two operands stay genuinely independent -- the left is computed by this module
         from `stat()`, the right is parsed out of a real subprocess run of the OTHER tool, which
         measures `len(text.encode())` -- so this can fail, and it fails under any drift in either
@@ -4755,7 +4751,7 @@ class TestS38TrimTriggerRow(unittest.TestCase):
             proc = subprocess.run(
                 ["python3", TRIM_PY, "--file", rel, "--check"],
                 cwd=str(self.REPO), capture_output=True, text=True, timeout=120)
-            # PHASE C2 RE-POINTED THIS REGEX, and the reason is the whole point of the test.
+            # THE REGEX WAS RE-POINTED, and the reason is the whole point of the test.
             # The row now names the threshold ACTUALLY IN FORCE, which for a root Class A ledger
             # is the archive threshold and not the one-read cap. Matching only the old wording
             # would have made this test fail loudly (it did) rather than quietly agree about a
@@ -5154,7 +5150,7 @@ class TestS38TrimTriggerRow(unittest.TestCase):
         self.assertEqual(trim_metrics["signals"], [])
         self.assertEqual(trim_metrics["ledgers"], [])
 
-    # --- the EDGES, not only the predicates (S37's gotcha 5) ------------------------------------
+    # --- the EDGES, not only the predicates ------------------------------------
 
     def _exact(self, base_lines, base_records, live_lines, live_records, trimmer=None):
         """A repo whose line metric lands on an arithmetic point I choose.
@@ -5197,7 +5193,7 @@ class TestS38TrimTriggerRow(unittest.TestCase):
         mutant that survived the whole suite one session ago on this very signal, so the exact
         boundary is exercised deliberately.
 
-        PHASE C2 MOVED THE BOUNDARY THIS PAIR GUARDS, and the rename is part of the change: these
+        THE THRESHOLD CHANGE MOVED THE BOUNDARY THIS PAIR GUARDS, and the rename is part of the change: these
         ledgers are Class A, and the arm that decides for them is CLASS_A_FIRE_BYTES. Testing the
         old constant here would have kept a green pair guarding a boundary the collector no longer
         keys on -- true arithmetic about a dead threshold."""
@@ -5216,9 +5212,9 @@ class TestS38TrimTriggerRow(unittest.TestCase):
         self.assertTrue(led["fires"])
 
     def test_a_class_a_ledger_BETWEEN_the_cap_and_the_threshold_stays_QUIET(self):
-        """THE BAND PHASE C2 CREATED, and the assertion that proves the move actually happened.
+        """THE BAND THE THRESHOLD CHANGE CREATED, and the assertion that proves the move actually happened.
 
-        Before C2 this size fired. It is now the adjudicated band: past the one-read cap, so a
+        Before the change this size fired. It is now the adjudicated band: past the one-read cap, so a
         whole-file read truncates, but nowhere near the point where archiving is worth doing.
         Without this test the pair above would pass equally well against an implementation that
         simply never fires."""
@@ -5272,21 +5268,21 @@ class TestS38TrimTriggerRow(unittest.TestCase):
         """`medium` -> `critical` and `low` -> `high` both survived the suite. Severity is not
         decoration here: worst_risk() drives the portfolio row, the terminal colour and the
         High+ Risk count, so a wrong tier is a wrong dashboard for every project."""
-        # THE SYNTHETIC HALF RUNS FIRST, AND THAT ORDER IS THE POINT -- S128. This half depends
+        # THE SYNTHETIC HALF RUNS FIRST, AND THAT ORDER IS THE POINT. This half depends
         # on no live file at all, but it used to sit BELOW the `skipTest` that guards the live
         # half, so whenever this repo's own trigger fell quiet the skip aborted the method and
         # took the synthetic pin with it. That is not hypothetical: it is exactly how this test
-        # hid a dead fixture for three days. Phase C2 (0afe9d6) re-denominated the Class A read
+        # hid a dead fixture for three days: a change re-denominated the Class A read
         # arm and re-sized this same `READ_CAP_BYTES + 2` fixture in two sibling tests, missed
-        # this one, and its own 287/287 run could not see the miss -- C2 silenced the live rows,
-        # so this method skipped and never reached the stale line. It surfaced only at ccfbe1c,
+        # this one, and its own run could not see the miss -- the change silenced the live rows,
+        # so this method skipped and never reached the stale line. It surfaced only later,
         # when HANDOFFS.md crossed 196,608 B and un-muted it. A skip that covers assertions it
         # has no bearing on is a mute button, so the guard now covers only what it is about.
         #
-        # The `low` tier went with the "watched but unmeasured" advisory Phase B deleted, so the
+        # The `low` tier went with the "watched but unmeasured" advisory that was deleted, so the
         # only severity this row can now author is `medium`. Pinned from the other side: a
         # firing ledger with no trimmer must still be advisory, never escalated. At
-        # READ_CAP_BYTES + 2 that ledger fires NEITHER arm post-C2 (the byte arm is None here --
+        # READ_CAP_BYTES + 2 that ledger fires NEITHER arm (the byte arm is None here --
         # no trimmer, no budget), so the signal set came back EMPTY and the severity assertion
         # went vacuous in the only direction that matters: a set with nothing in it can never
         # contain the wrong tier. Both fixture preconditions are therefore asserted separately
@@ -5336,11 +5332,11 @@ class TestS38TrimTriggerRow(unittest.TestCase):
             # that actually fired and the absence of the one that did not, or the row could quote
             # a threshold nothing tested against.
             #
-            # THE PARAGRAPH HERE UNTIL S128 DESCRIBED A STATE THAT NO LONGER EXISTS, and it is
+            # THE PARAGRAPH THAT STOOD HERE DESCRIBED A STATE THAT NO LONGER EXISTS, and it is
             # recorded rather than merely deleted because it is what made the stale assertion
             # below look reasonable. It said the two arms had "DIFFERENT thresholds -- the
             # one-read cap is the lower -- so a ledger can fire on the read arm alone, and this
-            # repo's own CHANGELOG.md is in exactly that state." Phase C2 falsified both halves:
+            # repo's own CHANGELOG.md is in exactly that state." The threshold change falsified both halves:
             # the read arm is CLASS_A_FIRE_BYTES, which on this repo is BYTE-EQUAL to the
             # trimmer's default budget (196,608 == 196,608), so the arms move together and
             # CHANGELOG.md fires BOTH. The `else` branch just below is therefore unreachable on
@@ -5361,9 +5357,9 @@ class TestS38TrimTriggerRow(unittest.TestCase):
                 # No ledger in this repo is past 262,144 B today, so nothing would have caught it
                 # -- test_the_refusal_advisory_says_nothing_is_delivered exercises it synthetically.
                 self.assertIn("{:,} B HARD REFUSAL".format(md.READ_REFUSE_BYTES), d, rel)
-                # PHASE C2 EMPTIED THIS GUARD AND IT STAYED GREEN THAT WAY. It read
+                # THE THRESHOLD CHANGE EMPTIED THIS GUARD AND IT STAYED GREEN THAT WAY. It read
                 # `assertNotIn("one-read budget", ...)`, which was the read arm's own wording
-                # until C2 reworded it; `collect_trim_metrics` has not emitted that substring
+                # until the rewording; `collect_trim_metrics` has not emitted that substring
                 # since (the only two sites are the D4(b) risk row, a different function), so the
                 # guard could no longer fail for any producer. The PROPERTY it was defending is
                 # live and still worth defending -- `refused` and `read_fires` are exclusive
@@ -5414,7 +5410,7 @@ class TestS38TrimTriggerRow(unittest.TestCase):
         self.assertNotIn("Class A archive threshold", d,
                          "a refused file is not a merely-oversized one; emitting both gives one "
                          "file two contradictory remedies")
-        # PHASE C2 RE-SIZED AND RE-WORDED THIS CONTROL. It used to sit at READ_CAP_BYTES + 2 and
+        # THIS CONTROL WAS RE-SIZED AND RE-WORDED. It used to sit at READ_CAP_BYTES + 2 and
         # grep for "one-read budget"; at the new arm that size emits NOTHING, so the control went
         # empty and the assertion failed -- correctly, because an empty control cannot show the two
         # branches are distinct. It now sits just past the Class A arm, where the non-refusal
@@ -5427,7 +5423,7 @@ class TestS38TrimTriggerRow(unittest.TestCase):
         self.assertNotIn("HARD REFUSAL", d2)
 
     def test_the_named_tool_must_content_verify_not_merely_exist(self):
-        """§7.2's detection contract is `.is_file()` AND a content check by regex, and dropping
+        """The detection contract is `.is_file()` AND a content check by regex, and dropping
         the second half survived the suite. A bare existence probe accepts an adopter's unrelated
         same-named script and then prints a command against it."""
         p = self._repo({
@@ -5470,7 +5466,7 @@ class TestS38TrimTriggerRow(unittest.TestCase):
 
         GUARD-THE-GUARD, and labelled: this is the ONE test in this class that also passes
         against the pre-change scanner, because score_health never read `trim` there either. A
-        green absence-assertion is not coverage (S37's gotcha 4), so it earns its place by
+        green absence-assertion is not coverage, so it earns its place by
         producer mutation instead -- adding `- 2 * len(metrics["trim"]["signals"])` to
         score_health's total was applied and observed to fail this test (72 != 68). It is a
         forward tripwire against a later edit quietly turning an advisory into a penalty."""
@@ -5483,14 +5479,14 @@ class TestS38TrimTriggerRow(unittest.TestCase):
 
 
 class TestPhaseC1ReadCapClasses(unittest.TestCase):
-    """Phase C1 of `docs/planning/read-cap-phase-c-plan.md` (BL-51) -- the watched population
+    """The partition change -- the watched population
     becomes TWO CLASSES, and each guard finally claims something true of the files it watches.
 
-    WHAT THIS PHASE DELIBERATELY DOES NOT DO: move a threshold. Plan section 8 says option A1
-    "changes no threshold and cannot degenerate anything" and section 9's Phase C1 criterion names
-    none; section 7's A1 row, whose mechanism cell reads as if two thresholds move, is the summary
-    that drifted. The threshold move is Phase C2, which section 8 requires be bundled with option
-    C1 (`DEFAULT_BUDGET_BYTES`) or it is inert. So the population assertion below is not a
+    WHAT THIS CHANGE DELIBERATELY DOES NOT DO: move a threshold. The design says option A1
+    "changes no threshold and cannot degenerate anything" and its first criterion names
+    none; a summary table that reads as if two thresholds move is the summary
+    that drifted. The threshold move is the next change, which must be bundled with the budget change
+    (`DEFAULT_BUDGET_BYTES`) or it is inert. So the population assertion below is not a
     formality -- it is the phase's central claim, and it is asserted against a FROZEN literal
     rather than against the module's own union, which would be an identity.
 
@@ -5503,9 +5499,9 @@ class TestPhaseC1ReadCapClasses(unittest.TestCase):
 
     REPO = Path(HERE).parent
 
-    # The six names as they stood at the END of Phase B, copied here as a FROZEN literal and
+    # The six names as they stood before this change, copied here as a FROZEN literal and
     # deliberately never derived from the module. Comparing the module's union against the
-    # module's own parts would be an identity that cannot fail (fork Learning #16).
+    # module's own parts would be an identity that cannot fail.
     POPULATION_AT_PHASE_B = frozenset((
         "SESSION_NOTES.md", "CHANGELOG.md", "HANDOFFS.md",
         "BACKLOG.md", "docs/BACKLOG.md", "docs/planning/BACKLOG.md",
@@ -5514,13 +5510,13 @@ class TestPhaseC1ReadCapClasses(unittest.TestCase):
     # --- the partition --------------------------------------------------------------------------
 
     def test_every_watched_name_resolves_to_exactly_one_class(self):
-        """Plan section 9's first DONE criterion, asserted three ways because a partition can fail
+        """The first DONE criterion, asserted three ways because a partition can fail
         in three directions: overlap, gap, and a classifier that disagrees with the sets it reads.
 
         ⚠ THE COVERAGE HALF IS ASSERTED AGAINST THE FROZEN POPULATION, NEVER AGAINST
         `READ_CAP_WATCHED`, AND THAT IS NOT A STYLE CHOICE. The union is DERIVED from the two
         classes, so `assertEqual(A | B, READ_CAP_WATCHED)` expands to `A | B == A | B` — an
-        identity that cannot fail (fork Learning #16). The first draft of this test asserted exactly
+        identity that cannot fail. The first draft of this test asserted exactly
         that, and the mutation round is what caught it: narrowing a class (M1, M8) shrinks the
         union in lockstep, so the tautological form stayed green on both while claiming to be
         the assertion that covers them. Compare to a literal that does not move.
@@ -5575,16 +5571,16 @@ class TestPhaseC1ReadCapClasses(unittest.TestCase):
     # --- the pin: class membership is asserted against the trimmer, never restated ---------------
 
     def test_class_a_is_pinned_to_the_trimmers_ledgers_table(self):
-        """Plan section 9's second DONE criterion: a canonical test must FAIL if a name is added
+        """The second DONE criterion: a canonical test must FAIL if a name is added
         to `LEDGERS` without moving class. This is that test.
 
-        The direction matters and is the subject of plan section 10 dragon 6. Class A is DECLARED,
+        The direction matters. Class A is DECLARED,
         not derived from `LEDGERS` -- derivation would make widening the trimmer silently
         reassign a file's class, which is the failure the dragon names. Declaring it and pinning
         it here means the widening turns this red and a human moves the name deliberately.
 
         Operands are independent: one side is this module's constant, the other is the trimmer's
-        own executed module (fork Learning #16). This is the pattern
+        own executed module. This is the pattern
         test_grammars_agree_with_the_trimmer_config_table established, applied to the class.
 
         KILLS: moving CHANGELOG.md or HANDOFFS.md to Class B; adding a third name to Class A."""
@@ -5627,9 +5623,9 @@ class TestPhaseC1ReadCapClasses(unittest.TestCase):
 
     def test_the_trim_row_population_is_class_a_at_the_constants_and_at_the_output(self):
         """The class and the old basename filter select the same two names today. That is the
-        precondition for Phase C1 changing no behaviour, so it is asserted rather than assumed --
+        precondition for the partition changing no behaviour, so it is asserted rather than assumed --
         and asserted at BOTH ends, because agreeing at the constants says nothing about what the
-        collector actually emitted (fork Learning #16 again).
+        collector actually emitted.
 
         GUARD-THE-GUARD on the output half: it also passes against the pre-change collector, since
         the two filters coincide. Its companion below is the one that can tell them apart."""
@@ -5651,7 +5647,7 @@ class TestPhaseC1ReadCapClasses(unittest.TestCase):
         contract, not in production. Said plainly, because an earlier draft of this docstring did
         not: `collect_file_metrics` only ever admits exact members of `READ_CAP_WATCHED` into
         `read_cap_watch`, so through `collect_all` the old and new filters are equivalent on every
-        input that can exist, and Phase C1 changed no production behaviour. What this test proves
+        input that can exist, and the partition changed no production behaviour. What this test proves
         is that `collect_trim_metrics` honours its own contract — it takes `files` as a PARAMETER,
         so a caller can hand it a name `collect_all` never would, and the function should answer NO
         rather than guess from the filename. Read the kill of the revert-to-basename mutant that
@@ -5692,7 +5688,7 @@ class TestPhaseC1ReadCapClasses(unittest.TestCase):
         # Positive control: the same harness, one directory up, does produce the row -- so the
         # empty result above is the filter working, not the fixture failing to reach the code.
         #
-        # ⚠ PHASE C2 HAD TO GROW THIS CONTROL'S FILE. It used to inherit whatever size the fixture
+        # ⚠ THE THRESHOLD CHANGE HAD TO GROW THIS CONTROL'S FILE. It used to inherit whatever size the fixture
         # happened to have, which fired the old 65,536 B arm; at 196,608 it went silent and this
         # assertion failed -- correctly. A control that does not fire proves nothing about the
         # branch it is controlling for, so the size is now set EXPLICITLY from the constant rather
@@ -5706,7 +5702,7 @@ class TestPhaseC1ReadCapClasses(unittest.TestCase):
     # --- the disposition, and the evidence it rests on --------------------------------------------
 
     def test_the_two_docs_backlog_locations_have_no_protocol_basis(self):
-        """Plan section 9's third DONE criterion is a DECISION -- keep or drop, but decide it. The
+        """The third DONE criterion is a DECISION -- keep or drop, but decide it. The
         decision was KEEP, and this pins the evidence the decision rests on so that the reasoning
         recorded beside the classes cannot quietly become false.
 
@@ -5717,10 +5713,10 @@ class TestPhaseC1ReadCapClasses(unittest.TestCase):
 
         The net is the WHOLE distributed .md corpus taken off bin/_manifest.py's SOURCE column,
         not just the two protocol files: a claim about "no distributed file" cannot be settled by
-        a net that misses most of them. Until the S176 resync the net had one hit, fork Learning #26
+        a net that misses most of them. The net once had one hit, a learning row
         citing this repo's own backlog as a WORKED EXAMPLE (evidence ABOUT the file, not an
-        instruction to open it), allowed for by name. That row left the distributed corpus for
-        docs/FORK_LEARNINGS.md, so both locations now read [] -- which a net that read nothing
+        instruction to open it), allowed for by name. That row has left the distributed corpus,
+        so both locations now read [] -- which a net that read nothing
         would also return, so the root basename's own hits are asserted non-empty first.
 
         THIS TEST IS SUPPOSED TO GO RED IF THE PROTOCOL CHANGES. That is its job: the day a runner
@@ -5763,28 +5759,28 @@ class TestPhaseC1ReadCapClasses(unittest.TestCase):
     # --- the phase's own boundary -----------------------------------------------------------------
 
     def test_phase_c2_moved_exactly_the_ratified_thresholds_and_nothing_else(self):
-        """SUCCESSOR TO `test_phase_c1_moved_no_threshold`, converted deliberately at Phase C2.
+        """SUCCESSOR TO THE TEST THAT ASSERTED THE CLASSES HAD NO THRESHOLDS, converted deliberately.
 
-        C1's version asserted the classes had acquired NO thresholds, because attaching one was
-        C2's job and would be inert before option C1 settled `DEFAULT_BUDGET_BYTES`. C2 did both
+        The earlier version asserted the classes had acquired NO thresholds, because attaching one was
+        a later step's job and would be inert before the budget was settled (`DEFAULT_BUDGET_BYTES`). The later step did both
         in one change, so the guard flips from "none exist" to "exactly these exist".
 
-        ⚠ AND C1'S VERSION HAD A HOLE THAT C2 WALKED STRAIGHT THROUGH — recorded rather than
+        ⚠ AND THE EARLIER VERSION HAD A HOLE THAT THE LATER CHANGE WALKED STRAIGHT THROUGH — recorded rather than
         quietly fixed, because it is the failure this class already ships two learnings about.
         Its docstring claimed a namespace check "which no per-class threshold can slip past
         WHATEVER IT IS CALLED". It was implemented as
-        `[n for n in dir(md) if n.startswith("READ_CAP_CLASS")]` — one prefix. C2's constants are
+        `[n for n in dir(md) if n.startswith("READ_CAP_CLASS")]` — one prefix. The later constants are
         named `CLASS_A_FIRE_BYTES` / `CLASS_A_STOP_BYTES`, chosen for what they guard rather than
-        to evade anything, and the guard stayed GREEN through the very phase it was written to
+        to evade anything, and the guard stayed GREEN through the very change it was written to
         gate. A guard you can walk around by picking a name has coverage that is a property of the
         change, not of the codebase. The check below is a SUBSTRING sweep over the whole namespace
-        asserting the EXACT expected set, which is what C1's docstring already claimed.
+        asserting the EXACT expected set, which is what the earlier docstring already claimed.
 
         KILLS: any of the six pinned literals moving; any further per-class constant landing under
         any spelling without a session deciding to add it here."""
         # FROZEN LITERALS on both sides. `READ_CAP_BYTES` is defined in this module as
         # `int(READ_CAP_TOKENS * MIN_BYTES_PER_TOKEN)`, so asserting that identity would assert
-        # nothing — fork Learning #43, earned in this very class.
+        # nothing.
         self.assertEqual(md.READ_CAP_BYTES, 56_750,
                          "C2 did NOT move the one-read budget. It is a measured harness fact, not "
                          "a policy knob; the Class A arm is a separate constant beside it")
@@ -5820,14 +5816,14 @@ class TestPhaseC1ReadCapClasses(unittest.TestCase):
                          % per_class)
 
 class TestPhaseC2PerClassRiskRows(unittest.TestCase):
-    """Phase C2's DASHBOARD half — the two threshold sites the plan's §6 inventory left owned by
-    no phase, and which S115 fenced at the top of the plan rather than resolving.
+    """The DASHBOARD half of the threshold change — the two threshold sites an earlier inventory left owned by
+    no one, and which were fenced rather than resolved.
 
-    WHY THIS IS IN C2 AT ALL, since §9's C2 criterion names only trimmer-side things. Because C2
+    WHY THIS IS IN THE CHANGE AT ALL, since its criterion names only trimmer-side things. Because the threshold change
     is the change that CREATES the disagreement: move the trimmer's trigger and leave this file,
     and `collect_trim_metrics` keeps emitting "the archive trigger fires; run `--check`" beside a
     `--check` that reports it does not. The row would name a command whose output contradicts it —
-    which the comment above that remedy says the wording exists to avoid. The operator widened C2
+    which the comment above that remedy says the wording exists to avoid. The change was widened
     to cover both sites; this class is that half.
 
     ⚠ CLASS B CANNOT BE EXERCISED BY THIS REPOSITORY. Its only Class B file within the watched set
@@ -5876,8 +5872,8 @@ class TestPhaseC2PerClassRiskRows(unittest.TestCase):
         return [r for r in rows if path in r["description"] and "read cap" in r["description"]]
 
     def test_a_class_A_ledger_over_the_cap_is_LOW_and_says_no_action_is_expected(self):
-        """The fleet-visible half of this phase. A Class A ledger between the one-read cap and the
-        archive threshold is the ADJUDICATED case (BL-52 third addendum): truncation is ordered and
+        """The fleet-visible half of this change. A Class A ledger between the one-read cap and the
+        archive threshold is the ADJUDICATED case: truncation is ordered and
         the file is newest-on-top, so what drops is the oldest records. Reporting that as HIGH
         taught a reader to ignore the row."""
         rows = self._rows_for("HANDOFFS.md", md.READ_CAP_BYTES + 1)
@@ -5892,10 +5888,10 @@ class TestPhaseC2PerClassRiskRows(unittest.TestCase):
                       "how far away it is")
 
     def test_a_class_B_file_over_the_cap_is_still_HIGH_and_says_why(self):
-        """Class B rows STAY, and still say why. This is plan §7's "make the rows DIFFERENT, not
+        """Class B rows STAY, and still say why. This is the design's "make the rows DIFFERENT, not
         delete one" — the severity and the row's existence are what this test is for.
 
-        ⚠ THE "WHY" IT PINS CHANGED AT BL-88, DELIBERATELY, AND THE ASSERTION WAS REPLACED RATHER
+        ⚠ THE "WHY" IT PINS CHANGED, DELIBERATELY, AND THE ASSERTION WAS REPLACED RATHER
         THAN REMOVED. It used to assert `"NO_CONFIG"` was present — i.e. that the row told the
         reader the trimmer had no config for this file. That claim was never evaluated by this
         module and is false in a tree that widened `LEDGERS`, so the row stopped making it; see
@@ -5922,12 +5918,12 @@ class TestPhaseC2PerClassRiskRows(unittest.TestCase):
         pins anything (`tools/test_methodology_dashboard.py` is absent from `bin/_manifest.py`).
 
         This does NOT relax the declared/derived split — see the two class pins above, unchanged.
-        The class stays declared; the PROSE stops claiming the trimmer's answer. BL-88.
+        The class stays declared; the PROSE stops claiming the trimmer's answer.
 
         KILLS: re-introducing any mention of the trimmer or its config into this row on a tree
-        where nothing was read -- this fixture carries no trimmer. BL-88 P2 appends a remedy ONLY
+        where nothing was read -- this fixture carries no trimmer. The probe appends a remedy ONLY
         where the scanned project's own trimmer SOURCE declares the file;
-        `TestBL88P2TrimmerSourceProbe` pins that arm, and pins this one byte-identical to P1."""
+        `TestBL88P2TrimmerSourceProbe` pins that arm, and pins this one byte-identical to the unprobed row."""
         for name in sorted(md.READ_CAP_CLASS_B):
             with self.subTest(name=name):
                 rows = self._rows_for(name, md.READ_CAP_BYTES + 1)
@@ -5947,9 +5943,9 @@ class TestPhaseC2PerClassRiskRows(unittest.TestCase):
         TASK section at the TOP — and states the true weaker form: nothing ENFORCES it. That
         correction reached the comment and never reached the row. This is that, closed.
 
-        Measured across 12 fleet repos at S227: every `SESSION_NOTES.md` carrying an
+        Measured across 12 fleet repos: every `SESSION_NOTES.md` carrying an
         `## ACTIVE TASK` heading has it at byte 132-9,490, inside READ_CAP_BYTES in all of them;
-        `mts-system` has no such heading at all, which is the case the weaker form is for.
+        one project has no such heading at all, which is the case the weaker form is for.
 
         KILLS: printing the backlog clause for SESSION_NOTES.md; dropping it from the backlogs."""
         clause = "bottom items are as live as its top ones"
@@ -5978,7 +5974,7 @@ class TestPhaseC2PerClassRiskRows(unittest.TestCase):
         self.assertEqual((a[0]["severity"], b[0]["severity"]), ("low", "high"))
 
     def test_the_hard_refusal_row_is_UNCHANGED_and_still_HIGH_for_BOTH_classes(self):
-        """C2 relaxed nothing past READ_REFUSE_BYTES. There the prefix stops existing, the
+        """The change relaxed nothing past READ_REFUSE_BYTES. There the prefix stops existing, the
         consolation that makes truncation survivable is FALSE, and ordering buys neither class
         anything — so this row must not have acquired a class."""
         for path in ("HANDOFFS.md", "SESSION_NOTES.md"):
@@ -6020,11 +6016,11 @@ class TestPhaseC2PerClassRiskRows(unittest.TestCase):
                                     "{:,}".format(md.READ_CAP_BYTES)))
 
 
-# BL-88 P2 -- P1's Class B over-cap row, FROZEN. Captured from the module at `cb9b0ed` (P1, before
-# P2 existed) for a watched file of READ_CAP_BYTES + 1 bytes and 100 lines, with nothing evaluated
-# about any trimmer. A LITERAL on purpose: plan §8 P2's criterion -- "a probe that finds nothing or
-# fails must leave the row byte-identical to P1's" -- is a claim about P1's OUTPUT, and a reference
-# computed by the code under test would only compare the new code with itself (fork Learning #16).
+# The Class B over-cap row before the trimmer-source probe, FROZEN. Captured from the module before
+# the probe existed, for a watched file of READ_CAP_BYTES + 1 bytes and 100 lines, with nothing evaluated
+# about any trimmer. A LITERAL on purpose: the criterion -- "a probe that finds nothing or
+# fails must leave the row byte-identical to the unprobed row" -- is a claim about that OUTPUT, and a reference
+# computed by the code under test would only compare the new code with itself.
 # If a ratified constant these rows print moves (READ_CAP_BYTES, READ_CAP_TOKENS,
 # MIN_BYTES_PER_TOKEN), regenerate them from the module as it stood before that change.
 _P1_CLASS_B_ROWS = {
@@ -6076,7 +6072,7 @@ _P1_CLASS_B_ROWS = {
     ),
 }
 
-# The sentence P2 appends when -- and only when -- the scanned project's own trimmer SOURCE declares
+# The sentence the probe appends when -- and only when -- the scanned project's own trimmer SOURCE declares
 # a LEDGERS entry for the file's basename. Spelled here independently of the module's own format
 # string, for the same reason as the literal above.
 _P2_REMEDY = (". BUT THIS PROJECT HAS A REMEDY: its own `{tool}` declares a `LEDGERS` entry for "
@@ -6085,20 +6081,19 @@ _P2_REMEDY = (". BUT THIS PROJECT HAS A REMEDY: its own `{tool}` declares a `LED
 
 
 class TestBL88P2TrimmerSourceProbe(unittest.TestCase):
-    """BL-88 P2 -- the Class B row may name a remedy it has CHECKED, and only then lower itself.
+    """The Class B row may name a remedy it has CHECKED, and only then lower itself.
 
-    Plan: `docs/planning/dashboard-read-cap-class-adopter-drift-plan.md` §8 P2. The operator's
-    sub-decision (S228's report): the probe is a SOURCE-TEXT read of the scanned project's own
+    The probe is a SOURCE-TEXT read of the scanned project's own
     `methodology_trim.py`, never an execution -- no adopter code runs inside the scanner, which is
-    the §7.1 precedent `find_trim_tool` already follows for the version and the budget.
+    the precedent `find_trim_tool` already follows for the version and the budget.
 
     THE FAILURE PATH IS THE CRITERION. Four trees are scanned through `collect_all` -- the surface
     an adopter's copy actually runs -- one per outcome: the trimmer declares the file (CONFIG), it
     does not (NO CONFIG), it cannot be read (LOAD FAILURE, a deliberately broken fixture trimmer,
-    never a wait for a real one), and there is none (ABSENT). Only CONFIG may differ from P1, and
-    the other three are compared to P1's row as a FROZEN LITERAL rather than to each other.
+    never a wait for a real one), and there is none (ABSENT). Only CONFIG may differ from the unprobed row, and
+    the other three are compared to that row as a FROZEN LITERAL rather than to each other.
 
-    DRAGON 6 IS NOT ENGAGED, AND ONE TEST SAYS SO. The probe changes prose and severity only: the
+    THE DECLARED/DERIVED SPLIT IS NOT ENGAGED, AND ONE TEST SAYS SO. The probe changes prose and severity only: the
     file's CLASS stays declared, and the trim row's population stays Class A even in a tree whose
     trimmer declares a Class B name."""
 
@@ -6119,7 +6114,7 @@ class TestBL88P2TrimmerSourceProbe(unittest.TestCase):
 
     @staticmethod
     def _splice(text):
-        """The canonical trimmer widened the way `nprcgenekeepr` widened its own: one more entry
+        """The canonical trimmer widened the way an adopter widened its own: one more entry
         in the LEDGERS literal, keyed by basename. Importable, so it can also serve as the
         independent operand for what such a file DEFINES."""
         anchor = "LEDGERS = {\n"
@@ -6202,7 +6197,7 @@ class TestBL88P2TrimmerSourceProbe(unittest.TestCase):
         self.assertIn(self.NOTES, md._parse_trim_ledgers(self.patched))
 
     def test_a_name_the_source_only_MENTIONS_is_not_a_config(self):
-        """Why the reading is a PARSE and not a grep. `nprcgenekeepr`'s widened trimmer spells
+        """Why the reading is a PARSE and not a grep. An adopter's widened trimmer spells
         SESSION_NOTES.md on three lines -- a comment, the key, and a `basename=` argument -- and a
         grep counts all three. A false positive is the harmful direction: it names a remedy that
         does not work."""
@@ -6366,7 +6361,7 @@ class TestBL88P2TrimmerSourceProbe(unittest.TestCase):
                                  [("high", _P1_CLASS_B_ROWS[self.NOTES])])
 
     def test_the_probe_touches_neither_the_class_A_row_nor_the_hard_refusal_row(self):
-        """P2 is confined to the Class B arm between the cap and the refusal. A Class A ledger is
+        """The probe is confined to the Class B arm between the cap and the refusal. A Class A ledger is
         already LOW and already remedied by the trim row; past the refusal nothing arrives at all,
         and a remedy sentence must not soften that row's severity."""
         base = copy.deepcopy(self.scans["absent"])
@@ -6387,11 +6382,11 @@ class TestBL88P2TrimmerSourceProbe(unittest.TestCase):
                 self.assertFalse(any("HAS A REMEDY" in d for _, d in rows_by["declared"]))
 
 
-# === BL-101 P5: the dashboard understands both layouts (plan section 7.2, row P5; C8, C15) ===========
+# === The dashboard understands both layouts ===========
 #
 # A project keeps its methodology files at its root (legacy) or one level down in methodology/ (new);
 # tools/layout_resolver.py answers which. Every test below builds a real tree with tools/layout_fixtures.py,
-# in every shape the plan names (legacy, new, tier1, half, empty), puts a real git history under it, and
+# in every shape the layout has (legacy, new, tier1, half, empty), puts a real git history under it, and
 # asserts a VALUE the dashboard computed: a score, a path, a risk row. Written RED-first (each class was
 # run against the unpatched dashboard before any change to it, and the layers below name what failed).
 
@@ -6430,7 +6425,7 @@ def risk_texts(project):
 
 
 class TestBL101P5Checklist(unittest.TestCase):
-    """C8: the compliance checklist, the adoption test and the role test read the project through the
+    """The compliance checklist, the adoption test and the role test read the project through the
     resolver, so a project that moved its files scores what it scored before it moved."""
 
     def test_a_complete_adopter_scores_the_full_checklist_in_every_layout(self):
@@ -6486,7 +6481,7 @@ class TestBL101P5Checklist(unittest.TestCase):
     def test_a_half_migrated_tree_counts_a_file_held_only_under_methodology(self):
         # The union cuts both ways: the half fixture holds everything at the root, so this one moves a single
         # file to the OTHER place and removes it from the root. A mutant that dropped the methodology copy
-        # from the half answer survived every other test (found by the S278 mutation pass).
+        # from the half answer survived every other test (found by a mutation pass).
         p = layout_project(self, "half", remove=("SAFEGUARDS.md",), extra={"methodology/SAFEGUARDS.md": "# safeguards\n"})
         m = md.collect_methodology_metrics(p)
         self.assertEqual(m["layout"]["kind"], "half")
@@ -6500,7 +6495,7 @@ class TestBL101P5Checklist(unittest.TestCase):
                 self.assertEqual(rows, [])
 
     def test_a_ledger_held_in_both_places_with_the_runner_at_the_root_is_half_migrated(self):
-        # The runner cannot decide a tie about a state file when the runner itself is at the root (plan 4.3).
+        # The runner cannot decide a tie about a state file when the runner itself is at the root.
         p = layout_project(self, "legacy", extra={"methodology/CHANGELOG.md": "# a second ledger\n"})
         lay = md.collect_methodology_metrics(p)["layout"]
         self.assertEqual(lay["kind"], "half")
@@ -6560,7 +6555,7 @@ def card_projection(project):
 
 
 class TestBL101P5Walk(unittest.TestCase):
-    """C8, the installed-source fingerprint and the read-cap watch: a methodology file is recognised by
+    """The installed-source fingerprint and the read-cap watch: a methodology file is recognised by
     the name the tables hold, wherever the layout put it, and a file of the same name that is the
     PROJECT's own (a root CHANGELOG.md beside the framework's under methodology/) is never read as ours."""
 
@@ -6586,7 +6581,7 @@ class TestBL101P5Walk(unittest.TestCase):
         # PINNED ON PURPOSE, not an accident. `has_docs_dir` is a bare presence check, and a legacy adopter
         # satisfies it with docs/methodology/ alone, so every synced project has earned 4 documentation points
         # for a directory the methodology put there. In the new layout nothing of ours is under docs/, so a
-        # project with no docs/ of its own loses them when it migrates. Recorded in the plan's section 7.2d:
+        # project with no docs/ of its own loses them when it migrates. Recorded as a known consequence:
         # parity would mean rewarding methodology/ as documentation, or changing every legacy score.
         want = {"legacy": True, "new": False, "tier1": False}
         for layout, has in want.items():
@@ -6755,7 +6750,7 @@ class TestBL101P5Sync(unittest.TestCase):
 class TestBL101P5CopyInsideMethodology(unittest.TestCase):
     """A dashboard that sits in <project>/methodology/ is one level below the project it scans. The two
     names tried are an ordinary project and a project literally NAMED methodology (this repository is one:
-    S277's check-overhead and check-ledger --all each took such a directory for a subdirectory)."""
+    check-overhead and check-ledger --all each took such a directory for a subdirectory)."""
 
     NAMES = ("proj", "methodology")
 
@@ -6830,8 +6825,8 @@ class TestBL101P5CopyInsideMethodology(unittest.TestCase):
 class TestBL101P5Gates(unittest.TestCase):
     """The quality-gate read (collect_gate_metrics) finds the manifest where it lives and follows its history
     across the move that took it there. Without that a migrated project silently loses its gate signals, and a
-    floor lowered INSIDE the move commit is invisible: the plan's E2, the same class as 'a gate fails open when
-    its file moves' (S273)."""
+    floor lowered INSIDE the move commit is invisible: the same class as 'a gate fails open when
+    its file moves'."""
 
     G = TestQualityGateSignals
 
@@ -6915,7 +6910,7 @@ class TestBL101P5Gates(unittest.TestCase):
 
 class TestBL101P5TheFrameworkRepoItself(unittest.TestCase):
     """The PUBLISHER's checklist asks whether the repo OPERATES what it publishes: its own CHANGELOG.md and
-    HANDOFFS.md. When this repository's own instance files move (the plan's P8 rehearsal and G-B), those two
+    HANDOFFS.md. When this repository's own instance files move, those two
     are under methodology/ while its sources (ITERATIVE_METHODOLOGY.md, workstreams/, bin/, starter-kit/)
     stay where they are; the framework checklist must follow the first and not the second."""
 

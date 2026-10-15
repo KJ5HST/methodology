@@ -26,7 +26,7 @@ The dashboard auto-detects its context based on where it's placed:
        ~/projects/my-app/                <-- put methodology_dashboard.py here
        ~/projects/my-app/lib/submodule/  <-- scanned as separate entry
 
-  A project that keeps its methodology files under methodology/ (BL-101, the new layout) keeps this
+  A project that keeps its methodology files under methodology/ (the new layout) keeps this
   file there too: it finds its own project one level up, scans it exactly as it scans a project
   whose files are at the root, and writes dashboard.html and dashboard_history.jsonl beside itself,
   so the project's root stays clean. `--sync` puts each project's copy where that project keeps its
@@ -115,34 +115,30 @@ def resolve_layout(root, anchor="SESSION_RUNNER.md"):
 # Every other copy (portfolio root + per-project) is a synced copy of the canonical and must
 # carry the same value. A copy whose DASHBOARD_VERSION is older than the canonical is stale —
 # re-sync from the canonical. Bump on any change to the canonical script.
-# 2.19.0: BL-88 (docs/planning/dashboard-read-cap-class-adopter-drift-plan.md). The Class B read-cap
-# row stops asserting a trimmer config it never read (P1, cb9b0ed, which shipped without a bump) and
+# 2.19.0: The Class B read-cap
+# row stops asserting a trimmer config it never read and
 # names a remedy only where the scanned project's own trimmer SOURCE declares the file, taking Class
-# A's severity there (P2). Changed output on a distributed tool: MINOR. Fork-only -- upstream's line
-# continues from 2.11.1, so the two stay apart until a dashboard PR reconciles them. (2.18.0, the
-# resync's merge of upstream's 2.11.x line, is described in git: `git log -S'2.18.0'` on this file.)
-# 2.22.0: BL-101 P5 (docs/planning/methodology-subdirectory-plan.md, section 7.2). The dashboard reads a
+# A's severity there. Changed output on a distributed tool: MINOR.
+# 2.22.0: The dashboard reads a
 # project that keeps its methodology files under methodology/ exactly as it reads one that keeps them at
 # the root: the checklist items keep their names and are LOCATED through the layout resolver, a project
 # whose runner is under methodology/ is still an adopter, and a half-migrated tree (the runner at both
 # places, or a state file at both with nothing to decide) is a HIGH risk that names both paths. Changed
 # output on a distributed tool: MINOR.
-# 2.21.0: BL-99. The manifest-history walk reads the FIRST-PARENT line (`_gate_manifest_history`):
+# 2.21.0: The manifest-history walk reads the FIRST-PARENT line (`_gate_manifest_history`):
 # a repo that had merged a lineage with a different manifest printed "floor lowered" / "gate
-# removed" rows nobody caused (9 of the 10 on this fork after the 2026-10 resync) and could miss a
+# removed" rows nobody caused and could miss a
 # real loosening a merge resolved to. Changed output on a distributed tool: MINOR.
-# 2.20.0: BL-95 R1, the 2026-10 resync (docs/planning/upstream-resync-2026-10-plan.md, D5). The
+# 2.20.0: The
 # `.gitattributes` seed (starter-kit/gitattributes, arriving from upstream's v4.1) is installed
 # content: dotfiles are categorized as config by name (CONFIG_FILES), and the seed has its own row
 # and signature set in _FRAMEWORK_INSTALLED_CONTENT. Changed output on a distributed tool: MINOR.
-# Fork-only -- upstream's line continues from 2.11.3, so the two stay apart until a dashboard PR
-# reconciles them.
 DASHBOARD_VERSION = "2.22.0"
 
 ROOT = Path(__file__).parent
-# `"methodology"` was here and is deliberately gone (plan D4(c)): the scanner was structurally
+# `"methodology"` was here and is deliberately gone: the scanner was structurally
 # blind to its own home in portfolio mode — the one repo whose methodology signals it is best
-# placed to check, and the subject of upstream issue #59. The self-scan is safe now that Layer 4
+# placed to check, and the subject of upstream issue #59. The self-scan is safe now that the dashboard
 # classifies repo role; before that it read its own home as a 5%-adoption risk.
 EXCLUDE_DIRS = {"BrogueCE-iOS", ".git", "__pycache__", "node_modules", ".venv", "venv"}
 WALK_SKIP = {".git", ".claude", "node_modules", "__pycache__", ".venv", "venv", "target",
@@ -158,7 +154,7 @@ TEST_PATTERNS = {"test_", "_test.", ".test.", ".spec.", "tests/", "__tests__/", 
 # vignettes and articles are prose-with-embedded-code, the same bucket `.md` already lives in, not
 # `.r`'s. Before this, a file with either extension outside a `docs/` path fell through
 # categorize_file's whole ladder to "other": not source, not docs, not even LOC-counted (LOC is
-# skipped for "other"). BL-34 — found scanning `nprcgenekeepr` (28 `.rmd` + 12 `.qmd`, 11 of the 12
+# skipped for "other"). Found scanning an adopter project (28 `.rmd` + 12 `.qmd`, 11 of the 12
 # invisible with 0 LOC because only one lived under `docs/`).
 DOC_EXTS = {".md", ".txt", ".rst", ".adoc", ".org", ".qmd", ".rmd"}
 CONFIG_FILES = {
@@ -188,8 +184,8 @@ LANG_MAP = {
     ".kt": "Kotlin", ".scala": "Scala", ".lua": "Lua", ".sh": "Shell",
     ".bash": "Shell", ".zsh": "Shell", ".html": "HTML", ".css": "CSS",
     ".scss": "SCSS", ".less": "LESS", ".sql": "SQL",
-    # BL-34 — `.r` was already in SOURCE_EXTS (so R LOC always counted toward Source), but had no
-    # LANG_MAP entry, so it never got its own "Code by Language" row. Found against `nprcgenekeepr`
+    # `.r` was already in SOURCE_EXTS (so R LOC always counted toward Source), but had no
+    # LANG_MAP entry, so it never got its own "Code by Language" row. Found against an adopter project
     # (603 `.r` files, 77,773 LOC — the bulk of that project's Source total — invisible in the
     # per-language breakdown).
     ".r": "R",
@@ -304,13 +300,13 @@ _BACKLOG_DONE_TOKENS = ("DONE", "COMPLETE", "COMPLETED", "SHIPPED", "FIXED", "RE
 _BACKLOG_LOCATIONS = ("BACKLOG.md", "docs/BACKLOG.md", "docs/planning/BACKLOG.md")
 
 # --- D4(b): the agent Read cap ----------------------------------------------------------------
-# A SECOND large-file question, deliberately NOT a widening of the BL-5 code-smell check in
-# assess_risks(). BL-5 asks "is this MODULE unwieldy?" — a judgment about structure, false for a
+# A SECOND large-file question, deliberately NOT a widening of the code-smell check in
+# assess_risks(). That check asks "is this MODULE unwieldy?" — a judgment about structure, false for a
 # 2,500-line chapter, which is why .md is excluded there and `vendor` after it: two consecutive
 # narrowings, both earned by measured false positives. This asks "does a file a session must read
 # IN FULL still fit in one read?" — a fact about the harness, true or false whatever the file is
 # for. Separating them is ADDED POLICY: the ratified design says only that a 2,090-line .md must
-# be able to trip *a* large-file risk, and taking that literally would regress BL-5's test.
+# be able to trip *a* large-file risk, and taking that literally would regress that check's test.
 #
 # UNIT: BYTES, converted from the TOKEN cap the harness actually enforces. Re-denominated at
 # Phase B (2026-08-26); it was LINES, and lines were not merely imprecise but STRICTLY DOMINATED.
@@ -333,8 +329,7 @@ _BACKLOG_LOCATIONS = ("BACKLOG.md", "docs/BACKLOG.md", "docs/planning/BACKLOG.md
 #     (256.1KB) exceeds maximum allowed size (256KB)" — so the familiar consolation that
 #     "truncation is ordered, and the top of the file still arrives" holds only BETWEEN the two
 #     boundaries. 5 of those 18 fleet ledgers are already past this one.
-# RE-MEASURE rather than restating those five sentences. The reproduction is
-# docs/planning/read-cap-premise-correction-plan.md Appendix A, and it is the ONLY instrument that
+# RE-MEASURE rather than restating those five sentences. A measurement made through the harness is the ONLY instrument that
 # can falsify them: no test in this repository can, because nothing here invokes the agent's Read
 # tool. A green suite is evidence that nothing ELSE broke.
 # BASIS — the failure already happened here, and was found by accident rather than by any check:
@@ -358,7 +353,7 @@ MIN_BYTES_PER_TOKEN = 2.27       # the measured FLOOR, not the mean — a guard 
 READ_CAP_BYTES = int(READ_CAP_TOKENS * MIN_BYTES_PER_TOKEN)     # 56,750 B — computed, not written
 READ_REFUSE_BYTES = 256 * 1024                                  # the hard, zero-content boundary
 
-# PHASE C2 — the Class A pair, mirrored from methodology_trim.py and pinned to it by a canonical
+# The Class A pair, mirrored from methodology_trim.py and pinned to it by a canonical
 # test, exactly as the four constants above are. THE REASON THEY EXIST HERE rather than only in
 # the trimmer: this scanner re-implements the trimmer's trigger in collect_trim_metrics (it must,
 # because it reports on repos where the tool is not installed), so a threshold that moved in the
@@ -367,8 +362,8 @@ READ_REFUSE_BYTES = 256 * 1024                                  # the hard, zero
 #
 # THESE ARE NOT A REPLACEMENT FOR READ_CAP_BYTES; the two answer different questions and BOTH are
 # reported. READ_CAP_BYTES answers "does one Read deliver this whole file?", which stays true of a
-# Class A ledger and is why its risk row survives rather than being deleted (plan §7 rejects
-# option D on exactly that ground). CLASS_A_FIRE_BYTES answers "is a trim worth doing?", and for a
+# Class A ledger and is why its risk row survives rather than being deleted.
+# CLASS_A_FIRE_BYTES answers "is a trim worth doing?", and for a
 # newest-on-top ledger whose truncation drops the OLDEST records the honest denominator for that
 # is the hard refusal, not the cap.
 CLASS_A_FIRE_BYTES = 192 * 1024   # 196,608 — see methodology_trim.py's block for the derivation
@@ -377,7 +372,7 @@ CLASS_A_STOP_BYTES = 96 * 1024    # 98,304  — reported, never applied here; th
 # The files a session opens to establish state, restricted to the ones the ADOPTER owns.
 #
 # THE JUSTIFICATION THAT STOOD HERE WAS FALSE FOR TWO OF THE SIX NAMES, and it is corrected rather
-# than quietly dropped (Phase B / BL-52). It read "the files a session is instructed to read IN
+# than quietly dropped. It read "the files a session is instructed to read IN
 # FULL ... step 6 (reconcile CHANGELOG.md and HANDOFFS.md against git log)". Step 6 is
 # SESSION_RUNNER.md's reconcile, and its own stated mechanics are FRONTIER-BASED:
 # `git log -1 --format=%H -- CHANGELOG.md`, then the commits after it. That reads git HISTORY, not
@@ -394,7 +389,7 @@ CLASS_A_STOP_BYTES = 96 * 1024    # 98,304  — reported, never applied here; th
 # reports a real property — whether one read delivers the file — which stays true whoever reads
 # it and however rarely. What was wrong was the REASON given, and a reason nobody re-checks is how
 # this defect got here. Narrowing the population was deferred to a separate, fleet-visible call —
-# and Phase C1 has since MADE that call: it PARTITIONED the six names without removing any, and
+# and a later change has since MADE that call: it PARTITIONED the six names without removing any, and
 # the two `docs/**` locations were kept deliberately, on evidence, for the reason stated with the
 # classes below. So the sentence above is still true, and it is now true by decision twice over
 # rather than by deferral.
@@ -410,9 +405,9 @@ CLASS_A_STOP_BYTES = 96 * 1024    # 98,304  — reported, never applied here; th
 # ROADMAP.md is a SEED too and is deliberately absent: the runner cites it as a pointer, never as
 # a file read whole to compute anything. Absent above all: a book chapter. Nobody is instructed to
 # read chap07.md in full, so truncating it produces no wrong answer — flagging it would re-create
-# the very false positive BL-5's ext filter, one signal over, exists to kill.
+# the very false positive that check's ext filter, one signal over, exists to kill.
 #
-# --- Phase C1: THE POPULATION IS TWO CLASSES, AND THE DIFFERENCE IS NOT COSMETIC ---------------
+# --- THE POPULATION IS TWO CLASSES, AND THE DIFFERENCE IS NOT COSMETIC ---------------
 # The six names above were one set, and the paragraph before this one records what that cost: a
 # justification that was FALSE for two of them, standing because nobody re-derived it. The split
 # below is read off two INDEPENDENT, machine-checkable facts, never off judgment:
@@ -428,7 +423,7 @@ CLASS_A_STOP_BYTES = 96 * 1024    # 98,304  — reported, never applied here; th
 #             (SESSION_RUNNER.md steps 2 and 3), with NO REMEDY the reader can reach -- no
 #             distributed file says what to do about an oversized one, which is the gap that
 #             separates this class from A far more sharply than any threshold does.
-#             ⚠ BL-88 P2: in a project whose OWN trimmer declares a Class B basename -- read from
+#             ⚠ In a project whose OWN trimmer declares a Class B basename -- read from
 #             that trimmer's source by _parse_trim_ledgers, never by running it -- the NO_CONFIG
 #             conjunct and the NO-REMEDY half of the second are false FOR THAT PROJECT, so its row
 #             names the remedy and takes Class A's severity. The access path is still the file,
@@ -441,7 +436,7 @@ CLASS_A_STOP_BYTES = 96 * 1024    # 98,304  — reported, never applied here; th
 #             at line 9, and across 11 fleet repos it sits at byte offsets 132-23,013 -- inside
 #             READ_CAP_BYTES in all 10 that have it. The true statement is that nothing ENFORCES
 #             it, and the fleet shows both ways that fails: one file carries 23 KB of prose above
-#             its ACTIVE TASK, and ONE (mts-system, 269,652 B) has no such heading at all -- zero
+#             its ACTIVE TASK, and ONE (an adopter's ledger, 269,652 B) has no such heading at all -- zero
 #             `## ` headings, its records opening at `### Session N`. Past READ_REFUSE_BYTES
 #             ordering buys nothing for either class anyway. Where the absolute
 #             form IS true is the backlogs: a backlog's bottom items are as live as its top ones,
@@ -452,26 +447,25 @@ CLASS_A_STOP_BYTES = 96 * 1024    # 98,304  — reported, never applied here; th
 #
 # WHY BOTH SETS ARE WRITTEN OUT AND THE UNION IS DERIVED, RATHER THAN THE REVERSE. Deriving the
 # CLASS from the trimmer would make widening LEDGERS silently reassign a file -- exactly what
-# read-cap-phase-c-plan.md section 10 dragon 6 says must FAIL rather than follow. So each class is
+# must FAIL rather than follow. So each class is
 # DECLARED and a canonical test PINS Class A against the trimmer's own LEDGERS table; adding a
 # name there without moving it here turns that test red, which is the point. Deriving the UNION
-# instead is what makes "the population did not change" provable rather than asserted -- Phase C1
-# moves no threshold (plan sections 8 and 9; section 7's A1 row, which reads otherwise, is the
-# summary that drifted, and the threshold move is Phase C2).
+# instead is what makes "the population did not change" provable rather than asserted -- the partition
+# moves no threshold; the thresholds move separately, in the Class A pair above.
 #
 # DISPOSITION OF THE TWO `docs/**` BACKLOG LOCATIONS: KEEP, BY ANALOGY, AND THE ANALOGY IS SAID
-# OUT LOUD. Plan section 9 requires this be DECIDED rather than inherited. Neither is named as a
+# OUT LOUD. That must be DECIDED rather than inherited. Neither is named as a
 # file to read anywhere in SESSION_RUNNER.md or SAFEGUARDS.md, and across the whole DISTRIBUTED
-# .md corpus (23 files at S176, taken off bin/_manifest.py's SOURCE column) both appear ZERO
-# times. `docs/planning/BACKLOG.md` appeared once, in fork Learning #26, which cites this repo's
-# own backlog as a WORKED EXAMPLE, not as a file anyone is told to open -- and that row left the
-# distributed corpus for docs/FORK_LEARNINGS.md at the S176 resync. So they are watched by analogy
+# .md corpus (23 files, taken off bin/_manifest.py's SOURCE column) both appear ZERO
+# times. `docs/planning/BACKLOG.md` appeared once, as a WORKED EXAMPLE of a backlog, not as a file
+# anyone is told to open -- and that text has since left the
+# distributed corpus. So they are watched by analogy
 # to the root basename, and that is a weaker warrant than the other four have. They are kept
-# anyway, for the reason plan section 7 rejects option D on:
+# anyway, for this reason:
 # the row reports a REAL PROPERTY -- does one read deliver this file? -- which stays true however
 # rarely anyone reads it, and dropping a name is a fleet-visible narrowing that buys nothing.
-# Measured cost of keeping them: `docs/BACKLOG.md` matches NO file in the 5-repo fleet, so it
-# emits nothing; `docs/planning/BACKLOG.md` matches exactly one, THIS repo's, at 0.54x the cap.
+# Measured cost of keeping them: `docs/BACKLOG.md` matches NO file in the repositories measured, so it
+# emits nothing; `docs/planning/BACKLOG.md` matches exactly one, at 0.54x the cap.
 # A canonical test pins the "no protocol basis" half of that reasoning, so the day a protocol
 # edit gives one of them a basis, this comment is forced to be revisited instead of quietly
 # becoming false -- which is the failure the paragraph above records.
@@ -488,7 +482,7 @@ def read_cap_class(rel_posix):
 
     The one place that knows the partition. Callers ask the question rather than re-deriving it
     from a membership test against the trimmer's grammar table -- which is what collect_trim_metrics
-    did before Phase C1, and which was correct only because the two happened to coincide. They
+    did before the partition, and which was correct only because the two happened to coincide. They
     still coincide, and a canonical test asserts that they do; the difference is that the
     coincidence is now checked rather than relied on."""
     if rel_posix in READ_CAP_CLASS_A:
@@ -497,29 +491,29 @@ def read_cap_class(rel_posix):
         return "B"
     return None
 
-# --- S38: the trim-trigger row ------------------------------------------------------------------
+# --- The trim-trigger row ------------------------------------------------------------------
 # D4(b) above reports a file that is ALREADY truncating. This reports the file that is heading
 # there, and names what to do about it. The two are separate risks on purpose and neither
 # subsumes the other: the ledgers in this repo are both well under the line cap today and both
 # already over the byte budget, so a cap-only reporter is silent about the live problem.
 #
-# THE ARCHITECTURE, AND WHY THE DASHBOARD COMPUTES RATHER THAN ASKS. The design (§1.3) says the
-# dashboard "reads the number rather than re-deriving it" AND that S38 owes an agreement test --
+# THE ARCHITECTURE, AND WHY THE DASHBOARD COMPUTES RATHER THAN ASKS. The design says the
+# dashboard "reads the number rather than re-deriving it" AND that an agreement test is owed --
 # "with the trimmer present, the dashboard's displayed headroom equals --check's". Those cannot
 # both hold. A number OBTAINED by parsing `--check` makes that test an identity, which cannot
-# fail; the repo has already paid for that mistake once (fork Learning #16 -- three losslessness
+# fail; the repo has already paid for that mistake once (three losslessness
 # guards inert at their call site behind a 13/13 mutation score). The owed test is only
 # meaningful if the two sides are computed independently, so this module computes the line
 # metric itself and the test compares it against a real `--check` run.
 #
 # That also keeps the rows READ-ONLY, which the ratified architecture requires, and matches
-# §7.1's stated precedent: check_stale_version()/parse_version() interrogate another executable
+# the stated precedent: check_stale_version()/parse_version() interrogate another executable
 # BY REGEX, without importing or running it. Nothing here executes a file it discovered.
 #
 # What is genuinely the trimmer's and cannot be re-derived is the BYTE BUDGET -- a judgment
-# calibrated in design §5.4, not a formula. It is read out of the tool's source by regex, the
+# calibrated in the design, not a formula. It is read out of the tool's source by regex, the
 # same way parse_version reads DASHBOARD_VERSION. No budget -> the byte half abstains out loud
-# (decision D4: a 0 from an unread source must not be reported as a clean state), and the line
+# (a 0 from an unread source must not be reported as a clean state), and the line
 # half, whose formula is published in CHANGELOG.md's own front matter, still answers.
 TRIM_TOOL_NAME = "methodology_trim.py"  # layout: ok -- this tool's own file name, the key of _FRAMEWORK_INSTALLED_CONTENT; found through layout_locations
 
@@ -527,7 +521,7 @@ TRIM_TOOL_NAME = "methodology_trim.py"  # layout: ok -- this tool's own file nam
 # root, exactly as it does for methodology_dashboard.py. So the root probe misses HERE, and the
 # fallback is what lets the "present" branch be observed on the one repo whose trigger fires.
 #
-# ITS ORIGINAL REASON EXPIRED AT S39' AND THE SURVIVING ONE IS NARROWER. When this was written the
+# ITS ORIGINAL REASON HAS EXPIRED AND THE SURVIVING ONE IS NARROWER. When this was written the
 # tool was canonical-only, so the root probe missed on EVERY repo in existence and the present
 # branch would have shipped never having run anywhere. `bin/sync` now installs the trimmer at
 # adopter roots, so the root probe is the live path for every adopter and this fallback covers
@@ -537,7 +531,7 @@ TRIM_TOOL_NAME = "methodology_trim.py"  # layout: ok -- this tool's own file nam
 # "watched but unmeasured" abstention row is gone from its risk list.
 #   python3 -c "import sys;sys.path.insert(0,'bin');import _manifest as m;\
 #     print([e for e in m.DISTRIBUTION if 'trim' in e[0]])"
-#   -> [('starter-kit/methodology_trim.py', 'methodology_trim.py', 'tracked')]  since S39'
+#   -> [('starter-kit/methodology_trim.py', 'methodology_trim.py', 'tracked')]
 TRIM_TOOL_FRAMEWORK_REL = "starter-kit/" + TRIM_TOOL_NAME
 
 _TRIM_VERSION_RE = re.compile(r'''^TRIM_VERSION\s*=\s*["']([^"']+)["']''', re.MULTILINE)
@@ -549,7 +543,7 @@ _TRIM_VERSION_RE = re.compile(r'''^TRIM_VERSION\s*=\s*["']([^"']+)["']''', re.MU
 _TRIM_BUDGET_RE = re.compile(
     r"^DEFAULT_BUDGET_BYTES\s*=\s*([0-9_]+(?:\s*\*\s*[0-9_]+)*)", re.MULTILINE)
 
-# TRIM_LINE_FIRE_BELOW IS GONE (Phase B). It was a SECOND distributed copy of design §5.2's
+# TRIM_LINE_FIRE_BELOW IS GONE. It was a SECOND distributed copy of the design's
 # published rate rule -- "archive when headroom falls below 15 records" -- pinned to the trimmer's
 # literal by a canonical test. The rule itself was deleted from the trimmer, not re-tuned: it is
 # denominated in records of headroom TO the cap, and a one-read CHANGELOG.md holds 20.9 records
@@ -576,7 +570,7 @@ _MIDDLE_DOT = "\u00b7"
 # the trimmer answers NO_CONFIG on every one of those by design ("there is deliberately no
 # generic fallback: a generic rule is what would mis-zone a differently-shaped ledger"). Naming
 # the trimmer as the remedy for a file it refuses would be a pointer the adopter cannot follow,
-# which is the misdirection §7.3 exists to prevent. A canonical test asserts these keys against
+# which is the misdirection the remedy rule exists to prevent. A canonical test asserts these keys against
 # the trimmer's own LEDGERS table rather than restating them here.
 TRIM_GRAMMARS = {
     "CHANGELOG.md": ("heading",  # layout: ok -- the LEGACY name of a methodology file, the key every table and the card use; where it lives is resolved by layout_locations
@@ -737,7 +731,7 @@ _VERSION_RE = re.compile(r'''^DASHBOARD_VERSION\s*=\s*["']([^"']+)["']''', re.MU
 # exists to correct the source-LOC read, and a general "skip framework files" rule is exactly the
 # laundering hole the exclusion must not become.
 #
-# WHY A TABLE AND NOT A TUPLE (S39', when the trimmer became the second installed executable).
+# WHY A TABLE AND NOT A TUPLE (when the trimmer became the second installed executable).
 # The membership list and the content gate were separate before, and that made one specific wrong
 # edit both easy and green: `test_exclusion_list_matches_the_manifest` goes red the moment the
 # manifest grows a non-markdown dest, and the cheapest way to green it is to append the name here.
@@ -761,9 +755,9 @@ _VERSION_RE = re.compile(r'''^DASHBOARD_VERSION\s*=\s*["']([^"']+)["']''', re.MU
 # Structural signatures of the SCANNER, for copies too old to carry DASHBOARD_VERSION. Two must
 # match. Three are ordinary function names, so two hits are suggestive rather than proof — this is
 # a heuristic, and the .methodology-profile marker is the documented override. Measured need: a
-# live adopter (feedback-loop-comparison) still runs a 1,614-line pre-version copy, and a
+# live adopter still runs a 1,614-line pre-version copy, and a
 # DASHBOARD_VERSION-only gate silently skipped it — the fix quietly not applying is the same class
-# of defect as the fix being wrong. (Moved up from below `is_framework_installed` at S39' so it is
+# of defect as the fix being wrong. (Moved up from below `is_framework_installed` so it is
 # defined before the table that consumes it; the constant and its rationale are unchanged.)
 _FRAMEWORK_SIGNATURES = (
     "METHODOLOGY_ITEMS",
@@ -940,18 +934,18 @@ FRAMEWORK_SEED_DOCS = (
     "ROADMAP.md",  # layout: ok -- the LEGACY name of a methodology file, the key every table and the card use; where it lives is resolved by layout_locations
 )
 
-# === LAYOUT (BL-101 P5; docs/planning/methodology-subdirectory-plan.md sections 4.1 and 4.3) ===========
+# === LAYOUT ===========
 #
 # A project keeps its methodology files at its root (legacy) or one level down in methodology/ (new), and
 # resolve_layout (the marked block near the top) answers which, from ONE anchor file the caller chooses:
 # the framework's own files resolve through the runner, and a state file (a ledger, the notes, a config)
-# through ITSELF, because the plan's tier 1 moves the first group and leaves the second at the root. Every
+# through ITSELF, because tier 1 moves the first group and leaves the second at the root. Every
 # name in this scanner's tables stays the LEGACY name (SESSION_RUNNER.md, docs/methodology/...): the card,
 # the JSON export, the portfolio grid and the history all key on them. What changes is where a name is
 # LOOKED FOR, in layout_locations() below, and a name found in a layout it does not belong to (the
 # project's own root CHANGELOG.md, beside the framework's under methodology/) is the project's own and is
-# never read as the framework's: the resolver's tie rule, decided for every tool at S276.
-NEW_LAYOUT_DIR = "methodology"  # layout: ok -- the directory a migrated project keeps its methodology files in (plan 4.1)
+# never read as the framework's: the resolver's tie rule, which applies to every tool.
+NEW_LAYOUT_DIR = "methodology"  # layout: ok -- the directory a migrated project keeps its methodology files in
 RUNNER_NAME = "SESSION_RUNNER.md"  # layout: ok -- the framework anchor the resolver reads: where it is tracked decides the layout
 
 # The state files, each its own anchor: the seeded ledgers and notes, and the three seeded configs.
@@ -966,17 +960,17 @@ LAYOUT_MOVED = (frozenset(FRAMEWORK_INSTALLED_DOCS) | frozenset(LAYOUT_STATE_NAM
 
 def new_layout_rel(rel):
     """Where a legacy-relative methodology name lands in the new layout: flat under methodology/, with
-    workstreams/ the one subdirectory, and docs/methodology/ dropped (plan decision D2)."""
-    if rel == "docs/methodology":  # layout: ok -- the legacy docs/methodology/ prefix the new layout drops (plan decision D2)
+    workstreams/ the one subdirectory, and docs/methodology/ dropped."""
+    if rel == "docs/methodology":  # layout: ok -- the legacy docs/methodology/ prefix the new layout drops
         return NEW_LAYOUT_DIR
-    if rel.startswith("docs/methodology/"):  # layout: ok -- the legacy docs/methodology/ prefix the new layout drops (plan decision D2)
-        rel = rel[len("docs/methodology/"):]  # layout: ok -- the legacy docs/methodology/ prefix the new layout drops (plan decision D2)
+    if rel.startswith("docs/methodology/"):  # layout: ok -- the legacy docs/methodology/ prefix the new layout drops
+        rel = rel[len("docs/methodology/"):]  # layout: ok -- the legacy docs/methodology/ prefix the new layout drops
     return NEW_LAYOUT_DIR + "/" + rel
 
 
 def layout_anchor(rel):
     """The file whose location decides where `rel` lives: a state file is its own anchor, every other
-    methodology file follows the runner (plan 4.3)."""
+    methodology file follows the runner."""
     return rel if rel in LAYOUT_STATE_NAMES else RUNNER_NAME
 
 
@@ -995,7 +989,7 @@ def layout_locations(path, rel):
 
 
 # The directories a trim writes its shards and proofs into: docs/archive/ beside a root ledger, and
-# methodology/archive/ beside one that moved (plan 4.1, methodology_trim.py 1.8.0).
+# methodology/archive/ beside one that moved (methodology_trim.py 1.8.0).
 TRIM_ARCHIVE_DIRS = (TRIM_ARCHIVE_DIR, NEW_LAYOUT_DIR + "/archive")
 
 
@@ -1004,7 +998,7 @@ def layout_names(path):
 
     `names` maps the real relative path of each methodology file found under methodology/ to its LEGACY
     name; `own` holds the root-relative names that read as a methodology file's but are the PROJECT's own
-    (the plan's tie rule, decided at S276: where the runner is under methodology/, the framework's
+    (the resolver's tie rule: where the runner is under methodology/, the framework's
     CHANGELOG.md is methodology/CHANGELOG.md and a root one is the project's product changelog, which no
     methodology tool reads). A legacy or empty project gets two empty answers, so its files are classified
     by their own paths exactly as before. A half-migrated one maps the methodology/ copies and leaves the
@@ -1024,7 +1018,7 @@ DASHBOARD_NAME = "methodology_dashboard.py"  # layout: ok -- this tool's own fil
 
 def dashboard_copy_target(project_dir):
     """(path, refusal) of the dashboard copy a project keeps. `--sync` is a second sync channel outside the
-    manifest (plan C15), so it resolves each target's layout itself: a migrated project's copy is
+    manifest, so it resolves each target's layout itself: a migrated project's copy is
     methodology/methodology_dashboard.py and never also a root one; a legacy or empty project's is the
     root (the default until the contract stage); a half-migrated project has none to write, because
     nothing says which of its two layouts is live, and the refusal names both runner paths."""
@@ -1124,7 +1118,7 @@ def is_framework_installed(rel_path, fpath):
 # distributed file — the adopter's own tool WROTE it into their repo — which is why it needs its own
 # predicate rather than an entry in the table above.
 #
-# WHY THIS EXISTS, and it is the defect S39' would otherwise have shipped. The exclusion above keeps
+# WHY THIS EXISTS, and it is the defect that would otherwise have shipped. The exclusion above keeps
 # the two installed executables out of the adopter's source count. It says nothing about what those
 # executables PRODUCE. A single `--write` emits a fixed 220-line bash script into `docs/archive/`,
 # and `.sh` is in SOURCE_EXTS — so a doc-only adopter who actually USES the tool we just shipped
@@ -1220,7 +1214,7 @@ def check_stale_version():
         )
 
 
-# --- S38 helpers: locating the trimmer, and computing the line metric without it ------------------
+# --- helpers: locating the trimmer, and computing the line metric without it ------------------
 
 def find_trim_tool(path, role="adopter"):
     """Locate the ledger trimmer for the SCANNED project, or None.
@@ -1232,8 +1226,8 @@ def find_trim_tool(path, role="adopter"):
 
     Content-verified by regex, exactly as parse_version verifies a dashboard copy: a bare
     `.is_file()` would accept a directory or an unrelated same-named script. Nothing here
-    imports or executes the file it found -- §7.1's precedent, and the reason the rows stay
-    read-only. That holds for `ledgers` too (BL-88 P2): _parse_trim_ledgers PARSES the source
+    imports or executes the file it found -- the design's precedent, and the reason the rows stay
+    read-only. That holds for `ledgers` too: _parse_trim_ledgers PARSES the source
     and runs none of it."""
     candidates = layout_locations(path, TRIM_TOOL_NAME)
     if role == "framework":
@@ -1256,7 +1250,7 @@ def find_trim_tool(path, role="adopter"):
 def _parse_trim_budget(text):
     """The trimmer's byte budget, read out of its source. None when it cannot be read.
 
-    None is a real answer here, not a zero: the budget is a calibrated judgment (design §5.4)
+    None is a real answer here, not a zero: the budget is a calibrated judgment
     that no formula recovers, so an unparseable one makes the byte half of the trigger
     unanswerable and it says so rather than substituting a guess."""
     m = _TRIM_BUDGET_RE.search(text)
@@ -1271,7 +1265,7 @@ def _parse_trim_budget(text):
     return total or None
 
 
-# BL-88 P2: the attribute uses of LEDGERS a reading survives -- each one only READS the table.
+# The attribute uses of LEDGERS a reading survives -- each one only READS the table.
 # Anything else on the name (`.pop`, `.update`, `.setdefault`, `.clear`, ...) could change what
 # the literal says, so the reading abstains rather than follow it.
 _TRIM_LEDGERS_READ_ONLY = frozenset(("get", "keys", "items", "values", "copy"))
@@ -1281,18 +1275,17 @@ def _parse_trim_ledgers(text):
     """The basenames a trimmer's LEDGERS table declares, read out of its SOURCE. None when the
     source alone cannot say.
 
-    BL-88 P2 (docs/planning/dashboard-read-cap-class-adopter-drift-plan.md §8). The operator
-    decided this is a SOURCE-TEXT read, never an execution: no adopter code runs inside the
-    scanner -- §7.1's precedent and find_trim_tool's own contract. `ast.parse` honours that, since
+    This is a SOURCE-TEXT read, never an execution: no adopter code runs inside the
+    scanner -- the design's precedent and find_trim_tool's own contract. `ast.parse` honours that, since
     it builds a syntax tree and runs nothing, and it is used instead of a grep because a grep
-    cannot tell an entry from a mention: nprcgenekeepr's widened trimmer spells SESSION_NOTES.md
+    cannot tell an entry from a mention: one adopter's widened trimmer spells SESSION_NOTES.md
     on three lines -- a comment, the key, and a `basename=` argument -- and one of them is a key.
 
     ABSTAIN, NEVER GUESS. The answer is the keys of ONE module-level `LEDGERS = {...}` display
     whose keys are all string constants, and only while nothing else in the file binds the name
     (assignment, import, def, class, except-as), stores into it, deletes from it, or calls a
     method on it that is not a read. Anything else returns None. The asymmetry is the reason: None
-    leaves the Class B row exactly as P1 wrote it, so a false negative costs nothing, while a key
+    leaves the Class B row exactly as it was, so a false negative costs nothing, while a key
     the running tool would not have makes the row name a remedy that does not work. What no
     source read can see -- a mutation through `globals()` or from another module -- is the residue
     accepted in exchange for never executing the file."""
@@ -1411,7 +1404,7 @@ def _trim_record_count(text, basename):
 # cost a session to find (a shard committed before the ledger existed is not an archive event,
 # because nothing shrank), and 18 assertions still pin that behaviour. Deleting it would discard
 # earned coverage; giving it a new consumer would be a feature this session did not scope. Whether
-# the S38 row should surface an archive baseline at all is part of Phase C's decision about that
+# the trim row should surface an archive baseline at all is a decision about that
 # row's shape — decide it there, and delete or re-wire this then. Recorded, not drifted into
 # (FM #17).
 def _newest_archive_sha(path, basename):
@@ -1438,7 +1431,7 @@ def _newest_archive_sha(path, basename):
         # filter, and skipping it is not cosmetic. A shard committed separately from the trim
         # (the ordinary two-step manual archive), or copied in beside new entries, adds a sha
         # here that the trimmer discards; the two then compute against different baselines and
-        # the row an operator reads stops matching `--check`, which is the one thing §1.3 names
+        # the row an operator reads stops matching `--check`, which is the one thing the design names
         # as worse than a single gauge. It does not bite on this repo -- every shard here really
         # did shrink its ledger -- so the agreement test passed on luck of history until a
         # fixture was built for it.
@@ -1507,7 +1500,7 @@ def sync_dashboards(start, dry_run=False, target=None, force=False):
     repos where it is still git-tracked — those need the Phase 3 `git rm --cached` +
     per-repo commit discipline. Tracked targets are flagged in the output.
 
-    Issue #67 points 2/3/4 (docs/planning/issue67-fork-side-fix-plan.md, D1-D4): a write is
+    Issue #67 points 2/3/4: a write is
     gated (skipped without --force) when the target is already git-tracked, or is a brand-new
     file landing in a repo whose own .gitignore does not already cover it. The gate is computed
     BEFORE branching on dry_run, so a --dry-run preview shows [SKIPPED] honestly instead of
@@ -1646,7 +1639,7 @@ def print_usage():
 
 # === DISCOVERY ===
 
-# BL-29: the two directories this script is actually checked into its OWN home repo at (see
+# The two directories this script is actually checked into its OWN home repo at (see
 # bin/_manifest.py — starter-kit/methodology_dashboard.py is the TRACKED distribution source;
 # tools/methodology_dashboard.py is the canonical-only portfolio copy). Every OTHER copy —
 # every adopter-installed copy, the portfolio-root copy — sits directly at the level it is meant
@@ -1681,7 +1674,7 @@ def resolve_single_project_root(script_dir):
             and (parent / ".git").exists()
             and (parent / "bin" / "_manifest.py").is_file()):
         return parent
-    # BL-101 P5: an adopter's copy in the new layout sits in <project>/methodology/, one level below the
+    # An adopter's copy in the new layout sits in <project>/methodology/, one level below the
     # project it scans. Three facts together, none of them the directory's NAME alone (a directory named
     # methodology that is not a project's subdirectory, as this repository's own root is, has a .git of its
     # own and returned above): the project above is a git repository, and the runner is beside the copy.
@@ -1694,7 +1687,7 @@ def resolve_single_project_root(script_dir):
 def output_dir(script_dir, root):
     """Where a run writes dashboard.html and dashboard_history.jsonl: beside the copy that ran, which is the
     project root for every copy but one. A copy that lives in <project>/methodology/ writes there, so the
-    project root stays clean (plan 4.1 lists both files under methodology/) and its history is read back
+    project root stays clean (the new layout lists both files under methodology/) and its history is read back
     from the same place."""
     return script_dir if (root != script_dir and script_dir.name == NEW_LAYOUT_DIR) else root
 
@@ -1882,7 +1875,7 @@ def collect_file_metrics(path):
             ext = fpath.suffix.lower()
             category = categorize_file(rel_path, ext, fname)
             rel_posix = str(rel_path).replace("\\", "/")
-            # BL-101 P5: the NAME every table below is keyed by. A methodology file under methodology/ is
+            # The NAME every table below is keyed by. A methodology file under methodology/ is
             # classified by its legacy name; a root file that is the project's own namesake (a product
             # CHANGELOG.md beside the framework's under methodology/) has no name and is never ours.
             class_name = layout_name_of.get(rel_posix, None if rel_posix in layout_own else rel_posix)
@@ -1956,7 +1949,7 @@ def collect_file_metrics(path):
             #     print([f['path'] for f in d['files']['largest_files']])"
             if class_name in READ_CAP_WATCHED:
                 # `lines` is kept and still reported: it is what a human scans a ledger by, and
-                # dashboard_history.jsonl has carried the key since S38. It is no longer what the
+                # dashboard_history.jsonl has carried the key since the trim row was added. It is no longer what the
                 # verdict is computed from.
                 try:
                     watched_bytes = fpath.stat().st_size
@@ -2087,7 +2080,7 @@ def collect_doc_metrics(path, file_metrics):
         ("ROADMAP", "has_roadmap"),
         ("TODO", "has_todo"),
     ]:
-        # BL-101 P5: a project that moved its state files keeps its changelog and roadmap under methodology/.
+        # A project that moved its state files keeps its changelog and roadmap under methodology/.
         top = [path] + ([path / NEW_LAYOUT_DIR] if resolve_layout(path)[0] == "new" else [])
         for entry in (e for d in top if d.is_dir() for e in d.iterdir()):
             if entry.name.upper().startswith(check_name):
@@ -2128,7 +2121,7 @@ def _find_changelog(path):
     This answers *which file*, never *does this repo keep an action ledger* — that is
     _find_action_ledger. Keeping the two questions apart is ratified decision D3."""
     bases = []
-    # BL-101 P5: the directory the ledger lives in comes first (a no-op in a legacy tree, where it is `path`).
+    # The directory the ledger lives in comes first (a no-op in a legacy tree, where it is `path`).
     for base in [loc.parent for loc in layout_locations(path, "CHANGELOG.md")] + [path, path / "docs"]:  # layout: ok -- the ledger's own file name: the resolver's anchor
         if base not in bases:
             bases.append(base)
@@ -2477,51 +2470,45 @@ def evaluate_changelog_freshness(path, git):
 
 
 def collect_trim_metrics(path, files, role="adopter"):
-    """S38 -- the trim-trigger row: one verdict per grow-and-must-be-read ledger, and the
-    remedy. Since Phase B both halves are LEVELS in bytes -- the one-read cap and the context
+    """The trim-trigger row: one verdict per grow-and-must-be-read ledger, and the
+    remedy. Both halves are LEVELS in bytes -- the one-read cap and the context
     budget -- where the first half used to be a records-per-line RATE with a baseline commit.
 
-    The remedy BRANCHES on whether the trimmer is installed for the scanned project (§7.3):
+    The remedy BRANCHES on whether the trimmer is installed for the scanned project:
     present names a command the adopter can actually run, built from the located path; absent
     never does. Every advisory names the file it was computed against rather than saying "the
     ledger" -- a generic noun in this position once sent an adopter to update a product
     release-notes file while the real finding stayed suppressed.
 
-    ONE DEPARTURE FROM §7.3, LABELLED AS SUCH RATHER THAN DRESSED AS A READING. The design says
+    ONE DEPARTURE FROM THE DESIGN, LABELLED AS SUCH RATHER THAN DRESSED AS A READING. The design says
     the absent branch "names the documented manual procedure". There is no such procedure to
-    name: no distributed file documents ledger archiving, which is precisely what queue item S40
-    is for (design §11 Phase 5 says so itself -- "Today zero distributed files say anything on
-    the subject"). Verified over the WHOLE distributed set, not a convenient corner of it -- the
-    design's own check greps `starter-kit/*.md`, which matches 11 of the 27 manifest entries, and
-    a claim about "no distributed file" cannot be settled by a net that misses 12 of them
-    (`HOW_TO_USE.md`, `ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, and nine `workstreams/*.md`):
+    name: no distributed file documents ledger archiving. Verified over the WHOLE distributed set,
+    not a convenient corner of it -- a claim about "no distributed file" cannot be settled by a net
+    that misses some of them:
       python3 -c "import sys;sys.path.insert(0,'bin');import _manifest as m;\
         print('\n'.join(sorted(e[0] for e in m.DISTRIBUTION if e[0].endswith('.md'))))" \
         | xargs grep -l -i archiv
-    -> `starter-kit/FRAMEWORK_LEARNINGS.md` (fork Learning #15's prose about PROVING a split
-       lossless, not a procedure for performing one; that row has since left for
-       docs/FORK_LEARNINGS.md), `HOW_TO_USE.md` (a worked example project's
-       `POST /projects/:id/archive` endpoint), and, since S39', `starter-kit/BOOTSTRAP.md` (the
+    -> `starter-kit/FRAMEWORK_LEARNINGS.md` (prose about PROVING a split lossless, not a procedure for performing one),
+       `HOW_TO_USE.md` (a worked example project's
+       `POST /projects/:id/archive` endpoint), and `starter-kit/BOOTSTRAP.md` (the
        one-line inventory entry describing what the newly distributed tool DOES -- a tool
        description, not a policy: it states no size norm, no trigger, and no procedure). None of
        the three documents ledger archiving, so the verdict is unchanged and the departure below
-       still stands. The narrower `starter-kit/*.md` grep reached the same verdict, which is luck,
-       not method -- and this result line is itself the demonstration, having gone from two files
-       to three inside the very session that shipped the tool. Re-run it; do not read it.
+       still stands. Re-run it; do not read it.
     The `.md` filter is not cosmetic either: run unfiltered and the distributed set also returns
     THIS FILE, because the paragraph you are reading contains the word. A measurement that
     includes the measurer is the trap one over from the narrow-population one, and the fix for
     both is to state the population beside the number.
     So the absent branch states the measurement and says plainly that the byte half did not run.
-    Inventing a destination would be the exact misdirection §7.3 exists to prevent. WHEN S40
-    LANDS, this branch should point at the seed ledger's own archiving section.
+    Inventing a destination would be the exact misdirection the design's remedy rule exists to prevent. WHEN AN
+    ARCHIVING PROCEDURE IS DISTRIBUTED, this branch should point at the seed ledger's own archiving section.
     """
     result = {
         "tool_present": False,
         "tool_path": None,
         "tool_version": None,
         "budget_bytes": None,
-        # BL-88 P2: the basenames the installed trimmer's OWN LEDGERS table declares, parsed from
+        # The basenames the installed trimmer's OWN LEDGERS table declares, parsed from
         # its source -- None when it is absent or the reading abstained. Not to be confused with
         # "ledgers" below, which is THIS row's population: the watched Class A files it measured.
         "tool_ledgers": None,
@@ -2550,7 +2537,7 @@ def collect_trim_metrics(path, files, role="adopter"):
     # The population is CLASS A -- the watched names the trimmer has a config entry for -- which
     # is what keeps the row from pointing at a file the tool refuses.
     #
-    # PHASE C1 CHANGED THE SPELLING, NOT THE SET, AND ON EVERY INPUT collect_all CAN PRODUCE IT
+    # THE PARTITION CHANGED THE SPELLING, NOT THE SET, AND ON EVERY INPUT collect_all CAN PRODUCE IT
     # CHANGES NOTHING AT ALL -- said plainly because an earlier draft of this comment overstated it.
     # This filtered on `basename in TRIM_GRAMMARS`. collect_file_metrics only ever admits an exact
     # member of READ_CAP_WATCHED into read_cap_watch, so through collect_all the two filters are
@@ -2571,7 +2558,7 @@ def collect_trim_metrics(path, files, role="adopter"):
             size_bytes = fpath.stat().st_size
         except OSError:
             continue
-        # PHASE C2. This re-implements methodology_trim.py's Trigger, so it must move with it.
+        # This re-implements methodology_trim.py's Trigger, so it must move with it.
         # Every path that reaches here has already been filtered to class "A" by the guard above,
         # and w["path"] is repo-root-relative, so the ROOT SCOPING the trimmer applies is already
         # satisfied here by construction: read_cap_class() is a path lookup and answers None for a
@@ -2605,7 +2592,7 @@ def collect_trim_metrics(path, files, role="adopter"):
             # "archive threshold", and STILL not the substring "read cap": the D4(b) risk row is
             # greppable on "read cap" and seven assertions plus the diagnostic trail in
             # dashboard_history.jsonl depend on that staying exclusive to it. The same discipline
-            # keeps BL-5's "Large files detected" disjoint from both. Phase C2 changed the NUMBER
+            # keeps "Large files detected" disjoint from both. The change was to the NUMBER
             # this row keys on, not that rule.
             #
             # WHY THE WORDING CHANGED WITH THE NUMBER. It used to say "against a 56,750 B one-read
@@ -2640,10 +2627,10 @@ def collect_trim_metrics(path, files, role="adopter"):
         result["signals"].append(
             ("medium", "%s: %s -- the archive trigger fires; %s" % (w["path"], why, remedy)))
 
-    # THE ABSTENTION DISCLOSURE WAS HERE, AND PHASE B DELETED THE STATE IT DETECTED rather than
+    # THE ABSTENTION DISCLOSURE WAS HERE, AND A LATER CHANGE DELETED THE STATE IT DETECTED rather than
     # the disclosure alone -- which is why this note replaces it instead of the code being quietly
     # dropped. It fired once per repo where NEITHER half could measure a watched ledger: the line
-    # RATE had no baseline archive AND the byte budget was unreadable. Decision D4 forbids
+    # RATE had no baseline archive AND the byte budget was unreadable. The design forbids
     # reporting a 0 from an unread source as a clean state, and a ledger about which this scanner
     # said nothing at all was exactly that.
     #
@@ -2709,7 +2696,7 @@ def collect_methodology_metrics(path, role="adopter"):
     # per-item map are all derived from this single map (they were previously three separate
     # loops over the same paths, each re-hitting the filesystem).
     #
-    # BL-101 P5: items are located through the layout (the names stay the legacy ones). For the PUBLISHER
+    # Items are located through the layout (the names stay the legacy ones). For the PUBLISHER
     # that moves exactly its own CHANGELOG.md and HANDOFFS.md, the instance files it operates; its sources
     # (ITERATIVE_METHODOLOGY.md, workstreams/, bin/, starter-kit/) are not in LAYOUT_MOVED under those
     # names and are read where they are, so the same call serves both checklists.
@@ -2732,7 +2719,7 @@ def collect_methodology_metrics(path, role="adopter"):
         "compliance_pct": checklist_pct(score, maximum),
         "missing_files": [item_path for item_path, present in items.items() if not present],
         "items": items,
-        # BL-101 P5: which layout this project is in, and the paths that settled it (additive).
+        # Which layout this project is in, and the paths that settled it (additive).
         "layout": project_layout(path),
     }
 
@@ -3149,10 +3136,10 @@ GATES_HISTORY_MAX = 50          # manifest commits scanned for loosenings, newes
 
 
 def gate_manifest_rels(path):
-    """The two places the manifest may live, the one the project's layout names first (BL-101 P5). Both are
+    """The two places the manifest may live, the one the project's layout names first. Both are
     always read for HISTORY: a manifest that moved has its older versions at the other path, and a walk by one
     name stops at the move, which hides a floor lowered inside the move commit and reads the move itself as a
-    removal (plan E2)."""
+    removal."""
     legacy, moved = GATES_MANIFEST, NEW_LAYOUT_DIR + "/" + GATES_MANIFEST
     return [moved, legacy] if resolve_layout(path, GATES_MANIFEST)[0] == "new" else [legacy, moved]
 
@@ -3222,7 +3209,7 @@ def _gate_manifest_history(path):
     that makes "every gate is missing" true, and that is the one case _gate_loosenings already
     handles.
 
-    FIRST-PARENT ON PURPOSE (BL-99). Each version is later compared with the next older ROW, so
+    FIRST-PARENT ON PURPOSE. Each version is later compared with the next older ROW, so
     the rows must be one line of ancestry. A plain `git log -- <path>` follows both parents of a
     merge whose manifest matches neither, and lists the two lineages interleaved by commit date:
     the newer of two sibling commits is then compared with a commit that is not its ancestor and
@@ -3468,8 +3455,8 @@ def detect_doc_only(path, files, render):
 
     # 4. Corpus disjunction (only when source is negligible): a real doc corpus OR a render
     #    toolchain — the latter catches a pure-LaTeX (or other toolchain-only) repo whose .tex
-    #    files are not counted as docs (so its doc_loc is ~0; BL-34 added `.qmd`/`.rmd` to
-    #    DOC_EXTS, so a pure-Quarto/R-Markdown corpus now clears the doc_loc/doc_files arms
+    #    files are not counted as docs (so its doc_loc is ~0; `.qmd`/`.rmd` are in
+    #    DOC_EXTS, so a pure-Quarto/R-Markdown corpus clears the doc_loc/doc_files arms
     #    directly and no longer depends on this fallback), the exact source_loc≈0 research repo
     #    that must not be missed.
     #    Framework-installed markdown is discounted here and ONLY here: bin/sync ships 22 doc
@@ -3789,7 +3776,7 @@ def assess_risks(metrics):
     # the one repo that dogfoods the ledger rule it publishes.
     lay = metrics["methodology"].get("layout") or {}
     if lay.get("kind") == "half":
-        # Never guess which copy is live: the tools refuse a half-migrated tree and name both (plan 4.3).
+        # Never guess which copy is live: the tools refuse a half-migrated tree and name both.
         risks.append({"severity": "high",
                       "description": "Half-migrated methodology layout: " + " and ".join(lay["found"])
                                      + " both exist and nothing says which is live, so the tools refuse "
@@ -3812,22 +3799,21 @@ def assess_risks(metrics):
     # D4(b) — silent truncation, not a code smell. A second risk on purpose: it shares only the
     # adjective with "Large files detected" above, and shares no substring with it, so the two stay
     # independently greppable in dashboard_history.jsonl and the diagnostic trail that produced
-    # BL-5's and Layer 7's narrowings survives intact.
+    # the large-file check's narrowings survives intact.
     #
     # Gated on `owes_ledger` (bound above), which is ADDED POLICY and the reason it is here rather
-    # than beside the BL-5 check: a project that never adopted the methodology is not told its
+    # than beside the large-file check: a project that never adopted the methodology is not told its
     # CHANGELOG.md is too long. Ungated, this fires on any repo that happens to keep a long
     # changelog — the assumption whose measured cost is recorded in FRAMEWORK_INSTALLED_SOURCE's
     # own comment. Severity is `high` (also added policy) because this is the only expense in the
     # set that produces silently WRONG answers rather than merely expensive ones. This row names no
     # remedy, and BOTH halves of the reason it used to give have since expired: the conditional
-    # naming it deferred to queue item S38 shipped in 2.12.0 (collect_trim_metrics), and the
-    # trimmer it called unreachable is in bin/_manifest.py as of S39'. What keeps the row bare is
+    # naming it deferred to a later change shipped in 2.12.0 (collect_trim_metrics), and the
+    # trimmer it called unreachable is now in bin/_manifest.py. What keeps the row bare is
     # now a scope boundary rather than a missing tool — the remedy is emitted by the trim row,
     # which owns the conditional wording and the abstentions; duplicating it here would give a
-    # ledger past both thresholds two remedies for one problem. The dedup between the two rows is
-    # raised and undecided (S38's residual 1), so this comment states the coupling rather than
-    # pretending the rows are independent. ONE EXCEPTION since BL-88 P2: a Class B file whose
+    # ledger past both thresholds two remedies for one problem. The rows are coupled, and this comment says so rather than
+    # pretending they are independent. ONE EXCEPTION: a Class B file whose
     # project's own trimmer declares it gets its remedy HERE, because the trim row's population
     # is Class A and never reaches that file -- still one remedy per problem, not two.
     if owes_ledger:
@@ -3850,19 +3836,19 @@ def assess_risks(metrics):
                                    "you here — there is no delivered prefix to be ordered. Read "
                                    "it with explicit offset/limit, or archive it"})
             elif wb > READ_CAP_BYTES:
-                # PHASE C2 — THIS ROW IS NOW PER-CLASS, WHICH IS HOW THE DEDUP ENDS.
-                # S38's residual 1 asked whether this row and the trim row should be deduplicated.
-                # The answer plan §7 gives for option A1 is "make the rows DIFFERENT, not delete
+                # THIS ROW IS NOW PER-CLASS, WHICH IS HOW THE DEDUP ENDS.
+                # A question was whether this row and the trim row should be deduplicated.
+                # The answer is "make the rows DIFFERENT, not delete
                 # one", and this is where that lands. Both rows still fire on a Class B file,
                 # because for those two thresholds still coincide. On a Class A file they now
                 # separate: the trim row is silent until 192 KiB, and this row keeps reporting the
                 # one-read property — which is REAL and stays true — at a severity that says what
                 # the reader should DO about it, which is nothing.
                 #
-                # ⚠ THE SEVERITY DROP IS THE FLEET-VISIBLE PART OF THIS PHASE, and it is a
-                # judgment, not a derivation. §10 dragon 7: a guard can be correct and not worth
+                # ⚠ THE SEVERITY DROP IS THE FLEET-VISIBLE PART OF THIS CHANGE, and it is a
+                # judgment, not a derivation: a guard can be correct and not worth
                 # acting on. A Class A ledger between the cap and the archive threshold is the
-                # adjudicated case (BL-52 third addendum) — ordered truncation drops the OLDEST
+                # adjudicated case — ordered truncation drops the OLDEST
                 # records, Phase 0 works from `git log`, and Phase 3A reads one receipt. Calling
                 # that HIGH taught a reader to ignore the row, which is worse than not emitting it.
                 # It is not dropped to "info" either: the property is real and a session that
@@ -3884,7 +3870,7 @@ def assess_risks(metrics):
                                        f"{CLASS_A_FIRE_BYTES - wb:,} B away. If you need the "
                                        "whole file, read it with an explicit offset/limit"})
                 else:
-                    # BL-88 — THIS ROW MAY ASSERT ONLY WHAT THIS MODULE EVALUATED. It used to print
+                    # THIS ROW MAY ASSERT ONLY WHAT THIS MODULE EVALUATED. It used to print
                     # "the trimmer answers NO_CONFIG for it": a fact about a NEIGHBOURING TOOL's
                     # config table, read from nothing. That was true here only because LEDGERS and
                     # the declared classes coincide -- which a canonical test pins -- and FALSE in
@@ -3892,7 +3878,7 @@ def assess_risks(metrics):
                     # trees while its suite is not (absent from bin/_manifest.py), so the claim was
                     # being evaluated where nothing could check it: one adopter's trimmer gained a
                     # SESSION_NOTES.md spec and this row went on denying it. The class stays
-                    # DECLARED (READ_CAP_CLASS_A/B above, and section 10 dragon 6 with it); only the
+                    # DECLARED (READ_CAP_CLASS_A/B above); only the
                     # prose stops speaking for the trimmer.
                     #
                     # AND THE REASON IS NOW PER-NAME. The comment above READ_CAP_CLASS_B already
@@ -3904,9 +3890,9 @@ def assess_risks(metrics):
                     # inside READ_CAP_BYTES in all of them; one repo has no such heading at all,
                     # which is the case the weaker form exists for.
                     #
-                    # P2 — AND WHERE IT HAS EVALUATED SOMETHING, IT MAY SAY SO. collect_trim_metrics
+                    # AND WHERE IT HAS EVALUATED SOMETHING, IT MAY SAY SO. collect_trim_metrics
                     # reads the scanned project's own trimmer SOURCE (_parse_trim_ledgers: a parse,
-                    # never an execution -- the operator's decision). Where that reading lists this
+                    # never an execution). Where that reading lists this
                     # file's BASENAME -- the key the trimmer itself looks up,
                     # `LEDGERS.get(path.name)` at any depth -- the conjunct that sets Class B apart
                     # from A, NO REMEDY the reader can reach, is checked false FOR THIS PROJECT, so
@@ -3952,7 +3938,7 @@ def assess_risks(metrics):
                     else:
                         risks.append({"severity": "high", "description": desc})
 
-    # S38: the trim-trigger rows, re-emitted VERBATIM from the collector -- the same arrangement
+    # The trim-trigger rows, re-emitted VERBATIM from the collector -- the same arrangement
     # the Component C signals above use. The collector owns the gate, the population and the
     # conditional remedy wording; nothing is re-decided here, so there is one place to read to
     # know what an operator was told. Absent key tolerated: a metrics dict built by an older
@@ -4059,7 +4045,7 @@ def collect_all(path):
     # Quality gates (D6): declared thresholds, last measured outcomes, git-only loosening history.
     metrics["gates"] = collect_gate_metrics(path)
 
-    # S38: the trim-trigger row. Wired after the metrics dict is built (it reads the collected
+    # The trim-trigger row. Wired after the metrics dict is built (it reads the collected
     # read_cap_watch line counts) and before the scores block, which re-emits its signals.
     metrics["trim"] = collect_trim_metrics(path, files, role=role_info["role"])
 
