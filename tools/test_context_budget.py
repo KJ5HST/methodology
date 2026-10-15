@@ -1850,11 +1850,11 @@ NEW_HISTORY = NEW_DIR + "/" + cb.HISTORY_NAME      # layout: the history file li
 
 
 class TestTheConfigMayLiveInEitherLayout(unittest.TestCase):
-    """BL-101 P4 (plan 4.3, C9, 7.2b): a project keeps its budget config at its root (legacy) or under
+    """A project keeps its budget config at its root (legacy) or under
     methodology/ (new), and the tool reads the resolver's table with the config as the anchor. The
-    config's files[] paths stay relative to the PROJECT root in both layouts (bin/migrate-layout, P7,
+    config's files[] paths stay relative to the PROJECT root in both layouts (bin/migrate-layout
     rewrites them); only where the config and its history file sit moves. A root config beside a
-    methodology/ one is the project's own when the runner is tracked under methodology/ (S276's picker)."""
+    methodology/ one is the project's own when the runner is tracked under methodology/."""
 
     CFG = {"classes": {"resident": {"total_bytes": 34000}},
            "files": [{"path": "CLAUDE.md", "class": "resident", "max_bytes": 100000}]}

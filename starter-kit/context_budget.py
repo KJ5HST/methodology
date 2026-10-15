@@ -39,7 +39,7 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-VERSION = "1.4.0"   # 1.4.0: BL-101 P4 -- the config and its history file live at the root or under methodology/
+VERSION = "1.4.0"   # 1.4.0: the config and its history file live at the root or under methodology/
 CONFIG_NAME = ".context-budget.json"  # layout: ok -- the config's own name; where it lives is resolved below
 HISTORY_NAME = ".context-budget-history.jsonl"  # layout: ok -- the history file's own name; it lives beside the config
 TOOL_NAME = "context_budget.py"  # layout: ok -- this tool's own name, cited in messages and found by the hook it installs
@@ -47,8 +47,8 @@ NEW_DIR = "methodology"
 RUNNER_NAME = "SESSION_RUNNER.md"  # layout: ok -- the framework anchor: where it is tracked decides a config held in both places
 
 # === LAYOUT ===
-# A project keeps its methodology files at its root (legacy) or under methodology/ (new): the plan's
-# section 4.3. This block is the resolver, embedded byte for byte; the canonical suite asserts that.
+# A project keeps its methodology files at its root (legacy) or under methodology/ (new).
+# This block is the resolver, embedded byte for byte; the canonical suite asserts that.
 
 # --- layout resolver: BEGIN ---
 import os as _os
@@ -352,7 +352,7 @@ def config_location(root):
     anchor. kind is new | legacy | half | none; the path is None unless the answer is one place. A tree
     with the config in both places is half-migrated and the tool never guesses between them, unless the
     runner is under methodology/ and not at the root: then the methodology copy is the config and the
-    root one is the project's own (plan 7.2b)."""
+    root one is the project's own."""
     kind, _directory, _found = resolve_layout(root, CONFIG_NAME)
     if kind == "new":
         return kind, f"{NEW_DIR}/{CONFIG_NAME}"

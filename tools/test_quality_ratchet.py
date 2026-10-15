@@ -252,7 +252,7 @@ class TestATimeoutIsNotAMeasurement(unittest.TestCase):
 # non-interactive shell has SIGINT ignored, ignored signals survive fork and exec, and Python installs no
 # KeyboardInterrupt when it starts with SIGINT ignored. This repository starts its long runs (a gate, a mutation round)
 # as `nohup ... &`: a driver that took the dispositions it was given failed the two hangup tests under nohup and the two
-# Ctrl-C tests in the background (S306). A fourth argument asks for SIGHUP ignored, as `nohup` would.
+# Ctrl-C tests in the background. A fourth argument asks for SIGHUP ignored, as `nohup` would.
 DRIVER = ("import importlib.util, signal, sys\n"
           "s = importlib.util.spec_from_file_location('qr', sys.argv[1])\n"
           "m = importlib.util.module_from_spec(s); s.loader.exec_module(m)\n"
@@ -265,7 +265,7 @@ class _GateCommandChildren(unittest.TestCase):
     """A gate command of the shape that matters: a shell that stays alive as the PARENT of a long-running
     child and records the child's pid. A single simple command would not do: `sh -c 'prog'` execs prog, the
     shell IS the program, and killing the shell kills it -- a test of that shape passes on the old tool for
-    the wrong reason. A test suite run under a shell is the shape here (BL-107)."""
+    the wrong reason. A test suite run under a shell is the shape here."""
 
     def setUp(self):
         td = tempfile.TemporaryDirectory()
@@ -320,7 +320,7 @@ class _GateCommandChildren(unittest.TestCase):
 
 
 class TestATimedOutCommandIsStopped(_GateCommandChildren):
-    """BL-107. `subprocess.run(shell=True, timeout=t)` kills the shell, not the shell's children: a test
+    """`subprocess.run(shell=True, timeout=t)` kills the shell, not the shell's children: a test
     suite that outlived its budget ran on to its end, with its result discarded, through every gate after
     it (failure mode #29). 1.4.0 reported the timeout truthfully and did not stop the command."""
 
@@ -380,7 +380,7 @@ class TestATimedOutCommandIsStopped(_GateCommandChildren):
 
     def test_a_refused_group_kill_does_not_escape(self):
         # macOS raises PermissionError from killpg when a member of the group is already dead and unreaped
-        # (measured, S306); ProcessLookupError is a group already gone. Neither is a failure of the gate.
+        # (measured); ProcessLookupError is a group already gone. Neither is a failure of the gate.
         for exc in (ProcessLookupError, PermissionError):
             with self.subTest(exc=exc.__name__), mock.patch.object(qr.os, "killpg", side_effect=exc):
                 t0 = time.time()
@@ -406,7 +406,7 @@ class TestATimedOutCommandIsStopped(_GateCommandChildren):
 class TestASignalToTheToolStopsTheCommand(_GateCommandChildren):
     """The command now runs in its own session, so the terminal's Ctrl-C and a closed terminal's hangup no
     longer reach it: the tool must stop it itself, or the fix for a timeout orphans it the other way round
-    (measured, S306: one child left after SIGINT and after SIGHUP to the tool's group)."""
+    (measured: one child left after SIGINT and after SIGHUP to the tool's group)."""
 
     def test_sigterm_stops_the_child_and_the_tool_exits_143(self):
         r = self.drive(self.command(before="kill -TERM $PPID; "))
@@ -897,7 +897,7 @@ LEGACY_CONFIG = qr.CONFIG_NAME
 
 
 class TestTheManifestMayLiveInEitherLayout(unittest.TestCase):
-    """BL-101 P2 (plan section 4.3): a project keeps its manifest at its root (legacy) or under
+    """A project keeps its manifest at its root (legacy) or under
     methodology/ (new). The ratchet reads the four-row table with the manifest as the anchor."""
 
     def setUp(self):
@@ -976,7 +976,7 @@ class TestTheManifestMayLiveInEitherLayout(unittest.TestCase):
         self.assertFalse(os.path.exists(os.path.join(self.d, "methodology", qr.DEFAULT_RESULTS)))
 
     def test_manifest_location_decides_a_tie_by_the_framework_anchor(self):
-        # S276's picker (plan 7.2b): a project whose runner is under methodology/ keeps its manifest
+        # A project whose runner is under methodology/ keeps its manifest
         # there, and a manifest at the root is the project's own, which the ratchet does not read.
         _put(self.d, LEGACY_CONFIG, manifest()); _put(self.d, NEW_CONFIG, manifest())
         self.assertEqual(qr.manifest_location(self.d), ("half", None))        # no runner: still refused
@@ -1028,7 +1028,7 @@ class _Repo(unittest.TestCase):
 
 
 class TestPrecommitAcrossTheMove(_Repo):
-    """BL-101 P2, plan C4. A move that reads as 'manifest removed' is refused for the wrong reason,
+    """A move that reads as 'manifest removed' is refused for the wrong reason,
     a base search that stops at the move cannot see a loosening made inside it, and a manifest at
     the new path that nothing looks for is a ratchet that fails OPEN."""
 
@@ -1058,7 +1058,7 @@ class TestPrecommitAcrossTheMove(_Repo):
         self.assertIn("gate 'cov' removed", out)   # the gate, not 'manifest removed': the file moved
 
     def test_a_loosening_at_the_new_path_after_the_move_commit_is_refused(self):
-        # The fail-open C4 measured: once the manifest is under methodology/ a ratchet that looks
+        # The fail-open measured here: once the manifest is under methodology/ a ratchet that looks
         # only at the root finds nothing staged and nothing at HEAD, and passes every loosening.
         self._move(); self._commit("move")
         _put(self.d, NEW_CONFIG, manifest(gate("cov", "min", 70))); _git(self.d, "add", NEW_CONFIG)
@@ -1132,7 +1132,7 @@ class TestPrecommitAcrossTheMove(_Repo):
         self._commit("a manifest in both places")
 
     def test_a_tie_the_runner_decides_judges_the_methodology_manifest_and_not_the_root_one(self):
-        # S276's picker: the ratchet works inside methodology/. A loosening there is refused for the
+        # The ratchet works inside methodology/. A loosening there is refused for the
         # loosening (not as "half-migrated"); a change to the root file, which is the user's, is not judged.
         self._tie()
         _put(self.d, NEW_CONFIG, manifest(gate("cov", "min", 70))); _git(self.d, "add", NEW_CONFIG)
@@ -1199,7 +1199,7 @@ class TestPrecommitAcrossTheMove(_Repo):
 
 class TestTheInstalledHookAcrossTheMove(_Repo):
     """The hook install-hook writes execs the tool by path. After a move that path is wrong, which
-    refuses every commit loudly (C4); the hook now also looks for the tool in the other layout."""
+    refuses every commit loudly; the hook now also looks for the tool in the other layout."""
 
     def _install(self, tool_rel):
         import shutil
@@ -1299,8 +1299,8 @@ class TestToolInvariants(unittest.TestCase):
         # sys.stdlib_module_names is 3.10+; pin the allowed set so the test runs on older
         # interpreters too, which is where a stray third-party import would bite first.
         allowed = {"hashlib", "json", "os", "re", "subprocess", "sys", "tempfile", "datetime",
-                   "shutil", "signal", "time",   # signal, time: a gate's command is stopped when the tool is (BL-107)
-                   "pathlib"}   # the embedded layout-resolver block (BL-101 P2) imports it
+                   "shutil", "signal", "time",   # signal, time: a gate's command is stopped when the tool is
+                   "pathlib"}   # the embedded layout-resolver block imports it
         self.assertTrue(names <= allowed, names - allowed)
 
     def test_selftest_is_green(self):
@@ -1318,7 +1318,7 @@ class TestToolInvariants(unittest.TestCase):
 
     def test_selftest_observes_a_command_being_stopped(self):
         # An adopter has the selftest and not this suite: it must SEE the command stopped, on a timeout
-        # and on a signal to the tool (BL-107). Run only where the platform has process groups.
+        # and on a signal to the tool. Run only where the platform has process groups.
         p = subprocess.run([PY, str(STARTER), "--selftest"], capture_output=True, text=True)
         for label in ("a timed-out gate's command is stopped, not left running",
                       "SIGTERM to the tool stops a gate's command and the tool exits 143"):
