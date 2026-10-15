@@ -629,15 +629,18 @@ class TestTheScanSet(Scratch):
     def test_this_repository_scans_the_tools_it_names_and_parses_cleanly(self):
         report = cll.scan_root(REPO)
         for name in ("starter-kit/methodology_dashboard.py", "starter-kit/methodology_trim.py",
-                     ".githooks/pre-commit", "bin/sync", "bin/status", "bin/check-links"):
+                     ".githooks/pre-commit", "bin/sync", "bin/status", "bin/check-links",
+                     "bin/check-handoff", "bin/check-ledger"):
             self.assertIn(name, report["files"])
         self.assertEqual(report["problems"], [])
 
-    def test_the_two_checkers_that_do_not_read_the_layout_are_not_scanned_and_say_why(self):
+    def test_only_the_manifest_and_the_suite_are_exempt_from_the_scan(self):
+        # The checkers read the layout and are scanned like every other shipped tool: a new exemption is a deliberate
+        # edit of this list, not a line added to NOT_SCANNED_ALWAYS on the way to a green gate.
+        self.assertEqual(sorted(cll.NOT_SCANNED_ALWAYS), ["bin/_manifest.py", "bin/tests.sh"])
         report = cll.scan_root(REPO)
         for name in ("bin/check-handoff", "bin/check-ledger"):
-            self.assertNotIn(name, report["files"])
-            self.assertIn("canonical-only", report["not_scanned"][name])
+            self.assertNotIn(name, report["not_scanned"])
 
 
 class TestToolsAlreadyResolvedStayAtZero(unittest.TestCase):

@@ -57,8 +57,6 @@ CANONICAL_PREFIXES = ("starter-kit/", "tools/", "workstreams/", "docs/planning/"
 NOT_SCANNED_ALWAYS = {
     "bin/_manifest.py": "the manifest is the table of paths itself",
     "bin/tests.sh": "the suite encodes the layout and is parameterised over both (plan C13)",
-    "bin/check-handoff": "a canonical-only checker that adopters never run; this tree does not give it the methodology/ layout reading",
-    "bin/check-ledger": "a canonical-only checker that adopters never run; this tree does not give it the methodology/ layout reading",
 }
 # ... and the same directories written as separate constants of a join: / "starter-kit" / "NAME"
 CANONICAL_JOIN_RE = re.compile(r"(?:%s)[\"']\)?\s*[,/]\s*[\"']$" % "|".join(

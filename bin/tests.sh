@@ -290,6 +290,16 @@ else
     fail "layout resolver, fixture trees and literal scanner unit tests failed"
 fi
 
+# The canonical checkers in both layouts (BL-101 P4): check-ledger and check-handoff,
+# each run as a command in a scratch project with its file at the root, under methodology/, in a
+# tie the runner decides and in a half-migrated tree. Canonical-only, like the checkers. It drives the tools;
+# it does not run them over this repository (the real-tree check is the evidence script of the P4 session).
+if python3 "$METHODOLOGY/tools/test_checker_layouts.py" >/dev/null 2>&1; then
+    pass "canonical checkers (ledger, receipts) in both layouts unit tests green"
+else
+    fail "canonical checkers in both layouts unit tests failed"
+fi
+
 # The sync layer in both layouts (BL-101 P6): the manifest's second table and its reader, bin/sync, bin/status and
 # bin/check-links, each run as a command in scratch projects (a legacy tree, a migrated one, an empty one, a
 # half-migrated one, and --source=github against sources with and without the table), and the literal scanner over
