@@ -1,0 +1,1458 @@
+#!/usr/bin/env python3
+"""Move a project's methodology files under methodology/ (BL-101, phase P7).
+
+CANONICAL-ONLY, like bin/sync and bin/status: it is not in bin/_manifest.py, so adopters do not receive it.
+Contract: docs/planning/methodology-subdirectory-plan.md section 4.7 and section 7.3 row P7.
+
+A project keeps its methodology files at its root and under docs/methodology/ (the legacy layout, the manifest's
+`dest` column) or in one directory, methodology/ (the new layout, its NEW_LAYOUT table). This tool moves a
+legacy project to the new layout. It is a dry run unless --apply is given: the dry run reads the project and
+prints the plan, and writes nothing.
+
+It REFUSES, before writing anything, a project that is not a git repository with a commit, one with a dirty tree,
+a half-migrated one (a runner at the root and under methodology/), one where a destination already exists, one
+that keeps its methodology files out of git (ignore mode), and one where bin/status does not read every TRACKED
+file current: sync first (plan 5A.2), because a tool that cannot find the ledger fails open (plan C5). Every
+refusal is reported together.
+
+Tiers (plan 4.6): tier 1 moves the framework's own files (the manifest's TRACKED rows); tier 2 the project's state
+(the SEED rows, the files the tools generate, the ledger shards the trimmer wrote, and the companions: a file of the
+project's own that joins the move with no manifest entry, PROJECT_LEARNINGS.md, plan D10). The default, all, is both.
+
+A tree that is already migrated, with a companion still at its root, is topped up: the plan is the companion's move and
+the rewrites of the names that point at it (CLAUDE.md, and the two configs where the layout keeps them), one commit and
+one ledger entry (BL-105). Every link in a live document to a file the move takes is listed, none rewritten (F30).
+
+Exit: 0 a dry run or a migration done, or nothing to do · 1 refused · 2 usage or a failure · 3 an apply that was
+rolled back.
+"""
+import argparse
+import datetime
+import difflib
+import json
+import os
+import posixpath
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import warnings
+from pathlib import Path
+from urllib.parse import unquote
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _manifest import DISTRIBUTION, TRACKED, SEED, NEW_LAYOUT  # noqa: E402  (bin/ on sys.path)
+
+# A project keeps its methodology files at its root (legacy) or under methodology/ (new): the plan's
+# section 4.3. This block is the resolver, embedded byte for byte; the canonical suite asserts that.
+
+# --- layout resolver: BEGIN ---
+import os as _os
+from pathlib import Path as _Path
+
+
+def resolve_layout(root, anchor="SESSION_RUNNER.md"):
+    """Return (kind, directory, found): kind is new|legacy|half|none, directory a Path or None,
+    found the anchor paths that exist. A half-migrated tree has no directory, by design.
+    A file found in both places is the framework's under methodology/ when the runner is under
+    methodology/ and not at the root: the root copy is the project's own and is left alone, kind new,
+    and found still names both. Any other tie stays half, and the runner cannot decide a tie about itself."""
+    root = _Path(root)
+    new, old = root / "methodology" / anchor, root / anchor
+    found = tuple(p for p in (new, old) if _os.path.isfile(p))
+    if len(found) == 2:
+        if _os.path.isfile(root / "methodology" / "SESSION_RUNNER.md") and not _os.path.isfile(root / "SESSION_RUNNER.md"):
+            return "new", new.parent, found
+        return "half", None, found
+    if not found:
+        return "none", None, ()
+    return ("new", new.parent, found) if found[0] == new else ("legacy", root, found)
+# --- layout resolver: END ---
+
+
+NEW_DIR = "methodology"
+# What the tools write beside the methodology files (plan section 2.1, "Generated beside them"). They are not in
+# the manifest, so the table is here; tools/layout_fixtures.GENERATED is the test suite's copy of it.
+GENERATED = ("dashboard.html", "dashboard_history.jsonl", ".context-budget-history.jsonl",  # layout: ok -- the files the tools generate; this tool moves them
+             ".quality-gates-results.json")  # layout: ok -- same
+ARCHIVE_OLD = "docs/archive"  # layout: ok -- where a trim has written shards so far; they move to methodology/archive
+ARCHIVE_NEW = NEW_DIR + "/archive"
+OLD_FRAMEWORK_DIR = "docs/methodology"  # layout: ok -- today's directory for the framework documents; the tool leaves what is not in the manifest
+# A shard the trimmer wrote: <ledger>-through-<date>[-N].md and its proof beside it. Anything else in the archive
+# directory is the project's own and stays.
+SHARD_RE = re.compile(r"^(?:CHANGELOG|HANDOFFS|SESSION_NOTES)-through-[^/]+\.md(?:\.verify\.sh)?$")  # layout: ok -- the shard names the trimmer writes
+GITATTRIBUTES = ".gitattributes"  # layout: ok -- the seed that moves, when it is only the seed's rules
+# BL-105 (plan D10): a file of the project's own that joins the move with no manifest entry. It is the project's state, so
+# tier 2's, and it moves only when git tracks it and the project has adopted the methodology (a runner, in either layout).
+COMPANIONS = ("PROJECT_LEARNINGS.md",)
+# The two configs whose path values the tool rewrites. BL-105 F29: they are read where the layout puts them.
+CONFIG_FILES = (".context-budget.json", ".quality-gates.json")  # layout: ok -- the two seeds the tool edits the values of
+
+HERE = Path(__file__).resolve().parent
+CANONICAL = HERE.parent
+
+REFUSAL_HELP = {
+    "not-a-repository": "the project is not the top of a git repository",
+    "no-commits": "the repository has no commit yet: there is no history for a move to keep",
+    "dirty-tree": "the working tree is not clean",
+    "half-migrated": "the runner is at the root and under methodology/",
+    "destination-exists": "a file already sits where a move would land",
+    "not-current": "bin/status does not read every TRACKED file current",
+    "ignore-mode": "the project keeps its methodology files out of git",
+    "tier-order": "tier 2 needs the framework files already under methodology/",
+    "status-unavailable": "bin/status could not be run",
+}
+
+
+def run(project, *args, check=False):
+    return subprocess.run(["git", "-C", str(project), *args], capture_output=True, text=True, check=check)
+
+
+def canonical_info():
+    r = subprocess.run(["git", "-C", str(CANONICAL), "rev-parse", "HEAD"], capture_output=True, text=True)
+    sha = r.stdout.strip() if r.returncode == 0 else None
+    dirty = bool(subprocess.run(["git", "-C", str(CANONICAL), "status", "--porcelain", "--untracked-files=no"],
+                                capture_output=True, text=True).stdout.strip()) if sha else None
+    return {"path": str(CANONICAL), "sha": sha, "modified": dirty}
+
+
+def refusal(code, message, paths=()):
+    return {"code": code, "message": message, "paths": list(paths)}
+
+
+def tracked_files(project):
+    r = run(project, "ls-files", "-z")
+    return set(p for p in r.stdout.split("\0") if p)
+
+
+def dirty_paths(project):
+    """Every path `git status` reports, untracked files one by one: a dirty tree is any of them."""
+    r = run(project, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+    out, entries = [], r.stdout.split("\0")
+    i = 0
+    while i < len(entries):
+        entry = entries[i]
+        i += 1
+        if not entry:
+            continue
+        out.append(entry[3:])
+        if entry[0] in "RC":
+            i += 1  # a rename or copy carries its source as the next field
+    return out
+
+
+def is_ignore_mode(project):
+    """bin/sync's rule: a .gitignore that lists a TRACKED destination, in either layout."""
+    gi = Path(project) / ".gitignore"
+    if not gi.is_file():
+        return False
+    lines = {line.strip() for line in gi.read_text(encoding="utf-8", errors="replace").splitlines()}
+    entries = set()
+    for src, dest, disp in DISTRIBUTION:
+        if disp == TRACKED:
+            entries.add("/" + dest)
+            entries.add("/" + NEW_LAYOUT[src])
+    return bool(entries & lines)
+
+
+def read_status(project):
+    """bin/status over the project, as rows (file, disposition, status). The columns are found from the header,
+    where render_table left-justified every cell, so a project name or a status with a space does not shift them."""
+    r = subprocess.run([sys.executable, "-B", str(HERE / "status"), str(project)], capture_output=True, text=True)
+    if r.returncode != 0:
+        return None, r.stderr.strip() or r.stdout.strip()
+    lines = r.stdout.splitlines()
+    head = next((i for i, line in enumerate(lines) if line.startswith("Project ")), None)
+    if head is None:
+        return None, "bin/status printed no table"
+    h = lines[head]
+    c1, c2, c3 = h.index("File"), h.index("Disposition"), h.index("Status")
+    rows = []
+    for line in lines[head + 1:]:
+        if not line.strip():
+            break
+        rows.append((line[c1:c2].strip(), line[c2:c3].strip(), line[c3:].strip()))
+    return rows, None
+
+
+def seed_rules_only(text, seed_text):
+    """True when every rule line of `text` is one of the seed's: the file holds nothing of the project's own."""
+    def rules(t):
+        return {line.strip() for line in t.splitlines() if line.strip() and not line.lstrip().startswith("#")}
+    return rules(text) <= rules(seed_text)
+
+
+def plan_moves(project, tier, tracked, kind):
+    """(moves, left_in_place, collisions): what the tier moves from where the project keeps it to where the new
+    layout puts it; what stays and why; and the destinations that already exist."""
+    root = Path(project)
+    moves, left, collisions = [], [], []
+
+    def add(src, dest, what):
+        moves.append({"src": src, "dest": dest, "kind": what, "tracked": src in tracked})
+
+    for srcname, legacy, disp in DISTRIBUTION:
+        in_tier = (disp == TRACKED and tier in ("1", "all")) or (disp == SEED and tier in ("2", "all"))
+        if not in_tier:
+            continue
+        new = NEW_LAYOUT[srcname]
+        old_here, new_here = (root / legacy).is_file(), (root / new).is_file()
+        if old_here and new_here:
+            if not (kind == "half" and legacy == "SESSION_RUNNER.md"):  # layout: ok -- the runner of a half-migrated tree has its own refusal, so its collision is not listed twice
+                collisions.append(new)
+            continue
+        if not old_here:
+            continue  # absent, or already under methodology/
+        if legacy == GITATTRIBUTES:
+            seed_text = (CANONICAL / srcname).read_text(encoding="utf-8")
+            if not seed_rules_only((root / legacy).read_text(encoding="utf-8", errors="replace"), seed_text):
+                left.append({"path": legacy, "reason": "holds rules of the project's own; it stays at the root"})
+                continue
+        add(legacy, new, "manifest")
+    if tier in ("2", "all"):
+        for name in GENERATED:
+            new = NEW_DIR + "/" + name
+            old_here, new_here = (root / name).is_file(), (root / new).is_file()
+            if old_here and new_here:
+                collisions.append(new)
+            elif old_here:
+                add(name, new, "generated")
+        for path in sorted(p for p in tracked if p.startswith(ARCHIVE_OLD + "/")):
+            name = path[len(ARCHIVE_OLD) + 1:]
+            if "/" not in name and SHARD_RE.match(name):
+                new = ARCHIVE_NEW + "/" + name
+                if (root / new).is_file():
+                    collisions.append(new)
+                else:
+                    add(path, new, "shard")
+    if tier in ("2", "all") and kind in ("legacy", "new"):
+        for name in COMPANIONS:
+            new = NEW_DIR + "/" + name
+            old_here, new_here = (root / name).is_file(), (root / new).is_file()
+            if old_here and new_here:
+                collisions.append(new)
+            elif old_here and name in tracked:
+                add(name, new, "companion")
+            elif old_here:
+                left.append({"path": name, "reason": "not tracked by git: this tool moves files git tracks; it stays"})
+    moved = {m["src"] for m in moves}
+    for path in sorted(tracked):
+        if path in moved:
+            continue
+        if path.startswith(OLD_FRAMEWORK_DIR + "/"):
+            left.append({"path": path, "reason": "not a file of the manifest: the project's own, or an older copy; it stays"})
+        elif path.startswith(ARCHIVE_OLD + "/") and tier in ("2", "all"):
+            left.append({"path": path, "reason": "not a ledger shard the trimmer wrote: the project's own; it stays"})
+    return moves, left, sorted(set(collisions))
+
+
+class Rewrite:
+    """A text file the migration edits: `path` where it is now, `final` where it will be once the moves are done."""
+
+    def __init__(self, path, final, old, new, replacements):
+        self.path, self.final, self.old, self.new, self.replacements = path, final, old, new, replacements
+
+    def as_report(self):
+        diff = "".join(difflib.unified_diff(self.old.splitlines(keepends=True), self.new.splitlines(keepends=True),
+                                            fromfile=self.path, tofile=self.final))
+        return {"path": self.path, "final": self.final, "replacements": self.replacements, "diff": diff}
+
+
+def rewrite_gitignore(text, mapping):
+    """An anchored ignore entry that is exactly a moved file's path follows it; an unanchored entry (no slash) still
+    matches the file under methodology/ and is left alone, as is every comment. Returns (text, replacements)."""
+    out, n = [], 0
+    for line in text.splitlines(keepends=True):
+        body = line.rstrip("\r\n")
+        eol = line[len(body):]
+        s = body.strip()
+        neg = s.startswith("!")
+        s = s[1:] if neg else s
+        if s and not s.startswith("#"):
+            path = s[1:] if s.startswith("/") else s
+            if (s.startswith("/") or "/" in path.rstrip("/")) and path in mapping:
+                out.append(("!" if neg else "") + "/" + mapping[path] + eol)
+                n += 1
+                continue
+        out.append(line)
+    return "".join(out), n
+
+
+class Unsafe(Exception):
+    """A file the tool could not rewrite faithfully: the migration is refused rather than left half done."""
+
+
+def is_top_up(moves):
+    """BL-105: a run whose every move is a companion is a top-up of a tree that is already migrated: the framework files
+    and the generated ones are where they belong, so it rewrites the names of the companions and nothing else."""
+    return bool(moves) and all(m.get("kind") == "companion" for m in moves)
+
+
+def logical_map(moves, tier):
+    """Where a name goes: every file this run moves, and the files the tools generate whether or not they are on disk
+    (a fresh clone has none, and the tools will write them beside the moved configs next time). A top-up adds none of
+    the generated names: in a tree that is migrated they are under methodology/ already."""
+    mapping = {m["src"]: m["dest"] for m in moves}
+    if tier in ("2", "all") and not is_top_up(moves):
+        for name in GENERATED:
+            mapping.setdefault(name, NEW_DIR + "/" + name)
+    return mapping
+
+
+def token_pattern(names):
+    """The regular expression for a methodology file's path where it stands alone: not behind a directory, a dot, a
+    hyphen, a tilde or a word character (so `starter-kit/X`, a URL, `MY_X` and `NOTES-X` are not the project's file),
+    and not before a word character or a dot and a word character (`X.mdx`, `X.bak`)."""
+    names = sorted(names, key=len, reverse=True)
+    return re.compile(r"(?<![\w./~-])(?:%s)(?!\w|\.\w)" % "|".join(re.escape(n) for n in names))
+
+
+def token_rewriter(mapping):
+    """A function (text) -> (text, replacements) that rewrites each standing-alone path of `mapping` to its value."""
+    if not mapping:
+        return lambda text: (text, 0)
+    pattern = token_pattern(mapping)
+
+    def rewrite(text):
+        return pattern.subn(lambda m: mapping[m.group(0)], text)
+    return rewrite
+
+
+def rewrite_json(text, mapping):
+    """A config's path-bearing values, rewritten in the text so every other byte is what it was: a value that is
+    exactly a moved file's path, and the tokens of a gate's `command`. Prose (a key that starts with an underscore)
+    and `canonical`, the path to the sibling checkout, are left. Returns (text, replacements); raises ValueError when
+    the text is not JSON and Unsafe when the result is not the structure the rule predicts."""
+    data = json.loads(text)
+    tokens = token_rewriter(mapping)
+    keys = set()
+
+    def new_value(key, value):
+        if key == "command":
+            return tokens(value)[0]
+        return mapping.get(value, value)
+
+    def expected(o):
+        if isinstance(o, dict):
+            return {k: (o[k] if k.startswith("_") or k == "canonical"
+                        else (new_value(k, o[k]) if isinstance(o[k], str) else expected(o[k]))) for k in o}
+        if isinstance(o, list):
+            return [expected(x) for x in o]
+        return o
+
+    def collect(o):
+        if isinstance(o, dict):
+            for k, v in o.items():
+                if k.startswith("_") or k == "canonical":
+                    continue
+                if isinstance(v, str):
+                    if new_value(k, v) != v:
+                        keys.add(k)
+                else:
+                    collect(v)
+        elif isinstance(o, list):
+            for x in o:
+                collect(x)
+    collect(data)
+    count = 0
+    for key in sorted(keys):
+        def sub(m, key=key):
+            nonlocal count
+            old = json.loads(m.group(2))
+            new = new_value(key, old)
+            if new == old:
+                return m.group(0)
+            count += 1
+            return m.group(1) + json.dumps(new, ensure_ascii=False)
+        text = re.sub(r'("%s"\s*:\s*)("(?:[^"\\]|\\.)*")' % re.escape(key), sub, text)
+    if json.loads(text) != expected(data):
+        raise Unsafe("the rewrite of this file does not give the structure the rule predicts (a path-bearing key inside a prose key?)")
+    return text, count
+
+
+def ledger_location(root, moves):
+    """(path now, path once the moves are done) of the action ledger, or (None, None) when the project has none."""
+    for m in moves:
+        if m["src"] == "CHANGELOG.md":  # layout: ok -- the ledger's own file name
+            return m["src"], m["dest"]
+    kind, directory, _found = resolve_layout(root, "CHANGELOG.md")  # layout: ok -- the resolver's anchor
+    if kind in ("legacy", "new"):
+        rel = Path(directory, "CHANGELOG.md").relative_to(root).as_posix()  # layout: ok -- the ledger's own file name
+        return rel, rel
+    return None, None
+
+
+def config_location(root, moves, name):
+    """(path now, path once the moves are done) of one of the two configs, or (None, None) when the project has none.
+    BL-105 F29: where the layout puts it, not at the root only. A config this run moves is read at its place before the
+    move; otherwise a tree whose runner is under methodology/ keeps it there (or still at the root, after a tier-1 run)."""
+    for m in moves:
+        if m["src"] == name:
+            return m["src"], m["dest"]
+    kind, _directory, _found = resolve_layout(root)
+    for rel in ((NEW_DIR + "/" + name, name) if kind == "new" else (name,)):
+        if (Path(root) / rel).is_file():
+            return rel, rel
+    return None, None
+
+
+SENTINEL_RE = re.compile(r"^[ \t]*<!--[ \t]*METHODOLOGY-SEED-SENTINEL.*?-->[ \t]*\n", re.S | re.M)
+
+
+HEADING_RE = re.compile(r"^(## \d{4}-\d{2})[ \t]*$|^### \d{4}-\d{2}-\d{2} · ")
+FENCE_RE = re.compile(r"^(`{3,}|~{3,})(.*)$")
+
+
+def first_heading(text):
+    """(offset, match) of the first month heading or dated entry heading that is not inside a fenced block, or None.
+    A fence is read as methodology_trim.py's fence_scan reads one: a line of three or more backticks or tildes at the
+    start of a line opens it, and only a line of the same character, at least as long and with nothing after it,
+    closes it. So the example heading in a ledger header's 'How to add an entry' fence is not an entry (F21). A fence
+    still open when the text ends, with no heading outside a fence before it, is Unsafe: whatever follows it is code."""
+    fence, offset = None, 0
+    for line in text.split("\n"):
+        f = FENCE_RE.match(line)
+        if fence is None:
+            if f:
+                fence = (f.group(1)[0], len(f.group(1)))
+            else:
+                m = HEADING_RE.match(line)
+                if m:
+                    return offset, m
+        elif f and f.group(1)[0] == fence[0] and len(f.group(1)) >= fence[1] and not f.group(2).strip():
+            fence = None
+        offset += len(line) + 1
+    if fence is not None:
+        raise Unsafe("the ledger has a code fence that never closes, so its entry cannot be placed outside it")
+    return None
+
+
+def insert_entry(text, entry, month):
+    """The entry at the top of the records zone: under the current month's heading when the first heading is that
+    one, with a new month heading above the older one when the month has turned, above the first entry when the
+    ledger has no month headings, and at the end (the seed sentinel dropped) when it has no entry yet. A heading
+    inside a fenced block is an example, not the first heading."""
+    block = entry.rstrip("\n") + "\n\n"
+    found = first_heading(text)
+    if found is None:
+        return SENTINEL_RE.sub("", text).rstrip("\n") + "\n\n" + block.rstrip("\n") + "\n"
+    start, m = found
+    if m.group(1) is None:
+        return text[:start] + block + text[start:]
+    if m.group(1) == "## " + month:
+        i = text.index("\n", start) + 1
+        while i < len(text) and text[i] == "\n":
+            i += 1
+        return text[:i] + block + text[i:]
+    return text[:start] + "## " + month + "\n\n" + block + text[start:]
+
+
+def ledger_entry_text(report, moves, rewritten, today):
+    sha = (report["canonical"]["sha"] or "an unknown commit")[:7]
+    edited = ", ".join("`%s`" % f for f in rewritten) if rewritten else "no file (none named a moved path)"
+    if is_top_up(moves):
+        names = ", ".join("`%s`" % m["src"] for m in moves)
+        return ("### %s · [ad hoc] Layout top-up: %s now lives under `methodology/` (tier %s, %d file%s)\n\n"
+                "`bin/migrate-layout` (KJ5HST/methodology @ %s) moved it in one commit with `git mv`; paths were rewritten in %s. "
+                "No older entry or shard was edited, so a link in an older entry is relative to the root, where the file sat "
+                "when it was written.\n" % (today, names, report["tier"], len(moves), "" if len(moves) == 1 else "s", sha, edited))
+    return ("### %s · [ad hoc] Layout migration: the methodology files now live under `methodology/` (tier %s, %d files)\n\n"
+            "`bin/migrate-layout` (KJ5HST/methodology @ %s) moved them in one commit with `git mv`; paths were rewritten in %s. "
+            "No older entry or shard was edited, so a link in an older entry is relative to the root, where the ledger sat "
+            "when it was written.\n" % (today, report["tier"], len(moves), sha, edited))
+
+
+def plan_rewrites(root, moves, tier, report):
+    """The edits that go with the moves: the .gitignore entries and CLAUDE.md and the two configs that name a moved
+    path, and the one ledger entry. Returns (the Rewrite records of those files, the ledger's Rewrite or None)."""
+    root = Path(root)
+    mapping = logical_map(moves, tier)
+    moved = {m["src"]: m["dest"] for m in moves}
+    tokens = token_rewriter(mapping)
+    rewrites = []
+
+    def add(path, new_text_fn):
+        f = root / path
+        if not f.is_file():
+            return
+        old = f.read_text(encoding="utf-8")
+        try:
+            new, n = new_text_fn(old)
+        except ValueError:
+            return  # not JSON: moved if it is in the plan, never edited
+        if n:
+            rewrites.append(Rewrite(path, moved.get(path, path), old, new, n))
+    add(".gitignore", lambda s: rewrite_gitignore(s, mapping))
+    add("CLAUDE.md", tokens)
+    for name in CONFIG_FILES:
+        where, _final = config_location(root, moves, name)
+        if where is not None:
+            add(where, lambda s: rewrite_json(s, mapping))
+    ledger = None
+    src, final = ledger_location(root, moves)
+    if src is not None:
+        old = (root / src).read_text(encoding="utf-8")
+        today = datetime.date.today()
+        entry = ledger_entry_text(report, moves, [r.final for r in rewrites], today.isoformat())
+        ledger = Rewrite(src, final, old, insert_entry(old, entry, today.strftime("%Y-%m")), 1)
+        report["ledger_entry"] = {"path": final, "text": entry}
+    return rewrites, ledger
+
+
+LEDGER_FILES = ("CHANGELOG.md", "HANDOFFS.md", "SESSION_NOTES.md")  # layout: ok -- the ledgers whose links are counted
+CI_PREFIXES = (".github/", ".circleci/")
+CI_FILES = (".gitlab-ci.yml", ".travis.yml", "Jenkinsfile", "azure-pipelines.yml")
+SITES_SHOWN = 25
+# BL-101 F5 (plan 7.6, findings register): a project's tests, proofs, scripts and configs read a moved path as a machine
+# does, so each is listed, every one, under its own kind and apart from prose. `harness` is a permission string a prompt
+# reads, `ledger` is counted and never listed, and `other` is prose and whatever is left.
+MACHINE_READ = ("ci", "hooks", "tests", "proofs", "scripts", "config")
+CATEGORIES = MACHINE_READ + ("harness", "ledger", "other")
+HOOK_DIRS = (".githooks/", ".husky/")
+HOOK_FILES = (".pre-commit-config.yaml",)
+# A comment-only line cannot change what a machine does; this is a heuristic by first character, not a parse.
+COMMENT_STARTS = ("#", "//", "<!--", "/*", "*", ";", "%")
+# BL-101 F15: a hook line that says why it names a moved tool and still works (`# layout: ok -- <reason>`: the layout-aware
+# ledger hook tries three places for it) is not a line that runs the tool at its old place. The grammar is the one
+# bin/check-layout-literals reads, a test holds the two equal: a marker with no reason acknowledges nothing.
+MARKER_RE = re.compile(r"#\s*layout:\s*ok\b(?P<reason>\s+--\s+\S)?")
+TEST_DIR_RE = re.compile(r"(^|/)(tests?|specs?|testthat|__tests__)(/|$)")
+TEST_FILE_RE = re.compile(r"(^|/)(test_[^/]*|[^/]*_test\.[^/]*|[^/]*\.test\.[^/]*|[^/]*_spec\.[^/]*|conftest\.py)$")
+PROSE_EXT = (".md", ".qmd", ".rmd", ".rst", ".txt", ".tex", ".html", ".adoc")
+SCRIPT_EXT = (".sh", ".bash", ".zsh", ".py", ".r", ".js", ".mjs", ".cjs", ".ts", ".rb", ".pl", ".ps1", ".bat", ".jl")
+CONFIG_EXT = (".json", ".toml", ".yml", ".yaml", ".cfg", ".ini")
+CONFIG_NAMES = (".rbuildignore", ".dockerignore", "makefile", "description", "namespace", "dockerfile")
+
+
+def is_pattern_list(low):
+    """BL-101 F11: a dot-file whose name ends in `ignore` is a list of patterns a program reads (`.vscodeignore`, `.npmignore`,
+    `.vercelignore`, `.railwayignore`), so it is config and not prose. vsce 3.6.0 matches each line with minimatch and no
+    `matchBase`: a bare name is the project root's, and `methodology/SESSION_RUNNER.md` is packaged. A `.gitignore` is the
+    exception: git matches a bare name at any depth, and the tool rewrites the anchored entries of the root one."""
+    return low.startswith(".") and low.endswith("ignore") and low != ".gitignore"
+
+
+def hit_category(path, text=""):
+    """The category a file that names a moved path falls in. `text` is the file's own, read only for a first line (`#!`),
+    which is what makes an extensionless script a script. A prose extension is prose wherever the file sits: the survey's
+    prototype sorted tests/eval/PHASE_E_AGREEMENT_REPORT.md as a test because its directory rule ran first."""
+    name = path.rsplit("/", 1)[-1]
+    if path.startswith(CI_PREFIXES) or path in CI_FILES:
+        return "ci"
+    if path.startswith(".claude/"):
+        return "harness"
+    if path.startswith(HOOK_DIRS) or name in HOOK_FILES:
+        return "hooks"
+    if path in LEDGER_FILES or path in tuple(NEW_DIR + "/" + n for n in LEDGER_FILES):
+        return "ledger"
+    if path.startswith((ARCHIVE_OLD + "/", ARCHIVE_NEW + "/")) and SHARD_RE.match(name):
+        return "ledger"
+    low = name.lower()
+    if low.endswith(".verify.sh") or re.match(r"verify[^/]*\.sh$", low):
+        return "proofs"
+    if low.endswith(PROSE_EXT):
+        return "other"
+    if TEST_DIR_RE.search(path) or TEST_FILE_RE.search(path):
+        return "tests"
+    if low in CONFIG_NAMES or low.endswith(CONFIG_EXT) or is_pattern_list(low):
+        return "config"
+    if low.endswith(SCRIPT_EXT) or text.startswith("#!"):
+        return "scripts"
+    return "other"
+
+
+POSIX_CLASS_RE = re.compile(r"\[:\^?[a-z]+:\]")
+
+
+def pattern_exposure(text, mapping):
+    """BL-101 F10 (plan 7.6, findings register): which moved files a `.Rbuildignore` stops covering. The scan reads whole names,
+    and a list of regular expressions (`^SESSION_RUNNER.*\\.md$`) names none, so it read the 3 comment lines of a real one and
+    listed the harmless row. Read as R reads it (measured on R 4.6.1 with a probe package): every non-empty line is a
+    case-insensitive regular expression, a line starting with # included (`# |ALPHA` left ALPHA.md out of the build); a line
+    that matches a path, or a directory above it, covers it (`^docsdir$` left docsdir/inner.txt out). A moved file is exposed
+    when a line covers it where it is and no line covers it where it goes: the same probe packaged
+    methodology/SESSION_RUNNER.md, and one more line, `^methodology$`, stopped it. The matching is Python's `re`, not R's
+    engine, so the answer is a candidate, not a verdict. A line `re` cannot compile, or that holds a POSIX class (`[[:alpha:]]`,
+    which `re` reads as a different set), is counted, not evaluated."""
+    rules, unread = [], 0
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # R's POSIX classes ([[:alpha:]]) are a nested-set warning to re, not an error
+        for number, line in enumerate(text.splitlines(), 1):
+            if not line:
+                continue
+            if POSIX_CLASS_RE.search(line):
+                unread += 1  # a character class to R's PCRE and a different set to `re`: not evaluated rather than misread
+                continue
+            try:
+                rules.append((number, line, re.compile(line, re.IGNORECASE)))
+            except re.error:
+                unread += 1
+
+    def covering(path):
+        parts = path.split("/")
+        prefixes = ["/".join(parts[:i]) for i in range(1, len(parts) + 1)]
+        return [r for r in rules if any(r[2].search(p) for p in prefixes)]
+
+    exposed, by_line = [], {}
+    for src, dest in mapping.items():
+        now = covering(src)
+        if now and not covering(dest):
+            exposed.append(src)
+            for number, line, _rx in now:
+                by_line.setdefault((number, line), []).append(src)
+    lines = [{"line": n, "text": s, "files": sorted(f)} for (n, s), f in sorted(by_line.items())]
+    return {"exposed": sorted(exposed), "lines": lines, "unread": unread}
+
+
+# BL-101 F24 (plan 7.6, findings register): a root `.vscodeignore` is read as vsce reads it. vsce 3.9.2 (`out/package.js`,
+# `collectFiles`, the same call as in 3.6.0) keeps a file when no line of the ignore list matches it or any negation does,
+# each line a minimatch pattern with `{ dot: true }` and no `matchBase`. Measured against minimatch 10.2.5 in S299 (the
+# adopter's own checkout; `f24-oracle.py`, `f24-differential.py`).
+VSCE_PINNED = "vsce 3.9.2, minimatch 10.2.5"
+VSCE_DEFAULT_IGNORE = (  # `defaultIgnore` of vsce 3.9.2, in its order; none of them gets the `/**` a line of the file gets
+    ".vscodeignore", "package-lock.json", "npm-debug.log", "yarn.lock", "yarn-error.log", "npm-shrinkwrap.json", ".editorconfig",
+    ".npmrc", ".yarnrc", ".gitattributes", "*.todo", "tslint.yaml", ".eslintrc*", ".babelrc*", ".prettierrc*", ".cz-config.js",  # layout: ok -- vsce's own default list, matched against the project's paths
+    ".commitlintrc*", "webpack.config.js", "ISSUE_TEMPLATE.md", "CONTRIBUTING.md", "PULL_REQUEST_TEMPLATE.md", "CODE_OF_CONDUCT.md",
+    ".github", ".travis.yml", "appveyor.yml", "**/.git", "**/.git/**", "**/*.vsix", "**/.DS_Store", "**/*.vsixmanifest",
+    "**/.vscode-test/**", "**/.vscode-test-web/**")
+VSCE_NOT_IGNORED = ("package.json", "README.md")  # the two negations vsce appends to every list
+VSCE_LEAF_GLOB_RE = re.compile(r"(^|/)[^/]*\*[^/]*\Z")  # vsce: a line whose last segment has a `*` is not a directory name
+
+
+def expand_braces(pattern):
+    """The alternatives of a pattern's comma lists (`{a,b}.md`, nested ones too), or None for a brace that is not one: a
+    range (`{1..3}`), a lone `{a}` (minimatch keeps it literal) and an unmatched one are read differently than here."""
+    first = pattern.find("{")
+    if first < 0:
+        return None if "}" in pattern else [pattern]
+    depth, commas, end = 0, [], -1
+    for i in range(first, len(pattern)):
+        if pattern[i] == "{":
+            depth += 1
+        elif pattern[i] == "}":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+        elif pattern[i] == "," and depth == 1:
+            commas.append(i)
+    if end < 0 or not commas:
+        return None
+    cuts = [first] + commas + [end]
+    out = []
+    for a, b in zip(cuts, cuts[1:]):
+        sub = expand_braces(pattern[:first] + pattern[a + 1:b] + pattern[end + 1:])
+        if sub is None:
+            return None
+        out += sub
+    return out
+
+
+def glob_segment(seg):
+    """The regular expression for one path segment of a glob, or None when it holds what is not read here: an extended glob
+    (`+(a|b)`), a backslash, a POSIX class (`[[:upper:]]`), a class that is empty or never closed. `*` and `?` stop at a `/`,
+    which a segment never holds, and with `{ dot: true }` they reach a leading dot; a `**` inside a segment is one `*`."""
+    out, i = [], 0
+    while i < len(seg):
+        c = seg[i]
+        if c == "\\":
+            return None
+        if c == "*":
+            while seg[i + 1:i + 2] == "*":
+                i += 1
+            if seg[i + 1:i + 2] == "(":
+                return None
+            out.append("[^/]*")
+        elif c in "+@!?" and seg[i + 1:i + 2] == "(":
+            return None
+        elif c == "?":
+            out.append("[^/]")
+        elif c == "[":
+            j = i + 1
+            negated = seg[j:j + 1] in ("!", "^")
+            j += negated
+            end = seg.find("]", j + 1)  # a `]` first would be a member, which minimatch and POSIX read differently: not read
+            if end < 0 or seg[j] == "]":
+                return None
+            body = seg[j:end]
+            if "[" in body or "\\" in body:
+                return None
+            members = "".join("-" if (k and k < len(body) - 1 and ch == "-") else re.escape(ch) for k, ch in enumerate(body))
+            out.append("[%s%s]" % ("^" if negated else "", members))
+            i = end
+        else:
+            out.append(re.escape(c))
+        i += 1
+    return "".join(out)
+
+
+def vsce_glob(pattern):
+    """A function (path) -> bool that answers as `minimatch(path, pattern, { dot: true })` does, or None when the pattern holds
+    what `glob_segment` and `expand_braces` do not read: it is then counted and never guessed. A `**` that is a whole segment
+    matches any number of segments, and at the end of the pattern one or more (`a/**` is not `a`); a leading `/`, a `.` segment
+    and a trailing `/` match no path. Case-sensitive, no `matchBase`: a pattern with no `/` is the project root's."""
+    alternatives = expand_braces(pattern)
+    if alternatives is None:
+        return None
+    compiled = []
+    for alt in alternatives:
+        segments = alt.split("/")
+        if "" in segments[1:-1]:
+            return None  # minimatch collapses `a//b` to `a/b`; not read
+        parts = []
+        for seg in segments:
+            if seg == "**":
+                parts.append(None)
+                continue
+            regex = glob_segment(seg)
+            if regex is None:
+                return None
+            try:
+                parts.append(re.compile(regex, re.S))
+            except re.error:
+                return None
+        compiled.append(parts)
+
+    def matches(parts, path):
+        done = {}
+
+        def go(i, j):
+            if (i, j) not in done:
+                if i == len(parts):
+                    done[(i, j)] = j == len(path)
+                elif parts[i] is None:
+                    done[(i, j)] = j < len(path) if i == len(parts) - 1 else any(go(i + 1, k) for k in range(j, len(path) + 1))
+                else:
+                    done[(i, j)] = j < len(path) and parts[i].fullmatch(path[j]) is not None and go(i + 1, j + 1)
+            return done[(i, j)]
+        return go(0, 0)
+    return lambda path: any(matches(parts, path.split("/")) for parts in compiled)
+
+
+def vsce_ignore_list(text):
+    """What vsce makes of a `.vscodeignore` (`collectFiles`): split at `\\n` and `\\r`, trimmed (a byte order mark with it), a line
+    that is empty or starts with `#` dropped; a line whose last segment has no `*` also stands for `/**` below it (`docs` is
+    `docs/**`), a negation (`!`) too; vsce's own default list is added, and `!package.json` and `!README.md`. Returns
+    (covering, unread): `covering(path)` is the (line, text) pairs that ignore the path, none when any negation matches it
+    wherever the negation sits, so a path is packaged exactly when it is empty; vsce's default list is line 0. A line this
+    tool does not read is counted in `unread` and plays no part."""
+    entries, negations, unread = [], [], 0
+    for number, raw in enumerate(re.split(r"\r\n|\r|\n", text), 1):
+        line = raw.strip().strip("\ufeff").strip()
+        if not line or line.startswith("#"):
+            continue
+        negated = line.startswith("!")
+        patterns = [line] + ([] if VSCE_LEAF_GLOB_RE.search(line) else [line + "**" if line.endswith("/") else line + "/**"])
+        globs = [vsce_glob(p[1:] if negated else p) for p in patterns]
+        if any(g is None for g in globs):
+            unread += 1
+            continue
+        (negations if negated else entries).extend((number, line, g) for g in globs)
+    for name in VSCE_DEFAULT_IGNORE:
+        entries.append((0, "(vsce default) " + name, vsce_glob(name)))
+    negations += [(0, "!" + name, vsce_glob(name)) for name in VSCE_NOT_IGNORED]
+
+    def covering(path):
+        hit = [(n, t) for n, t, g in entries if g(path)]
+        return [] if hit and any(g(path) for _n, _t, g in negations) else hit
+    return covering, unread
+
+
+def vscodeignore_exposure(text, mapping):
+    """BL-101 F24: which moved files a `.vscodeignore` stops covering, read as vsce reads it (`vsce_ignore_list`). A moved file
+    is exposed when it is ignored where it is and packaged where it goes. Same shape as `pattern_exposure`; vsce's default
+    list is reported as line 0, last, and a line this tool does not read is counted."""
+    covering, unread = vsce_ignore_list(text)
+    exposed, by_line = [], {}
+    for src, dest in mapping.items():
+        now = covering(src)
+        if now and not covering(dest):
+            exposed.append(src)
+            for key in now:
+                by_line.setdefault(key, []).append(src)
+    lines = [{"line": n, "text": s, "files": sorted(set(f))} for (n, s), f in sorted(by_line.items(), key=lambda kv: (kv[0][0] == 0, kv[0]))]
+    return {"exposed": sorted(exposed), "lines": lines, "unread": unread}
+
+
+DIR_RE = re.compile(r"(?<![\w./~-])docs/(?:methodology/?|archive/?)(?![\w.-])")  # layout: ok -- the two directories the move empties, searched for in prose
+
+
+def scan_hits(root, moves, rewrites, tier):
+    """Every tracked file that still names a moved path and that the tool will not edit, by category: a person decides
+    these (a CI filter, a harness rule, a hook copy, a link in the project's own docs). A ledger's links are counted and
+    never listed, since a committed entry is never rewritten. The files the tool moves unedited (the framework's own
+    documents) are not hits; a file it rewrites is read as it will be once rewritten, so a directory it names in prose
+    (`docs/methodology/`, which a rewrite of the paths in it leaves) is a hit and a path it has rewritten is not. A hook
+    line that runs a moved tool is marked: that hook will refuse the migration commit. A line carrying `# layout: ok -- <reason>`
+    (BL-101 F15: the layout-aware ledger hook names the tool that way and tries three places for it) is listed, not marked.
+
+    BL-101 F5: a file in a machine-read category (tests, proofs, scripts, config, and the CI and hook files) is also listed
+    in `paths`, every one, with its mentions, the mentions on non-comment lines, the names it carries and its first
+    mention on a code line, because the 25 sites a category shows are the first 25 lines and one file can use them all.
+    These are candidates: the scan reads names, never runs a file, so a name on a code line is necessary, not sufficient.
+
+    BL-101 F10: a root `.Rbuildignore` is also read for what its regular expressions cover (`pattern_exposure`), since a pattern
+    names no file the scan could find, and its row gains `patterns`. BL-101 F24: so is a root `.vscodeignore`, for what vsce's
+    glob matching covers (`vscodeignore_exposure`); a pattern list for any other program is listed and never judged."""
+    root = Path(root)
+    mapping = logical_map(moves, tier)
+    out = {c: {"mentions": 0, "files": 0, "sites": [], "paths": []} for c in CATEGORIES}
+    out["hooks"]["runs_moved_tool"] = 0
+    if not mapping:
+        return out
+    pattern = token_pattern(mapping)
+    # In a hook a name behind a command substitution or a variable ("$(git rev-parse --show-toplevel)/X", "$top/X") is the
+    # project root's: the standing-alone rule rejects it everywhere else, since a directory in front of a name is not the root.
+    rooted = re.compile(r"(?:\)|\}|\$\w+)/(%s)(?!\w|\.\w)" % "|".join(re.escape(n) for n in sorted(mapping, key=len, reverse=True)))
+    new_text = {r.path: r.new for r in rewrites}
+    skip = {m["src"] for m in moves if hit_category(m["src"]) != "ledger"} | {p for p in new_text if p.endswith(".json")}
+    probe = ["-e" + n for n in sorted({k.rsplit("/", 1)[-1] for k in mapping} | {"docs/methodology", "docs/archive"})]  # layout: ok -- same
+    r = run(root, "grep", "-I", "-l", "-z", "-F", *probe)
+    shown = {c: 0 for c in CATEGORIES}
+
+    def visit(path, text, cat, rewritten=False, untracked=False):
+        mentions = code = 0
+        found = set()
+        first = first_code = None
+        for number, line in enumerate(text.splitlines(), 1):
+            spans = [(m.start(), m.end(), m.group(0)) for m in pattern.finditer(line)] if not rewritten else []
+            names = [s[2] for s in spans]
+            if cat == "hooks":
+                names += [m.group(1) for m in rooted.finditer(line)]
+            for m in DIR_RE.finditer(line):
+                if not any(s[0] < m.end() and m.start() < s[1] for s in spans):
+                    names.append(m.group(0))
+            if not names:
+                continue
+            mentions += len(names)
+            if cat in MACHINE_READ:
+                found.update(names)
+                first = first or (number, line)
+                if not line.lstrip().startswith(COMMENT_STARTS):
+                    code += len(names)
+                    first_code = first_code or (number, line)
+            if cat != "ledger" and shown[cat] < SITES_SHOWN:
+                site = {"file": path, "line": number, "text": line.strip()[:200], "names": sorted(set(names))}
+                if cat == "hooks":
+                    marked = MARKER_RE.search(line)
+                    site["runs_tool"] = (any(n.endswith(".py") for n in names) and not line.lstrip().startswith("#")
+                                         and not (marked and marked.group("reason")))
+                    site["untracked"] = untracked
+                    out["hooks"]["runs_moved_tool"] += int(site["runs_tool"])
+                out[cat]["sites"].append(site)
+                shown[cat] += 1
+        if mentions:
+            out[cat]["mentions"] += mentions
+            out[cat]["files"] += 1
+            if cat in MACHINE_READ:
+                number, line = first_code or first
+                out[cat]["paths"].append({"file": path, "line": number, "text": line.strip()[:200], "mentions": mentions,
+                                          "code_mentions": code, "names": sorted(found), "untracked": untracked})
+
+    listed = sorted(p for p in r.stdout.split("\0") if p)
+    for path in listed:
+        if path in skip:
+            continue
+        rewritten = path in new_text
+        try:
+            text = new_text[path] if rewritten else (root / path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        visit(path, text, hit_category(path, text), rewritten)
+    # The hooks git runs are per clone and mostly not tracked (context_budget.py install-hook writes .git/hooks/pre-commit,
+    # which execs the tool by its root path): read the directory git uses, so the hook that will refuse the commit is seen.
+    hooks_rel = run(root, "rev-parse", "--git-path", "hooks").stdout.strip()
+    hooks_dir = Path(hooks_rel) if os.path.isabs(hooks_rel) else root / hooks_rel
+    if hooks_rel and hooks_dir.is_dir():
+        tracked = tracked_files(root)
+        for f in sorted(hooks_dir.iterdir()):
+            if not f.is_file() or f.name.endswith(".sample"):
+                continue
+            try:
+                rel = f.resolve().relative_to(root.resolve()).as_posix()
+            except ValueError:
+                rel = str(f)
+            if rel in tracked:
+                continue  # a tracked hook directory was read above
+            try:
+                visit(rel, f.read_text(encoding="utf-8", errors="replace"), "hooks", untracked=True)
+            except OSError:
+                continue
+    # BL-101 F10, F24: the root .Rbuildignore (as R reads it) and the root .vscodeignore (as vsce reads it) are read for what
+    # their patterns cover, whether or not they spell a name out; the row a file already has (from a name it spells out)
+    # keeps its fields and gains `patterns`.
+    root_tracked = tracked_files(root)
+    for ignore_name, exposure_of in ((".Rbuildignore", pattern_exposure), (".vscodeignore", vscodeignore_exposure)):
+        if ignore_name not in root_tracked:
+            continue
+        try:
+            ignore_text = (root / ignore_name).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            ignore_text = ""
+        exposure = exposure_of(ignore_text, mapping)
+        if exposure["exposed"]:
+            row = next((x for x in out["config"]["paths"] if x["file"] == ignore_name), None)
+            if row is None:
+                first = exposure["lines"][0]
+                row = {"file": ignore_name, "line": first["line"], "text": first["text"].strip()[:200], "mentions": 0,
+                       "code_mentions": 0, "names": [], "untracked": False}
+                out["config"]["paths"].append(row)
+                out["config"]["files"] += 1
+            row["patterns"] = exposure
+    for c in MACHINE_READ:
+        out[c]["paths"].sort(key=lambda x: x["file"])
+    return out
+
+
+# BL-101 F30 (his call, S303: list only): a link from a project's live document to a file the move takes breaks, and the
+# tool's other lists name a moved path as text and never read a link as a link. Inline links, images and reference
+# definitions of the Markdown family are read; a fenced block is an example, not a link. Not seen: an HTML href, a link built
+# in code, a link in a document that is not Markdown (their paths are in the lists above when they name the file).
+LINK_EXT = (".md", ".qmd", ".rmd")
+INLINE_LINK_RE = re.compile(r"\]\(\s*(?:<([^<>]*)>|((?:[^()\s]|\([^()\s]*\))+))")
+REF_DEF_RE = re.compile(r"^ {0,3}\[[^\]]+\]:[ \t]*(?:<([^<>]*)>|(\S+))")
+
+
+def link_targets(text):
+    """[(line number, target as written)] of every link outside a fenced block; a fence is read as first_heading reads one."""
+    out, fence = [], None
+    for number, line in enumerate(text.splitlines(), 1):
+        f = FENCE_RE.match(line)
+        if fence is not None:
+            if f and f.group(1)[0] == fence[0] and len(f.group(1)) >= fence[1] and not f.group(2).strip():
+                fence = None
+            continue
+        if f:
+            fence = (f.group(1)[0], len(f.group(1)))
+            continue
+        ref = REF_DEF_RE.match(line)
+        if ref:
+            out.append((number, ref.group(1) if ref.group(1) is not None else ref.group(2)))
+        for m in INLINE_LINK_RE.finditer(line):
+            out.append((number, m.group(1) if m.group(1) is not None else m.group(2)))
+    return out
+
+
+def resolve_link(doc, target):
+    """The project-relative path a link in `doc` points at, or None when it is not a path in the project: a URL or
+    scheme, a protocol-relative address, a bare anchor, or a path that climbs out of the root."""
+    t = target.strip().split("#", 1)[0].split("?", 1)[0]
+    if not t or t.startswith("//") or re.match(r"[A-Za-z][A-Za-z0-9+.-]*:", t):
+        return None
+    t = unquote(t)
+    path = posixpath.normpath(t[1:] if t.startswith("/") else posixpath.join(posixpath.dirname(doc), t))
+    if path in (".", "..") or path.startswith("../"):
+        return None
+    return path
+
+
+def live_links(root, moves, rewrites):
+    """Every link in a live document that points at a file this run moves: the project's own Markdown, not a ledger or a
+    shard (a committed entry is never edited, and its links are counted with the ledger's), not a file the tool moves
+    unedited (the framework's documents are judged by check-links) and not a file the tool rewrites (its paths follow).
+    {"count", "files", "sites": [{file, line, text, target, resolves_to, moves_to}]}, every link, none rewritten."""
+    root = Path(root)
+    out = {"count": 0, "files": 0, "sites": []}
+    moved = {m["src"]: m["dest"] for m in moves}
+    if not moved:
+        return out
+    skip = set(moved) | {r.path for r in rewrites}
+    names = sorted({src.rsplit("/", 1)[-1] for src in moved})
+    for path in sorted(tracked_files(root)):
+        if path in skip or not path.lower().endswith(LINK_EXT) or hit_category(path) == "ledger":
+            continue
+        try:
+            text = (root / path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if not any(n in text for n in names):
+            continue
+        lines = text.splitlines()
+        found = 0
+        for number, target in link_targets(text):
+            resolved = resolve_link(path, target)
+            if resolved in moved:
+                out["sites"].append({"file": path, "line": number, "text": lines[number - 1].strip()[:200], "target": target,
+                                     "resolves_to": resolved, "moves_to": moved[resolved]})
+                found += 1
+        out["count"] += found
+        out["files"] += 1 if found else 0
+    return out
+
+
+def rehearse_shards(root, moves):
+    """Move the shards in a throwaway clone and run each proof there, before and after: an older-format proof reads its
+    shard by a working-tree path and exits 2 once the shard moves (vscode_quarto_ext), while the trimmer's current proofs
+    read git history and hold. A shard whose proof changes its exit code stays, with its proof. Returns (moves, left in
+    place, what the rehearsal did)."""
+    proofs = [m for m in moves if m["kind"] == "shard" and m["src"].endswith(".verify.sh")]
+    info = {"ran": False, "proofs": 0, "excluded": []}
+    if not proofs:
+        return moves, [], info
+    shards = [m for m in moves if m["kind"] == "shard"]
+    tmp = tempfile.mkdtemp(prefix="migrate-rehearsal-")
+    try:
+        clone = Path(tmp) / "clone"
+        r = subprocess.run(["git", "clone", "-q", "--no-local", str(root), str(clone)], capture_output=True, text=True)
+        if r.returncode != 0:
+            info["error"] = "the rehearsal clone failed: " + r.stderr.strip()[-200:]
+            return moves, [], info
+        before = {m["src"]: tool_run(["bash", m["src"]], clone, PROOF_TIMEOUT)[0] for m in proofs}
+        for m in shards:
+            (clone / m["dest"]).parent.mkdir(parents=True, exist_ok=True)
+            run(clone, "mv", m["src"], m["dest"])
+        run(clone, "-c", "user.name=rehearsal", "-c", "user.email=rehearsal@localhost", "-c", "commit.gpgsign=false",
+            "commit", "-q", "--no-verify", "-m", "rehearsal")
+        after = {m["src"]: tool_run(["bash", m["dest"]], clone, PROOF_TIMEOUT)[0] for m in proofs}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    info.update(ran=True, proofs=len(proofs))
+    left, drop = [], set()
+    for src in sorted(s for s in before if before[s] != after[s]):
+        shard = src[:-len(".verify.sh")]
+        drop |= {src, shard}
+        info["excluded"].append(shard)
+        why = "its proof exits %s at the new place (%s here): the proof reads its shard by a path that moves; the shard and its proof stay" % (after[src], before[src])
+        left += [{"path": shard, "reason": why}, {"path": src, "reason": why}]
+    return [m for m in moves if m["src"] not in drop], left, info
+
+
+def build_report(project, tier, apply_mode):
+    root = Path(project)
+    report = {"project": str(root), "canonical": canonical_info(), "layout": None, "tier": tier,
+              "mode": "apply" if apply_mode else "dry-run", "status": "ok", "refusals": [], "moves": [],
+              "left_in_place": [], "rewrites": [], "not_rewritten": {}, "live_links": {"count": 0, "files": 0, "sites": []},
+              "ledger_entry": None, "rehearsal": None, "commit": None, "checks": None}
+    refusals = report["refusals"]
+    top = run(root, "rev-parse", "--show-toplevel")
+    if top.returncode != 0 or Path(top.stdout.strip()).resolve() != root.resolve():
+        refusals.append(refusal("not-a-repository", REFUSAL_HELP["not-a-repository"] + ": " + str(root)))
+        return finish(report)
+    if run(root, "rev-parse", "--verify", "-q", "HEAD").returncode != 0:
+        refusals.append(refusal("no-commits", REFUSAL_HELP["no-commits"]))
+        return finish(report)
+    kind, _directory, found = resolve_layout(root)
+    report["layout"] = {"new": "new", "legacy": "legacy", "half": "half-migrated", "none": "none"}[kind]
+    tracked = tracked_files(root)
+    dirty = dirty_paths(root)
+    if dirty:
+        refusals.append(refusal("dirty-tree", REFUSAL_HELP["dirty-tree"] + ": " + ", ".join(dirty[:8])
+                                + (" ..." if len(dirty) > 8 else ""), dirty))
+    if kind == "half":
+        where = " and ".join(p.relative_to(root).as_posix() for p in reversed(found))
+        refusals.append(refusal("half-migrated", "SESSION_RUNNER.md is at " + where  # layout: ok -- a file named in a message, never opened
+                                + ": never guess which is the framework's; remove one", [p.relative_to(root).as_posix() for p in found]))
+    if tier == "2" and kind != "new":
+        refusals.append(refusal("tier-order", REFUSAL_HELP["tier-order"] + " (run tier 1 first, or --tier all)"))
+    moves, left, collisions = plan_moves(root, tier, tracked, kind)
+    if collisions:
+        refusals.append(refusal("destination-exists", REFUSAL_HELP["destination-exists"] + ": " + ", ".join(collisions), collisions))
+    if is_ignore_mode(root):
+        refusals.append(refusal("ignore-mode", REFUSAL_HELP["ignore-mode"] + " (.gitignore lists a methodology file): this tool moves files that git tracks"))
+    present = bool(moves) or any((root / d).is_file() for _s, d, _x in DISTRIBUTION) \
+        or any((root / NEW_LAYOUT[s]).is_file() for s, _d, _x in DISTRIBUTION)
+    if present:
+        rows, why = read_status(root)
+        if rows is None:
+            refusals.append(refusal("status-unavailable", REFUSAL_HELP["status-unavailable"] + ": " + why))
+        else:
+            bad = [f"{f} ({s})" for f, d, s in rows if d == TRACKED and s != "current" and s != "half-migrated"]
+            if bad:
+                refusals.append(refusal("not-current", "bin/status does not read every TRACKED file current: run bin/sync first (plan 5A.2): "
+                                        + ", ".join(bad), [b.split(" (")[0] for b in bad]))
+    report["rehearsal"] = {"ran": False, "proofs": 0, "excluded": []}
+    if moves and not refusals:
+        moves, more_left, report["rehearsal"] = rehearse_shards(root, moves)
+        left += more_left
+    elif moves:
+        # F32: the shard proofs run only on a run that can go on, so a REFUSED run's lists are the plan before them. `ran`
+        # alone cannot say so (it is also False when there was nothing to rehearse), hence the marker; a refusal that comes
+        # later (rewrite-unsafe) leaves the lists rehearsed and leaves no marker.
+        report["rehearsal"]["skipped"] = "refused"
+    report["moves"], report["left_in_place"] = moves, sorted(left, key=lambda x: x["path"])
+    rewrites, ledger = [], None
+    if moves and not refusals:
+        try:
+            rewrites, ledger = plan_rewrites(root, moves, tier, report)
+        except Unsafe as e:
+            refusals.append(refusal("rewrite-unsafe", "a file that names a moved path cannot be rewritten faithfully: %s" % e))
+    report["rewrites"] = [r.as_report() for r in rewrites]
+    report["_rewrites"] = rewrites + ([ledger] if ledger else [])
+    if moves and not refusals:
+        report["not_rewritten"] = scan_hits(root, moves, rewrites, tier)
+        report["live_links"] = live_links(root, moves, rewrites)
+    if not refusals and not present:
+        report["status"] = "nothing-to-do"
+        return report
+    if not refusals and not moves:
+        report["status"] = "nothing-to-do"
+    return finish(report)
+
+
+def finish(report):
+    if report["refusals"]:
+        report["status"] = "refused"
+        report["moves"] = report["moves"] if report["moves"] else []
+    return report
+
+
+def remove_empty_parents(root, rel):
+    """rmdir the directories a move emptied, from the file's old parent up, never the project root."""
+    d = Path(root) / rel
+    for parent in d.parents:
+        if parent == Path(root):
+            break
+        try:
+            parent.rmdir()
+        except OSError:
+            break
+
+
+def commit_message(report, moves):
+    tracked = [m for m in moves if m["tracked"]]
+    plain = [m for m in moves if not m["tracked"]]
+    sha = report["canonical"]["sha"] or "an unknown commit"
+    modified = " (plus uncommitted changes)" if report["canonical"].get("modified") else ""
+    if is_top_up(moves):
+        subject = "chore(methodology): move %s under methodology/ (top-up, tier %s, %d file%s)" % (
+            ", ".join(m["src"] for m in moves), report["tier"], len(moves), "" if len(moves) == 1 else "s")
+    else:
+        subject = "chore(methodology): move the methodology files under methodology/ (tier %s, %d files)" % (report["tier"], len(moves))
+    lines = [subject,
+             "",
+             "Moved by bin/migrate-layout of the KJ5HST/methodology checkout at %s%s (BL-101 P7)." % (sha, modified),
+             "%d file(s) with git mv%s." % (len(tracked), (", %d without git (generated files that .gitignore keeps out of the repository)" % len(plain)) if plain else ""),
+             "Every tracked move is a rename at 90% similarity or better (git diff -M), so git log --follow reaches the history before the move.",
+             "No committed ledger entry and no ledger shard was edited."]
+    return "\n".join(lines)
+
+
+def renames_in_index(project):
+    """{(src, dest): score} for the renames git finds between HEAD and the index."""
+    out = run(project, "diff", "--cached", "-M", "--name-status", "-z").stdout.split("\0")
+    renames, i = {}, 0
+    while i < len(out):
+        status = out[i]
+        if status.startswith("R"):
+            renames[(out[i + 1], out[i + 2])] = int(status[1:])
+            i += 3
+        else:
+            i += 2 if status else 1
+    return renames
+
+
+def rollback(root, done_plain, methodology_existed):
+    """Give the tree back: the index and every tracked file from HEAD, the files git does not track moved home,
+    and the directories the run created removed. The run started from a clean tree, so nothing else is lost."""
+    run(root, "reset", "-q", "--hard", "HEAD")
+    for src, dest in reversed(done_plain):
+        if (root / dest).is_file() and not (root / src).exists():
+            os.rename(root / dest, root / src)
+    if not methodology_existed:
+        for d in sorted((p for p in (root / NEW_DIR).rglob("*") if p.is_dir()), key=lambda p: -len(p.parts)):
+            try:
+                d.rmdir()
+            except OSError:
+                pass
+        try:
+            (root / NEW_DIR).rmdir()
+        except OSError:
+            pass
+
+
+PROOF_TIMEOUT = 300
+# The links check judges the framework's documents (a TRACKED file, named in either layout) and only reports a link in a file the
+# project owns: a committed ledger entry is never edited, so a link in one that was right where the ledger sat dangles after the move.
+FRAMEWORK_FILES = ({dest for _s, dest, disp in DISTRIBUTION if disp == TRACKED}
+                   | {NEW_LAYOUT[src] for src, _d, disp in DISTRIBUTION if disp == TRACKED})
+DANGLING_LINE = re.compile(r"^\s+(\S+):\d+\s+->\s+")  # check-links' own line: "  <file>:<line>  ->  <target>"
+
+
+def tool_run(args, cwd, timeout=300):
+    """(exit code, output). A tool that cannot run or does not finish is a cell with that word, never a crash."""
+    try:
+        r = subprocess.run(args, cwd=str(cwd), capture_output=True, text=True, timeout=timeout)
+        return r.returncode, r.stdout + r.stderr
+    except subprocess.TimeoutExpired:
+        return "timeout", ""
+    except OSError as e:
+        return "error", str(e)
+
+
+def last_line(text):
+    lines = [x.strip() for x in text.splitlines() if x.strip()]
+    return lines[-1][:200] if lines else ""
+
+
+def links_cell(code, text):
+    """The links check as data: its exit, its last line, and the dangling links counted by whose file they sit in
+    (`framework`, judged; `project`, reported). A run that did not decide, or a failure whose lines are not in the shape
+    check-links prints, has no counts (None): an unreadable result must never read as zero."""
+    cell = {"exit": code, "line": last_line(text), "framework": None, "project": None}
+    if code in (0, 1):
+        files = [m.group(1) for m in map(DANGLING_LINE.match, text.splitlines()) if m]
+        if code == 0 or files:
+            cell["framework"] = sum(1 for f in files if f in FRAMEWORK_FILES)
+            cell["project"] = len(files) - cell["framework"]
+    return cell
+
+
+def run_checks(root, proofs, ledger):
+    """The read-only checks of plan 4.7.4, as data: bin/status, the two ledger checkers, check-links, every shard proof
+    (the exit histogram), and how far `git log --follow` reaches back from the ledger. Run from the project's root."""
+    root = Path(root)
+    out = {}
+    rows, why = read_status(root)
+    if rows is None:
+        out["status"] = {"exit": 1, "tracked": 0, "current": 0, "line": (why or "")[:200]}
+    else:
+        tracked = [s for _f, d, s in rows if d == TRACKED]
+        out["status"] = {"exit": 0, "tracked": len(tracked), "current": sum(1 for s in tracked if s == "current")}
+    for name, tool in (("ledger", "check-ledger"), ("handoff", "check-handoff")):
+        code, text = tool_run([sys.executable, "-B", str(HERE / tool)], root)
+        out[name] = {"exit": code, "line": last_line(text)}
+    code, text = tool_run([sys.executable, "-B", str(HERE / "check-links"), "--tree", str(root)], root)
+    out["links"] = links_cell(code, text)
+    histogram = {}
+    for rel in proofs:
+        code, _text = tool_run(["bash", rel], root, PROOF_TIMEOUT)
+        histogram[str(code)] = histogram.get(str(code), 0) + 1
+    out["proofs"] = {"count": len(proofs), "histogram": histogram}
+    commits = run(root, "log", "--follow", "--format=%H", "--", ledger).stdout.split() if ledger else []
+    out["history"] = {"commits": len(commits)}
+    return out
+
+
+def check_differences(before, after):
+    """What a migration must not change: bin/status reading every TRACKED file current, the ledger checkers' exit codes,
+    how many links dangle in the framework's documents, the proofs' exit histogram, and the ledger's history staying
+    reachable (every older commit plus the move). The project's own files are reported, not judged."""
+    diffs = []
+    if before["status"] != after["status"] or after["status"]["exit"] != 0 or after["status"]["current"] != after["status"]["tracked"]:
+        diffs.append("status")
+    for name in ("ledger", "handoff"):
+        if before[name]["exit"] != after[name]["exit"]:
+            diffs.append(name)
+    if before["links"]["framework"] != after["links"]["framework"]:
+        diffs.append("links")
+    if before["proofs"] != after["proofs"]:
+        diffs.append("proofs")
+    if before["history"]["commits"] and after["history"]["commits"] < before["history"]["commits"] + 1:
+        diffs.append("history")
+    return diffs
+
+
+def apply_migration(report, trailers, skip_checks=False):
+    """Do the plan: the moves, the edits, ONE commit. Any failure before or at the commit is rolled back."""
+    root = Path(report["project"])
+    moves, rewrites = report["moves"], report["_rewrites"]
+    methodology_existed = (root / NEW_DIR).exists()
+    done_plain = []
+    ledger_src, ledger_final = ledger_location(root, moves)
+    proof_srcs = [m["src"] for m in moves if m["kind"] == "shard" and m["src"].endswith(".verify.sh")]
+    proof_dests = [m["dest"] for m in moves if m["kind"] == "shard" and m["src"].endswith(".verify.sh")]
+    before = None if skip_checks else run_checks(root, proof_srcs, ledger_src)
+    rewrites_by_final = {rw.final: rw for rw in rewrites}
+    try:
+        for m in moves:
+            (root / m["dest"]).parent.mkdir(parents=True, exist_ok=True)
+            if m["tracked"]:
+                r = run(root, "mv", m["src"], m["dest"])
+                if r.returncode != 0:
+                    raise RuntimeError("git mv %s %s failed: %s" % (m["src"], m["dest"], r.stderr.strip()))
+            else:
+                os.rename(root / m["src"], root / m["dest"])
+                done_plain.append((m["src"], m["dest"]))
+        for rw in rewrites:
+            (root / rw.final).write_text(rw.new, encoding="utf-8")
+            r = run(root, "add", "--", rw.final)
+            if r.returncode != 0:
+                raise RuntimeError("git add %s failed: %s" % (rw.final, r.stderr.strip()))
+        for m in moves:
+            remove_empty_parents(root, m["src"])
+        renames = renames_in_index(root)
+        weak = []
+        for m in moves:
+            if m["tracked"]:
+                score = renames.get((m["src"], m["dest"]))
+                if score is None or score < 90:
+                    why = "not a rename" if score is None else "%d%%" % score
+                    if m["src"] == ledger_src:
+                        size = len(rewrites_by_final[ledger_final].old.encode("utf-8")) if ledger_final in rewrites_by_final else 0
+                        why += ": the ledger is too small to take its entry and stay a rename at 90%% (it holds %d bytes); migrate after it has more entries" % size
+                    weak.append("%s -> %s (%s)" % (m["src"], m["dest"], why))
+        if weak:
+            raise RuntimeError("a moved file would fall below 90% similarity, so git log --follow could not reach its history: "
+                               + ", ".join(weak))
+        parent = run(root, "rev-parse", "HEAD").stdout.strip()
+        message = commit_message(report, moves) + (("\n\n" + "\n".join(trailers)) if trailers else "")
+        r = subprocess.run(["git", "-C", str(root), "commit", "-q", "-F", "-"], input=message + "\n", capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError("git commit was refused: " + (r.stdout + r.stderr).strip())
+    except Exception as e:  # noqa: BLE001 -- every failure rolls back, then is reported
+        rollback(root, done_plain, methodology_existed)
+        report["status"] = "rolled-back"
+        report["commit"] = {"error": str(e)}
+        return 3
+    report["status"] = "applied"
+    report["commit"] = {"sha": run(root, "rev-parse", "HEAD").stdout.strip(), "parent": parent, "message": message,
+                        "renames": [{"src": s, "dest": d, "score": sc} for (s, d), sc in sorted(renames.items())
+                                    if any(m["src"] == s and m["dest"] == d for m in moves)]}
+    if skip_checks:
+        report["checks"] = {"ran": False}
+        return 0
+    after = run_checks(root, proof_dests, ledger_final)
+    differences = check_differences(before, after)
+    clean = run(root, "status", "--porcelain").stdout.strip() == ""
+    sha = report["commit"]["sha"]
+    report["checks"] = {"ran": True, "before": before, "after": after, "differences": differences,
+                        "clean": clean, "ok": not differences and clean, "way_back": "git revert %s" % sha[:12]}
+    return 0 if report["checks"]["ok"] else 4
+
+
+def render_text(report):
+    out = ["migrate-layout: %s" % report["project"],
+           "canonical: %s @ %s" % (report["canonical"]["path"], (report["canonical"]["sha"] or "unknown")[:12]),
+           "layout: %s   tier: %s   mode: %s" % (report["layout"], report["tier"],
+                                                 "dry run (nothing written; add --apply to migrate)" if report["mode"] == "dry-run" else "apply")]
+    if report["refusals"]:
+        out.append("")
+        out.append("REFUSED:")
+        for r in report["refusals"]:
+            out.append("  - [%s] %s" % (r["code"], r["message"]))
+    if report["status"] == "nothing-to-do":
+        out.append("")
+        out.append("nothing to migrate: no methodology file is left to move")
+    if report["moves"]:
+        out.append("")
+        if (report["rehearsal"] or {}).get("skipped"):
+            out.append("moves (%d, UNREHEARSED):" % len(report["moves"]))
+            out.append("  this run is refused, so the shard proofs did not run in a clone: this list and the left-in-place list are the plan"
+                       " before that rehearsal, and once the refusal clears a shard whose proof exits differently at the new place drops out of the moves")
+        else:
+            out.append("moves (%d):" % len(report["moves"]))
+        for m in report["moves"]:
+            out.append("  git mv %s %s%s" % (m["src"], m["dest"], "" if m["tracked"] else "   (not tracked: a plain move)"))
+    if report["left_in_place"]:
+        out.append("")
+        out.append("left in place (%d):" % len(report["left_in_place"]))
+        for x in report["left_in_place"]:
+            out.append("  %s -- %s" % (x["path"], x["reason"]))
+    if report["rewrites"]:
+        out.append("")
+        out.append("rewrites (%d file(s)):" % len(report["rewrites"]))
+        for rw in report["rewrites"]:
+            out.append("  %s (%d replacement(s))" % (rw["path"], rw["replacements"]))
+            out.extend("    " + line for line in rw["diff"].splitlines())
+    if report["not_rewritten"]:
+        out.append("")
+        out.append("not rewritten (reported for a person to decide):")
+        out.append("  machine-read files that name a moved path (candidates: this tool does not run them):")
+        out.append("    a name on a code line is necessary, not sufficient (a control named 25 files and 4 broke); a path built in pieces or a")
+        out.append("    module imported by its stem is not seen. Before applying, rehearse the project's own tests and proofs in a clone,")
+        out.append("    at tier 1 and then at tier all (plan 7.4).")
+        for cat in CATEGORIES:
+            c = report["not_rewritten"][cat]
+            note = "  (a committed entry is never edited; a link in one is relative to where its ledger sat when it was written)" if cat == "ledger" else ""
+            out.append("  %-9s%d mention(s) in %d file(s)%s" % (cat + ":", c["mentions"], c["files"], note))
+            if cat in MACHINE_READ:
+                for x in sorted(c["paths"], key=lambda x: (x["code_mentions"] == 0 and not x.get("patterns"), x["file"])):
+                    more = "" if x["mentions"] <= 1 else "   (%d mentions, %d on code lines)" % (x["mentions"], x["code_mentions"])
+                    out.append("    %s:%d  %s%s%s%s" % (x["file"], x["line"], x["text"][:120], more,
+                                                        "" if x["code_mentions"] or not x["mentions"] or x.get("patterns") else "   [comment lines only]",
+                                                        "   [not tracked: per clone]" if x.get("untracked") else ""))
+                    p = x.get("patterns")
+                    if p:
+                        vsce = x["file"] == ".vscodeignore"
+                        for ln in p["lines"]:
+                            names = ln["files"]
+                            shown = ", ".join(names[:3]) + (" and %d more" % (len(names) - 3) if len(names) > 3 else "")
+                            if ln["line"]:
+                                out.append("      line %d: %s  stops covering %s" % (ln["line"], ln["text"][:120], shown))
+                            else:
+                                out.append("      vsce's default list: %s  stops covering %s" % (ln["text"].replace("(vsce default) ", "", 1), shown))
+                        if vsce:
+                            out.append("      %d line(s) cover %d moved file(s) where they are now and no line covers them under %s/; a line such as %s/** would"
+                                       " (vsce reads each line with minimatch, { dot: true } and no matchBase, so a bare name is the project root's; this tool's"
+                                       " own translation of that, checked against %s: a candidate, not a verdict)"
+                                       % (len(p["lines"]), len(p["exposed"]), NEW_DIR, NEW_DIR, VSCE_PINNED))
+                        else:
+                            out.append("      %d line(s) cover %d moved file(s) where they are now and no line covers them under %s/; a line such as ^%s$ would"
+                                       " (each line read as a case-insensitive regular expression with Python's re, not R's engine: a candidate, not a verdict)"
+                                       % (len(p["lines"]), len(p["exposed"]), NEW_DIR, NEW_DIR))
+                        if p["unread"]:
+                            out.append("      %d line(s) could not be read as %s and were not evaluated" % (p["unread"], "a glob" if vsce else "a regular expression"))
+            else:
+                for s in c["sites"]:
+                    out.append("    %s:%d  %s%s" % (s["file"], s["line"], s["text"][:120], "   [not tracked: per clone]" if s.get("untracked") else ""))
+            if cat == "hooks" and c["runs_moved_tool"]:
+                out.append("    WARNING: %d hook line(s) run a moved tool: that hook will refuse the migration commit and the run will roll back;"
+                           " update the hook first (hooks are per clone and not part of this plan)" % c["runs_moved_tool"])
+    ll = report["live_links"]
+    if ll["count"]:
+        out.append("")
+        out.append("live links the move breaks (%d in %d file(s); listed, not rewritten: a person decides):" % (ll["count"], ll["files"]))
+        for s in ll["sites"][:SITES_SHOWN]:
+            out.append("    %s:%d  %s -> %s" % (s["file"], s["line"], s["target"], s["moves_to"]))
+        if ll["count"] > SITES_SHOWN:
+            out.append("    and %d more (every one is in --json)" % (ll["count"] - SITES_SHOWN))
+    ck = report["checks"]
+    if ck and ck.get("ran"):
+        out.append("")
+        out.append("checks (before -> after):")
+
+        def show(name, side):
+            c = ck[side][name]
+            if name == "status":
+                return "%d/%d tracked current" % (c["current"], c["tracked"])
+            if name == "proofs":
+                return "%d proof(s), exit histogram %s" % (c["count"], json.dumps(c["histogram"], sort_keys=True))
+            if name == "history":
+                return "%d commit(s) reached by git log --follow" % c["commits"]
+            if name == "links":
+                n = lambda x: "?" if x is None else x
+                return "exit %s; %s framework, %s project dangling" % (c["exit"], n(c["framework"]), n(c["project"]))
+            return "exit %s" % c["exit"]
+        for name in ("status", "ledger", "handoff", "links", "proofs", "history"):
+            note = "  (the framework documents are judged; the project's own files are reported)" if name == "links" else ""
+            out.append("  %-8s %s -> %s%s" % (name + ":", show(name, "before"), show(name, "after"), note))
+        out.append("  clean tree: %s" % ("yes" if ck["clean"] else "NO"))
+        if not ck["ok"]:
+            out.append("CHECKS DIFFER (%s). The commit stands; to undo it: %s" % (", ".join(ck["differences"]) or "tree not clean", ck["way_back"]))
+    if report["status"] == "applied":
+        out.append("")
+        out.append("APPLIED: one commit, %s" % report["commit"]["sha"][:12])
+    if report["status"] == "rolled-back":
+        out.append("")
+        out.append("ROLLED BACK: %s" % report["commit"]["error"])
+        out.append("the project is as it was before the run")
+    return "\n".join(out) + "\n"
+
+
+def main():
+    p = argparse.ArgumentParser(description="Move a project's methodology files under methodology/ (a dry run unless --apply).")
+    p.add_argument("project", help="the project directory (the top of a git repository)")
+    p.add_argument("--apply", action="store_true", help="write the migration as one commit (the default is a dry run)")
+    p.add_argument("--tier", choices=("1", "2", "all"), default="all", help="1: the framework's files; 2: the project's state; all (default)")
+    p.add_argument("--trailer", action="append", default=[], metavar="TEXT", help="a trailer line for the commit message, e.g. a Co-Authored-By line (repeatable)")
+    p.add_argument("--skip-checks", action="store_true", help="do not run the before-and-after checks of an apply")
+    p.add_argument("--json", action="store_true", help="print the report as JSON")
+    args = p.parse_args()
+    project = Path(args.project)
+    if not project.is_dir():
+        print("error: %s is not a directory" % project, file=sys.stderr)
+        return 2
+    report = build_report(project, args.tier, args.apply)
+    code = 0
+    if report["status"] == "refused":
+        code = 1
+    elif args.apply and report["status"] == "ok":
+        code = apply_migration(report, args.trailer, args.skip_checks)
+    report.pop("_rewrites", None)
+    print(json.dumps(report, indent=2) if args.json else render_text(report), end="" if not args.json else "\n")
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())
