@@ -7,7 +7,7 @@
     {
       "name": "tests-sh-passed",
       "direction": "min",
-      "threshold": 301,
+      "threshold": 302,
       "command": "bash bin/tests.sh",
       "extract": "== Summary: (\\d+) passed",
       "why": "the framework's build equivalent; the passed count is a ratchet — every suite it wires in (dashboard, trim, budget, ratchet units) reports through it"
@@ -72,6 +72,23 @@
       "command": "python3 tools/test_sync_layouts.py",
       "extract": "Ran (\\d+) tests",
       "why": "the manifest's second table (NEW_LAYOUT) and its reader, bin/sync --layout auto|legacy|new (a legacy project is never given the new layout, seeds are not shadowed, ignore mode, --source=github), bin/status and bin/check-links in both layouts, each driven as a command in scratch projects, and the literal scanner over this repository. Count never drops; green/red is carried by tests-sh-passed. 82 is measured (Ran 82 tests, OK)."
+    },
+    {
+      "name": "migrate-layout-unit-tests",
+      "direction": "min",
+      "threshold": 280,
+      "command": "python3 tools/test_migrate_layout.py",
+      "extract": "Ran (\\d+) tests",
+      "timeout_seconds": 3600,
+      "why": "bin/migrate-layout run as a command in scratch git projects the real bin/sync wrote (the plan, the refusals, the one commit and its rollback, the rewrites of CLAUDE.md, .gitignore and the two configs, the one ledger entry, the hits it leaves, the shard rehearsal, the checks before and after) and its rules as functions. Count never drops. bin/tests.sh runs only the two fast classes, so this gate's colour is migrate-layout-unit-tests-failed, not tests-sh-failed. 280 is measured (Ran 280 tests, OK)."
+    },
+    {
+      "name": "migrate-layout-unit-tests-failed",
+      "direction": "max",
+      "threshold": 0,
+      "command": "python3 tools/test_migrate_layout.py",
+      "timeout_seconds": 3600,
+      "why": "the colour of the suite the gate above counts: a count gate passes over a red test (it still ran), and bin/tests.sh wires in only the fast classes of this suite, so nothing else would turn red. The same command as the count gate, no extract, so the exit code is the measurement and the ratchet runs the command once for both."
     },
     {
       "name": "layout-literals",

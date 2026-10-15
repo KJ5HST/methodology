@@ -318,6 +318,17 @@ else
     fail "sync layer in both layouts unit tests failed"
 fi
 
+# The migration tool: only its FAST classes run here, the rules as functions and the usage shapes (about a second).
+# The command-level suite (bin/migrate-layout run in scratch git projects the real bin/sync wrote: 365 s measured on this tree) is the
+# gate migrate-layout-unit-tests and is NOT wired in: run here it would roughly double this suite's time and push it
+# toward the 600 s a gate is given, and a gate that times out reads "unmeasured", so tests-sh-passed and
+# tests-sh-failed would then measure nothing. That suite's colour is the gate migrate-layout-unit-tests-failed.
+if python3 "$METHODOLOGY/tools/test_migrate_layout.py" TestThePureRules TestUsageAndNothingToDo >/dev/null 2>&1; then
+    pass "migration tool (bin/migrate-layout) rules and usage unit tests green (the command-level suite is the gate migrate-layout-unit-tests)"
+else
+    fail "migration tool (bin/migrate-layout) rules and usage unit tests failed"
+fi
+
 echo "== Test 19: dashboard twins byte-identical + same DASHBOARD_VERSION =="
 diff -q "$METHODOLOGY/tools/methodology_dashboard.py" "$STARTER/methodology_dashboard.py" >/dev/null \
     && pass "dashboard twins byte-identical" || fail "dashboard twins differ"
