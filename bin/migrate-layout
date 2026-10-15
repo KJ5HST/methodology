@@ -1058,7 +1058,7 @@ def build_report(project, tier, apply_mode):
         else:
             bad = [f"{f} ({s})" for f, d, s in rows if d == TRACKED and s != "current" and s != "half-migrated"]
             if bad:
-                refusals.append(refusal("not-current", "bin/status does not read every TRACKED file current: run bin/sync first (plan 5A.2): "
+                refusals.append(refusal("not-current", "bin/status does not read every TRACKED file current: run bin/sync first: "
                                         + ", ".join(bad), [b.split(" (")[0] for b in bad]))
     report["rehearsal"] = {"ran": False, "proofs": 0, "excluded": []}
     if moves and not refusals:
@@ -1120,7 +1120,7 @@ def commit_message(report, moves):
         subject = "chore(methodology): move the methodology files under methodology/ (tier %s, %d files)" % (report["tier"], len(moves))
     lines = [subject,
              "",
-             "Moved by bin/migrate-layout of the KJ5HST/methodology checkout at %s%s (BL-101 P7)." % (sha, modified),
+             "Moved by bin/migrate-layout of the KJ5HST/methodology checkout at %s%s." % (sha, modified),
              "%d file(s) with git mv%s." % (len(tracked), (", %d without git (generated files that .gitignore keeps out of the repository)" % len(plain)) if plain else ""),
              "Every tracked move is a rename at 90% similarity or better (git diff -M), so git log --follow reaches the history before the move.",
              "No committed ledger entry and no ledger shard was edited."]
@@ -1350,7 +1350,7 @@ def render_text(report):
         out.append("  machine-read files that name a moved path (candidates: this tool does not run them):")
         out.append("    a name on a code line is necessary, not sufficient (a control named 25 files and 4 broke); a path built in pieces or a")
         out.append("    module imported by its stem is not seen. Before applying, rehearse the project's own tests and proofs in a clone,")
-        out.append("    at tier 1 and then at tier all (plan 7.4).")
+        out.append("    at tier 1 and then at tier all.")
         for cat in CATEGORIES:
             c = report["not_rewritten"][cat]
             note = "  (a committed entry is never edited; a link in one is relative to where its ledger sat when it was written)" if cat == "ledger" else ""

@@ -505,7 +505,7 @@ class TestThePureRules(unittest.TestCase):
         owned = NEW_OF[SEED_DESTS[0]]
         text = ("check-links: FAIL — 3 dangling link(s) in the tree at /x (new layout):\n"
                 "  %s:12  ->  gone.md\n  %s:7  ->  docs/methodology/HOW_TO_USE.md\n  %s:3  ->  also-gone.md\n\n"
-                "Distributed files author cross-references for the ADOPTER layout (B1 plan section 4). Fix the target above, not the layout.\n"
+                "Distributed files author cross-references for the ADOPTER layout. Fix the target above, not the layout.\n"
                 % (new, owned, legacy))
         got = self.m.links_cell(1, text)
         self.assertEqual((got["exit"], got["framework"], got["project"]), (1, 2, 1), "either layout's name for a framework file counts")
@@ -1739,7 +1739,7 @@ class TestTheMachineReadFilesAreListedApartFromProse(Adopter):
         tests = run_migrate(self.project).report["not_rewritten"]["tests"]
         self.assertEqual((tests["mentions"], tests["files"]), (90, 31))
         self.assertEqual(len(tests["sites"]), 25, "sites stay capped at 25 as before")
-        self.assertEqual({s["file"] for s in tests["sites"]}, {"tests/test_big.py"}, "the capped sites are all one file's: the crowd-out F5 found")
+        self.assertEqual({s["file"] for s in tests["sites"]}, {"tests/test_big.py"}, "the capped sites are all one file's: the crowd-out the machine-read listing prevents")
         self.assertEqual([x["file"] for x in tests["paths"]], sorted(files), "the file list is complete and sorted")
         big = next(x for x in tests["paths"] if x["file"] == "tests/test_big.py")
         self.assertEqual((big["mentions"], big["code_mentions"]), (60, 60))
@@ -1869,7 +1869,7 @@ class TestAPatternThatStopsMatchingIsListed(Adopter):
         self.put("# the ledger is CHANGELOG.md\n^SESSION_RUNNER.*\\.md$\n")
         nr = self.report()
         row = self.row(nr)
-        self.assertEqual((row["mentions"], row["code_mentions"], row["line"]), (1, 0, 1), "F5's row, as it was")
+        self.assertEqual((row["mentions"], row["code_mentions"], row["line"]), (1, 0, 1), "the row, as it was")
         self.assertEqual(row["patterns"]["exposed"], ["SESSION_RUNNER.md"])
         self.assertEqual(sum(1 for x in nr["config"]["paths"] if x["file"] == ".Rbuildignore"), 1)
         self.assertEqual((nr["config"]["files"], nr["config"]["mentions"]), (1, 1))
@@ -1979,7 +1979,7 @@ class TestAPatternThatStopsMatchingIsListed(Adopter):
         self.put("SESSION_RUNNER.md\nCHANGELOG.md\n", rel=".npmignore")
         npm = self.row(self.report(), ".npmignore")
         self.assertEqual((npm["mentions"], npm["code_mentions"]), (2, 2))
-        self.assertNotIn("patterns", npm, "only vsce's matching was read and run (F24): any other pattern list is listed, never judged")
+        self.assertNotIn("patterns", npm, "only vsce's matching was read and run: any other pattern list is listed, never judged")
 
     def test_a_gitignore_below_the_root_stays_prose(self):
         self.put("CHANGELOG.md\n", rel="web/.gitignore")
@@ -2014,14 +2014,14 @@ class TestAPackagersIgnoreFileIsEvaluated(Adopter):
         self.put("# keep the framework out of the .vsix\n" + self.LINES)
         row = self.row(self.report())
         p = row["patterns"]
-        self.assertEqual((row["mentions"], row["code_mentions"]), (2, 2), "F5's row, as it was: the two bare names")
+        self.assertEqual((row["mentions"], row["code_mentions"]), (2, 2), "the row, as it was: the two bare names")
         self.assertEqual([x["line"] for x in p["lines"]], [2, 3, 4, 0], "line order, the default list last")
         for name in ("SESSION_RUNNER.md", "CHANGELOG.md", "docs/methodology/HOW_TO_USE.md", ".gitattributes"):
             self.assertIn(name, p["exposed"], name)
         self.assertNotIn("docs/methodology/PROJECT_CONVENTIONS.md", p["exposed"], "the project's own file stays where it is")
         self.assertEqual(p["unread"], 0)
         self.assertEqual(p["lines"][-1]["text"], "(vsce default) .gitattributes")
-        self.assertEqual((row["line"], row["text"]), (3, "SESSION_RUNNER.md"), "an existing row keeps F5's pointer: its first mention")
+        self.assertEqual((row["line"], row["text"]), (3, "SESSION_RUNNER.md"), "an existing row keeps its pointer: its first mention")
         self.put("# keep the framework out of the .vsix\ndocs/**\n", message="a file that names no moved file")
         fresh = self.row(self.report())
         self.assertEqual((fresh["line"], fresh["text"], fresh["mentions"]), (2, "docs/**", 0), "a new row points at the first line that stops matching")
@@ -2029,7 +2029,7 @@ class TestAPackagersIgnoreFileIsEvaluated(Adopter):
     def test_a_line_for_the_new_directory_clears_every_exposure_and_the_row_of_patterns(self):
         self.put(self.LINES + "methodology/**\n")
         row = self.row(self.report())
-        self.assertEqual(row["mentions"], 2, "the file still names two moved files, which is F5's row")
+        self.assertEqual(row["mentions"], 2, "the file still names two moved files, which is the existing row")
         self.assertNotIn("patterns", row)
         self.put("src/**\nmethodology/**\n", message="a file that names no moved file")
         nr = self.report()
@@ -2053,7 +2053,7 @@ class TestAPackagersIgnoreFileIsEvaluated(Adopter):
     def test_only_the_file_at_the_root_is_read_and_only_when_git_tracks_it(self):
         self.put("SESSION_RUNNER.md\n", rel="pkg/.vscodeignore")
         below = self.row(self.report(), "pkg/.vscodeignore")
-        self.assertEqual(below["mentions"], 1, "F5 lists it, as a pattern list")
+        self.assertEqual(below["mentions"], 1, "the machine-read listing includes it, as a pattern list")
         self.assertNotIn("patterns", below, "but only the file at the root is evaluated")
         (self.project / ".git" / "info" / "exclude").write_text(".vscodeignore\n", encoding="utf-8")
         (self.project / ".vscodeignore").write_text("SESSION_RUNNER.md\n", encoding="utf-8")
@@ -2215,7 +2215,7 @@ class TestTheChecks(Adopter):
         r = run_migrate(self.project, "--apply", checks=True)
         self.assertEqual(r.returncode, 0, r.out)
         checks = r.report["checks"]
-        self.assertNotIn("informational", checks, "no check is exempt any more: P9 rewrote the documents")
+        self.assertNotIn("informational", checks, "no check is exempt any more: the documents were rewritten")
         self.assertEqual((checks["before"]["links"]["exit"], checks["before"]["links"]["framework"], checks["before"]["links"]["project"]), (0, 0, 0))
         self.assertEqual((checks["after"]["links"]["exit"], checks["after"]["links"]["framework"], checks["after"]["links"]["project"]), (1, 0, 1))
         self.assertEqual(checks["differences"], [])
