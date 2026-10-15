@@ -4,7 +4,7 @@
 
 Every session has exactly ONE deliverable. When it's done, you close out. You do not start the next thing. The deliverable MAY be a **verified vertical slice** — one capability end to end — but only under the gates in §Vertical Slice Sessions below. One capability never means a second capability.
 
-**Where the files are.** This document names methodology files by bare name; look beside this runner. Two exceptions: a legacy project keeps `ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md` and `workstreams/` in `docs/methodology/`; and a project that moved only its framework files into `methodology/` keeps its ledgers, notes and configs at the project root. Commands run from the project root; in a migrated project put `methodology/` in front of the tool and of any methodology file it takes (`python3 methodology/methodology_trim.py --file methodology/CHANGELOG.md --check`).
+**Where the files are.** This document names methodology files by bare name; look beside this runner. Two exceptions: a legacy project keeps `ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md` and `workstreams/` in `docs/methodology/`; and a project that moved only its framework files into `methodology/` keeps its ledgers, notes and configs at the project root. Commands run from the project root; in a migrated project put `methodology/` in front of the tool and of any methodology file it takes.
 
 ---
 
