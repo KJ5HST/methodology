@@ -105,7 +105,7 @@ If your build produces rendered output that depends on external assets (fonts, c
 | **Post-render** (every build) | Confirm the rendered output uses the assets it was configured to use (e.g., `pdffonts` shows all expected font faces embedded, not just the family name) | **Hard rule** — part of the build-equivalent step. Failure blocks the commit. | Catches silent fallback that survives correct-looking static config. |
 | **Pre-render / setup** (when render-dep config changes) | Confirm each configured asset actually provides the faces / version / features the document uses (e.g., `fc-list "<family>"` returns each expected face; `kpsewhich <Italic-file>` resolves; the CSL version matches the cited style) | **Soft prompt** — surfaces at Phase 0 when render-dep config changes; project decides response based on its toolchain. | Catches mis-configuration without requiring a render. |
 
-A deliverable that compiles, renders, and embeds the right assets is correct. A deliverable that compiles and renders but embeds fallback assets is broken in a way the build will not tell you about — find it before the reader does. See domain workstreams (e.g., `docs/methodology/workstreams/RESEARCH_DOCUMENTATION_WORKSTREAM.md` for research papers) for toolchain-specific verification commands.
+A deliverable that compiles, renders, and embeds the right assets is correct. A deliverable that compiles and renders but embeds fallback assets is broken in a way the build will not tell you about — find it before the reader does. See domain workstreams (e.g., `workstreams/RESEARCH_DOCUMENTATION_WORKSTREAM.md` for research papers) for toolchain-specific verification commands.
 
 ---
 

@@ -36,11 +36,13 @@ your-projects/                        <-- parent directory (portfolio level)
 └── project-c/                        <-- same structure
 ```
 
+This tree shows the legacy layout. The `methodology/` layout is described under *Two layouts* below.
+
 ---
 
 ## Two adoption modes
 
-The methodology supports two ways to keep the synced files current in your project (`bin/sync` distributes the full corpus — the operating files at your project root and the framework under `docs/methodology/`; see the next section for the complete list):
+The methodology supports two ways to keep the synced files current in your project (`bin/sync` distributes the full corpus — in the legacy layout the operating files at your project root and the framework under `docs/methodology/`, in the `methodology/` layout all of it under `methodology/`; see *Setup with `bin/sync`* for the complete list):
 
 | Mode | What it means | Best for |
 |------|---------------|----------|
@@ -48,6 +50,22 @@ The methodology supports two ways to keep the synced files current in your proje
 | **Ignored** | Files live at project root but are gitignored. Synced from a sibling `methodology/` checkout via `bin/sync`. | Multi-project operators (5+ projects), methodology authors/forks. Updates propagate via one command. |
 
 Both are first-class. You can start in committed mode and migrate to ignored mode later.
+
+---
+
+## Two layouts
+
+Where the methodology files sit is a second choice, separate from the adoption mode:
+
+| Layout | Where the files sit | Who has it |
+|--------|---------------------|------------|
+| **Legacy** | the operating files, tools, ledgers and notes at the project root; the framework (`ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md`, `workstreams/`) under `docs/methodology/` | every project until it migrates; what `bin/sync` gives an empty project |
+| **`methodology/`** | all of it in one `methodology/` directory, `workstreams/` beneath it; the root keeps `CLAUDE.md`, `.githooks/`, `.github/` and the project's own files | a project started with `--layout new`, or moved by `bin/migrate-layout` |
+
+- **`bin/sync --layout auto`** (the default) keeps the layout a project has and gives an empty project the legacy one; `--layout new` starts an empty project in `methodology/`. A request that disagrees with the project (a legacy project asked for `new`, a migrated one asked for `legacy`) is refused before anything is written, and so is a project holding both layouts at once.
+- **Moving a project:** from the canonical checkout, `bin/migrate-layout your-project/` is a dry run; `--apply` moves the files in one commit that git follows as renames, and rewrites the paths in `CLAUDE.md`, `.gitignore` and the two config files. It refuses a dirty tree, an `--mode=ignore` project, a destination that exists, and a project where `bin/status` does not read every tracked file `current` (sync first). It lists what it will not rewrite: CI workflows, `.claude/` rules, hook copies, links inside past ledger entries. `--tier 1` moves only the framework's files and leaves the ledgers and configs at the root.
+- **Two things are called `methodology`.** The `methodology/` directory inside your project holds your copy of these files. The *canonical checkout* is the clone of the methodology repository that `bin/sync` copies from, written `../methodology` in the commands below. They are different directories.
+- **Names are bare.** Documents name files without a directory, and the commands in this guide are written for the legacy layout; in a migrated project put `methodology/` in front of a tool and of the methodology files it takes (`python3 methodology/methodology_dashboard.py`). `SESSION_RUNNER.md` §Where the files are says where to look.
 
 ---
 
@@ -69,7 +87,7 @@ If you have a local `methodology/` checkout (sibling to your projects), use the 
 ../methodology/bin/sync your-project/ --source=github
 ```
 
-`bin/sync` copies the full methodology corpus into the target: the operating files (`SESSION_RUNNER.md`, `FRAMEWORK_LEARNINGS.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`) at the project root and the framework (`ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md`, `workstreams/`) under `docs/methodology/`, creating subdirectories as needed. `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, and `ROADMAP.md` are *seeded* at the root only when absent and are never overwritten afterward — once created they are yours to edit. The complete mapping is defined once in `bin/_manifest.py`. In `--mode=ignore` it also adds `.gitignore` entries for the tracked files (not the seeded ones, which you commit) and warns (non-destructively) if any tracked file is currently tracked by git.
+`bin/sync` copies the full methodology corpus into the target: the operating files (`SESSION_RUNNER.md`, `FRAMEWORK_LEARNINGS.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `CONTEXT_TEMPLATE.md`, `CLAUDE_TEMPLATE.md`, `BOOTSTRAP.md`, `methodology_dashboard.py`) at the project root and the framework (`ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md`, `workstreams/`) under `docs/methodology/`, creating subdirectories as needed (with `--layout new`, or in a project already in the `methodology/` layout, all of it goes under `methodology/` instead). `SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, and `ROADMAP.md` are *seeded* at the root only when absent and are never overwritten afterward — once created they are yours to edit. The complete mapping is defined once in `bin/_manifest.py`. In `--mode=ignore` it also adds `.gitignore` entries for the tracked files (not the seeded ones, which you commit) and warns (non-destructively) if any tracked file is currently tracked by git.
 
 **Drift safety:** `bin/sync` refuses to overwrite a file that has local modifications not matching canonical or any historical version. The recommended pattern is to move per-project customizations into your CLAUDE.md's "Project-Specific Methodology Adaptations" section (see Step 5), then run sync. If you really need to discard local edits, pass `--force`.
 
@@ -94,7 +112,7 @@ If you don't have (or don't want) the sync tool, copy files manually:
 
 ### Step 1: Copy the Framework Files
 
-Copy `docs/methodology/` content (`ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md`, `workstreams/`) from the methodology repo into your project's `docs/methodology/` directory. These files are project-independent — you should not need to modify them.
+Copy `docs/methodology/` content (`ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md`, `workstreams/`) from the methodology repo into your project's `docs/methodology/` directory (or into `methodology/`, if your project uses that layout, together with Step 2's files). These files are project-independent — you should not need to modify them.
 
 ### Step 2: Copy the Starter Kit Files to Project Root
 
@@ -111,7 +129,7 @@ From the methodology `starter-kit/` directory:
 | `ROADMAP.md` | Feature inventory and future plans — what's built, what's next |
 | `methodology_dashboard.py` | Health scanner — scores project health and methodology compliance |
 
-This table is the minimum manual set. The **authoritative, complete distribution list** — which also includes `RECOMMENDED_SKILLS.md` and the `CONTEXT_TEMPLATE.md`/`CLAUDE_TEMPLATE.md` templates at the project root, plus the framework under `docs/methodology/` — is defined once in `bin/_manifest.py` and applied by `bin/sync`. Copy those too for the full set; the templates are renamed to `CONTEXT.md`/`CLAUDE.md` (see Step 5).
+This table is the minimum manual set. The **authoritative, complete distribution list** — which also includes `RECOMMENDED_SKILLS.md` and the `CONTEXT_TEMPLATE.md`/`CLAUDE_TEMPLATE.md` templates at the project root, plus the framework under `docs/methodology/` (in the legacy layout; the `methodology/` layout has its own table) — is defined once in `bin/_manifest.py` and applied by `bin/sync`. Copy those too for the full set; the templates are renamed to `CONTEXT.md`/`CLAUDE.md` (see Step 5).
 
 Run the dashboard once to generate your first report:
 
@@ -197,11 +215,11 @@ When a project needs to extend the base methodology — add a custom task mappin
 
 Why: edits to synced files become drift. When the methodology updates, you either merge conflicts, miss the update, or lose your customization. Keeping synced files byte-identical to canonical means updates are friction-free, and your project's additions remain visible where agents already read them (CLAUDE.md is loaded every session).
 
-**Keep CLAUDE.md lean — extract Learnings before they crowd the budget.** That every-session load has a flip side: CLAUDE.md competes for context with the work itself, so it has a practical size budget (Claude Code targets roughly 200 lines, and an oversized memory file measurably degrades how reliably the agent follows it). The Adaptations subsections — Learnings most of all — grow with every session and have no natural cap. When CLAUDE.md starts to feel heavy (check with `/context`), move the largest growing subsection to a committed `PROJECT_LEARNINGS.md` at your project root and leave a one-line pointer that tells the agent *when* to open it, since a referenced file is read on demand, not loaded automatically — write that pointer as a plain Markdown link, not an `@`-import, which Claude Code expands into context every session and would defeat the point:
+**Keep CLAUDE.md lean — extract Learnings before they crowd the budget.** That every-session load has a flip side: CLAUDE.md competes for context with the work itself, so it has a practical size budget (Claude Code targets roughly 200 lines, and an oversized memory file measurably degrades how reliably the agent follows it). The Adaptations subsections — Learnings most of all — grow with every session and have no natural cap. When CLAUDE.md starts to feel heavy (check with `/context`), move the largest growing subsection to a committed `PROJECT_LEARNINGS.md` beside `FRAMEWORK_LEARNINGS.md` (your project root, or `methodology/` if your project uses that layout) and leave a one-line pointer that tells the agent *when* to open it and names the file where it lives (`methodology/PROJECT_LEARNINGS.md` in that layout), since a referenced file is read on demand, not loaded automatically — write that pointer as a plain Markdown link, not an `@`-import, which Claude Code expands into context every session and would defeat the point:
 
-> *Project Learnings live in [`PROJECT_LEARNINGS.md`](PROJECT_LEARNINGS.md) — read it when a task resembles earlier work (a workstream or problem you've hit before).*
+> *Project Learnings live in `PROJECT_LEARNINGS.md` — read it when a task resembles earlier work (a workstream or problem you've hit before).*
 
-This is the same discipline as the three-file `BACKLOG`/`CHANGELOG`/`ROADMAP` split above — and as `SESSION_RUNNER.md` → `FRAMEWORK_LEARNINGS.md`, where the framework applies it to itself: the always-read file stays scannable; the accumulated record moves to a sibling read only when relevant. `PROJECT_LEARNINGS.md` is project-owned (committed, never synced), so it needs no tooling changes. Most projects never need this — extract only when the file actually approaches its budget.
+This is the same discipline as the three-file `BACKLOG`/`CHANGELOG`/`ROADMAP` split above — and as `SESSION_RUNNER.md` → `FRAMEWORK_LEARNINGS.md`, where the framework applies it to itself: the always-read file stays scannable; the accumulated record moves to a sibling read only when relevant. `PROJECT_LEARNINGS.md` is project-owned (committed, never synced), so it needs no tooling of yours: if your project later moves to the `methodology/` layout, `bin/migrate-layout` moves it with the methodology files (when git tracks it) and rewrites the pointer in `CLAUDE.md`. Most projects never need this — extract only when the file actually approaches its budget.
 
 Template section (from `CLAUDE_TEMPLATE.md`):
 
@@ -260,7 +278,7 @@ Open `SESSION_RUNNER.md` and review the Phase 1 task-to-workstream mapping table
 ## Step 8: Create a Sessions Directory (Optional)
 
 ```bash
-mkdir -p docs/methodology/sessions
+mkdir -p docs/methodology/sessions    # methodology/sessions in the methodology/ layout
 ```
 
 This is where session output documents go if you use them. The methodology works without explicit session documents — `SESSION_NOTES.md` carries the essential continuity — but formal session documents are useful for design series and audits.
@@ -324,7 +342,7 @@ git config core.hooksPath .githooks
 
 **Ledger co-staging hook (recommended).** The first hook the methodology *does* ship is narrow and single-purpose: [`.githooks/pre-commit`](https://github.com/KJ5HST/methodology/blob/main/.githooks/pre-commit) refuses a commit that changes tracked content unless `CHANGELOG.md` is co-staged — the mechanical form of the Phase 3F close-out gate (failure mode #27, "unrecorded action"). Enable it with the `core.hooksPath` line above after copying it into your `.githooks/`; bypass a single commit with `git commit --no-verify` (Phase 0 reconcile-on-read backfills anything bypassed, so the ledger stays true on the next Orient); opt out permanently by deleting `CHANGELOG.md` and recording that in `CLAUDE.md`. It never blocks a repo that has no ledger yet, and it skips merges/rebases. Details in [`SAFEGUARDS.md`](SAFEGUARDS.md) → Commit Discipline → "Ledger Co-Staging Hook."
 
-**Quality ratchet (recommended).** The second hook the methodology ships is the same shape — narrow, single-purpose, bypassable on the record. `quality_ratchet.py` (synced to your root) holds the thresholds you declare in `.quality-gates.json` (seeded empty) and refuses a commit that *loosens* one: a floor lowered, a ceiling raised, a direction flipped, a gate removed — or the manifest itself removed or emptied, which is judged against the last version that declared a gate, so a bypassed removal and a lower re-declaration are two recorded loosenings, not a fresh start. Tightening and adding never need approval; loosening is a plan-mode decision committed with `--no-verify`, which the hook prints as a recorded bypass ([`SAFEGUARDS.md`](SAFEGUARDS.md) §Blast Radius Limits; [`ITERATIVE_METHODOLOGY.md`](docs/methodology/ITERATIVE_METHODOLOGY.md) §Mechanical Gates Bind Every Actor). **Start where you are:** run each measurement once, declare the gate at the value it reports, then let the ratchet hold it — a floor copied from someone else's project is false at install and teaches bypass on day one. `python3 quality_ratchet.py --run` measures every declared gate, writes `.quality-gates-results.json` (add it to `.gitignore` unless you want every clone to score the last run) and prints a summary line the close-out receipt cites (`HANDOFFS.md`, `runtime_smoke`). Install with `python3 quality_ratchet.py install-hook`; if you already run the ledger hook, chain the ratchet after it — one line before the ledger hook's final `exit`:
+**Quality ratchet (recommended).** The second hook the methodology ships is the same shape — narrow, single-purpose, bypassable on the record. `quality_ratchet.py` (synced to your root) holds the thresholds you declare in `.quality-gates.json` (seeded empty) and refuses a commit that *loosens* one: a floor lowered, a ceiling raised, a direction flipped, a gate removed — or the manifest itself removed or emptied, which is judged against the last version that declared a gate, so a bypassed removal and a lower re-declaration are two recorded loosenings, not a fresh start. Tightening and adding never need approval; loosening is a plan-mode decision committed with `--no-verify`, which the hook prints as a recorded bypass ([`SAFEGUARDS.md`](SAFEGUARDS.md) §Blast Radius Limits; `ITERATIVE_METHODOLOGY.md` §Mechanical Gates Bind Every Actor). **Start where you are:** run each measurement once, declare the gate at the value it reports, then let the ratchet hold it — a floor copied from someone else's project is false at install and teaches bypass on day one. `python3 quality_ratchet.py --run` measures every declared gate, writes `.quality-gates-results.json` (add it to `.gitignore` unless you want every clone to score the last run) and prints a summary line the close-out receipt cites (`HANDOFFS.md`, `runtime_smoke`). Install with `python3 quality_ratchet.py install-hook`; if you already run the ledger hook, chain the ratchet after it — one line before the ledger hook's final `exit`:
 
 ```sh
 python3 "$(git rev-parse --show-toplevel)/quality_ratchet.py" --precommit || exit $?
@@ -378,13 +396,13 @@ two, and the split is not cosmetic:
 
 | Class | Files | On update |
 |---|---|---|
-| **Tracked** (canonical owns them) | `SESSION_RUNNER.md`, `FRAMEWORK_LEARNINGS.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `BOOTSTRAP.md`, the `*_TEMPLATE.md` files, `methodology_dashboard.py`, `methodology_trim.py`, `context_budget.py`, `quality_ratchet.py`, and everything under `docs/methodology/` | **overlay** — replace with the latest |
+| **Tracked** (canonical owns them) | `SESSION_RUNNER.md`, `FRAMEWORK_LEARNINGS.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `BOOTSTRAP.md`, the `*_TEMPLATE.md` files, `methodology_dashboard.py`, `methodology_trim.py`, `context_budget.py`, `quality_ratchet.py`, and everything under `docs/methodology/` (the framework files) | **overlay** — replace with the latest |
 | **Adopter-owned** | `CHANGELOG.md`, `HANDOFFS.md`, `SESSION_NOTES.md`, `ROADMAP.md`, `.context-budget.json`, `.quality-gates.json`, `.gitattributes` | **never overwrite** — these hold *your* history (or, for `.context-budget.json` and `.quality-gates.json`, your project's own tuned budgets and declared gates) |
 
 Overlaying the second row replaces your action ledger and your close-out receipts with empty
 templates. `bin/sync` refuses to do it by construction — `bin/_manifest.py` classes those seven as
 seeds, installed once and never again — but an agent working from prose has only this sentence to
-stop it. Say it explicitly.
+stop it. Say it explicitly. In a project in the `methodology/` layout both rows are in `methodology/` and the rule is the same.
 
 **2. Reconcile the adopter-owned files by hand, because nothing else will.** Since they are never
 overwritten, a project moving up from an earlier methodology keeps its ledgers *in their old
@@ -420,7 +438,7 @@ front-matter change, never a rewrite of history.
 |------|------|
 | `CLAUDE.md` → Adaptations → Learnings | After each session — the table grows organically; when it nears CLAUDE.md's size budget, extract it to a referenced `PROJECT_LEARNINGS.md` and leave a pointer (see Step 5) |
 | `CLAUDE.md` → Adaptations → Phase 0 steps | When you discover project-specific orient needs |
-| Workstream documents in `docs/methodology/workstreams/` | After 2-3 sessions in a workstream — add domain-specific patterns |
+| Workstream documents in `workstreams/` | After 2-3 sessions in a workstream — add domain-specific patterns |
 
 ### What NOT to Customize
 

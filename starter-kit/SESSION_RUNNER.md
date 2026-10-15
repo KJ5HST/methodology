@@ -4,6 +4,8 @@
 
 Every session has exactly ONE deliverable. When it's done, you close out. You do not start the next thing. The deliverable MAY be a **verified vertical slice** — one capability end to end — but only under the gates in §Vertical Slice Sessions below. One capability never means a second capability.
 
+**Where the files are.** This document names methodology files by bare name; look beside this runner. Two exceptions: a legacy project keeps `ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, `HOW_TO_USE.md` and `workstreams/` in `docs/methodology/`; and a project that moved only its framework files into `methodology/` keeps its ledgers, notes and configs at the project root. Commands run from the project root; in a migrated project put `methodology/` in front of the tool and of any methodology file it takes (`python3 methodology/methodology_trim.py --file methodology/CHANGELOG.md --check`).
+
 ---
 
 ## Phase 0: Orient
@@ -36,7 +38,7 @@ DO NOT skip the report. DO NOT start working. DO NOT assume you know what to do.
 
 1. **Check for a committed ledger first** — `git log -1 --format=%H -- CHANGELOG.md`. If this is **empty**, no commit has ever recorded the ledger: self-provision (step 4) and reconcile from the repo root — do **not** treat an empty result as "current" (that is the original hole). If it returns a commit, that is the **frontier**.
 2. **List the gap** — commits since the frontier with no entry: `git log --no-merges <frontier>..HEAD` (the same count `git rev-list --count --no-merges <frontier>..HEAD` drives the dashboard's ledger-lag signal).
-3. **Backfill** — prepend one entry per undocumented span, **source-tagged so the audit still enumerates it** ([§The Action Ledger](docs/methodology/FRAMEWORK_APPARATUS.md#the-action-ledger); best-recoverable source), noting provenance and the commit range: `### YYYY-MM-DD · [ad hoc] Backfilled (reconcile-on-read): undocumented commits <X>..<Y> — <summary>`. Commit it on its own (`docs(changelog): backfill …`). If a commit's intent is unclear, report it and ask before summarizing.
+3. **Backfill** — prepend one entry per undocumented span, **source-tagged so the audit still enumerates it** (`FRAMEWORK_APPARATUS.md` §The Action Ledger; best-recoverable source), noting provenance and the commit range: `### YYYY-MM-DD · [ad hoc] Backfilled (reconcile-on-read): undocumented commits <X>..<Y> — <summary>`. Commit it on its own (`docs(changelog): backfill …`). If a commit's intent is unclear, report it and ask before summarizing.
 4. **Self-provision if absent (D3)** — if step 1 found no committed ledger and `CLAUDE.md` records no "no CHANGELOG" opt-out, create `CHANGELOG.md` from the bootstrap seed (or commit an existing uncommitted seed), record pre-ledger history as a single pointer line, and reconcile forward. A missing ledger on a repo with real history is a defect, never a silent skip.
 
 Two no-ops only: a **non-empty** frontier with an empty `<frontier>..HEAD` (no undocumented commits; non-commit actions leave none, and are Phase 3F's responsibility — failure mode #27), or a project that records a "no CHANGELOG" decision in `CLAUDE.md`. The backfill records what past sessions did; it does not become this session's deliverable or license work beyond the one assigned task (failure mode #17).
@@ -58,22 +60,22 @@ Common task-to-workstream mappings:
 
 | User Says | Deliverable | Workstream Document |
 |-----------|-------------|---------------------|
-| "Design the [X]" | One design document | `docs/methodology/workstreams/DESIGN_WORKSTREAM.md` |
-| "Implement [feature/plan]" | One implementation | `docs/methodology/workstreams/DEVELOPMENT_WORKSTREAM.md` |
-| "Audit [X]" | One audit report | `docs/methodology/workstreams/AUDIT_WORKSTREAM.md` |
-| "Plan [feature/migration]" | One architecture document | `docs/methodology/workstreams/ARCHITECTURE_WORKSTREAM.md` |
-| "Fix [bug campaign]" | One fix campaign pass | `docs/methodology/workstreams/DEVELOPMENT_WORKSTREAM.md` |
+| "Design the [X]" | One design document | `workstreams/DESIGN_WORKSTREAM.md` |
+| "Implement [feature/plan]" | One implementation | `workstreams/DEVELOPMENT_WORKSTREAM.md` |
+| "Audit [X]" | One audit report | `workstreams/AUDIT_WORKSTREAM.md` |
+| "Plan [feature/migration]" | One architecture document | `workstreams/ARCHITECTURE_WORKSTREAM.md` |
+| "Fix [bug campaign]" | One fix campaign pass | `workstreams/DEVELOPMENT_WORKSTREAM.md` |
 | "Review [code/PR]" | One review document | The review produces a plan; follow DEVELOPMENT_WORKSTREAM for structure |
-| "Write/draft/audit [paper/section/dimension]" | One paper section, one audit pass, or one corpus retrieval pass | `docs/methodology/workstreams/RESEARCH_DOCUMENTATION_WORKSTREAM.md` |
-| "Grill me" / "I want to be grilled" / "Decide before designing" | A decisions list with stakeholder answers, then the Phase 3 design | `docs/methodology/ITERATIVE_METHODOLOGY.md` §Phase 2B (then continue in the relevant workstream — typically DESIGN or ARCHITECTURE). The grill itself is run via `/grill-me` — see [`RECOMMENDED_SKILLS.md`](RECOMMENDED_SKILLS.md). |
+| "Write/draft/audit [paper/section/dimension]" | One paper section, one audit pass, or one corpus retrieval pass | `workstreams/RESEARCH_DOCUMENTATION_WORKSTREAM.md` |
+| "Grill me" / "I want to be grilled" / "Decide before designing" | A decisions list with stakeholder answers, then the Phase 3 design | `ITERATIVE_METHODOLOGY.md` §Phase 2B (then continue in the relevant workstream — typically DESIGN or ARCHITECTURE). The grill itself is run via `/grill-me` — see [`RECOMMENDED_SKILLS.md`](RECOMMENDED_SKILLS.md). |
 | Multi-phase plan appears in prompt (from Plan Mode or user) | Plan document written to `docs/planning/` with evidence-based inventory | Planning workstream |
-| "Fan out" / two sessions at once | ONE deliverable, ONE closer per tree | `docs/methodology/ITERATIVE_METHODOLOGY.md` §Parallel Actors |
+| "Fan out" / two sessions at once | ONE deliverable, ONE closer per tree | `ITERATIVE_METHODOLOGY.md` §Parallel Actors |
 
 **⚠ Plan Mode exit trap.** Plan Mode generates "Implement the following plan" as its preamble. **This does NOT mean "start coding."** When a multi-phase plan appears in the prompt — regardless of the preamble wording — the deliverable is writing the plan document with grep-based evidence and per-phase criteria. Orient first. The plan is a DRAFT until evidence-verified. See Planning Sessions below.
 
-**⚠ Multi-session campaign check.** If your work cannot be produced cleanly in one session even after correct decomposition — paper-wide verification, repository-wide hardening, multi-module familiarization — look for a matching `*_CAMPAIGN.md` in `workstreams/`. If one exists, your session is one unit within its campaign: read the campaign template and follow its planning → execution → consolidation sequence. If none exists but the work has that shape, raise it before starting work — a planning session may be needed to either adopt an existing campaign or draft one. See [`ITERATIVE_METHODOLOGY.md` §Multi-Session Campaigns](docs/methodology/ITERATIVE_METHODOLOGY.md#multi-session-campaigns).
+**⚠ Multi-session campaign check.** If your work cannot be produced cleanly in one session even after correct decomposition — paper-wide verification, repository-wide hardening, multi-module familiarization — look for a matching `*_CAMPAIGN.md` in `workstreams/`. If one exists, your session is one unit within its campaign: read the campaign template and follow its planning → execution → consolidation sequence. If none exists but the work has that shape, raise it before starting work — a planning session may be needed to either adopt an existing campaign or draft one. See `ITERATIVE_METHODOLOGY.md` §Multi-Session Campaigns.
 
-**If no workstream document exists for the task type, follow the master framework:** `docs/methodology/ITERATIVE_METHODOLOGY.md`, phases 1-6.
+**If no workstream document exists for the task type, follow the master framework:** `ITERATIVE_METHODOLOGY.md`, phases 1-6.
 
 State your understanding back to the user: *"I'm going to [deliverable] following [workstream doc]. I'll close out when that's done."*
 
