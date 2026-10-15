@@ -1529,7 +1529,7 @@ if [ -n "$NOOVERWRITE" ]; then
         || fail "bootstrap: tracked file(s) wrongly listed as never-overwrite:$WRONG"
 fi
 
-echo "== Test 36: no early-exiting consumer decides a fail arm, so a flake cannot read a defect as a pass (BL-97, RED-first) =="
+echo "== Test 36: no early-exiting consumer decides a fail arm, so a flake cannot read a defect as a pass (RED-first) =="
 # `:5` sets `pipefail`. A consumer that exits at its first match (`grep -q`, `grep -m`, `head`,
 # `sed q`) can leave its producer with bytes still to write; the producer takes SIGPIPE and the
 # MATCHED pipeline is scored FAILED. Measured at 1.5 KB: `echo "$(cat f)" | grep -q PAT` failed
@@ -1627,7 +1627,7 @@ PY45
 SITES45="$(python3 "$SCAN45" "$BIN/tests.sh")"
 TOTAL45="$(grep -oE 'BL97-TOTAL [0-9]+' <<< "$SITES45" | awk '{print $2}')"
 [ "$TOTAL45" = "0" ] && pass "no early-exiting consumer decides a fail arm in bin/tests.sh" \
-    || fail "BL-97 site(s) present: $SITES45"
+    || fail "early-exiting-consumer site(s) present: $SITES45"
 
 # (2) THE SCANNER, PROVEN TO FIRE AND TO HOLD ITS FIRE. A detector no input can trip is a comment,
 # and one that trips on everything is noise. Each fixture line that must be flagged ends in the
@@ -1694,7 +1694,7 @@ else
 fi
 rm -f "$SCAN45" "$FIX45" "$M45"
 
-echo "== Test 37: the ledger hook and the ratchet chain follow the files under methodology/ (BL-101 P2, X2, RED-first) =="
+echo "== Test 37: the ledger hook and the ratchet chain follow the files under methodology/ (RED-first) =="
 # It was measured: once the ledger moved under methodology/, a LATER commit that left the ledger
 # out PASSED, because the hook found no tracked CHANGELOG.md and took its "no ledger, never block"
 # branch -- the gate that enforces failure mode #27 failing open, silently. The same fail-open sat in
@@ -1726,8 +1726,8 @@ for L37 in legacy new; do
     U="$(t37_repo "$L37" "$HOOK37")"
     printf 'two\n' > "$U/tracked.txt"; t37_try "$U"
     [ "$RC37" = 1 ] && grep -qF "${PRE37}CHANGELOG.md not staged" <<< "$OUT37" \
-        && pass "$L37 layout: a later commit that leaves the ledger out is refused, naming ${PRE37}CHANGELOG.md (X2)" \
-        || fail "$L37 layout: X2 -- exit $RC37, wanted 1 naming ${PRE37}CHANGELOG.md; got: $OUT37"
+        && pass "$L37 layout: a later commit that leaves the ledger out is refused, naming ${PRE37}CHANGELOG.md" \
+        || fail "$L37 layout: exit $RC37, wanted 1 naming ${PRE37}CHANGELOG.md; got: $OUT37"
     rm -rf "$U"
     U="$(t37_repo "$L37" "$HOOK37")"
     printf 'two\n' > "$U/tracked.txt"; t37_entry "$U/${PRE37}CHANGELOG.md"; t37_try "$U"
@@ -1793,7 +1793,7 @@ U="$(t37_tie methodology)"
 printf 'two\n' > "$U/tracked.txt"; printf '# Product changelog\n\n## 1.1\n\n- shipped again\n' > "$U/CHANGELOG.md"; t37_try "$U"
 [ "$RC37" = 1 ] && grep -qF "methodology/CHANGELOG.md not staged" <<< "$OUT37" \
     && pass "a tie the anchor decides: a commit that touches only the root product changelog is refused, naming methodology/CHANGELOG.md" \
-    || fail "tie decided by the anchor: X2 -- exit $RC37, wanted 1 naming methodology/CHANGELOG.md; got: $OUT37"
+    || fail "tie decided by the anchor: exit $RC37, wanted 1 naming methodology/CHANGELOG.md; got: $OUT37"
 rm -rf "$U"
 U="$(t37_tie both)"
 printf 'two\n' > "$U/tracked.txt"; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
@@ -1853,7 +1853,7 @@ t37_mutant() { # $1 what, $2 python expression, $3 the selftest probe that must 
         fail "control mutation DID NOT APPLY: $1"
     fi
 }
-t37_mutant "the new-layout ledger branch disabled" 's.replace("if indexed \"$new_ledger\"; then", "if false; then", 1)' "new layout: ledger not co-staged -> REFUSED (X2"
+t37_mutant "the new-layout ledger branch disabled" 's.replace("if indexed \"$new_ledger\"; then", "if false; then", 1)' "new layout: ledger not co-staged -> REFUSED (the gate"
 t37_mutant "the half-migrated refusal disabled"    's.replace("\tif indexed \"$legacy_ledger\" && ! { indexed \"$new_runner\" && ! indexed \"$legacy_runner\"; }; then", "\tif false; then", 1)' "a ledger in both places"
 t37_mutant "the framework anchor never decides a tie" 's.replace("\tif indexed \"$legacy_ledger\" && ! { indexed \"$new_runner\" && ! indexed \"$legacy_runner\"; }; then", "\tif indexed \"$legacy_ledger\"; then", 1)' "a tie, the runner under methodology/: the methodology ledger co-staged with a new entry -> pass"
 t37_mutant "a root runner beside the methodology one still decides the tie" 's.replace("indexed \"$new_runner\" && ! indexed \"$legacy_runner\"", "indexed \"$new_runner\"", 1)' "a tie, runner tracked: both -> REFUSED"

@@ -63,7 +63,7 @@
       "threshold": 11,
       "command": "python3 tools/test_checker_layouts.py",
       "extract": "Ran (\\d+) tests",
-      "why": "BL-101 P4: the canonical checkers (check-ledger and check-handoff) run as commands in both layouts, in a tie the runner decides and in a half-migrated tree. Count never drops; green/red is carried by tests-sh-passed. 11 is measured (Ran 11 tests, OK)."
+      "why": "The canonical checkers (check-ledger and check-handoff) run as commands in both layouts, in a tie the runner decides and in a half-migrated tree. Count never drops; green/red is carried by tests-sh-passed. 11 is measured (Ran 11 tests, OK)."
     },
     {
       "name": "sync-layout-unit-tests",

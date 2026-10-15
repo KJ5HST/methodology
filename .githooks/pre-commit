@@ -89,7 +89,7 @@ if [ "${1:-}" = "--selftest" ]; then
 	# ONLY marker in the list that leaks: MERGE_HEAD, CHERRY_PICK_HEAD, rebase-merge
 	# and rebase-apply are all removed when their operation ends or is aborted.
 	build; ( cd "$d" && : > .git/REBASE_HEAD )
-	                expect "stale REBASE_HEAD -> STILL REFUSED (BL-76)"         1
+	                expect "stale REBASE_HEAD -> STILL REFUSED"         1
 
 	# ...and the skip must still fire for every state that is genuinely in progress.
 	# REBASE_HEAD is redundant for this: a stopped rebase always carries a DIRECTORY
@@ -174,7 +174,7 @@ if [ "${1:-}" = "--selftest" ]; then
 	# measured after a move: a later commit that left the ledger out PASSED, because the
 	# hook found no tracked CHANGELOG.md and took its "no ledger, never block" branch. The first
 	# probe below; it is the reason this block exists and the one to keep when the rest is rewritten.
-	build newledger; expect "new layout: ledger not co-staged -> REFUSED (X2, the gate follows the ledger)" 1
+	build newledger; expect "new layout: ledger not co-staged -> REFUSED (the gate follows the ledger)" 1
 	build newledger; ( cd "$d" && git add "$NEWPATH" >/dev/null 2>&1 )
 	                 expect "new layout: ledger co-staged -> pass"              0
 	build tier1;     expect "framework files under methodology/, ledger still at the root -> the root ledger gates" 1
@@ -323,10 +323,10 @@ staged=$(git diff --cached --name-only)
 # passed without a ledger entry -- the gate that enforces failure mode #27 failing open, silently.
 legacy_ledger=CHANGELOG.md                # layout: ok -- the legacy half of the table this hook resolves
 new_ledger=methodology/CHANGELOG.md       # layout: ok -- the new half
-legacy_runner=SESSION_RUNNER.md           # layout: ok -- the framework anchor, root half: it decides a tie (plan 7.2a)
+legacy_runner=SESSION_RUNNER.md           # layout: ok -- the framework anchor, root half: it decides a tie
 new_runner=methodology/SESSION_RUNNER.md  # layout: ok -- the framework anchor, new half
 legacy_archive=docs/archive               # layout: ok -- where a trim writes its shard today
-new_archive=methodology/archive           # layout: ok -- where it will write it once the archive moves (D5)
+new_archive=methodology/archive           # layout: ok -- where it will write it once the archive moves
 indexed() { git ls-files --error-unmatch -- "$1" >/dev/null 2>&1; }
 
 # Lifecycle — a committed entry is never edited (the Action Ledger section of the framework
@@ -420,7 +420,7 @@ if indexed "$new_ledger"; then
 ✗ Two ledgers are tracked: $legacy_ledger and $new_ledger — a half-migrated tree.
 
 The ledger gate will not guess which one is the authoritative action ledger
-(the layout table in the BL-101 plan: stop, name both). Finish the move (the
+(the layout table: stop, name both). Finish the move (the
 older one is renamed onto the newer, or removed) or revert it, then re-commit.
 
   * If the one at the root is the project's own product changelog, say so by
