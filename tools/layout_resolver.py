@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""The layout resolver: where do a project's methodology files live? (BL-101, phase P1.)
+"""The layout resolver: where do a project's methodology files live?
 
-CANONICAL-ONLY reference copy. Contract: docs/planning/methodology-subdirectory-plan.md
-section 4.3. A project keeps its methodology files either at its root (legacy) or one level
+CANONICAL-ONLY reference copy.
+A project keeps its methodology files either at its root (legacy) or one level
 down in methodology/ (new). The answer is read from one anchor file, by the four-row table:
 
     R/methodology/<anchor>   R/<anchor>   kind      directory
@@ -11,20 +11,20 @@ down in methodology/ (new). The answer is read from one anchor file, by the four
     exists                   exists       half      None  -- stop, name both, never guess
     absent                   absent       none      None  -- the framework repo, or not an adopter
 
-A fifth row, no request needed (decided 2026-10-06 for the ledger, 2026-10-07 for every file, plan
-7.2a and 7.2b): a file found in BOTH places is the framework's under methodology/ when the runner is under
+A fifth row, no request needed: a file found in BOTH places is the framework's under methodology/ when
+the runner is under
 methodology/ and not at the root. The root copy is the project's own (a product CHANGELOG.md, a manifest of
 its own) and the methodology tools leave it alone. The resolver takes no argument for the rule, so a tool
-cannot forget to ask: the S276 build made it a request, and that is what he overruled. A tie the runner does
+cannot forget to ask. A tie the runner does
 not decide (no runner under methodology/, a runner at the root, or at both) is still half, and the runner
 cannot decide a tie about itself.
 
-The anchor is the caller's choice, because a project can be part-way: the plan's tier 1 moves the
+The anchor is the caller's choice, because a project can be part-way: tier 1 moves the
 framework files (SESSION_RUNNER.md and the rest) and leaves the state files (CHANGELOG.md,
 HANDOFFS.md, the two JSON configs) at the root until tier 2. A tool that reads a framework file
 resolves with the default anchor; a tool that reads the ledger resolves with "CHANGELOG.md".
 Resolving the ledger through the runner would point the ledger hook at a file that is not there,
-which is the failure the plan's C5 measured: a gate that passes silently.
+which is the failure measured once: a gate that passes silently.
 
 Shipped tools are single stdlib files adopters receive one by one, so none can import this module.
 Each carries the marked block below, byte for byte, and its suite asserts that with

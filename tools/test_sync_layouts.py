@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Unit tests for the sync layer in both layouts (BL-101, phase P6).
+"""Unit tests for the sync layer in both layouts.
 
 CANONICAL-ONLY, like tools/test_layout_resolver.py and tools/test_checker_layouts.py: bin/sync,
 bin/status and bin/check-links are not in bin/_manifest.py, so adopters do not receive them. The
-contract is docs/planning/methodology-subdirectory-plan.md section 7.2 row P6 and the couplings it
-names (C1 no blank seed beside a real ledger and no second runner, C2 ignore mode, C3 status and
-check-links, C16 the manifest stays data so --source=github can read it).
+contract: no blank seed beside a real ledger and no second runner, ignore mode, status and
+check-links following the layout, and the manifest staying data so --source=github can read it.
 
 Layer 0 (this file's first classes): the manifest's second literal table, NEW_LAYOUT, and the reader
 that reads it as data. Later layers add bin/sync, bin/status and bin/check-links, each driven as a
@@ -38,7 +37,7 @@ manifest = _load("_manifest", MANIFEST)
 reader = _load("_manifest_reader", REPO / "bin" / "_manifest_reader.py")
 lf = _load("layout_fixtures", HERE / "layout_fixtures.py")
 lr = _load("layout_resolver", HERE / "layout_resolver.py")
-tlr = _load("test_layout_resolver", HERE / "test_layout_resolver.py")  # section 4.1, typed out as literals
+tlr = _load("test_layout_resolver", HERE / "test_layout_resolver.py")  # the target layout, typed out as literals
 
 DISPOSITIONS = (manifest.TRACKED, manifest.SEED)
 SYNC = REPO / "bin" / "sync"
@@ -143,7 +142,7 @@ def tearDownModule():
 
 
 def section_4_1_destinations():
-    """The new destination of every distributed file, from the plan's section 4.1 as
+    """The new destination of every distributed file, from the target layout as
     tools/test_layout_resolver.py types it: flat under methodology/, workstreams/ the one subdirectory."""
     return ({"methodology/" + n for n in tlr.S41_FRAMEWORK + tlr.S41_STATE}
             | {"methodology/workstreams/" + n for n in tlr.S41_WORKSTREAMS})
@@ -300,7 +299,7 @@ class TestTheReaderReadsTheTableAsData(Scratch):
 
 class TestSyncChoosesTheLayout(Scratch):
     """`--layout auto` (the default): a legacy tree stays legacy, a migrated one stays migrated, an empty
-    directory gets the default, which stays legacy until the contract release (plan 5A.2 rule 2, D7)."""
+    directory gets the default, which stays legacy until the contract release."""
 
     def test_an_empty_project_gets_the_legacy_layout_by_default(self):
         d = self.project()
@@ -376,7 +375,7 @@ class TestSyncChoosesTheLayout(Scratch):
 
 
 class TestSyncRefusesWhatWouldDamageAProject(Scratch):
-    """C1: a tool that writes the new layout into a legacy tree leaves a second, current runner beside the stale one
+    """A tool that writes the new layout into a legacy tree leaves a second, current runner beside the stale one
     an agent still reads, and a blank ledger beside the real one. The guard runs before any write."""
 
     def refused(self, d, *args, names=()):
@@ -392,7 +391,7 @@ class TestSyncRefusesWhatWouldDamageAProject(Scratch):
         d = self.project("legacy")
         r = self.refused(d, "--layout", "new", names=("migrate-layout",))
         self.assertFalse((d / "methodology").exists())
-        self.assertNotIn("not built", r.out)  # P7 built the tool: a refusal names a command that exists, without a caveat
+        self.assertNotIn("not built", r.out)  # the tool exists: a refusal names a command that exists, without a caveat
         self.assertTrue((REPO / "bin" / "migrate-layout").is_file())
         self.refused(d, "--layout", "new", "--dry-run")
 
@@ -419,7 +418,7 @@ class TestSyncRefusesWhatWouldDamageAProject(Scratch):
 
 
 class TestSyncDoesNotShadowAProjectsOwnFiles(Scratch):
-    """C1, the seed half: a seed is the project's after its first creation, and a ledger that sits at the root
+    """The seed half: a seed is the project's after its first creation, and a ledger that sits at the root
     (tier 1, or the project's own product changelog) is not a reason to create a blank one beside it."""
 
     def tier_1(self):
@@ -515,7 +514,7 @@ class TestSyncKeepsTrackedFilesCurrentUnderMethodology(Scratch):
 
 
 class TestSyncIgnoreModeFollowsTheLayout(Scratch):
-    """C2: ignore mode lists the TRACKED destinations file by file, so the list, the detection of an ignored
+    """Ignore mode lists the TRACKED destinations file by file, so the list, the detection of an ignored
     project and the `git rm --cached` hint all have to follow the layout."""
 
     def entries(self, d):
@@ -637,8 +636,8 @@ class TestSyncFromGithubReadsTheTable(Scratch):
 
 
 class TestStatusNamesAndReadsTheLayout(Scratch):
-    """C3: status reads each project at the place its layout puts the files, and says which layout that is.
-    Plan 5A.2 rule 6: a status over a portfolio names each project's layout, so a half-migrated portfolio is
+    """Status reads each project at the place its layout puts the files, and says which layout that is.
+    A status over a portfolio names each project's layout, so a half-migrated portfolio is
     visible and a half-migrated project is an error."""
 
     def states(self, r, project):
@@ -722,7 +721,7 @@ class TestStatusNamesAndReadsTheLayout(Scratch):
 
 
 class TestStatusFindsSeedsWhereTheProjectKeepsThem(Scratch):
-    """C3: a seed in the new layout may still sit at the root (tier 1, or the project's own changelog), and its
+    """A seed in the new layout may still sit at the root (tier 1, or the project's own changelog), and its
     format marker is keyed by the seed, not by where it happens to be."""
 
     def states(self, r, project):
@@ -812,8 +811,8 @@ IN_BOTH = "[a](SAFEGUARDS.md)\n"                                # a sibling of t
 
 
 class TestCheckLinksSimulatesBothLayouts(Scratch):
-    """C3: check-links simulates the adopter tree from the manifest, so it has to be able to simulate the new
-    one. Whether the docs link correctly in both is phase P9's criterion; this is the instrument for it."""
+    """check-links simulates the adopter tree from the manifest, so it has to be able to simulate the new
+    one. Whether the docs link correctly in both is asserted elsewhere in the suite; this is the instrument for it."""
 
     def script(self, text):
         return scratch_canonical(self.root / ("canon%d" % len(list(self.root.glob("canon*")))), {RUNNER: text})

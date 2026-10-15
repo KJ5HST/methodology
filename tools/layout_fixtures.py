@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""Fixture trees in both layouts, for every phase of the methodology/ move to reuse (BL-101, P1).
+"""Fixture trees in both layouts, for every tool of the methodology/ move to reuse.
 
 CANONICAL-ONLY, like tools/layout_resolver.py and for the same reason: it is not in bin/_manifest.py.
-The plan is docs/planning/methodology-subdirectory-plan.md: section 4.1 is the target layout, section
-4.6 the two tiers. ``build_tree`` writes one of five shapes into an empty directory:
+The target layout is one level down in methodology/, and the move has two tiers. ``build_tree`` writes one of five
+shapes into an empty directory:
 
     legacy  what ``bin/sync`` writes into a project today: the manifest's destinations, as they are
-    new     section 4.1: every methodology file one level down in methodology/
+    new     every methodology file one level down in methodology/
     tier1   the framework's own files (the manifest's TRACKED rows) moved, the project's state files
-            (its SEED rows, the generated files, the archive) still at the root: section 4.6's
+            (its SEED rows, the generated files, the archive) still at the root: tier 1's
             "coherent end state", and the shape that needs a second anchor to resolve (layout_resolver)
     half    legacy plus a second runner under methodology/: the state the resolver must refuse
     empty   no files: a project that has not adopted the methodology
 
 The tree is derived from bin/_manifest.py, so a file the manifest gains appears in the legacy shape
-by itself. The new shape is derived from the manifest's second table, NEW_LAYOUT (phase P6: a literal
-table, so ``--source=github`` can read it as data), and tools/test_layout_resolver.py holds section 4.1
-typed out as literals, so a change to that table cannot also quietly reshape the target. Before P6 this
-module carried a mapping rule of its own (``new_path``); there is one table now, and it is the manifest's.
+by itself. The new shape is derived from the manifest's second table, NEW_LAYOUT (a literal
+table, so ``--source=github`` can read it as data), and tools/test_layout_resolver.py holds the target layout
+typed out as literals, so a change to that table cannot also quietly reshape the target.
+There is one mapping table, and it is the manifest's.
 
 A tree here is files only. A phase that needs a git repository, hooks or a real ledger builds them on
 top, passing ``contents`` for the files it cares about.
@@ -31,7 +31,7 @@ sys.dont_write_bytecode = True  # building a fixture must not generate bin/__pyc
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
 LAYOUTS = ("legacy", "new", "tier1", "half", "empty")
-# What the tools write beside the methodology files (plan section 2.1, "Generated beside them").
+# What the tools write beside the methodology files.
 GENERATED = ("dashboard.html", "dashboard_history.jsonl", ".context-budget-history.jsonl",
              ".quality-gates-results.json")
 ARCHIVE_SHARD = "CHANGELOG-through-2000-01-01.md"  # a placeholder shard: the archive's location is the point

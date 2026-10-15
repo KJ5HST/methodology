@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""Unit tests for the methodology/ layout work (BL-101, phase P1).
+"""Unit tests for the methodology/ layout work.
 
 CANONICAL-ONLY. None of tools/layout_resolver.py, tools/layout_fixtures.py or
-bin/check-layout-literals is in bin/_manifest.py, so adopters do not receive them: phases
-P2-P6 embed the resolver's marked block in each shipped tool, and assert here that every
+bin/check-layout-literals is in bin/_manifest.py, so adopters do not receive them: each shipped tool
+embeds the resolver's marked block, and the tests assert here that every
 copy is byte-identical to this module's (the dashboard twin test is the precedent).
 
-The contract is docs/planning/methodology-subdirectory-plan.md section 4.3 (the four-row
-table) and section 7.1 (what P1 is done when). Every rule is observed failing as well as
-passing (Learning #12): the scanner section builds trees that must be refused.
+The contract is the four-row table in tools/layout_resolver.py's docstring. Every rule is observed failing
+as well as passing (Learning #12): the scanner section builds trees that must be refused.
 """
 import importlib.util
 import os
@@ -58,7 +57,7 @@ class Scratch(unittest.TestCase):
 
 
 class TestTheFourRows(Scratch):
-    """Section 4.3, one test per row of the table."""
+    """One test per row of the table."""
 
     def test_row_1_the_runner_under_methodology_is_the_new_layout(self):
         touch(self.root, "methodology", "SESSION_RUNNER.md")
@@ -119,13 +118,11 @@ class TestAnchors(Scratch):
 
 
 class TestTheFrameworkAnchorDecidesATie(Scratch):
-    """Decided 2026-10-06 (S275 close-out picker, plan 7.2a) for the ledger, and 2026-10-07 (S276 close-out
-    picker, plan 7.2b) for every file: a project whose SESSION_RUNNER.md is under methodology/ keeps its
+    """For the ledger and for every file: a project whose SESSION_RUNNER.md is under methodology/ keeps its
     methodology files there, and a same-named file at the root is the project's own, which the methodology
     tools leave alone: the ledger beside a product changelog, the ratchet's manifest, the budget gate's
     config. It is not a request a caller makes. The resolver takes no argument for it, so a tool cannot
-    forget to ask (the S276 build asked in the tools that read a ledger and not in the ratchet, and that
-    difference is what he overruled)."""
+    forget to ask."""
 
     ANCHORS = ("CHANGELOG.md", "HANDOFFS.md", ".quality-gates.json", ".context-budget.json")
 
@@ -152,7 +149,7 @@ class TestTheFrameworkAnchorDecidesATie(Scratch):
         self.decided("HANDOFFS.md")
 
     def test_a_manifest_in_both_places_is_the_methodology_one_when_the_runner_is_there(self):
-        # S276's picker: the ratchet works inside methodology/ and a root manifest is the user's own.
+        # The ratchet works inside methodology/ and a root manifest is the user's own.
         self.both(".quality-gates.json")
         self.decided(".quality-gates.json")
 
@@ -195,16 +192,16 @@ class TestTheFrameworkAnchorDecidesATie(Scratch):
                     self.assertEqual(lr.resolve_layout(td, "CHANGELOG.md")[0], kind)
 
     def test_the_tier_1_tree_still_reads_legacy_for_the_ledger(self):
-        # The runner moved and the ledger did not (plan 4.6): there is no tie, so the rule is not reached.
+        # The runner moved and the ledger did not: there is no tie, so the rule is not reached.
         touch(self.root, "methodology", "SESSION_RUNNER.md")
         touch(self.root, "CHANGELOG.md")
         self.assertEqual(lr.resolve_layout(self.root, "CHANGELOG.md")[:2], ("legacy", self.root))
 
 
 class TestEveryEmbeddedCopyIsByteIdentical(unittest.TestCase):
-    """Each shipped tool that resolves the layout carries the module's block, byte for byte (plan 4.3).
-    A copy that drifted is a second resolver with its own answers. P2 embeds it in the ratchet; each
-    later phase appends the tool it touches to COPIES (the dashboard, the trimmer, the budget gate)."""
+    """Each shipped tool that resolves the layout carries the module's block, byte for byte.
+    A copy that drifted is a second resolver with its own answers. Each tool that embeds the block is
+    listed in COPIES."""
 
     COPIES = ("starter-kit/context_budget.py", "starter-kit/methodology_dashboard.py", "starter-kit/methodology_trim.py",
               "starter-kit/quality_ratchet.py",   # the gate layer, the trimmer, the budget gate and the dashboard (its tools/ twin is asserted below)
@@ -241,7 +238,7 @@ class TestEveryEmbeddedCopyIsByteIdentical(unittest.TestCase):
 
 
 class TestTheBlockIsEmbeddable(Scratch):
-    """Shipped tools are single stdlib files, so each carries the same marked block (section 4.3)."""
+    """Shipped tools are single stdlib files, so each carries the same marked block."""
 
     def setUp(self):
         super().setUp()
@@ -303,7 +300,7 @@ class TestTheBlockIsEmbeddable(Scratch):
             lr.embedded_block(self.block + "\n" + self.block)
 
 
-# The plan's section 4.1, typed out: the one place the target layout is written as literals, so a change to
+# The target layout, typed out: the one place it is written as literals, so a change to
 # the manifest cannot quietly reshape what "the new layout" means. 34 files, none of them at the root.
 S41_FRAMEWORK = ["SESSION_RUNNER.md", "SAFEGUARDS.md", "FRAMEWORK_LEARNINGS.md", "RECOMMENDED_SKILLS.md",
                  "BOOTSTRAP.md", "CONTEXT_TEMPLATE.md", "CLAUDE_TEMPLATE.md",
@@ -386,7 +383,7 @@ class TestFixtureTrees(Scratch):
             self.assertTrue(any(p.startswith("docs/archive/") for p in lf.build_tree(td, "tier1", archive=True)))
 
     def test_the_manifests_table_maps_the_three_kinds_of_destination(self):
-        # was lf.new_path, a rule of this module's own; P6 made the manifest's NEW_LAYOUT the one table
+        # the manifest's NEW_LAYOUT is the one table that maps a file to its new place
         table = _load("_manifest", REPO / "bin" / "_manifest.py").NEW_LAYOUT
         self.assertEqual(table["starter-kit/CHANGELOG.md"], "methodology/CHANGELOG.md")
         self.assertEqual(table["HOW_TO_USE.md"], "methodology/HOW_TO_USE.md")
@@ -447,7 +444,7 @@ def site_lines(sites):
 
 
 class TestTheScannerReadsCode(unittest.TestCase):
-    """Section 7.1: list every line that names a methodology file's root path in a shipped tool."""
+    """List every line that names a methodology file's root path in a shipped tool."""
 
     def setUp(self):
         self.sites, self.acked, self.prose, self.problems = cll.scan_text("starter-kit/t.py", PY_TOOL)
@@ -645,9 +642,8 @@ class TestTheScanSet(Scratch):
 
 
 class TestToolsAlreadyResolvedStayAtZero(unittest.TestCase):
-    """A tool that phase P2-P5 has worked scans at zero unacknowledged sites, and stays there: the
-    scanner is not a gate until P6, so this is what stops a later edit putting a root literal back.
-    Each phase appends the tools it resolved; P6 replaces the list with the gate."""
+    """A tool that resolves the layout scans at zero unacknowledged sites, and stays there: this is
+    what stops a later edit putting a root literal back. Each tool resolved is appended to RESOLVED."""
 
     RESOLVED = (".githooks/pre-commit", "starter-kit/quality_ratchet.py",   # the gate layer
                 "starter-kit/methodology_trim.py",   # the trimmer

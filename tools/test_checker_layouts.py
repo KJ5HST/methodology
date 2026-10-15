@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""The canonical checkers find their ledger (or config) at the project root or under methodology/ (BL-101 P4).
+"""The canonical checkers find their ledger (or config) at the project root or under methodology/.
 
 CANONICAL-ONLY, like the checkers it drives (bin/check-handoff and bin/check-ledger): neither is in
 bin/_manifest.py. bin/check-learnings is not driven here: it reads the
 framework's own learnings table under starter-kit/ and no ledger, and the scanner reads zero root
 literals in it.
 
-Plan section 4.3 and 7.2b. Each tool is run as a command, in a scratch project, in four shapes:
+Each tool is run as a command, in a scratch project, in four shapes:
 
     legacy   its file at the root
     new      its file under methodology/, nothing at the root
@@ -125,7 +125,7 @@ class TestCheckLedger(Project):
     def test_all_reads_the_shards_beside_the_ledger_in_either_layout(self):
         for name, shard in (("legacy", "docs/archive/CHANGELOG-through-2025-12-01.md"),
                             ("new", "methodology/archive/CHANGELOG-through-2025-12-01.md"),
-                            ("new", "docs/archive/CHANGELOG-through-2025-12-01.md")):   # the archive moves last (D5)
+                            ("new", "docs/archive/CHANGELOG-through-2025-12-01.md")):   # the archive moves last
             with self.subTest(layout=name, shard=shard):
                 self.setUp()
                 self.shape(name, "CHANGELOG.md", LEDGER, JUNK_LEDGER)
