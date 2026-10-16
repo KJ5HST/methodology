@@ -55,7 +55,7 @@
       "threshold": 76,
       "command": "python3 tools/test_layout_resolver.py",
       "extract": "Ran (\\d+) tests",
-      "why": "the layout resolver, the fixture trees in both layouts and the literal scanner's own behaviour on scratch trees. Count never drops; green/red is carried by tests-sh-passed. 74 is measured (Ran 74 tests, OK)."
+      "why": "the layout resolver, the fixture trees in both layouts and the literal scanner's own behaviour on scratch trees. Count never drops; green/red is carried by tests-sh-passed. 76 is measured (Ran 76 tests, OK)."
     },
     {
       "name": "checker-layout-unit-tests",
@@ -95,7 +95,7 @@
       "direction": "max",
       "threshold": 0,
       "command": "bin/check-layout-literals",
-      "why": "exit code: no shipped tool names a methodology file by a root path (a string constant in a bin/ script, a starter-kit/ tool or a hook), so the methodology/ move cannot be passed silently by a gate that reads the wrong place. A site is acknowledged only by a same-line marker with a reason. bin/check-handoff and bin/check-ledger are not scanned: they are canonical-only checkers that adopters never run, and this change does not give them the layout reading."
+      "why": "exit code: no shipped tool names a methodology file by a root path (a string constant in a bin/ script, a starter-kit/ tool or a hook), so the methodology/ move cannot be passed silently by a gate that reads the wrong place. A site is acknowledged only by a same-line marker with a reason. The scan covers starter-kit/*.py, bin/* and .githooks/*, so the canonical-only bin/check-handoff and bin/check-ledger are scanned like the rest; it skips bin/_manifest.py and bin/tests.sh by name."
     },
     {
       "name": "check-links",

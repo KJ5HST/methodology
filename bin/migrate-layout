@@ -23,7 +23,8 @@ the rewrites of the names that point at it (CLAUDE.md, and the two configs where
 one ledger entry. Every link in a live document to a file the move takes is listed, none rewritten.
 
 Exit: 0 a dry run or a migration done, or nothing to do · 1 refused · 2 usage or a failure · 3 an apply that was
-rolled back.
+rolled back · 4 an apply that committed and whose after-checks differ from its before-checks, or that left the
+tree dirty (the commit stands; the report names the `git revert` that undoes it).
 """
 import argparse
 import datetime

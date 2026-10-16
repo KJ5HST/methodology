@@ -1204,7 +1204,8 @@ def check_stale_version():
         #
         # A disproportionate remedy is one mechanism behind an IGNORED warning: in one adopter this
         # staleness line rode ~28 consecutive handoffs unacted-on. The measurement was never the
-        # missing part — the safe per-project action is one `cp`, and the message never printed it.
+        # missing part — the safe per-project action is a `--sync` scoped to that one project, and
+        # the message never printed it.
         sys.stderr.write(
             f"  ⚠ methodology_dashboard.py is stale: this copy is v{DASHBOARD_VERSION}, "  # layout: ok -- a name printed in a message, never opened
             f"canonical is v{canon_ver}.\n"
