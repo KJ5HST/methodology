@@ -23,7 +23,7 @@
     {
       "name": "dashboard-unit-tests",
       "direction": "min",
-      "threshold": 395,
+      "threshold": 397,
       "command": "python3 tools/test_methodology_dashboard.py",
       "extract": "Ran (\\d+) tests",
       "why": "test count never drops; green/red is carried by tests-sh-passed"

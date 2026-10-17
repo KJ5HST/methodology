@@ -2512,16 +2512,62 @@ class TestFmtRatioAndTwins(unittest.TestCase):
         self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.22\.0"', starter_src, re.MULTILINE),
                         "starter-kit twin must also declare DASHBOARD_VERSION 2.22.0")
 
-    # NOTE: `TestCliRemedyProportionality` (issue #67 / PR #73) is deliberately not carried here --
-    # the `--sync [DIR]` single-project scope took a different, more general
-    # design (not a bare `cp`), and its behavior is already
-    # covered more thoroughly by the existing Row 13/14 tests below (`test_sync_accepts_a_single_
-    # target_directory`, `test_bare_dry_run_without_sync_errors_and_writes_nothing`,
-    # `test_sync_end_to_end_via_main_writes_only_the_target`, etc.). The earlier
+
+class TestCliRemedyProportionality(unittest.TestCase):
+    """Issue #67 — the CLI must not answer a small finding with a portfolio-wide write, and a
+    flag named --dry-run must never write. Both are CLI-surface behaviors, so both are driven
+    through a real subprocess: importing the module cannot observe main()'s argument handling.
+    """
+
+    def setUp(self):
+        self._td = tempfile.TemporaryDirectory()
+        self.p = Path(self._td.name)
+
+    def tearDown(self):
+        self._td.cleanup()
+
+    def _project(self, name="proj"):
+        """A minimal git project with its own copy of the scanner, ready to run."""
+        proj = self.p / name
+        proj.mkdir(parents=True)
+        write_tree(proj, {"README.md": "# p\n"})
+        subprocess.run(["git", "init", "-q", str(proj)], check=True)
+        subprocess.run(["git", "-C", str(proj), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(proj), "-c", "user.email=t@t", "-c", "user.name=t",
+                        "commit", "-qm", "i"], check=True)
+        shutil.copy(TOOLS_PY, proj / "methodology_dashboard.py")
+        return proj
+
+    def test_bare_dry_run_refuses_instead_of_writing(self):
+        # The defect: --dry-run was consulted ONLY inside the --sync branch, so on its own it
+        # fell through to a full scan and wrote both artifacts. Assert the artifacts, not just
+        # the exit code — "it exits non-zero" would still pass if it wrote and then failed.
+        proj = self._project()
+        r = subprocess.run([sys.executable, "methodology_dashboard.py", "--dry-run"],
+                           cwd=proj, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 2, "bare --dry-run must be an error, not a silent full run")
+        self.assertFalse((proj / "dashboard.html").exists(),
+                         "--dry-run must not write dashboard.html")
+        self.assertFalse((proj / "dashboard_history.jsonl").exists(),
+                         "--dry-run must not append to dashboard_history.jsonl")
+        self.assertIn("--sync", r.stderr, "the refusal must say what the flag is actually for")
+
+    def test_a_normal_run_still_writes(self):
+        # Presence control: without it, a scanner that refused EVERY invocation would pass the
+        # test above and look fixed.
+        proj = self._project()
+        r = subprocess.run([sys.executable, "methodology_dashboard.py", "--no-open"],
+                           cwd=proj, capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0)
+        self.assertTrue((proj / "dashboard.html").exists(),
+                        "a plain run must still generate the dashboard")
+
+    # NOTE: upstream's third test in this class is deliberately not carried:
     # `test_stale_warning_leads_with_the_project_scoped_remedy` asserts a literal `"cp "` in the
-    # stale-copy message, which the `--sync [DIR]`-based message does not contain by
-    # design -- porting that assertion would fail against a correct, already-tested design, not
-    # catch a real defect.
+    # stale-copy warning, and this branch's warning prints a `--sync` scoped to the one project
+    # instead, so it would fail against the design that replaced it, not catch a defect. The two
+    # tests above assert behaviour this branch keeps (a bare `--dry-run` exits 2 and writes
+    # nothing; a plain run writes dashboard.html) and are restored as upstream wrote them.
 
 
 class TestEndToEnd(unittest.TestCase):
