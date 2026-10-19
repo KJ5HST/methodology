@@ -51,6 +51,15 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
   (261 passed / 0 failed; ratchet 12/12). The release itself: [`CLAUDE.md` §Versioning](CLAUDE.md#versioning) v4.2
   (pointer, not re-narrated).
 
+### 2026-10-03 · [ad hoc] Recorded: v4.2 tagged and released by rmsharp
+
+- **Action (non-commit):** rmsharp tagged `v4.2` at `f34769f` (a lightweight tag; v3.8–v4.1 are annotated) and
+  published its [GitHub Release v4.2](https://github.com/KJ5HST/methodology/releases/tag/v4.2) (created
+  2026-10-03T01:37:10Z, published 02:55:21Z), with the README and §Versioning entries deferred to the release
+  documentation entry above. Gate run at the tagged commit: 261 passed / 0 failed; ratchet 12/12. The tag stays at
+  `f34769f` when those notes merge: a moved tag does not reach clones that already hold it. The release:
+  [`CLAUDE.md` §Versioning](CLAUDE.md#versioning) v4.2.
+
 ### 2026-10-03 · [ad hoc] PR #91: comment to rmsharp that his three approval points were fixed before the merge
 
 - **Action (non-commit):** S39, after its close-out, with the operator's OK on the full text:
