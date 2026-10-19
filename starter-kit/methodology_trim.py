@@ -58,6 +58,11 @@ TRIM_VERSION = "1.8.2"   # 1.8.2: issue #93, the maintainer's review of the pull
                          # absent from a commit (or a working tree) it CAN read is a FAIL at exit 1, as
                          # in 1.5.0: a trim commit that also deleted the live ledger had read 3, "the proof
                          # did not finish", which called a total loss "no verdict".
+                         # (2) The proof's Python runs isolated (`python3 -I -`): with `python3 -` the
+                         # working directory is first on the import path, so a module planted at the
+                         # repository root (`difflib.py`, `subprocess.py`) ran inside the proof and the
+                         # verdict was still exit 0; `--reverify` runs a proof on a tree someone else
+                         # handed you. Frozen proofs keep `python3 -`; `--reverify` renders today's.
                          #
                          # 1.8.1: issue #93, the abort code -- a proof that could not read an
                          # artifact from git ended in `sys.exit("verify: cannot read ...")`, which
@@ -1335,7 +1340,10 @@ LIVE=@@LIVE@@
 SHARD=@@SHARD@@
 TRIM_SHA="$(git log --diff-filter=A -1 --format=%H -- "$SHARD" 2>/dev/null)"
 export LIVE SHARD TRIM_SHA
-python3 - <<'PYEOF_VERIFY'
+# -I (isolated): no working directory on sys.path and no PYTHON* environment. This script reads the
+# tree it checks, and a plain `python3 -` would import a difflib.py or subprocess.py planted at
+# the repository root and still end at exit 0. Standard library only, so nothing needs the path.
+python3 -I - <<'PYEOF_VERIFY'
 import difflib, os, re, subprocess, sys
 from collections import Counter
 

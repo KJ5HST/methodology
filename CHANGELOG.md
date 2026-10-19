@@ -44,6 +44,22 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-19 · [issue #93] The generated proof's Python runs isolated, so a module planted in the checked tree does not run (`TRIM_VERSION` 1.8.2)
+
+- **Action:** the maintainer's second requested change. The proof reads the tree it checks, and `python3 -` puts the working
+  directory first on its import path, so a `difflib.py` or `subprocess.py` at the repository root ran inside the proof and the
+  verdict was still exit 0; `--reverify` runs a proof on a tree someone else handed you. Measured with a planted module that
+  writes a marker file and then loads the real one (`docs/planning/pr94-response-evidence/point2_planted_module.py`): under
+  1.5.0 a planted `subprocess.py` ran in the frozen proof (so the exposure is older than this pull request: the 1.5.0 template
+  imports `subprocess`, not `difflib`); under 1.8.1 both ran, in the frozen proof and in `--reverify`; now neither does. In
+  `VERIFY_TEMPLATE` the interpreter line is `python3 -I -` (isolated: no working directory on the path, no `PYTHON*`
+  environment); the proof uses the standard library only, and `LIVE`, `SHARD` and `TRIM_SHA` reach it through the process
+  environment, which `-I` does not touch. Frozen proofs keep their bytes (and so `python3 -`); `--reverify` renders today's
+  template, so it is safe on any shard. `tools/test_methodology_trim.py`: `TestAPlantedModuleDoesNotRunInTheProof`, 3 tests
+  (the fixture proved first, by putting the old interpreter line back and watching both planted modules run at exit 0; a proof
+  written now; `--reverify` of a proof frozen with the old line); 199 tests (2 skipped), up from 196; the
+  `trimmer-unit-tests` gate 196 → 199, a tightening. 3 mutants (plain `python3 -`, `-E`, `-s`) all killed. A patch release.
+
 ### 2026-10-19 · [issue #93] Exit 3 is for a ref or object the clone cannot read; a path missing from a readable commit is a FAIL again (`TRIM_VERSION` 1.8.2)
 
 - **Action:** the maintainer's first requested change on the pull request. A trim commit that also `git rm`s the live ledger

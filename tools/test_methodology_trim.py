@@ -3684,5 +3684,86 @@ class TestAPathMissingFromAReadableCommitIsAFail(unittest.TestCase):
             self.assertNotIn("FAIL:", v.stdout)
 
 
+# =============================================================================================
+# The proof reads the tree it checks, and `python3 -` puts the working directory first on its import
+# path. A module planted at the repository root (`difflib.py`, `subprocess.py`) then runs inside the
+# proof, and the verdict is still exit 0. `--reverify` makes this reachable on a tree someone else
+# handed you, so it runs the proof's Python in isolated mode (`-I`): no working directory on the
+# path, no PYTHON* environment (maintainer's point 2 on the pull request).
+# =============================================================================================
+
+PLANTED_MODULE = (
+    "import importlib.util, os, sys, sysconfig\n"
+    "open('planted-ran-' + __name__ + '.txt', 'w').write('the planted module ran\\n')\n"
+    "_real = os.path.join(sysconfig.get_paths()['stdlib'], __name__ + '.py')\n"
+    "_spec = importlib.util.spec_from_file_location(__name__, _real)\n"
+    "_mod = importlib.util.module_from_spec(_spec)\n"
+    "sys.modules[__name__] = _mod\n"
+    "_spec.loader.exec_module(_mod)\n")
+
+
+class TestAPlantedModuleDoesNotRunInTheProof(unittest.TestCase):
+
+    MODULES = ("difflib", "subprocess")
+
+    def _committed(self, tmp):
+        p = make_handoff_repo(tmp)
+        r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        sh(p, "git", "add", "-A")
+        sh(p, "git", "commit", "-qm", "trim")
+        shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0].relative_to(p).as_posix()
+        return p, shard
+
+    def _plant(self, p):
+        for name in self.MODULES:
+            (p / (name + ".py")).write_text(PLANTED_MODULE, encoding="utf-8")
+
+    def _ran(self, p):
+        return sorted(f.name for f in p.glob("planted-ran-*.txt"))
+
+    def _clear(self, p):
+        for f in p.glob("planted-ran-*.txt"):
+            f.unlink()
+
+    def test_control_the_fixture_does_detect_a_planted_module_under_the_old_invocation(self):
+        """Fixture proved first: with the proof's interpreter line put back to `python3 -`, both
+        planted modules run and the verdict is still 0 -- the defect, reproduced."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._committed(tmp)
+            proof = p / (shard + ".verify.sh")
+            text = proof.read_text(encoding="utf-8")
+            old = text.replace("python3 -I - <<'PYEOF_VERIFY'", "python3 - <<'PYEOF_VERIFY'")
+            self.assertNotEqual(old, text, "control: the proof must carry the isolated-mode line")
+            proof.write_text(old, encoding="utf-8")
+            self._plant(p)
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 0, v.stdout)
+            self.assertEqual(self._ran(p), ["planted-ran-difflib.txt", "planted-ran-subprocess.txt"])
+
+    def test_a_proof_written_now_runs_no_planted_module(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._committed(tmp)
+            self._plant(p)
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 0, v.stdout)
+            self.assertIn("OK:", v.stdout)
+            self.assertEqual(self._ran(p), [], "a module at the repository root must not run in the proof")
+
+    def test_reverify_runs_no_planted_module(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._committed(tmp)
+            # a proof frozen by an older trimmer carries the old interpreter line; --reverify
+            # re-renders today's template, so it must be safe regardless
+            proof = p / (shard + ".verify.sh")
+            proof.write_text(proof.read_text(encoding="utf-8").replace(
+                "python3 -I - <<'PYEOF_VERIFY'", "python3 - <<'PYEOF_VERIFY'"), encoding="utf-8")
+            self._plant(p)
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 0, r.stdout)
+            self.assertIn("exit 0 (", r.stdout)
+            self.assertEqual(self._ran(p), [], "--reverify must not execute a module from the tree it checks")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
