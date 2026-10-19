@@ -3478,5 +3478,87 @@ class TestTheProofPrintsTheRecord0Diff(unittest.TestCase):
             self.assertNotIn("DIFF", v.stdout, "the diff is for record 0 only; another record is a plain loss")
 
 
+# =============================================================================================
+# Issue #93, the abort code (the fork's BL-118). An abort BEFORE the checks is not a verdict. The
+# proof's `show()` ended in `sys.exit("verify: cannot read ...")`, which prints the text and exits
+# 1 -- the FAIL code -- so a proof that had compared nothing read as a trim that lost something.
+# Seen once in a 54-shard `--reverify` sweep over a partial clone: one blob fetch failed, the shard
+# read FAIL, and the re-run read 0. The fixture plants the field case rather than mocking it: a
+# depth-1 clone of a trimmed repository holds the trim commit and not its parent, so
+# `git show <trim>^:<ledger>` cannot be answered there and can everywhere else.
+# =============================================================================================
+
+class TestAnAbortBeforeTheChecksIsNotAVerdict(unittest.TestCase):
+
+    def _trimmed_and_shallow(self, tmp):
+        """TestReverify's fixture (make_handoff_repo, trimmed at --cut 2, committed), plus a depth-1
+        clone of it in which the trim commit is the only commit. Returns (source repo, clone, shard
+        path relative to either root, as the proof names it)."""
+        src = make_handoff_repo(str(Path(tmp) / "src"))
+        r = run_trim(src, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        sh(src, "git", "add", "-A")
+        sh(src, "git", "commit", "-qm", "trim")
+        shard = sorted((src / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0]
+        shard = shard.relative_to(src).as_posix()
+        clone = Path(tmp) / "shallow"
+        c = sh(Path(tmp), "git", "clone", "-q", "--depth", "1", "file://" + str(src.resolve()),
+               str(clone))
+        self.assertEqual(c.returncode, 0, c.stdout)
+        return src, clone, shard
+
+    def test_control_the_fixture_is_the_field_case(self):
+        """Prove the fixture first: the clone holds exactly the trim commit, names it as the shard's
+        adding commit and cannot show its parent -- and the SAME proof holds in the full repository,
+        so the missing parent is the only difference the other tests see."""
+        with tempfile.TemporaryDirectory() as tmp:
+            src, clone, shard = self._trimmed_and_shallow(tmp)
+            self.assertEqual(sh(clone, "git", "rev-list", "--count", "HEAD").stdout.strip(), "1")
+            trim = sh(clone, "git", "log", "--diff-filter=A", "-1", "--format=%H", "--", shard)
+            self.assertEqual(trim.stdout.strip(), sh(clone, "git", "rev-parse", "HEAD").stdout.strip())
+            self.assertNotEqual(sh(clone, "git", "show", "HEAD^:HANDOFFS.md").returncode, 0,
+                                "the parent must be unreadable here, or the fixture proves nothing")
+            full = sh(src, "bash", shard + ".verify.sh")
+            self.assertEqual(full.returncode, 0, full.stdout)
+            self.assertIn("OK:", full.stdout)
+
+    def test_the_frozen_proof_exits_3_with_its_reason_and_no_verdict(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _src, clone, shard = self._trimmed_and_shallow(tmp)
+            r = sh(clone, "bash", shard + ".verify.sh")
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("verify: cannot read", r.stdout)
+            self.assertIn("did not finish", r.stdout)
+            self.assertNotIn("FAIL:", r.stdout, "a proof that compared nothing has no FAIL to report")
+            self.assertNotIn("OK:", r.stdout, "and no OK either: it is not a verdict")
+
+    def test_reverify_reports_the_abort_as_exit_3_not_as_a_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _src, clone, shard = self._trimmed_and_shallow(tmp)
+            r = run_trim(clone, "--reverify", shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_VERDICT]", r.stdout)
+            self.assertIn("exit 3 (0:", r.stdout, "the legend's own 3: the proof did not finish")
+            self.assertIn("verify: cannot read", r.stdout)
+            self.assertNotIn("FAIL:", r.stdout)
+
+    def test_a_shard_file_that_cannot_be_read_is_the_same_abort(self):
+        """The other read before the checks: with the trim uncommitted the proof reads the live file
+        and the shard from the working tree, and a shard that is not there is an abort, not a FAIL."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+            self.assertIn("[WROTE]", r.stdout, r.stdout)
+            shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0]
+            ok = sh(p, "bash", str(shard) + ".verify.sh")
+            self.assertEqual(ok.returncode, 0, "control: the uncommitted trim's proof holds\n" + ok.stdout)
+            shard.unlink()
+            r = sh(p, "bash", str(shard) + ".verify.sh")
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("verify: cannot read", r.stdout)
+            self.assertIn(shard.name, r.stdout)
+            self.assertNotIn("FAIL:", r.stdout)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

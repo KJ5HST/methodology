@@ -536,7 +536,9 @@ warns when it sees the state coming
 (`FRONTIER_PENDING_STUB`, `FRONTIER_FINALIZE_UNCOMMITTED`); the warning is advisory and refuses
 nothing. A `.verify.sh` already written is frozen and never changes; to ask what today's template
 says about an old shard, run `methodology_trim.py --reverify <shard>` — read-only, it prints a verdict
-that is a claim about today's logic, not about the artifact that was shipped.
+that is a claim about today's logic, not about the artifact that was shipped. A proof that cannot
+read an artifact from git (a shallow or partial clone without the trim commit's parent) exits 3
+and prints no verdict, never a `FAIL:` line; run it where the history is present.
 
 **Not everything that grows can be archived this way.** Archiving moves *history*. A file that grows
 because someone keeps adding *procedure* has no past to move — extract a section to a sibling file

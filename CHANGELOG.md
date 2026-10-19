@@ -44,6 +44,28 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-17 · [issue #93] An abort before the proof's checks exits 3, "the proof did not finish", not 1, the FAIL code (`TRIM_VERSION` 1.8.1)
+
+- **Action:** closes a gap that a 54-shard `--reverify` sweep of the adopter repository exposed in [issue #93](https://github.com/KJ5HST/methodology/issues/93):
+  the generated proof's `show()` ended in `sys.exit("verify: cannot read ...")`, which prints the text and exits 1, the FAIL
+  code, so a proof that could not read an artifact from git -- and so had compared nothing -- read as a trim that lost
+  something. Seen once in the 54-shard `--reverify` sweep of the adopter repository (`rmsharp/nprcgenekeepr`): a blob fetch
+  from the partial clone's promisor remote failed, `docs/archive/SESSION_NOTES-through-2026-09-26-2.md` read exit 1, and the
+  re-run read 0. In `VERIFY_TEMPLATE` every abort before the checks -- a `git show` that fails, a live or shard file that
+  cannot be read -- now goes through one `unfinished(why)`: the reason to stderr and exit 3, the code the proof's shell head
+  already uses when it cannot reach the repository root and the code `--reverify`'s legend gives "the proof did not finish".
+  Frozen proofs keep their bytes (exit 1 where they always did); `--reverify` renders today's template, so it reads 3 there.
+  Reproduced on that adopter's clone with the promisor remote pointed at a dead path: the frozen proof and `--reverify` under
+  1.8.0 both exit 1 with `verify: cannot read 7a55e19^:SESSION_NOTES.md`; under 1.8.1 `--reverify` exits 3 with the same
+  reason and no `FAIL:` line. `FRAMEWORK_APPARATUS.md`'s `--reverify` sentence gains the case. `tools/test_methodology_trim.py`:
+  `TestAnAbortBeforeTheChecksIsNotAVerdict`, 4 tests on a depth-1 clone of a trimmed repository (the trim commit's parent
+  absent: the field case, not a mock): the fixture proved first (the same proof holds where the parent is readable), the
+  frozen proof at exit 3 with its reason and neither `FAIL:` nor `OK:`, `--reverify` at exit 3, and a shard file that cannot
+  be read as the same abort; 188 tests (2 skipped), up from 184; the `trimmer-unit-tests` gate 184 → 188, a tightening; 6
+  mutants (exit 1 restored in `show()`, `unfinished()` at 1 and at 0, `readf()` unguarded, the reason unprinted, its words
+  dropped) all killed by the intended test. Measured on that adopter's 54 proofs with the remote alive: every shard reads the
+  same code under 1.8.1 as under 1.8.0. A patch release: no verdict on a readable tree changes.
+
 ### 2026-10-16 · [issue #93] the proof prints the record-0 diff (`TRIM_VERSION` 1.8.0)
 
 - **Action:** the generated proof, and so `--reverify`, now prints a unified diff of record 0 against the record that
