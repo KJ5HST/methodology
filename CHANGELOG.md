@@ -44,6 +44,13 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-18 · [ad hoc] PR #92: review comment to rmsharp (in progress)
+
+- **Action:** session S40 claimed on `main`. Post the operator-approved review of PR #92 (head `fa2bb5d`): three text
+  fixes before merge (release notes describe two branch-only defects as shipped; the release has no ledger entry of
+  its own; the adopter line omits that D8 lives in non-distributed `bin/`), and the answer on the tag: leave `v4.2`
+  at `f34769f`.
+
 ### 2026-10-03 · [ad hoc] PR #91: comment to rmsharp that his three approval points were fixed before the merge
 
 - **Action (non-commit):** S39, after its close-out, with the operator's OK on the full text:
