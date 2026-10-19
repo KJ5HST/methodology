@@ -3921,5 +3921,57 @@ class TestReverifyRefusesAPrefixItCannotHonour(unittest.TestCase):
             self.assertIn("PREFIX appears 2 times", r.stdout)
 
 
+# =============================================================================================
+# The same refusal for the one lifted value that is free text. RECORD_START is spliced into a raw
+# string literal that Python reads from a heredoc; a CR ends the literal and a NUL cannot be passed
+# to bash. Either must be refused at the lift, by name, at exit 3 -- not run, and not read as a
+# FAIL (maintainer's point 7 on the pull request).
+# =============================================================================================
+
+class TestReverifyRefusesARecordStartItCannotSplice(unittest.TestCase):
+
+    def _trimmed(self, tmp):
+        return TestReverifyRefusesAPrefixItCannotHonour._trimmed(self, tmp)
+
+    def test_control_a_record_start_of_the_usual_kind_lifts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 0, r.stdout)
+
+    def _with_record_start(self, tmp, ch):
+        """A proof whose RECORD_START line carries `ch` before the closing quote. Written in binary so
+        that a carriage return or a NUL reaches the file as itself."""
+        p, shard = self._trimmed(tmp)
+        proof = p / (shard + ".verify.sh")
+        raw = proof.read_bytes()
+        out, n = re.subn(rb'(?m)^(RECORD_START = r"[^"\n]*)(")$', lambda m: m.group(1) + ch + m.group(2), raw, count=1)
+        self.assertEqual(n, 1, "control: the proof must carry a RECORD_START line")
+        proof.write_bytes(out)
+        return p, shard
+
+    def test_a_carriage_return_in_record_start_is_refused_not_a_crash_read_as_a_fail(self):
+        """A raw CR ends the string literal (Python's tokenizer treats it as a newline), so the
+        spliced proof is a SyntaxError and bash reports the interpreter's exit 1 -- the FAIL code."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._with_record_start(tmp, b"\r")
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+            self.assertIn("RECORD_START", r.stdout)
+            self.assertNotIn("SyntaxError", r.stdout)
+            self.assertNotIn("[REVERIFY_VERDICT]", r.stdout)
+
+    def test_a_nul_in_record_start_is_refused_not_a_traceback(self):
+        """A NUL cannot be passed to bash at all (`embedded null byte`): without a refusal at the
+        lift, --reverify itself dies with a traceback."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._with_record_start(tmp, b"\x00")
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+            self.assertNotIn("Traceback", r.stdout)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

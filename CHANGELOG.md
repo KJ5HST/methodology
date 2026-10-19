@@ -44,6 +44,18 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-19 · [issue #93] `--reverify` refuses a carriage return or a NUL in a lifted `RECORD_START` (`TRIM_VERSION` 1.8.2)
+
+- **Action:** the maintainer's seventh point. The lift shape for `RECORD_START` excluded only a newline, so a carriage return
+  went into the raw string literal that Python reads from the heredoc: the tokenizer reads a CR as a newline, the proof is a
+  `SyntaxError`, and bash reports the interpreter's exit 1, the FAIL code (reproduced, `verify_points.py` point 7: `--reverify`
+  exit 1 with `SyntaxError: unterminated string literal`). Testing it, a NUL did worse: bash cannot be handed one, and
+  `--reverify` itself died with `ValueError: embedded null byte`. The shape is now `[^"\r\n\x00]*`, so both are
+  `REVERIFY_NOT_LIFTABLE` at exit 3, by name. `REGEN_PATTERNS` and `STUB_PATTERN` go through `repr()`, which escapes both, and
+  the other lifted values have fixed shapes. `tools/test_methodology_trim.py`: `TestReverifyRefusesARecordStartItCannotSplice`,
+  3 tests (control; CR; NUL); 213 tests (2 skipped), up from 210; the `trimmer-unit-tests` gate 210 → 213, a tightening. 3
+  mutants (the old shape, CR allowed, NUL allowed) all killed. A patch release.
+
 ### 2026-10-19 · [issue #93] `--reverify` refuses a frozen proof whose link prefix it cannot honour (`TRIM_VERSION` 1.8.2)
 
 - **Action:** the maintainer's sixth point. `--reverify` lifts the grammar lines of a frozen proof and fills today's template

@@ -71,6 +71,9 @@ TRIM_VERSION = "1.8.2"   # 1.8.2: issue #93, the maintainer's review of the pull
                          # (4) `--reverify` refuses a frozen proof whose PREFIX is not the template's
                          # `../../` (exit 3, by name). It lifted every grammar line but that one, so a
                          # proof written for another depth, passing as written, read exit 1 here.
+                         # (5) `--reverify` refuses a CR or a NUL in the lifted RECORD_START: a CR made
+                         # the spliced proof a SyntaxError that bash reported as exit 1, the FAIL code,
+                         # and a NUL crashed `--reverify` itself with a traceback.
                          #
                          # 1.8.1: issue #93, the abort code -- a proof that could not read an
                          # artifact from git ended in `sys.exit("verify: cannot read ...")`, which
@@ -1867,7 +1870,11 @@ _LIFT_REQUIRED = (
     ("LIVE", "live", r"LIVE=(%s)" % _PATH_TEXT),
     ("SHARD", "shard", r"SHARD=(%s)" % _PATH_TEXT),
     ("RECORD_KIND", "kind", r'RECORD_KIND = "(heading|fence)"'),
-    ("RECORD_START", "start", r'RECORD_START = r"([^"\n]*)"'),
+    # No quote, and no CR, LF or NUL: the value is spliced into a raw string literal that Python
+    # reads from a heredoc. A CR ends the literal (the tokenizer reads it as a newline), so the
+    # proof dies with a SyntaxError that bash reports as the FAIL code; a NUL cannot be passed to
+    # bash at all. Refused at the lift, they are exit 3 by name.
+    ("RECORD_START", "start", r'RECORD_START = r"([^"\r\n\x00]*)"'),
     ("FENCE_INFO", "info", r'FENCE_INFO = "([A-Za-z0-9_-]*)"'),
     ("FOOTER_MODE", "footer", r'FOOTER_MODE = "(separator|none)"'),
 )
@@ -1888,8 +1895,8 @@ def _lift_pattern(key, value):
     """A pattern text that will be spliced into the template: it must compile and must not collide
     with the template's own placeholders (the filler substitutes them one after another, so a
     placeholder inside a value would be rewritten by a later pass). Two things need no check of
-    their own: a newline (START's form excludes it; REGEN and STUB go through repr(), which escapes
-    it) and a trailing unpaired backslash, which would end START's raw string early but does not
+    their own: a newline, a CR or a NUL (START's form excludes them; REGEN and STUB go through
+    repr(), which escapes them) and a trailing unpaired backslash, which would end START's raw string early but does not
     compile either."""
     if "@@" in value:
         raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE", "%s carries a template placeholder" % key)
