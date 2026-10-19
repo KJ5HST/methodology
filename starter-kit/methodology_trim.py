@@ -74,6 +74,10 @@ TRIM_VERSION = "1.8.2"   # 1.8.2: issue #93, the maintainer's review of the pull
                          # (5) `--reverify` refuses a CR or a NUL in the lifted RECORD_START: a CR made
                          # the spliced proof a SyntaxError that bash reported as exit 1, the FAIL code,
                          # and a NUL crashed `--reverify` itself with a traceback.
+                         # (6) The frontier note and the record-0 diff are printed only when every other
+                         # record is byte-identical and in order (`others_intact`, the condition the stub
+                         # label already needed); an edit to record 0 beside a reorder printed both and
+                         # said nothing of the reorder. Otherwise a note says the others moved.
                          #
                          # 1.8.1: issue #93, the abort code -- a proof that could not read an
                          # artifact from git ended in `sys.exit("verify: cannot read ...")`, which
@@ -1741,9 +1745,14 @@ frontier_edit = (len(absent_records) == 1 and br and absent_records[0] == br[0]
 stub_finalized = False
 successor = (next(a for a in added_records if anchor(a) == anchor(absent_records[0]))
              if frontier_edit else None)
+# Everything but record 0 is byte-identical and in order across the move. The stub label needs it
+# (e), and so does everything below that speaks about record 0 ALONE: the frontier note and the
+# diff. Without it an edit to record 0 that also reordered or changed other records printed the
+# reassuring note and a diff of record 0 and said nothing of the rest.
+others_intact = (rebuilt == br[1:])
 if fails and frontier_edit and STUB is not None and STUB.search(absent_records[0]):
     other_fails = [f for f in fails if not (f.startswith("L1 ") or f.startswith("L3 "))]
-    stub_finalized = (not STUB.search(successor) and not other_fails and rebuilt == br[1:])
+    stub_finalized = (not STUB.search(successor) and not other_fails and others_intact)
 
 if stub_finalized:
     # The generic L1/L3 pair is this edit's own symptom (record 0's pre-trim bytes are the stub, and
@@ -1759,6 +1768,12 @@ if stub_finalized:
         "changed and that record 0 was a stub; it cannot certify that the finalized text is right. "
         "To avoid it, trim while record 0 is complete -- before the claim, or after the finalize "
         "is committed -- never in the same commit.")
+elif fails and frontier_edit and not others_intact:
+    notes.append(
+        "record 0 was edited AND the other record(s) are not byte-identical and in order across the "
+        "move (they were reordered, edited or dropped as well), so this is not the shape a bundled "
+        "finalize leaves and no diff of record 0 is shown: it would hide the rest. Compare the "
+        "shard's records against the parent's by hand.")
 elif fails and frontier_edit:
     notes.append(
         "the only missing record is the frontier one (position 0, newest), and an added record "
@@ -1784,12 +1799,14 @@ for f in fails:
     print("FAIL:", f)
 for n in notes:
     print("NOTE:", n)
-if frontier_edit:
+if frontier_edit and others_intact:
     # Issue #93's first suggestion. The proof cannot judge an edit to record 0 -- a stub finalize and
     # a real loss have the same shape -- but a reader shown the edit can, in seconds. Printed for both
     # shapes the frontier note covers (the recognised stub finalize, exit 4, and the generic edit,
     # exit 1) and for nothing else: a record other than the frontier that differs is a plain loss,
-    # and a diff would dress it up. Output only; it changes no verdict and no exit status.
+    # and a diff would dress it up -- so is a frontier edit with other records moved as well, where
+    # a diff of record 0 alone would hide the rest. Output only; it changes no verdict and no exit
+    # status.
     diff = list(difflib.unified_diff(absent_records[0].splitlines(keepends=True),
                                      successor.splitlines(keepends=True),
                                      fromfile="record 0 before the trim commit (its parent)",

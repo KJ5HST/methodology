@@ -3973,5 +3973,68 @@ class TestReverifyRefusesARecordStartItCannotSplice(unittest.TestCase):
             self.assertNotIn("Traceback", r.stdout)
 
 
+# =============================================================================================
+# The frontier note ("the only missing record is the frontier one ... the shape a bundled finalize
+# leaves") and the record-0 diff speak about record 0 ALONE. They are true only when every other
+# record is byte-identical and in order across the move -- the condition the stub label already
+# requires (`rebuilt == br[1:]`). Without it, an edit to record 0 that also reordered two archived
+# records printed the reassuring note and a diff of record 0, and said nothing of the reorder
+# (maintainer's point 8 on the pull request).
+# =============================================================================================
+
+class TestTheFrontierNoteAndDiffAreForTheFrontierAlone(unittest.TestCase):
+
+    def _repo_with_record_0_edited(self, tmp):
+        helper = TestVerifyShNamesAStubFinalize()
+        p = make_handoff_repo(tmp)
+        shard = helper._trim(p)
+        helper._edit_live(p, "commentary about session 0.", "commentary about session 0 (amended).",
+                          "record 0, a complete receipt, must change")
+        return helper, p, shard
+
+    def _swap_two_archived_records(self, shard):
+        text = shard.read_text(encoding="utf-8")
+        pos = [text.index("```handoff\nsession: S%d\n" % i) for i in (2, 3, 4)]
+        a, b = text[pos[0]:pos[1]], text[pos[1]:pos[2]]
+        self.assertNotEqual(a, b)
+        shard.write_text(text[:pos[0]] + b + a + text[pos[2]:], encoding="utf-8")
+
+    def test_control_record_0_edited_alone_keeps_the_note_and_the_diff(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper, p, shard = self._repo_with_record_0_edited(tmp)
+            helper._commit(p, "trim + record 0 edited")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("the only missing record is the frontier one", v.stdout)
+            self.assertIn("DIFF: record 0", v.stdout)
+
+    def test_a_reorder_beside_the_edit_withdraws_the_note_and_the_diff_and_names_the_reorder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper, p, shard = self._repo_with_record_0_edited(tmp)
+            self._swap_two_archived_records(shard)
+            helper._commit(p, "trim + record 0 edited + two archived records swapped")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertNotIn("the shape (BL-27) a bundled finalize leaves", v.stdout,
+                             "the reassuring note is not true when other records moved")
+            self.assertNotIn("DIFF: record 0", v.stdout, "a diff of record 0 alone would hide the reorder")
+            self.assertIn("NOTE: record 0 was edited AND the other record(s) are not byte-identical and in "
+                          "order across the move", v.stdout, v.stdout)
+            self.assertIn("reordered", v.stdout)
+
+    def test_a_stub_finalize_beside_a_reorder_is_still_not_labelled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = helper._stub_repo(tmp)
+            shard = helper._trim(p)
+            helper._edit_live(p, "status: pending\n", "status: complete\n", "record 0 must be finalized")
+            self._swap_two_archived_records(shard)
+            helper._commit(p, "trim + stub finalize + a swap")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertNotIn("pending stub", v.stdout)
+            self.assertNotIn("DIFF: record 0", v.stdout)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

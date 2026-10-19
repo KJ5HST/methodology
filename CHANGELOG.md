@@ -44,6 +44,20 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-19 · [issue #93] The frontier note and the record-0 diff are printed only when no other record moved (`TRIM_VERSION` 1.8.2)
+
+- **Action:** the maintainer's eighth point. The generic note ("the only missing record is the frontier one ... the shape a
+  bundled finalize leaves") and the record-0 diff speak about record 0 alone, but were printed whenever record 0 was edited,
+  even when other records were reordered as well: the proof ended at exit 1 with L1 and L3 FAIL lines and a reassuring note,
+  and said nothing of the reorder (reproduced, `verify_points.py` point 8). The stub label already required `rebuilt == br[1:]`
+  (every record but record 0 byte-identical and in order); that condition is now one name, `others_intact`, and gates the
+  generic note and the diff too. When it fails, a note says the other record(s) were reordered, edited or dropped as well, that
+  this is not the bundled-finalize shape, and that no diff is shown because it would hide the rest. No verdict and no exit
+  status changes. `tools/test_methodology_trim.py`: `TestTheFrontierNoteAndDiffAreForTheFrontierAlone`, 3 tests (control:
+  record 0 edited alone keeps note and diff; a reorder beside the edit; a stub finalize beside a reorder, still unlabelled and
+  with no diff); 216 tests (2 skipped), up from 213; the `trimmer-unit-tests` gate 213 → 216, a tightening. 4 mutants (the
+  note back, the diff back, `others_intact` always true, the wrong slice) all killed. A patch release.
+
 ### 2026-10-19 · [issue #93] `--reverify` refuses a carriage return or a NUL in a lifted `RECORD_START` (`TRIM_VERSION` 1.8.2)
 
 - **Action:** the maintainer's seventh point. The lift shape for `RECORD_START` excluded only a newline, so a carriage return
