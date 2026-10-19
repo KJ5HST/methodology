@@ -526,8 +526,9 @@ here — one ledger, one shard, one commit, one revert. It does **not** belong i
 read-only apart from the reconcile backfill.
 
 **Give the trim a commit of its own, never in the same commit that edits record 0.** A session's
-claim leaves record 0 of `HANDOFFS.md` as a `status: pending` stub that close-out overwrites in
-place. A trim that lands in that same commit makes the generated `.verify.sh` read the receipt as
+claim leaves record 0 of `HANDOFFS.md` as a `status: pending` stub, and record 0 of `SESSION_NOTES.md`
+as the Phase 1B stub (a `**Deliverable:** … (IN PROGRESS)` line and a `**Status:** Session claimed`
+line); close-out overwrites both in place. A trim that lands in that same commit makes the generated `.verify.sh` read the receipt as
 *edited*, because its pre-trim bytes are the stub: the proof ends red (exit 4, named as a stub
 finalize since nothing else went missing, but still a FAIL) with nothing lost, and it prints the
 diff of the stub against the receipt that replaced it, so a reader can see in seconds what the

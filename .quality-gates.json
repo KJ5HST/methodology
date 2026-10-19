@@ -38,7 +38,7 @@
     {
       "name": "trimmer-unit-tests",
       "direction": "min",
-      "threshold": 227,
+      "threshold": 245,
       "command": "python3 tools/test_methodology_trim.py",
       "extract": "Ran (\\d+) tests"
     },

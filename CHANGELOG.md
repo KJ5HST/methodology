@@ -161,6 +161,32 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
   documentation entry above. Gate run at the tagged commit: 261 passed / 0 failed; ratchet 12/12. The tag stays at
   `f34769f` when those notes merge: a moved tag does not reach clones that already hold it. The release:
   [`CLAUDE.md` §Versioning](CLAUDE.md#versioning) v4.2.
+### 2026-10-19 · [issue #93] `SESSION_NOTES.md` joins the ledger table (`TRIM_VERSION` 1.9.0)
+
+- **Action:** the change the maintainer asked to have as its own pull request, kept separate from the proof fixes. Seven of the
+  ten failing proofs in the adopter repository [issue #93](https://github.com/KJ5HST/methodology/issues/93) reports on
+  (`rmsharp/nprcgenekeepr`) are `SESSION_NOTES.md` shards; the ledger table had no entry for that file, so no stub marker reached
+  them and `--reverify` could print only the generic L1/L3 failures. `starter-kit/methodology_trim.py`'s `LEDGERS` gains
+  `SESSION_NOTES.md`: the runner's two record shapes (`### What Session N Did`, `### Session N-1 Handoff Evaluation (by Session
+  N)`), no footer, a best-effort record date, and a stub marker that requires BOTH Phase 1B lines, the `**Status:** Session
+  claimed` line and the `(IN PROGRESS)` tag, anywhere in the record with the status line starting a line (a finished record in
+  3 of 12 adopters' notes files still carries the status line, and 2 of those 3 dropped the tag, so the line alone would have
+  called finished records stubs). `_session_notes_date`'s comment now says what is true: the date labels a shard's span AND
+  decides where `--cut DATE` falls, and a record whose only date is the fallback can be cut by a date that is not its own (the
+  cut is lossless either way). `FRAMEWORK_APPARATUS.md`'s timing-rule paragraph names the notes stub; `README.md`'s file tree
+  lists the third ledger. `tools/test_methodology_trim.py`: `TestSessionNotesIsATrimmableLedger`, 18 tests (the grammar and the
+  marker's two parts, the fixture proved first, the seed read as fresh, a trim end to end with the proof before and after the
+  commit, the labelled finalize with its diff, four narrowed controls, the write-time guard, the 1.5.0-proof re-derivation, a
+  grammar mismatch refused loudly, the Class A arm at the root only), and two existing tests updated from the old truth; 245 tests
+  (2 skipped), up from 227; the `trimmer-unit-tests` gate 227 → 245, a tightening. Measured on that adopter's 54 proofs (at its
+  commit 82433662): `--reverify` reads 46 at exit 0 and 8 at exit 4 with this entry, and 46 at exit 0, 1 at exit 4 and 7 at
+  exit 1 without it; the proof fixes of 1.8.2 change none of the 54 verdicts. A minor release: a third ledger the tool can
+  trim. Not settled here, and said so rather than hidden: a notes file over the seed `.context-budget.json` caps (400 lines,
+  120,000 B) can fail `context_budget.py` while `--check` reports no trim due (the Class A arm is 196,608 B); a trim leaves
+  headings the pattern does not match (a lowercase `did`) as front matter without saying so; and an `ACTIVE TASK` edit in the
+  trim commit fails L2 after the trimmer printed `L2_OK`. What it does not do: a recognised stub finalize stays a FAIL at exit
+  4, because the proof can see that a stub was replaced and not what the replacement dropped.
+
 ### 2026-10-19 · [issue #93] A failed history walk is "the proof did not finish", not a pass; found while testing, not in the review (`TRIM_VERSION` 1.8.2)
 
 - **Action:** not one of the maintainer's nine points; found while writing the tests for the first. The proof finds the trim
