@@ -1568,14 +1568,18 @@ class TestVerifyShNamesAStubFinalize(unittest.TestCase):
             p = self._stub_repo(tmp)
             shard = self._trim(p)
             pat = pattern_of((shard.parent / (shard.name + ".verify.sh")).read_text(encoding="utf-8"))
-            self.assertTrue(re.search(pat, "x\nstatus: pending\ny\n", re.M),
+            def receipt(line):                      # the marker is scoped to the receipt's own fence
+                return "```handoff\nsession: S1\n%s\ny: z\n```\n" % line
+            self.assertTrue(re.search(pat, receipt("status: pending"), re.M),
                             "the HANDOFFS marker must match a pending line")
-            self.assertFalse(re.search(pat, "x\nstatus: complete\ny\n", re.M),
+            self.assertFalse(re.search(pat, receipt("status: complete"), re.M),
                              "...and must not match a complete one")
-            self.assertFalse(re.search(pat, "x\nnext_steps: grep `status: pending` here\n", re.M),
+            self.assertFalse(re.search(pat, receipt("next_steps: grep `status: pending` here"), re.M),
                              "...nor a line that merely quotes the marker")
-            self.assertFalse(re.search(pat, "x\nnext_steps: the stub reads status: pending\n", re.M),
+            self.assertFalse(re.search(pat, receipt("next_steps: the stub reads status: pending"), re.M),
                              "...nor one that ENDS with it, so the marker is anchored at the line's start")
+            self.assertFalse(re.search(pat, "x\nstatus: pending\ny\n", re.M),
+                             "...nor a bare line outside any receipt fence (TestTheHandoffsStubMarkerIsScopedToItsFence)")
         with tempfile.TemporaryDirectory() as tmp:
             p = make_repo(tmp)
             r = run_trim(p, "--file", "CHANGELOG.md", "--write", "--today", "2026-02-01")
@@ -3763,6 +3767,88 @@ class TestAPlantedModuleDoesNotRunInTheProof(unittest.TestCase):
             self.assertEqual(r.returncode, 0, r.stdout)
             self.assertIn("exit 0 (", r.stdout)
             self.assertEqual(self._ran(p), [], "--reverify must not execute a module from the tree it checks")
+
+
+# =============================================================================================
+# The HANDOFFS.md stub marker is `status: pending` -- inside the receipt's OWN fence. The 1.6.0
+# pattern was `^status: pending\s*$` searched over the whole record, so a COMPLETE receipt that has
+# that line anywhere (commentary after the fence, a second fenced block, a quoted example) was
+# read as a stub, and a trim commit that also lost data from it was labelled "a recognised stub
+# finalize" at exit 4 instead of failing plainly at exit 1 (maintainer's point 5).
+# =============================================================================================
+
+class TestTheHandoffsStubMarkerIsScopedToItsFence(unittest.TestCase):
+
+    RECEIPT = ("```handoff\nsession: S1\ndate: 2026-01-01\nstatus: %s\nactive_task: x\n```\n"
+               "Self-score **8/10.** commentary.\n%s\n")
+
+    def _marker(self):
+        return mod.LEDGERS["HANDOFFS.md"].stub_marker
+
+    def test_a_receipt_whose_own_fence_says_pending_is_a_stub(self):
+        self.assertTrue(self._marker().search(self.RECEIPT % ("pending", "")))
+
+    def test_a_trailing_space_or_a_crlf_ending_still_marks_it(self):
+        m = self._marker()
+        self.assertTrue(m.search((self.RECEIPT % ("pending ", "")).replace("\n", "\r\n")))
+        self.assertTrue(m.search("````handoff\nsession: S1\nstatus: pending\n````\n"),
+                        "a four-backtick fence is the same fence")
+
+    def test_a_complete_receipt_is_not_a_stub_whatever_follows_its_fence(self):
+        m = self._marker()
+        for after, why in (("status: pending", "a bare line in the commentary after the fence"),
+                           ("```\nstatus: pending\n```", "a second fenced block in the record"),
+                           ("```handoff\nstatus: pending\n```", "a quoted example receipt in a second handoff fence"),
+                           ("> status: pending", "a quoted line (it does not start the line)")):
+            self.assertIsNone(m.search(self.RECEIPT % ("complete", after)), why)
+
+    def test_a_line_that_merely_contains_the_words_is_not_the_marker(self):
+        m = self._marker()
+        self.assertIsNone(m.search((self.RECEIPT % ("complete", "")).replace(
+            "active_task: x", "active_task: set status: pending, then finish")))
+        self.assertIsNone(m.search(self.RECEIPT % ("pending-review", "")))
+
+    def test_it_does_not_run_away_on_a_large_record_with_no_marker(self):
+        """Guard for the new pattern: a lazy scan across lines must stay linear. 400,000 lines,
+        no marker, one search; a generous bound, so only a blow-up fails it."""
+        import time
+        body = ("x" * 40 + "\n") * 400000
+        rec = "```handoff\nsession: S1\nstatus: complete\n" + body + "```\n"
+        t0 = time.monotonic()
+        self.assertIsNone(self._marker().search(rec))
+        self.assertLess(time.monotonic() - t0, 5.0)
+
+    def test_a_complete_record_0_that_lost_data_is_a_plain_fail_even_with_a_stray_pending_line(self):
+        """Maintainer's case: the parent's record 0 is COMPLETE but carries a stray line, the trim
+        commit drops the line and 34,000 B of what_was_done. Exit 1, no stub label."""
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = make_handoff_repo(tmp)
+            helper._edit_live(p, "commentary about session 0.\n",
+                              "commentary about session 0.\nstatus: pending\n", "a stray line in record 0")
+            sh(p, "git", "commit", "-qa", "--amend", "-m", "seed")
+            shard = helper._trim(p)
+            live = p / "HANDOFFS.md"
+            text = live.read_text(encoding="utf-8")
+            text = text.replace("status: pending\n", "", 1)
+            text, n = re.subn(r"what_was_done: x{34000}", "what_was_done: x", text, count=1)
+            self.assertEqual(n, 1, "control: record 0 must lose its what_was_done")
+            live.write_text(text, encoding="utf-8")
+            helper._commit(p, "trim, and record 0 loses data")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertNotIn("pending stub", v.stdout)
+            self.assertNotIn("exit 4", v.stdout)
+
+    def test_the_write_time_warning_is_silent_for_a_complete_record_0_with_a_stray_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = make_handoff_repo(tmp)
+            helper._edit_live(p, "commentary about session 0.\n",
+                              "commentary about session 0.\nstatus: pending\n", "a stray line in record 0")
+            sh(p, "git", "commit", "-qa", "--amend", "-m", "seed")
+            r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--today", "2026-02-01")
+            self.assertNotIn("FRONTIER_PENDING_STUB", r.stdout, r.stdout)
 
 
 if __name__ == "__main__":

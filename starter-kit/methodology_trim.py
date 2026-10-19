@@ -63,6 +63,11 @@ TRIM_VERSION = "1.8.2"   # 1.8.2: issue #93, the maintainer's review of the pull
                          # repository root (`difflib.py`, `subprocess.py`) ran inside the proof and the
                          # verdict was still exit 0; `--reverify` runs a proof on a tree someone else
                          # handed you. Frozen proofs keep `python3 -`; `--reverify` renders today's.
+                         # (3) HANDOFFS.md's stub marker is scoped to the receipt's own fence: a complete
+                         # receipt with a `status: pending` line elsewhere in its record (commentary, a
+                         # second fenced block) was read as a stub, so a real loss from it was labelled a
+                         # recognised stub finalize at exit 4. A proof frozen before this carries the old
+                         # marker, and `--reverify` lifts what the proof carries.
                          #
                          # 1.8.1: issue #93, the abort code -- a proof that could not read an
                          # artifact from git ended in `sys.exit("verify: cannot read ...")`, which
@@ -450,12 +455,19 @@ LEDGERS = {
         # Phase 1B commits this ledger's record 0 as `status: pending` and Phase 3D overwrites it to
         # `status: complete` IN PLACE, so a pending record 0 is a stub by the runner's own design.
         # One whole line (`status:` is a single-line key), so a receipt that merely QUOTES the
-        # marker mid-line in a long field is not one. CHANGELOG.md declares none, deliberately: its
+        # marker mid-line in a long field is not one -- and that line must sit INSIDE the receipt's
+        # own fence, the ```handoff block that opens the record: a complete receipt with the same
+        # line in its commentary, or in a second fenced block, is not a stub. (The first version
+        # searched the whole record, so a real loss from such a receipt was labelled a recognised
+        # stub finalize at exit 4.) The opening run of backticks or tildes is captured, and a line
+        # that starts with it closes the fence; a lazy line-by-line scan, linear in the record.
+        # CHANGELOG.md declares none, deliberately: its
         # lifecycle is "a committed entry is never edited" and a claim's `(in progress)` entry
         # stays as written when close-out adds its own (FRAMEWORK_APPARATUS.md, The Action
         # Ledger), so such an entry is a FINAL record: every claim in this repo's own ledger still
         # reads (in progress).
-        stub_marker=re.compile(r"^status: pending\s*$", re.M),
+        stub_marker=re.compile(
+            r"\A(`{3,}|~{3,})handoff[^\n]*\n(?:(?!\1)[^\n]*\n)*?status: pending[ \t\r]*$", re.M),
     ),
 }
 

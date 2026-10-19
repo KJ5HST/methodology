@@ -44,6 +44,23 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-19 · [issue #93] `HANDOFFS.md`'s stub marker is scoped to the receipt's own fence (`TRIM_VERSION` 1.8.2)
+
+- **Action:** the maintainer's fifth point. The marker was `^status: pending\s*$` searched over the whole record, so a COMPLETE
+  receipt with that line anywhere in its record (commentary after the fence, a second fenced block) was read as a stub, and a
+  trim commit that also lost data from it was labelled "a recognised stub finalize" at exit 4 instead of failing plainly at
+  exit 1. Reproduced (`docs/planning/pr94-response-evidence/verify_points.py`, point 5): a complete record 0 with a stray line,
+  its `what_was_done` cut from 34,000 B to 1 B in the trim commit, read exit 4 with "record 0 was a pending stub". The marker
+  is now `\A(`{3,}|~{3,})handoff[^\n]*\n(?:(?!\1)[^\n]*\n)*?status: pending[ \t\r]*$` (multiline): the line must be inside
+  the fence that opens the record, whose own opening run of backticks or tildes closes it; a lazy line-by-line scan, linear in
+  the record (guarded by a test on 400,000 lines). The write-time `FRONTIER_PENDING_STUB` warning keys on the same marker, so
+  it is quiet for such a receipt too. What it does not change: a proof frozen by 1.6.0 to 1.8.1 carries the old marker in its
+  `STUB_PATTERN` line, and `--reverify` lifts what the proof carries. `tools/test_methodology_trim.py`:
+  `TestTheHandoffsStubMarkerIsScopedToItsFence`, 7 tests, and `test_the_proofs_grammar_carries_the_ledgers_stub_pattern` now
+  uses real receipts and gains the bare-line case; 206 tests (2 skipped), up from 199; the `trimmer-unit-tests` gate 199 → 206,
+  a tightening. 6 mutants (the old marker, the fence-closing guard, the trailing-space and CR tolerance, the four-backtick
+  fence, the start anchor, the line-start requirement) all killed. A patch release.
+
 ### 2026-10-19 · [issue #93] The generated proof's Python runs isolated, so a module planted in the checked tree does not run (`TRIM_VERSION` 1.8.2)
 
 - **Action:** the maintainer's second requested change. The proof reads the tree it checks, and `python3 -` puts the working
