@@ -78,6 +78,11 @@ TRIM_VERSION = "1.8.2"   # 1.8.2: issue #93, the maintainer's review of the pull
                          # record is byte-identical and in order (`others_intact`, the condition the stub
                          # label already needed); an edit to record 0 beside a reorder printed both and
                          # said nothing of the reorder. Otherwise a note says the others moved.
+                         # (7) The timing rule is the one the proof enforces, no stronger: give the trim
+                         # a commit of its own, never in the same commit that edits record 0. 1.6.0 to
+                         # 1.8.1 said to trim only while record 0 is complete (before the claim or after
+                         # the finalize), and FRONTIER_PENDING_STUB advised against a trim committed on
+                         # its own while record 0 is a stub, which passes. Wording only: no verdict moves.
                          #
                          # 1.8.1: issue #93, the abort code -- a proof that could not read an
                          # artifact from git ended in `sys.exit("verify: cannot read ...")`, which
@@ -1766,8 +1771,7 @@ if stub_finalized:
         "exit 4, not 1: a recognised stub finalize is NAMED, but it is still a FAIL, because a "
         "real loss can have this exact shape too. The proof certifies that nothing but record 0 "
         "changed and that record 0 was a stub; it cannot certify that the finalized text is right. "
-        "To avoid it, trim while record 0 is complete -- before the claim, or after the finalize "
-        "is committed -- never in the same commit.")
+        "To avoid it, give the trim a commit of its own, never in the same commit that edits record 0.")
 elif fails and frontier_edit and not others_intact:
     notes.append(
         "record 0 was edited AND the other record(s) are not byte-identical and in order across the "
@@ -1779,9 +1783,9 @@ elif fails and frontier_edit:
         "the only missing record is the frontier one (position 0, newest), and an added record "
         "carries the same anchor -- the shape (BL-27) a bundled finalize leaves: record 0 was "
         "edited in the same commit as the archive write, so it differs between this commit's "
-        "parent and itself. That bundling is not this framework's practice: trim while record 0 "
-        "is complete -- before the claim, or after the finalize is committed -- never in the "
-        "same commit. This does NOT confirm losslessness -- a real loss can have this exact "
+        "parent and itself. That bundling is not this framework's practice: give the trim a commit "
+        "of its own, never in the same commit that edits record 0. This does NOT confirm "
+        "losslessness -- a real loss can have this exact "
         "shape -- so diff record 0 by hand to be sure it is a finalize and not data loss."
         + ("" if STUB is not None else
            " This ledger declares no stub marker, so a pending-stub finalize cannot be told from "
@@ -2182,9 +2186,13 @@ def check_P1a(ledger_path, spec_for_ledger, expected_after_partition, result):
 # =============================================================================================
 
 # The same words as the proof's notes (VERIFY_TEMPLATE) and FRAMEWORK_APPARATUS.md, pinned together
-# by a test: this rule used to live only in the repo's habits, and its verifier contradicted it.
-TRIM_TIMING_RULE = ("trim while record 0 is complete -- before the claim, or after the finalize is "
-                    "committed -- never in the same commit")
+# by a test: this rule used to live only in the repo's habits, and its verifier contradicted it. It is
+# the rule the proof ENFORCES, no stronger: what ends red is a trim that lands in the commit that
+# edits record 0 (the finalize that replaces a pending stub). A trim committed on its own while
+# record 0 is a stub passes, because record 0 is untouched in that commit; 1.6.0 to 1.8.1 said
+# "trim while record 0 is complete -- before the claim, or after the finalize is committed", which
+# advised against a safe order.
+TRIM_TIMING_RULE = "give the trim a commit of its own, never in the same commit that edits record 0"
 
 
 def check_stub_frontier(repo, path, spec, records, result):
@@ -2196,10 +2204,10 @@ def check_stub_frontier(repo, path, spec, records, result):
         result.add(
             "FRONTIER_PENDING_STUB",
             "record 0 of %s is a pending stub (it matches this ledger's stub marker): a session has "
-            "claimed it and not finalized it. A trim that lands in the same commit as that finalize "
-            "makes the generated .verify.sh read record 0 as EDITED, and the proof ends red (exit 4: "
-            "named, because nothing else went missing, but still a FAIL). %s: either finalize "
-            "record 0 and commit that first, then trim in its own commit, or trim before the claim. "
+            "claimed it and not finalized it. A trim is safe while it stays a stub, provided the trim "
+            "goes in a commit of its own: record 0 is then untouched. What ends red is the finalize "
+            "landing in the same commit as the trim, which makes the generated .verify.sh read record "
+            "0 as EDITED (exit 4: named, because nothing else went missing, but still a FAIL). %s. "
             "Advisory: nothing is refused." % (live_rel, TRIM_TIMING_RULE.capitalize()))
         return
     head = git_bytes(repo, "show", "HEAD:%s" % live_rel)
@@ -2217,8 +2225,8 @@ def check_stub_frontier(repo, path, spec, records, result):
             "HEAD's record 0 of %s is a pending stub and the working tree no longer holds it: it "
             "was finalized or replaced and the change is uncommitted. If that edit and this trim "
             "land in one commit, the generated .verify.sh reads record 0 as EDITED and ends red "
-            "(exit 4: named, but still a FAIL). %s: commit the finalize first, then trim in its "
-            "own commit. Advisory: nothing is refused." % (live_rel, TRIM_TIMING_RULE.capitalize()))
+            "(exit 4: named, but still a FAIL). %s: commit the finalize first, then trim. "
+            "Advisory: nothing is refused." % (live_rel, TRIM_TIMING_RULE.capitalize()))
 
 
 # =============================================================================================

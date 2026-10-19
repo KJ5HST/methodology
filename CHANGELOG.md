@@ -44,6 +44,25 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-19 · [issue #93] The timing rule is the one the proof enforces, no stronger (`TRIM_VERSION` 1.8.2)
+
+- **Action:** the first half of the maintainer's fourth point. 1.6.0 to 1.8.1 said "trim while record 0 is complete -- before
+  the claim, or after the finalize is committed -- never in the same commit", and `FRONTIER_PENDING_STUB` advised finalizing
+  first or trimming before the claim. Measured (`verify_points.py` point 4a): a trim committed on its own while record 0 is a
+  pending stub gets a passing proof, exit 0, because record 0 is untouched in that commit; the warning advised against a safe
+  order. The rule is now what the proof enforces: **give the trim a commit of its own, never in the same commit that edits
+  record 0.** One wording, pinned in the same words in `TRIM_TIMING_RULE`, the proof's two notes, both write-time warnings and
+  `FRAMEWORK_APPARATUS.md`, which now also says what is fine (a trim committed on its own while record 0 is a stub).
+  `FRONTIER_PENDING_STUB` says a trim is safe while it stays a stub provided it goes in a commit of its own, and no longer
+  advises "either finalize first or trim before the claim". Wording only: no verdict, no exit status and no finding code
+  changes. The second half of that point, an `ACTIVE TASK` edit in the trim commit failing L2 after the trimmer printed `L2_OK`,
+  concerns `SESSION_NOTES.md`'s mutable front matter and goes with that file's own change. `tools/test_methodology_trim.py`:
+  `TestTheTimingRuleIsTheOneTheProofEnforces`, 3 tests (the passing trim-alone proof; the warning's words; the constant and
+  template carry no retired phrase), and the older pinned-wording tests updated to the new phrase; 224 tests (2 skipped), up
+  from 221; the `trimmer-unit-tests` gate 221 → 224, a tightening. 4 mutants (the old constant, the old warning advice, the old
+  stub note, the old generic note) all killed. A patch release. Historic entries above that quote the old wording are left as
+  written: a committed entry is never edited.
+
 ### 2026-10-19 · [issue #93] Every kind of other failure is pinned against the stub label (tests only; `TRIM_VERSION` unchanged)
 
 - **Action:** the maintainer's ninth point. The stub label needs "nothing else failed": `other_fails` is every failure that is

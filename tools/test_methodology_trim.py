@@ -1472,7 +1472,7 @@ class TestVerifyShNamesAStubFinalize(unittest.TestCase):
             self.assertNotIn("MISSING from live+shard", v.stdout, v.stdout)
             self.assertNotIn("OK:", v.stdout, "a labelled stub finalize must never read as a pass")
             self.assertIn("NOTE: exit 4, not 1:", v.stdout, "the label explains its own exit status")
-            self.assertIn("never in the same commit", v.stdout, "...and states the timing rule")
+            self.assertIn(TIMING_RULE, v.stdout, "...and states the timing rule")
 
     def test_a_stub_that_is_still_pending_after_the_trim_is_not_called_finalized(self):
         """NARROWED control. The label says FINALIZED, so it must not stamp a stub that was merely
@@ -1639,7 +1639,7 @@ class TestVerifyShNamesAStubFinalize(unittest.TestCase):
 # not this guard's).
 # =============================================================================================
 
-TIMING_RULE = "before the claim, or after the finalize is committed"
+TIMING_RULE = "a commit of its own, never in the same commit that edits record 0"
 
 
 class TestWriteTimeGuardForAStubFinalize(unittest.TestCase):
@@ -1669,16 +1669,14 @@ class TestWriteTimeGuardForAStubFinalize(unittest.TestCase):
         cl.write_text(t[:at] + "### 2026-01-31 · [ad hoc] a documented commit\n\nbody\n\n" + t[at:],
                       encoding="utf-8")
 
-    def test_a_pending_stub_at_record_0_fires_the_guard_and_names_both_ways_out(self):
+    def test_a_pending_stub_at_record_0_fires_the_guard_and_names_the_one_rule(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = self._repo(tmp)
             r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--today", "2026-02-01")
             self.assertIn("[FRONTIER_PENDING_STUB]", r.stdout, r.stdout)
             self.assertIn("[DRY_RUN]", r.stdout, "the guard is advisory: the dry run still completes")
             self.assertEqual(r.returncode, 0, "advisory, so exit 0: " + r.stdout)
-            self.assertIn(TIMING_RULE, r.stdout, "the message names the rule")
-            self.assertIn("finalize record 0 and commit that first", r.stdout, "way out 1")
-            self.assertIn("or trim before the claim", r.stdout, "way out 2")
+            self.assertIn(TIMING_RULE, " ".join(r.stdout.split()), "the message names the rule")
             self.assertEqual(sh(p, "git", "status", "--porcelain").stdout.strip(), "",
                              "a dry run writes nothing")
 
@@ -1707,7 +1705,7 @@ class TestWriteTimeGuardForAStubFinalize(unittest.TestCase):
             self.assertEqual(r.exit, 0, "advisory")
             msg = next(f.message for f in r.findings if f.code == "FRONTIER_FINALIZE_UNCOMMITTED")
             self.assertIn("commit the finalize first", msg, "the way out")
-            self.assertIn(TIMING_RULE, msg)
+            self.assertIn(TIMING_RULE, " ".join(msg.split()))
 
     def test_the_advised_order_gives_a_passing_proof(self):
         """The message's way out must WORK: finalize and commit, then trim in its own commit."""
@@ -1835,8 +1833,8 @@ class TestWriteTimeGuardForAStubFinalize(unittest.TestCase):
 
 # =============================================================================================
 # Issue #93, the third layer -- SAY THE SAME THING EVERYWHERE. The rule that makes a trim lossless-
-# and-green is a timing one (trim while record 0 is complete: before the claim, or after the
-# finalize is committed, never in the commit that finalizes it). It lived only in the repo's habits
+# and-green is a timing one (give the trim a commit of its own, never in the same commit that edits
+# record 0 -- the finalize that replaces a pending stub). It lived only in the repo's habits
 # while the proof's own note told the reader that bundling was "this repository's own established
 # practice": a file's instructions and its verifier disagreeing, where only the verifier is
 # mechanical. These tests pin the same words in every place a reader meets the rule -- the writer's
@@ -1852,7 +1850,8 @@ class TestTheTimingRuleIsStatedTheSameEverywhere(unittest.TestCase):
         prose = " ".join((REPO / "FRAMEWORK_APPARATUS.md").read_text(encoding="utf-8").split())
         self.assertIn(TIMING_RULE, prose,
                       "FRAMEWORK_APPARATUS.md, The Action Ledger, must state the timing rule in the same words")
-        self.assertIn("never in the commit that finalizes it", prose)
+        self.assertIn("committed on its own while record 0 is a stub", prose,
+                      "...and the prose must say what is fine, not only what is not")
 
     def test_the_proofs_generic_frontier_note_carries_the_rule_and_not_the_retired_claim(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -4141,6 +4140,46 @@ class TestTheStubLabelNeedsEveryKindOfOtherFailureToBeAbsent(unittest.TestCase):
             self.assertEqual(v.returncode, 1, v.stdout)
             self.assertIn("L2 FOOTER migrated into the shard", v.stdout, v.stdout)
             self.assertNotIn("pending stub", v.stdout)
+
+
+# =============================================================================================
+# The rule had been stated too strongly: "trim while record 0 is complete -- before the claim, or
+# after the finalize is committed". A trim committed on its own while record 0 is a pending stub
+# passes (record 0 is untouched in that commit), yet the write-time warning advised against it. The
+# real rule is the one the proof enforces: do not put the trim in the commit that EDITS record 0
+# (maintainer's point 4 on the pull request).
+# =============================================================================================
+
+class TestTheTimingRuleIsTheOneTheProofEnforces(unittest.TestCase):
+
+    def test_a_trim_committed_on_its_own_while_record_0_is_a_stub_passes(self):
+        """The measurement behind the rewording: the stub is retained, untouched, in the trim commit."""
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = helper._stub_repo(tmp)
+            shard = helper._trim(p)
+            helper._commit(p, "trim, alone: record 0 is still a pending stub")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 0, v.stdout)
+            self.assertIn("OK:", v.stdout)
+
+    def test_the_write_time_warning_says_the_trim_is_fine_in_a_commit_of_its_own(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = helper._stub_repo(tmp)
+            r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--today", "2026-02-01")
+            self.assertIn("FRONTIER_PENDING_STUB", r.stdout, r.stdout)
+            self.assertIn(TIMING_RULE, " ".join(r.stdout.split()))
+            self.assertIn("goes in a commit of its own", " ".join(r.stdout.split()),
+                          "the warning must say what is safe")
+            self.assertNotIn("either finalize record 0 and commit that first", r.stdout,
+                             "the retired advice: a trim before the finalize is fine")
+            self.assertNotIn("or trim before the claim", r.stdout)
+
+    def test_the_constant_does_not_claim_the_trim_must_wait_for_a_complete_record(self):
+        self.assertNotIn("before the claim", mod.TRIM_TIMING_RULE)
+        self.assertNotIn("after the finalize is committed", mod.TRIM_TIMING_RULE)
+        self.assertNotIn("before the claim", mod.VERIFY_TEMPLATE)
 
 
 if __name__ == "__main__":
