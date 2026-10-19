@@ -44,6 +44,25 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-19 · [issue #93] Exit 3 is for a ref or object the clone cannot read; a path missing from a readable commit is a FAIL again (`TRIM_VERSION` 1.8.2)
+
+- **Action:** the maintainer's first requested change on the pull request. A trim commit that also `git rm`s the live ledger
+  made the generated proof end `verify: cannot read <commit>:HANDOFFS.md -- the proof did not finish; this is not a
+  verdict (exit 3)`, where 1.5.0 exited 1: a total loss read as "no verdict". Reproduced on the 1.8.1 tree and on 1.5.0
+  (`docs/planning/pr94-response-evidence/point1_removed_ledger.py`). In `VERIFY_TEMPLATE`, `show(ref, path)` now asks three
+  questions in order: can the commit be read (`git rev-parse --verify <ref>^{commit}`), can its tree be read and does the
+  path appear in it (`git ls-tree`), can the blob be read (`git show`). The first and third failing, or the tree unreadable,
+  are `unfinished()` (exit 3, unchanged); the path absent from a readable tree is the new `absent()` (a `FAIL:` line, exit
+  1). `readf()` makes the same cut in the working-tree mode: a file that does not exist is `absent()`; a file that is there
+  and cannot be read (a directory in its place) stays `unfinished()`. `FRAMEWORK_APPARATUS.md`'s exit-3 sentence is
+  qualified the same way. `tools/test_methodology_trim.py`: `TestAPathMissingFromAReadableCommitIsAFail`, 8 tests (the
+  fixture proved first; the deleted live ledger at exit 1 for the frozen proof and for `--reverify`; the live ledger and
+  the shard missing from the working tree at exit 1; the parent commit, a tree and a blob this clone cannot read at exit
+  3), and the existing shard-file test now splits missing (exit 1) from present-and-unreadable (exit 3); 196 tests (2
+  skipped), up from 188; the `trimmer-unit-tests` gate 188 → 196, a tightening. 8 mutants (`absent()` at exit 3, without
+  its FAIL line, the two missing-path sites back to the abort, `readf` treating every `OSError` as missing, the
+  tree-lookup check dropped, an unreadable blob or ref made a FAIL) all killed by the intended test. A patch release.
+
 ### 2026-10-17 · [issue #93] An abort before the proof's checks exits 3, "the proof did not finish", not 1, the FAIL code (`TRIM_VERSION` 1.8.1)
 
 - **Action:** closes a gap that a 54-shard `--reverify` sweep of the adopter repository exposed in [issue #93](https://github.com/KJ5HST/methodology/issues/93):

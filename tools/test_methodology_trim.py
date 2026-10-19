@@ -3479,7 +3479,7 @@ class TestTheProofPrintsTheRecord0Diff(unittest.TestCase):
 
 
 # =============================================================================================
-# Issue #93, the abort code (the fork's BL-118). An abort BEFORE the checks is not a verdict. The
+# Issue #93, the abort code. An abort BEFORE the checks is not a verdict. The
 # proof's `show()` ended in `sys.exit("verify: cannot read ...")`, which prints the text and exits
 # 1 -- the FAIL code -- so a proof that had compared nothing read as a trim that lost something.
 # Seen once in a 54-shard `--reverify` sweep over a partial clone: one blob fetch failed, the shard
@@ -3542,9 +3542,10 @@ class TestAnAbortBeforeTheChecksIsNotAVerdict(unittest.TestCase):
             self.assertIn("verify: cannot read", r.stdout)
             self.assertNotIn("FAIL:", r.stdout)
 
-    def test_a_shard_file_that_cannot_be_read_is_the_same_abort(self):
+    def test_a_shard_that_is_there_and_cannot_be_read_is_the_same_abort(self):
         """The other read before the checks: with the trim uncommitted the proof reads the live file
-        and the shard from the working tree, and a shard that is not there is an abort, not a FAIL."""
+        and the shard from the working tree. A shard that is present and cannot be read (here, a
+        directory where the file should be) is an abort, not a FAIL: nothing is known about it."""
         with tempfile.TemporaryDirectory() as tmp:
             p = make_handoff_repo(tmp)
             r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
@@ -3552,12 +3553,135 @@ class TestAnAbortBeforeTheChecksIsNotAVerdict(unittest.TestCase):
             shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0]
             ok = sh(p, "bash", str(shard) + ".verify.sh")
             self.assertEqual(ok.returncode, 0, "control: the uncommitted trim's proof holds\n" + ok.stdout)
+            proof = shard.with_name(shard.name + ".verify.sh")
+            keep = proof.read_text(encoding="utf-8")
             shard.unlink()
-            r = sh(p, "bash", str(shard) + ".verify.sh")
+            shard.mkdir()                                   # present, and not a file anyone can read
+            proof.write_text(keep, encoding="utf-8")
+            r = sh(p, "bash", str(proof))
             self.assertEqual(r.returncode, 3, r.stdout)
             self.assertIn("verify: cannot read", r.stdout)
             self.assertIn(shard.name, r.stdout)
             self.assertNotIn("FAIL:", r.stdout)
+
+
+class TestAPathMissingFromAReadableCommitIsAFail(unittest.TestCase):
+    """Exit 3 means the proof could not read an artifact, so it compared nothing. It is the right
+    answer only when the ref or the object cannot be read. A path that is absent from a commit (or a
+    working tree) the proof CAN read is a finding about the trim: the thing the proof exists to
+    account for is gone, and calling that "did not finish" hides a total loss. 1.5.0 exited 1 here;
+    1.8.1 exited 3 (maintainer's point 1 on the pull request)."""
+
+    def _trimmed(self, tmp):
+        p = make_handoff_repo(tmp)
+        r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0]
+        return p, shard.relative_to(p).as_posix()
+
+    def test_control_the_proof_holds_when_the_trim_commit_only_trims(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim")
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 0, v.stdout)
+
+    def test_a_trim_commit_that_also_deletes_the_live_ledger_is_a_fail_not_an_abort(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            sh(p, "git", "rm", "-q", "-f", "HANDOFFS.md")
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim, and delete the live ledger")
+            self.assertFalse((p / "HANDOFFS.md").exists(), "control: the ledger is gone")
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("FAIL:", v.stdout)
+            self.assertIn("HANDOFFS.md is absent from", v.stdout, "the FAIL names the path")
+            self.assertNotIn("did not finish", v.stdout, "it is a verdict, not an abort")
+            self.assertNotIn("OK:", v.stdout)
+
+    def test_reverify_reads_that_total_loss_as_a_fail_too(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            sh(p, "git", "rm", "-q", "-f", "HANDOFFS.md")
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim, and delete the live ledger")
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 1, r.stdout)
+            self.assertIn("exit 1 (", r.stdout)
+            self.assertIn("HANDOFFS.md is absent from", r.stdout)
+
+    def test_a_live_ledger_missing_from_the_working_tree_is_a_fail_with_the_trim_uncommitted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            (p / "HANDOFFS.md").unlink()
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("HANDOFFS.md does not exist in the working tree", v.stdout)
+            self.assertNotIn("did not finish", v.stdout)
+
+    def test_a_shard_missing_from_the_working_tree_is_a_fail_with_the_trim_uncommitted(self):
+        """The archived records live only in the shard: if it is gone they are gone."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            (p / shard).unlink()
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("does not exist in the working tree", v.stdout)
+            self.assertNotIn("did not finish", v.stdout)
+
+    def _lose_object(self, p, rev):
+        """Delete one loose object from the repository's store, as a partial clone that has not
+        fetched it (or a damaged one) would lack it. The fixture's objects are loose, so this works."""
+        sha = sh(p, "git", "rev-parse", rev).stdout.strip()
+        self.assertEqual(len(sha), 40, sha)
+        path = p / ".git" / "objects" / sha[:2] / sha[2:]
+        self.assertTrue(path.is_file(), "control: %s must be a loose object" % rev)
+        path.chmod(0o644)
+        path.unlink()
+        return sha
+
+    def test_a_tree_this_clone_cannot_read_is_the_abort(self):
+        """HEAD resolves to a commit, but its tree is not in the store (a treeless partial clone
+        that has not fetched it): the path cannot be looked up, so nothing is known -- exit 3. The
+        trim is uncommitted here, which is the mode that reads HEAD's copy of the live ledger."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self._lose_object(p, "HEAD^{tree}")
+            self.assertEqual(sh(p, "git", "rev-parse", "--verify", "-q", "HEAD^{commit}").returncode, 0,
+                             "control: the commit is still readable; its tree is not")
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 3, v.stdout)
+            self.assertIn("did not finish", v.stdout)
+            self.assertNotIn("FAIL:", v.stdout)
+            self.assertNotIn("OK:", v.stdout)
+
+    def test_a_blob_this_clone_cannot_read_is_the_abort(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim")
+            self._lose_object(p, "HEAD^:HANDOFFS.md")
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 3, v.stdout)
+            self.assertIn("did not finish", v.stdout)
+            self.assertNotIn("FAIL:", v.stdout)
+
+    def test_a_ref_this_clone_cannot_read_is_still_the_abort(self):
+        """The line between the two: the parent commit is not in a depth-1 clone, so nothing can be
+        said about the live ledger before the trim -- exit 3, with no verdict."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim")
+            clone = Path(tmp) / "shallow"
+            c = sh(Path(tmp), "git", "clone", "-q", "--depth", "1", "file://" + str(p.resolve()), str(clone))
+            self.assertEqual(c.returncode, 0, c.stdout)
+            v = sh(clone, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 3, v.stdout)
+            self.assertIn("did not finish", v.stdout)
+            self.assertNotIn("FAIL:", v.stdout)
 
 
 if __name__ == "__main__":

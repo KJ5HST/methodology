@@ -52,7 +52,14 @@ import sys
 import tempfile
 from pathlib import Path
 
-TRIM_VERSION = "1.8.1"   # 1.8.1: issue #93, the abort code -- a proof that could not read an
+TRIM_VERSION = "1.8.2"   # 1.8.2: issue #93, the maintainer's review of the pull request -- correctness
+                         # fixes to what the tool writes and reads, patch not minor, no new finding code.
+                         # (1) Exit 3 is for a ref or an object the clone CANNOT READ. A path that is
+                         # absent from a commit (or a working tree) it CAN read is a FAIL at exit 1, as
+                         # in 1.5.0: a trim commit that also deleted the live ledger had read 3, "the proof
+                         # did not finish", which called a total loss "no verdict".
+                         #
+                         # 1.8.1: issue #93, the abort code -- a proof that could not read an
                          # artifact from git ended in `sys.exit("verify: cannot read ...")`, which
                          # prints the text and exits 1, the FAIL code, so a proof that had compared
                          # nothing read as a trim that lost something (seen once in a 54-shard
@@ -1467,14 +1474,39 @@ def unfinished(why):
     # An abort BEFORE the checks is not a verdict. `sys.exit("<text>")` prints the text and exits
     # 1, which is this script's FAIL code, so a proof that had compared nothing read as a trim that
     # lost something. Exit 3 is "the proof did not finish": the code the shell head above uses when
-    # it cannot reach the repository root, and the code `--reverify`'s legend gives this case.
+    # it cannot reach the repository root, and the code `--reverify`'s legend gives this case. It
+    # is for a ref or an object this clone CANNOT READ, and for nothing else -- see `absent`.
     sys.stderr.write("verify: %s -- the proof did not finish; this is not a verdict (exit 3)\n"
                      % why)
     sys.exit(3)
 
 
+def absent(why):
+    # The opposite mistake, and the worse one: a path that is not in a commit (or a working tree)
+    # the proof CAN read is a finding about the trim, not a failure to run. A trim commit that also
+    # deletes the live ledger leaves exactly this, and "did not finish" would call a total loss
+    # "no verdict". The FAIL code, with the reason as a FAIL line (1.5.0 exited 1 here too).
+    print("FAIL: %s" % why)
+    sys.exit(1)
+
+
 def show(ref, path):
-    p = subprocess.run(["git", "show", "%s:%s" % (ref, path)], stdout=subprocess.PIPE)
+    # Three questions, in this order, because they have three different answers. Can the commit
+    # be read at all (a shallow clone lacks the trim commit's parent)? Can its tree be read, and
+    # does the path appear in it? Can the blob be read (a partial clone fetches it on demand)?
+    # Only the first and the third are "did not finish"; a path missing from a readable tree is a FAIL.
+    if subprocess.run(["git", "rev-parse", "--verify", "-q", ref + "^{commit}"],
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
+        unfinished("cannot read %s:%s" % (ref, path))
+    tree = subprocess.run(["git", "ls-tree", "--name-only", ref, "--", path], stdout=subprocess.PIPE,
+                          stderr=subprocess.DEVNULL)
+    if tree.returncode:
+        unfinished("cannot read the tree of %s (for %s)" % (ref, path))
+    if not tree.stdout.strip():
+        absent("%s is absent from %s, a commit this clone can read: there is nothing to account "
+               "for the records against" % (path, ref))
+    p = subprocess.run(["git", "show", "%s:%s" % (ref, path)], stdout=subprocess.PIPE,
+                       stderr=subprocess.DEVNULL)
     if p.returncode:
         unfinished("cannot read %s:%s" % (ref, path))
     return p.stdout.decode("utf-8")
@@ -1484,6 +1516,8 @@ def readf(path):
     try:
         with open(path, "r", encoding="utf-8", newline="") as fh:
             return fh.read()
+    except FileNotFoundError:
+        absent("%s does not exist in the working tree" % path)
     except OSError as e:
         unfinished("cannot read %s (%s)" % (path, e.strerror or e))
 
