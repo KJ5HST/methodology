@@ -52,7 +52,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-TRIM_VERSION = "1.7.0"   # 1.7.0: issue #93, cause 3 — a proof is a FROZEN artifact, so a fix to the
+TRIM_VERSION = "1.8.0"   # 1.8.0: issue #93, the proof prints the record-0 diff -- whenever the
+                         # frontier was edited in the trim commit (exit 4 or exit 1) the generated proof, and so
+                         # `--reverify`, prints a unified diff of record 0 against the record that
+                         # replaced it, so a reader can judge in seconds what the proof cannot. Minor,
+                         # not patch: new proof output. No verdict and no exit status changes.
+                         #
+                         # 1.7.0: issue #93, cause 3 — a proof is a FROZEN artifact, so a fix to the
                          # template (1.5.1's whole-line `leaked`, 1.6.0's stub label) never reaches a
                          # proof already written, and an adopter holds red proofs of lossless trims
                          # with no way to ask what today's template says. `--reverify <shard>` lifts
@@ -1309,7 +1315,7 @@ SHARD=@@SHARD@@
 TRIM_SHA="$(git log --diff-filter=A -1 --format=%H -- "$SHARD" 2>/dev/null)"
 export LIVE SHARD TRIM_SHA
 python3 - <<'PYEOF_VERIFY'
-import os, re, subprocess, sys
+import difflib, os, re, subprocess, sys
 from collections import Counter
 
 RECORD_KIND = "@@KIND@@"
@@ -1646,8 +1652,9 @@ frontier_edit = (len(absent_records) == 1 and br and absent_records[0] == br[0]
 # one missing and the edit keeps the generic note and exit 1, which is what BL-27 protected: a
 # record 0 that was COMPLETE before the trim and differs after it is a real-loss shape.
 stub_finalized = False
+successor = (next(a for a in added_records if anchor(a) == anchor(absent_records[0]))
+             if frontier_edit else None)
 if fails and frontier_edit and STUB is not None and STUB.search(absent_records[0]):
-    successor = next(a for a in added_records if anchor(a) == anchor(absent_records[0]))
     other_fails = [f for f in fails if not (f.startswith("L1 ") or f.startswith("L3 "))]
     stub_finalized = (not STUB.search(successor) and not other_fails and rebuilt == br[1:])
 
@@ -1690,6 +1697,20 @@ for f in fails:
     print("FAIL:", f)
 for n in notes:
     print("NOTE:", n)
+if frontier_edit:
+    # Issue #93's first suggestion. The proof cannot judge an edit to record 0 -- a stub finalize and
+    # a real loss have the same shape -- but a reader shown the edit can, in seconds. Printed for both
+    # shapes the frontier note covers (the recognised stub finalize, exit 4, and the generic edit,
+    # exit 1) and for nothing else: a record other than the frontier that differs is a plain loss,
+    # and a diff would dress it up. Output only; it changes no verdict and no exit status.
+    diff = list(difflib.unified_diff(absent_records[0].splitlines(keepends=True),
+                                     successor.splitlines(keepends=True),
+                                     fromfile="record 0 before the trim commit (its parent)",
+                                     tofile="record 0 in the trim commit"))
+    print("DIFF: record 0, before the trim commit (-) against the record that replaced it (+), "
+          "%d line(s):" % len(diff))
+    for ln in diff:
+        sys.stdout.write(ln if ln.endswith("\n") else ln + "\n")
 if fails:
     sys.exit(4 if stub_finalized else 1)
 # State what actually ran, never a blanket claim: on a ledger with no footer the footer clause is

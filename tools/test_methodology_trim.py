@@ -3423,5 +3423,60 @@ class TestPhaseC2ClassAThreshold(unittest.TestCase):
             self.assertIn("{:,}".format(mod.READ_CAP_BYTES), nest)
 
 
+# =============================================================================================
+# Issue #93, the first of its suggestions: when the trim commit also edited record 0 (the
+# frontier), the generated proof cannot judge the edit -- a stub finalize and a real loss have the
+# same shape -- but a reader shown the edit can, in seconds. The proof prints a unified diff of
+# record 0 against the record that replaced it. Output only: no verdict and no exit status moves.
+# =============================================================================================
+
+class TestTheProofPrintsTheRecord0Diff(unittest.TestCase):
+
+    def test_a_stub_finalize_bundled_into_the_trim_commit_exits_4_and_shows_the_diff(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = helper._stub_repo(tmp)
+            shard = helper._trim(p)
+            helper._edit_live(p, "status: pending\n", "status: complete\n", "record 0 must be finalized")
+            helper._commit(p, "trim + stub finalize, bundled")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 4, v.stdout)
+            self.assertIn("DIFF: record 0", v.stdout, v.stdout)
+            self.assertIn("-status: pending\n", v.stdout)
+            self.assertIn("+status: complete\n", v.stdout)
+            self.assertIn("@@", v.stdout, "a unified diff carries hunk headers")
+            self.assertLess(v.stdout.index("NOTE: exit 4"), v.stdout.index("DIFF: record 0"),
+                            "the verdict and its note come first, the diff after")
+
+    def test_the_diff_also_prints_for_the_generic_frontier_edit(self):
+        """The diff is for the reader's eyes in BOTH cases the frontier note covers: a recognised
+        stub finalize (exit 4, above) and the generic record-0 edit (exit 1). It is not a judgement."""
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = make_handoff_repo(tmp)
+            shard = helper._trim(p)
+            helper._edit_live(p, "commentary about session 0.", "commentary about session 0 (amended).",
+                              "record 0, a complete receipt, must change")
+            helper._commit(p, "trim + a complete record 0 edited")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertNotIn("pending stub", v.stdout)
+            self.assertIn("DIFF: record 0", v.stdout, v.stdout)
+            self.assertIn("-Self-score **8/10.** commentary about session 0.\n", v.stdout)
+            self.assertIn("+Self-score **8/10.** commentary about session 0 (amended).\n", v.stdout)
+
+    def test_no_diff_prints_when_a_record_other_than_the_frontier_is_edited(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = make_handoff_repo(tmp)
+            shard = helper._trim(p)
+            helper._edit_live(p, "commentary about session 1.", "commentary about session 1 (amended).",
+                              "record 1, retained and not the frontier, must change")
+            helper._commit(p, "trim + record 1 edited")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertNotIn("DIFF", v.stdout, "the diff is for record 0 only; another record is a plain loss")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

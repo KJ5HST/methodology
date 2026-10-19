@@ -44,6 +44,17 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-16 · [issue #93] the proof prints the record-0 diff (`TRIM_VERSION` 1.8.0)
+
+- **Action:** the generated proof, and so `--reverify`, now prints a unified diff of record 0 against the record that
+  replaced it whenever the frontier was edited in the trim commit, for the recognised stub finalize (exit 4) and the
+  generic edit (exit 1) alike and for nothing else: output, not a verdict, so no exit status changes (issue #93's first
+  suggestion). A reader judges in seconds what the proof cannot. `FRAMEWORK_APPARATUS.md`'s timing-rule paragraph names
+  the diff. `tools/test_methodology_trim.py`: `TestTheProofPrintsTheRecord0Diff`, 3 tests (the stub finalize at exit 4
+  with its diff, the generic frontier edit at exit 1 with its diff, and no diff when a record other than the frontier is
+  edited); 184 tests (2 skipped), up from 181; the `trimmer-unit-tests` gate 181 → 184, a tightening. A minor release:
+  new proof output, no verdict changes.
+
 ### 2026-10-05 · [issue #93] `methodology_trim.py --reverify <shard>` re-derives a frozen proof under today's template, read-only (`TRIM_VERSION` 1.7.0)
 
 - **Action:** answers the third of the three causes in [issue #93](https://github.com/KJ5HST/methodology/issues/93): a

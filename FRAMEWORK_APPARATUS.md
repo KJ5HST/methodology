@@ -530,7 +530,9 @@ the commit that finalizes it.** A session's claim leaves record 0 of `HANDOFFS.m
 `status: pending` stub that close-out overwrites in place. A trim that lands in that same commit
 makes the generated `.verify.sh` read the receipt as *edited*, because its pre-trim bytes are the
 stub: the proof ends red (exit 4, named as a stub finalize since nothing else went missing, but
-still a FAIL) with nothing lost. `methodology_trim.py` warns when it sees the state coming
+still a FAIL) with nothing lost, and it prints the diff of the stub against the receipt that
+replaced it, so a reader can see in seconds what the proof cannot judge. `methodology_trim.py`
+warns when it sees the state coming
 (`FRONTIER_PENDING_STUB`, `FRONTIER_FINALIZE_UNCOMMITTED`); the warning is advisory and refuses
 nothing. A `.verify.sh` already written is frozen and never changes; to ask what today's template
 says about an old shard, run `methodology_trim.py --reverify <shard>` — read-only, it prints a verdict
