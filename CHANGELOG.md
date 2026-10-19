@@ -44,6 +44,20 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-19 · [issue #93] Every kind of other failure is pinned against the stub label (tests only; `TRIM_VERSION` unchanged)
+
+- **Action:** the maintainer's ninth point. The stub label needs "nothing else failed": `other_fails` is every failure that is
+  not L1 or L3, which is the L2 family in four kinds (a front-matter line lost, a front-matter line leaked into the shard, the
+  footer altered, the footer migrated into the shard). One test pinned the first. Measured on the 1.8.1 tree: narrowing
+  `other_fails` to `L2 FRONT MATTER lost` survived the whole suite (mutants M1 here), and so did "all L2", which is equivalent
+  (every failure string starts with `L1`, `L2` or `L3`, so it selects the same set). No code changes.
+  `tools/test_methodology_trim.py`: `TestTheStubLabelNeedsEveryKindOfOtherFailureToBeAbsent`, 5 tests: for HANDOFFS.md a stub
+  finalize alone (control, exit 4) and with a front-matter line leaked into the shard (exit 1, no label); for a ledger with a
+  footer (the CHANGELOG fixture with a stub marker declared on the frozen proof, because the shipped CHANGELOG.md declares
+  none) the control, the footer altered and the footer migrated into the shard (exit 1, no label). 221 tests (2 skipped), up
+  from 216; the `trimmer-unit-tests` gate 216 → 221, a tightening. 8 mutants of `other_fails` (narrowed to each single kind,
+  to each pair or triple, and emptied) all killed; the equivalent one survives, as it must.
+
 ### 2026-10-19 · [issue #93] The frontier note and the record-0 diff are printed only when no other record moved (`TRIM_VERSION` 1.8.2)
 
 - **Action:** the maintainer's eighth point. The generic note ("the only missing record is the frontier one ... the shape a

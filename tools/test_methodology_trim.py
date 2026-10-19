@@ -4036,5 +4036,112 @@ class TestTheFrontierNoteAndDiffAreForTheFrontierAlone(unittest.TestCase):
             self.assertNotIn("DIFF: record 0", v.stdout)
 
 
+# =============================================================================================
+# The stub label ("record 0 was a pending stub ... finalized", exit 4) is earned by (d): nothing
+# else failed. `other_fails` is every failure that is not L1 or L3 -- the L2 family, four kinds: a
+# front-matter line LOST, a front-matter line LEAKED into the shard, the footer ALTERED, the footer
+# MIGRATED into the shard. One test pinned the first. Narrowing `other_fails` to just that kind
+# passed all 203 tests (maintainer's point 9 on the pull request), so a stub finalize beside any of
+# the other three would have been labelled and exited 4. Each kind gets its own test here.
+# =============================================================================================
+
+class TestTheStubLabelNeedsEveryKindOfOtherFailureToBeAbsent(unittest.TestCase):
+
+    # --- a ledger with no footer: HANDOFFS.md ------------------------------------------------
+
+    def _handoffs(self, tmp):
+        helper = TestVerifyShNamesAStubFinalize()
+        p = helper._stub_repo(tmp)
+        shard = helper._trim(p)
+        helper._edit_live(p, "status: pending\n", "status: complete\n", "record 0 must be finalized")
+        return helper, p, shard
+
+    def test_control_a_stub_finalize_alone_is_labelled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper, p, shard = self._handoffs(tmp)
+            helper._commit(p)
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 4, v.stdout)
+            self.assertIn("record 0 was a pending stub", v.stdout)
+
+    def test_a_front_matter_line_leaked_into_the_shard_beside_a_finalize_is_not_labelled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper, p, shard = self._handoffs(tmp)
+            text = shard.read_text(encoding="utf-8")
+            line = "This file currently holds **0**."          # a long front-matter line of the live ledger
+            self.assertNotIn(line + "\n", text.split("```handoff", 1)[0], "control: not already in the shard")
+            i = text.index("```handoff")
+            shard.write_text(text[:i] + line + "\n\n" + text[i:], encoding="utf-8")   # records untouched
+            helper._commit(p)
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("L2 FRONT MATTER leaked", v.stdout, v.stdout)
+            self.assertNotIn("pending stub", v.stdout)
+            self.assertNotIn("exit 4", v.stdout)
+
+    # --- a ledger with a footer: CHANGELOG.md, with a stub marker declared for the test ---------
+
+    def _footed(self, tmp):
+        """A CHANGELOG fixture with a footer whose record 0 carries a `(in progress)` line, trimmed;
+        the frozen proof's STUB_PATTERN is set to match that line (the real CHANGELOG.md declares no
+        marker, so this is the only way to put a stub beside a footer), and the stub is finalized in
+        the live ledger. Returns (repo, shard path relative to it)."""
+        p = make_repo(tmp, footer=True)
+        cl = p / "CHANGELOG.md"
+        s = cl.read_text(encoding="utf-8")
+        old = "entry 0\n\nsee"
+        self.assertEqual(s.count(old), 1)
+        cl.write_text(s.replace(old, "entry 0\n\n(in progress)\nsee"), encoding="utf-8")
+        sh(p, "git", "commit", "-qa", "--amend", "-m", "seed")
+        r = run_trim(p, "--file", "CHANGELOG.md", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        shard = sorted((p / "docs" / "archive").glob("CHANGELOG-through-*.md"))[0]
+        proof = shard.with_name(shard.name + ".verify.sh")
+        text = proof.read_text(encoding="utf-8")
+        text2 = text.replace("STUB_PATTERN = ''", "STUB_PATTERN = " + repr(r"^\(in progress\)$"))
+        self.assertNotEqual(text2, text, "control: the proof must carry an empty STUB_PATTERN")
+        proof.write_text(text2, encoding="utf-8")
+        live = (p / "CHANGELOG.md")
+        t2 = live.read_text(encoding="utf-8")
+        self.assertEqual(t2.count("(in progress)\n"), 1, "control: record 0 is retained and still a stub")
+        live.write_text(t2.replace("(in progress)\n", "", 1), encoding="utf-8")
+        return p, shard
+
+    def _commit_and_prove(self, p, shard):
+        sh(p, "git", "add", "-A")
+        sh(p, "git", "commit", "-qm", "trim + finalize")
+        return sh(p, "bash", shard.relative_to(p).as_posix() + ".verify.sh")
+
+    def test_control_the_footed_fixture_labels_a_stub_finalize_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._footed(tmp)
+            v = self._commit_and_prove(p, shard)
+            self.assertEqual(v.returncode, 4, v.stdout)
+            self.assertIn("record 0 was a pending stub", v.stdout)
+
+    def test_an_altered_footer_beside_a_finalize_is_not_labelled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._footed(tmp)
+            live = p / "CHANGELOG.md"
+            text = live.read_text(encoding="utf-8")
+            self.assertEqual(text.count("prepend-only."), 1)
+            live.write_text(text.replace("prepend-only.", "prepend-only (edited)."), encoding="utf-8")
+            v = self._commit_and_prove(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("L2 FOOTER is not byte-identical", v.stdout, v.stdout)
+            self.assertNotIn("pending stub", v.stdout)
+
+    def test_a_footer_migrated_into_the_shard_beside_a_finalize_is_not_labelled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._footed(tmp)
+            text = shard.read_text(encoding="utf-8")
+            i = text.index("### ")
+            shard.write_text(text[:i] + FOOTER.strip() + "\n\n" + text[i:], encoding="utf-8")   # records untouched
+            v = self._commit_and_prove(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("L2 FOOTER migrated into the shard", v.stdout, v.stdout)
+            self.assertNotIn("pending stub", v.stdout)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
