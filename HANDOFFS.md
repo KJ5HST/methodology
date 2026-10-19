@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S41
+date: 2026-10-18
+status: pending
+active_task: Post the review comment on PR #94 (rmsharp, trimmer fixes for issue #93); the operator approved the full text ("post it"). The review itself is internal (oversight S531). Post, read back, record. IN PROGRESS.
+```
+
+```handoff
 session: S40
 date: 2026-10-18
 status: complete

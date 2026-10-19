@@ -44,6 +44,12 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-18 · [ad hoc] PR #94: review comment to rmsharp (in progress)
+
+- **Action:** session S41 claimed on `main`. Post the operator-approved review of PR #94 (head `1082d3b`): request
+  changes. Two fixes before merge (exit 3 masks a total loss; `--reverify` imports modules from the checked tree), and
+  a request to split the `SESSION_NOTES.md` table entry into its own PR.
+
 ### 2026-10-18 · [ad hoc] S40 close-out — PR #92 review comment posted
 
 - **Action:** S40's receipt completed in `HANDOFFS.md`; next step is to wait for rmsharp's fixes, then merge locally
