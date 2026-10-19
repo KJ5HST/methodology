@@ -83,6 +83,11 @@ TRIM_VERSION = "1.8.2"   # 1.8.2: issue #93, the maintainer's review of the pull
                          # 1.8.1 said to trim only while record 0 is complete (before the claim or after
                          # the finalize), and FRONTIER_PENDING_STUB advised against a trim committed on
                          # its own while record 0 is a stub, which passes. Wording only: no verdict moves.
+                         # (8) Found while testing (1), not in the review: the walk that finds the trim
+                         # commit (`git log --diff-filter=A`) had its failure ignored, so a walk that
+                         # FAILED read as "the shard is not in history yet" and a committed trim was
+                         # proved against a working tree equal to HEAD, printing OK having compared
+                         # nothing (present since 1.5.0). A failed walk is now exit 3.
                          #
                          # 1.8.1: issue #93, the abort code -- a proof that could not read an
                          # artifact from git ended in `sys.exit("verify: cannot read ...")`, which
@@ -1365,7 +1370,14 @@ set -u
 cd "$(git rev-parse --show-toplevel)" || exit 3
 LIVE=@@LIVE@@
 SHARD=@@SHARD@@
-TRIM_SHA="$(git log --diff-filter=A -1 --format=%H -- "$SHARD" 2>/dev/null)"
+# The walk that finds the trim commit. An EMPTY answer means the shard is not in history yet (an
+# uncommitted trim, which the script below proves against HEAD). A walk that FAILS is a different
+# thing: with stderr discarded and the failure ignored it read as "empty", and a committed trim was
+# "proved" against a working tree that equals HEAD and printed OK having compared nothing.
+TRIM_SHA="$(git log --diff-filter=A -1 --format=%H -- "$SHARD" 2>/dev/null)" || {
+    echo "verify: cannot walk the history for $SHARD -- the proof did not finish; this is not a verdict (exit 3)" >&2
+    exit 3
+}
 export LIVE SHARD TRIM_SHA
 # -I (isolated): no working directory on sys.path and no PYTHON* environment. This script reads the
 # tree it checks, and a plain `python3 -` would import a difflib.py or subprocess.py planted at

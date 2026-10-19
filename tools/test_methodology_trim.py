@@ -4182,5 +4182,58 @@ class TestTheTimingRuleIsTheOneTheProofEnforces(unittest.TestCase):
         self.assertNotIn("before the claim", mod.VERIFY_TEMPLATE)
 
 
+# =============================================================================================
+# Found while testing the maintainer's point 1, and not one of the nine. The proof finds the trim
+# commit with `git log --diff-filter=A -- <shard>`, discarding stderr. If that walk FAILS (a
+# treeless partial clone whose remote is gone; a damaged object store) TRIM_SHA is empty, the
+# proof runs in its "trim not yet committed" mode -- HEAD's copy of the live ledger against the
+# working tree's, the same file -- and prints OK for a trim that is committed and was never
+# compared. Present in 1.5.0. A walk that fails is "the proof did not finish", exit 3.
+# =============================================================================================
+
+class TestAFailedHistoryWalkIsNotAnUncommittedTrim(unittest.TestCase):
+
+    def _trimmed(self, tmp, commit):
+        p = make_handoff_repo(tmp)
+        r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0].relative_to(p).as_posix()
+        if commit:
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim")
+        return p, shard
+
+    def test_control_a_committed_trim_is_proved_against_its_commit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp, commit=True)
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 0, v.stdout)
+            self.assertIn("the trim commit", v.stdout)
+            self.assertNotIn("not yet committed", v.stdout)
+
+    def test_control_an_uncommitted_trim_is_still_proved_against_head(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp, commit=False)
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 0, v.stdout)
+            self.assertIn("not yet committed", v.stdout)
+
+    def test_a_history_walk_that_fails_is_the_abort_not_a_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp, commit=True)
+            sha = sh(p, "git", "rev-parse", "HEAD^^{tree}").stdout.strip()
+            obj = p / ".git" / "objects" / sha[:2] / sha[2:]
+            self.assertTrue(obj.is_file(), "control: the parent's root tree must be a loose object")
+            obj.chmod(0o644)
+            obj.unlink()
+            self.assertNotEqual(sh(p, "git", "log", "--diff-filter=A", "-1", "--format=%H", "--", shard).returncode,
+                                0, "control: the walk must fail here")
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 3, v.stdout)
+            self.assertIn("did not finish", v.stdout)
+            self.assertNotIn("OK:", v.stdout, "a proof that compared nothing must not say OK")
+            self.assertNotIn("not yet committed", v.stdout, "and must not pretend the trim is uncommitted")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

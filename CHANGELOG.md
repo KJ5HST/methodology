@@ -44,6 +44,21 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-19 · [issue #93] A failed history walk is "the proof did not finish", not a pass; found while testing, not in the review (`TRIM_VERSION` 1.8.2)
+
+- **Action:** not one of the maintainer's nine points; found while writing the tests for the first. The proof finds the trim
+  commit with `git log --diff-filter=A -1 -- <shard>` and discarded both its stderr and its failure. An EMPTY answer means the
+  shard is not in history yet (an uncommitted trim, proved against HEAD); a walk that FAILS, such as a treeless partial clone
+  whose remote is gone or a damaged object store, read the same way, so a committed trim was proved against a working tree
+  that equals HEAD and the proof printed `OK: L1, L2/front-matter, L3 hold` having compared nothing. Measured
+  (`docs/planning/pr94-response-evidence/finding_history_walk_failure.py`): with the parent's root tree deleted from the object
+  store, the proof exits 0 with OK under 1.5.0, 1.8.1 and the tree before this commit. The shell head now ends
+  `|| { ... exit 3; }`: a failed walk is exit 3 with its reason. `tools/test_methodology_trim.py`:
+  `TestAFailedHistoryWalkIsNotAnUncommittedTrim`, 3 tests (a committed trim proved against its commit; an uncommitted one still
+  proved against HEAD; the failed walk at exit 3 with neither OK nor "not yet committed"); 227 tests (2 skipped), up from 224;
+  the `trimmer-unit-tests` gate 224 → 227, a tightening. 2 mutants (the failure ignored, the failure at exit 1) killed. This
+  commit is separable: drop it and the nine points stand. A patch release.
+
 ### 2026-10-19 · [issue #93] The timing rule is the one the proof enforces, no stronger (`TRIM_VERSION` 1.8.2)
 
 - **Action:** the first half of the maintainer's fourth point. 1.6.0 to 1.8.1 said "trim while record 0 is complete -- before
