@@ -10,8 +10,17 @@ This repository dogfoods its own methodology: every session records a durable, m
 ```handoff
 session: S40
 date: 2026-10-18
-status: pending
-active_task: Post the review comment on PR #92 (rmsharp, v4.2 release documentation) — the operator approved the full text ("post it"). The review itself is internal (oversight S530). Post, read back, record. IN PROGRESS.
+status: complete
+self_score: 8
+predecessor_score: 8
+active_task: Post the review comment on PR #92 (rmsharp, v4.2 release documentation). The operator approved the full text ("post it"). COMPLETE: posted and read back.
+what_was_done: Claim ae2d2fb → posted the operator-approved text as https://github.com/KJ5HST/methodology/pull/92#issuecomment-6257621669 (KJ5HST, 2026-10-19T01:19:30Z); read back from the API, the body is identical to the approved text apart from a trailing newline, with no attribution lines → this close-out. The review behind it is internal (oversight S530, not in this repo): merge after three text fixes (release notes describe the clone-manifest exec and seed-relabel overwrite, both branch-only in 9b69070, as shipped defects; the v4.2 release has no ledger entry of its own; the adopter line omits that D8 lives in non-distributed bin/), and leave the lightweight v4.2 tag at f34769f. Predecessor S39 8/10: key_files line numbers into bin/_manifest_reader.py made the path-check claims a one-read check; its next step (b) "v4.1.1" was overtaken by rmsharp's own v4.2 release. Learnings: none for the framework (the review's one learning is recorded in the oversight notes).
+next_steps: (a) WAIT for rmsharp on PR #92 (comment above). When he pushes, re-check the head (reviewed at fa2bb5d) and verify the three fixes against the comment's points 1–3; re-fetch with `git fetch origin pull/92/head:refs/pr/92`. (b) Merge locally with --no-ff, as with #91: one ledger entry and one receipt for the merge (runner Phase 0 step 6), then quality_ratchet --run on the merged tree (expect 12/12), then push. (c) Still open from S39: delete the merged feat/sync-manifest-at-ref (local and origin), only with the operator's OK; the two parked branches are unchanged. (d) Unreviewed: PR #94 (the #93 trimmer fix) and issue #95 (the seed context budget fails on a fresh sync).
+key_files: README.md:292 and :293 (the two bullets point 1 is about, line numbers on fa2bb5d); CLAUDE.md:124 (the v4.2 §Versioning entry on fa2bb5d); CHANGELOG.md:47 (the PR's ledger entry on fa2bb5d); bin/_manifest_reader.py:43 (the .git check the nit cites)
+gotchas: (1) The comment answers the tag question as "leave it at f34769f". If rmsharp moves it anyway, the PR's own "tagged at f34769f" lines in CLAUDE.md and CHANGELOG.md go stale, and the ledger entry then needs a correction entry, never an edit. (2) The comment says the operator will merge locally; the base is current main and merge-tree is clean, so GitHub's button would work too, but it would skip the local ledger entry for the merge. (3) The Release body (rmsharp's) repeats point 1's three sentences; the comment asks for it to be edited in place.
+runtime_smoke: n/a (a posted comment, read back from the API). Build-equivalent: quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 10df8059439f · manifest 5986cf638fb1 — run at f34769f and at fa2bb5d in scratch worktrees (oversight S530); main has changed since only in CHANGELOG.md and HANDOFFS.md.
+changelog_ref: CHANGELOG.md "2026-10-18 · [ad hoc] S40 close-out — PR #92 review comment posted"
+commit: ae2d2fb (claim) + this commit (close-out)
 ```
 
 ```handoff

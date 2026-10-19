@@ -44,6 +44,19 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-18 · [ad hoc] S40 close-out — PR #92 review comment posted
+
+- **Action:** S40's receipt completed in `HANDOFFS.md`; next step is to wait for rmsharp's fixes, then merge locally
+  with one entry and one receipt for the merge.
+
+### 2026-10-18 · [ad hoc] PR #92: review comment to rmsharp — three text fixes before merge; leave the `v4.2` tag
+
+- **Action (non-commit):** S40, with the operator's OK on the full text:
+  [comment](https://github.com/KJ5HST/methodology/pull/92#issuecomment-6257621669), read back from the API (body
+  identical to the approved text). It asks for three fixes before merge: the release notes describe two branch-only
+  defects (`9b69070`) as shipped; the release needs its own ledger entry; and the adopter line should say D8 lives in
+  non-distributed `bin/`. It also answers the PR's question: leave `v4.2` (lightweight) at `f34769f`.
+
 ### 2026-10-18 · [ad hoc] PR #92: review comment to rmsharp (in progress)
 
 - **Action:** session S40 claimed on `main`. Post the operator-approved review of PR #92 (head `fa2bb5d`): three text
