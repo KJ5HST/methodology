@@ -68,6 +68,9 @@ TRIM_VERSION = "1.8.2"   # 1.8.2: issue #93, the maintainer's review of the pull
                          # second fenced block) was read as a stub, so a real loss from it was labelled a
                          # recognised stub finalize at exit 4. A proof frozen before this carries the old
                          # marker, and `--reverify` lifts what the proof carries.
+                         # (4) `--reverify` refuses a frozen proof whose PREFIX is not the template's
+                         # `../../` (exit 3, by name). It lifted every grammar line but that one, so a
+                         # proof written for another depth, passing as written, read exit 1 here.
                          #
                          # 1.8.1: issue #93, the abort code -- a proof that could not read an
                          # artifact from git ended in `sys.exit("verify: cannot read ...")`, which
@@ -1920,6 +1923,25 @@ def lift_grammar(text):
             raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
                                   "%s is not a path inside the repository: %s" % (key, out[field]))
     _lift_pattern("RECORD_START", out["start"])
+    # PREFIX is a constant of the template, not a placeholder: the writer always puts a shard two
+    # directories below the root, so today's template inverts links with REBASE_PREFIX. A proof
+    # written for another depth passes as written and cannot be re-derived here; reading it as a
+    # FAIL would be a verdict about neither, so it is refused, by name.
+    prefix_line = _lift_line(text, "PREFIX")
+    if prefix_line is None:
+        raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
+                              "PREFIX is not in the frozen proof: it predates the link prefix this tool "
+                              "re-derives with, or it is not a proof")
+    pm = re.fullmatch(r'PREFIX = "([^"\r\n]*)"', prefix_line)
+    if pm is None:
+        raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
+                              "PREFIX is not in the form methodology_trim.py writes it: %s" % prefix_line[:70])
+    if pm.group(1) != REBASE_PREFIX:
+        raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
+                              'PREFIX is "%s" in the frozen proof; this tool\'s template writes "%s" (a shard two '
+                              "directories below the root): the shard's links were rebased for a different "
+                              "depth, so re-deriving it here would be a verdict about neither"
+                              % (pm.group(1), REBASE_PREFIX))
     for key, field in (("REGEN_PATTERNS", "regen"), ("STUB_PATTERN", "stub")):
         line = _lift_line(text, key)
         if line is None:

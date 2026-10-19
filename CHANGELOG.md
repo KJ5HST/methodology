@@ -44,6 +44,19 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-19 · [issue #93] `--reverify` refuses a frozen proof whose link prefix it cannot honour (`TRIM_VERSION` 1.8.2)
+
+- **Action:** the maintainer's sixth point. `--reverify` lifts the grammar lines of a frozen proof and fills today's template
+  with them, but not `PREFIX`, which is a constant of the template (`"../../"`: the writer always puts a shard two directories
+  below the root). A proof written for another depth passes as written and, re-derived under `"../../"`, cannot invert a link
+  and reads exit 1: a verdict about neither. Reproduced (`docs/planning/pr94-response-evidence/verify_points.py`, point 6): a
+  shard one directory down, `PREFIX = "../"`, frozen proof exit 0, `--reverify` exit 1. `lift_grammar` now reads the line and
+  refuses (`REVERIFY_NOT_LIFTABLE`, exit 3) when it is missing, appears twice, is not `PREFIX = "..."`, or is not
+  `REBASE_PREFIX`, naming both values. All 179 frozen proofs of the contributor's fork carry `"../../"` and still lift.
+  `tools/test_methodology_trim.py`: `TestReverifyRefusesAPrefixItCannotHonour`, 4 tests (control: the untouched proof; another
+  depth; no line; another form, and two lines); 210 tests (2 skipped), up from 206; the `trimmer-unit-tests` gate 206 → 210, a
+  tightening. 3 mutants (any value accepted, a missing line not refused, the form check dropped) all killed. A patch release.
+
 ### 2026-10-19 · [issue #93] `HANDOFFS.md`'s stub marker is scoped to the receipt's own fence (`TRIM_VERSION` 1.8.2)
 
 - **Action:** the maintainer's fifth point. The marker was `^status: pending\s*$` searched over the whole record, so a COMPLETE

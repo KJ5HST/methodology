@@ -3851,5 +3851,75 @@ class TestTheHandoffsStubMarkerIsScopedToItsFence(unittest.TestCase):
             self.assertNotIn("FRONTIER_PENDING_STUB", r.stdout, r.stdout)
 
 
+# =============================================================================================
+# `--reverify` fills TODAY's template with the grammar it lifts from a frozen proof. The template's
+# PREFIX (how a shard's relative links climb back to the repository root) is a constant, "../../",
+# because the writer always puts a shard two directories down. A frozen proof written for another
+# depth (the adopter's HEAD carries "../") passes as written, and re-derived under "../../" it
+# cannot invert a single link and reads exit 1: a verdict about neither. It has to be REFUSED, by
+# name, at exit 3 (maintainer's point 6 on the pull request).
+# =============================================================================================
+
+class TestReverifyRefusesAPrefixItCannotHonour(unittest.TestCase):
+
+    def _trimmed(self, tmp):
+        p = make_handoff_repo(tmp)
+        r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        sh(p, "git", "add", "-A")
+        sh(p, "git", "commit", "-qm", "trim")
+        shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0]
+        return p, shard.relative_to(p).as_posix()
+
+    def _rewrite(self, p, shard, fn):
+        proof = p / (shard + ".verify.sh")
+        text = proof.read_text(encoding="utf-8")
+        text2 = fn(text)
+        self.assertNotEqual(text2, text, "control: the proof must change")
+        proof.write_text(text2, encoding="utf-8")
+
+    def test_control_the_untouched_proof_lifts_and_holds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self.assertIn('PREFIX = "../../"', (p / (shard + ".verify.sh")).read_text(encoding="utf-8"))
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_a_prefix_of_another_depth_is_refused_by_name_not_read_as_a_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self._rewrite(p, shard, lambda t: t.replace('PREFIX = "../../"', 'PREFIX = "../"'))
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+            self.assertIn('PREFIX is "../"', r.stdout, "the refusal names the value it found")
+            self.assertIn('"../../"', r.stdout, "...and the value this tool's template writes")
+            self.assertNotIn("[REVERIFY_VERDICT]", r.stdout, "a refusal is not a verdict")
+            self.assertNotIn("FAIL:", r.stdout)
+
+    def test_a_proof_with_no_prefix_line_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self._rewrite(p, shard, lambda t: re.sub(r'(?m)^PREFIX = .*\n', "", t, count=1))
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+            self.assertIn("PREFIX is not in the frozen proof", r.stdout)
+
+    def test_a_prefix_line_in_another_form_or_twice_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self._rewrite(p, shard, lambda t: t.replace('PREFIX = "../../"', "PREFIX = '../../'"))
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self._rewrite(p, shard, lambda t: t.replace('PREFIX = "../../"', 'PREFIX = "../../"\nPREFIX = "../"'))
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("PREFIX appears 2 times", r.stdout)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
