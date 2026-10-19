@@ -10,8 +10,17 @@ This repository dogfoods its own methodology: every session records a durable, m
 ```handoff
 session: S41
 date: 2026-10-18
-status: pending
-active_task: Post the review comment on PR #94 (rmsharp, trimmer fixes for issue #93); the operator approved the full text ("post it"). The review itself is internal (oversight S531). Post, read back, record. IN PROGRESS.
+status: complete
+self_score: 8
+predecessor_score: 8
+active_task: Post the review comment on PR #94 (rmsharp, trimmer fixes for issue #93); the operator approved the shortened full text ("post it"). COMPLETE: posted and read back.
+what_was_done: Claim 21b5396 → posted https://github.com/KJ5HST/methodology/pull/94#issuecomment-6258571753 (KJ5HST, 2026-10-19T02:47:56Z), read back identical → this close-out. The review behind it is internal (oversight S531). It requests changes: exit 3 masks a total loss (a trim commit that deletes the live ledger); --reverify imports modules from the checked tree (fix: python3 -I); split the SESSION_NOTES.md table entry into its own PR; plus items 4–9 and minors. Predecessor S40 8/10: its next steps named #94 as unreviewed and its gotchas (head SHA, local merge) held. Learnings: none for the framework.
+next_steps: (a) WAIT for rmsharp on #94. When he pushes, re-check the head (reviewed at 1082d3b) and verify points 1–3 first: a trim commit that git rm -f's HANDOFFS.md must exit 1; a planted difflib.py at the repo root must not run under --reverify; SESSION_NOTES.md must be gone from LEDGERS or come with the docs, a read-class trigger and a partial-grammar refusal. (b) Merge #92 and #94 locally: both prepend to CHANGELOG.md, and GitHub's button ignores merge=union. (c) main is 4 commits ahead of origin (S40, S41), unpushed, awaiting the operator. (d) Issue #95 is unreviewed; merged branch feat/sync-manifest-at-ref awaits the operator's OK to delete.
+key_files: starter-kit/methodology_trim.py:1519 (unfinished, point 1, on 1082d3b); :1384 (python3 -, point 2); :1113 (is_root_class_a, point 3); :467 (HANDOFFS stub marker, point 5)
+gotchas: (1) The posted comment cites line numbers on 1082d3b; they shift if rmsharp rebases. (2) Point 3 states the operator's position on B3 (split), given by approving the text. (3) The internal review (/Users/terrell/code/docs/reviews/2026-10-18-rmsharp-pr94-review.md) names the operator's other adopter repos; the comment deliberately does not, so keep it that way in any follow-up.
+runtime_smoke: n/a (a posted comment, read back from the API). Build-equivalent: quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results 10df8059439f · manifest 5986cf638fb1 — run at f34769f (oversight S530); main has changed since only in CHANGELOG.md and HANDOFFS.md.
+changelog_ref: CHANGELOG.md "2026-10-18 · [ad hoc] S41 close-out — PR #94 review comment posted"
+commit: 21b5396 (claim) + this commit (close-out)
 ```
 
 ```handoff

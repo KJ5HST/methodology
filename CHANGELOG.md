@@ -44,6 +44,19 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-18 · [ad hoc] S41 close-out — PR #94 review comment posted
+
+- **Action:** S41's receipt completed in `HANDOFFS.md`. Next: wait for rmsharp's fixes, then merge #92 and #94
+  locally.
+
+### 2026-10-18 · [ad hoc] PR #94: review comment to rmsharp — request changes
+
+- **Action (non-commit):** S41, with the operator's OK on the full text:
+  [comment](https://github.com/KJ5HST/methodology/pull/94#issuecomment-6258571753), read back from the API
+  (identical). It asks for two fixes before merge (exit 3 masks a total loss; `--reverify` imports modules from the
+  checked tree, fix `python3 -I`) and for the `SESSION_NOTES.md` table entry to be split into its own PR, plus
+  items 4–9.
+
 ### 2026-10-18 · [ad hoc] PR #94: review comment to rmsharp (in progress)
 
 - **Action:** session S41 claimed on `main`. Post the operator-approved review of PR #94 (head `1082d3b`): request
