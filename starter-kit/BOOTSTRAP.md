@@ -342,6 +342,15 @@ The methodology ships the ratchet, not the ruler: which tool produces each numbe
 
 **Close-out completeness hook (optional, agent-specific).** The ledger hook guards the *action ledger*; the harder-to-see gap is a skipped *handoff report*. The durable fix ships in `SESSION_RUNNER.md` (the Phase 3D `HANDOFFS.md` receipt + Phase 0 reconcile). For an in-session catch — before the agent falls silent — an adopter may wire their agent harness's session-end / "stop" hook to grep `HANDOFFS.md` for a trailing `status: pending` (or run the canonical-only `bin/check-handoff`, copied in) and re-prompt to finish close-out. This is a *recommendation*, not a shipped hook: it is agent-specific harness config, soft-remind not hard-block. Details in [`SAFEGUARDS.md`](SAFEGUARDS.md) → Commit Discipline → "Close-Out Completeness Hook."
 
+To have the agent print the Phase 3G close-out report itself, copy [`starter-kit/close_out_report.py`](https://github.com/KJ5HST/methodology/blob/main/starter-kit/close_out_report.py) to your project root and wire its hook in your own, untracked `.claude/settings.local.json`. The tool prints the report from the newest `HANDOFFS.md` receipt and `git`; the hook only ever adds a message and never blocks a session on an error:
+
+```json
+{"hooks": {
+  "SessionStart": [{"hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/close_out_report.py --hook"}]}],
+  "Stop":         [{"hooks": [{"type": "command", "command": "python3 \"$CLAUDE_PROJECT_DIR\"/close_out_report.py --hook"}]}]
+}}
+```
+
 **Mechanical SAFEGUARDS enforcement (optional).** [`SAFEGUARDS.md`](SAFEGUARDS.md)'s "Blast Radius Limits" table lists destructive git operations as no-exception rules, enforced textually. For mechanical enforcement of those rules — `git push --force`, `git reset --hard`, `git clean -f`, etc. blocked at runtime by a Claude Code `PreToolUse` hook — the methodology recommends Pocock's `/git-guardrails-claude-code` skill, see [`RECOMMENDED_SKILLS.md`](RECOMMENDED_SKILLS.md). The methodology ships no *blast-radius* hook of its own (that skill is the structural countermeasure for failure modes #1, eager-to-start, and #17, protocol erosion) — the hooks it ships are the two narrow ones above, the ledger co-staging gate and the quality ratchet.
 
 **Ledger merge driver (recommended).** Not a hook, but it guards the same ledgers. `bin/sync` seeds a `.gitattributes` that merges the append-only records with git's built-in `union` driver (no per-clone setup), so two sessions that each prepend an entry at the top of `CHANGELOG.md` merge without a conflict, both entries kept. Like every seed it is written only when absent and never overwritten, even with `--force` — so if your project already had a `.gitattributes`, sync left it as-is: append the three lines from [`starter-kit/gitattributes`](https://github.com/KJ5HST/methodology/blob/main/starter-kit/gitattributes) yourself.

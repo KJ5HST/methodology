@@ -44,6 +44,30 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-20 · [ad hoc] Phase 3G close-out report tool: where adopters find it (layer 2 of 2)
+
+- **Action:** points adopters at the tool. `starter-kit/SAFEGUARDS.md` §Close-Out Completeness Hook gains one bullet
+  (+544 B): the tool is canonical-only, copy it to the project root; what `--check` and `--hook` do. `starter-kit/BOOTSTRAP.md`
+  Step 10 gains the Claude Code settings snippet (`.claude/settings.local.json`, untracked), checked to parse as JSON.
+  `README.md`'s tree and `CLAUDE.md`'s tables list the tool and its tests. **Deliberately not done:** no
+  `bin/_manifest.py` row, so `bin/sync` does not deliver it. A row fails five checks in `tools/test_methodology_dashboard.py`
+  (the dashboard keeps three cross-references to the manifest), so distributing the tool is a separate, larger change;
+  `SESSION_RUNNER.md` is untouched.
+
+### 2026-10-20 · [ad hoc] Phase 3G close-out report tool: `starter-kit/close_out_report.py`, its tests and its gate (layer 1 of 2)
+
+- **Action:** adds the tool that prints and lints the close-out report `starter-kit/SESSION_RUNNER.md` §3G asks for, so a
+  session no longer hand-formats it. `python3 close_out_report.py --deliverable … --outcome … --well … --badly …
+  --predecessor … --next …` renders the report from the newest `HANDOFFS.md` receipt and from git (session, date, both
+  scores, HEAD, uncommitted count, the gate-run citation); `--check FILE` lints a message against seven shape rules;
+  `--hook` is an optional Claude Code Stop / SessionStart hook that asks a session to print the generated report when its
+  final message is not one (it only ever adds a message: every uncertainty resolves to allow, an internal error exits 0).
+  Python 3 standard library only. 68 tests in `tools/test_close_out_report.py`, including a property test that renders and
+  lints a report for every complete receipt this repository keeps (38 today) and, for the hook, a table of decisions
+  plus mutants that each break one decision and must turn a named row red. Wired into `bin/tests.sh`; gate
+  `close-out-report-unit-tests` (min 68) added and `tests-sh-passed` raised 261 → 262, measured on the tree.
+  Canonical-only: adopters copy it, as with `bin/check-handoff`; the document pointers are layer 2.
+
 ### 2026-10-03 · [ad hoc] PR #91: comment to rmsharp that his three approval points were fixed before the merge
 
 - **Action (non-commit):** S39, after its close-out, with the operator's OK on the full text:

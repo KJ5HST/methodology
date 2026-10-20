@@ -55,6 +55,7 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 | `starter-kit/methodology_trim.py` | Ledger trimmer — archives cold ledger entries losslessly (PR #80) |
 | `starter-kit/context_budget.py` + `context-budget.json` | Context-budget gate — ceilings on the files a session must read (v3.7); seed → `.context-budget.json` |
 | `starter-kit/quality_ratchet.py` + `quality-gates.json` | Quality ratchet — declared thresholds that only tighten; `--precommit` refuses a loosening, `--run` measures; seed → `.quality-gates.json` (empty) |
+| `starter-kit/close_out_report.py` | Prints and lints the Phase 3G close-out report from the newest `HANDOFFS.md` receipt and git; `--hook` is an optional Claude Code Stop / SessionStart hook. **Canonical-only** — adopters copy it (`SAFEGUARDS.md` §Close-Out Completeness Hook); not in `bin/_manifest.py`. |
 | `starter-kit/gitattributes` | Ledger merge-driver seed → `.gitattributes`: `merge=union` for `CHANGELOG.md` and the two `.jsonl` histories, deliberately not `HANDOFFS.md` (v4.1; parallel-sessions plan) |
 
 ### Tools
@@ -64,6 +65,7 @@ Each phase is hard-gated — you cannot skip ahead. The most critical gate is be
 | `tools/methodology_dashboard.py` | Portfolio health scanner — scores activity, testing, docs, CI/CD, methodology (the 2nd/5th dimensions adapt to repo class; see README §Dashboard). |
 | `tools/test_methodology_dashboard.py` | Scoring tests for the scanner (stdlib `unittest`). **Canonical-only**; byte-compares the `starter-kit/` twin; wired into `bin/tests.sh`. |
 | `tools/test_methodology_trim.py`, `test_context_budget.py`, `test_quality_ratchet.py` | Unit suites for the three distributed tools; canonical-only; wired into `bin/tests.sh`. |
+| `tools/test_close_out_report.py` | Unit suite for the close-out report tool; canonical-only; wired into `bin/tests.sh`. |
 | `bin/check-handoff`, `bin/check-ledger`, `bin/check-learnings` | Structural checkers for `HANDOFFS.md`, `CHANGELOG.md` (+ its archive shards) and the Learnings table; canonical-only; each a declared quality gate. |
 
 ### Workstreams (domain-specific adaptations)
