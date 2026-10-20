@@ -262,6 +262,13 @@ if python3 "$METHODOLOGY/tools/test_quality_ratchet.py" >/dev/null 2>&1; then
 else
     fail "quality ratchet unit tests failed"
 fi
+# The Phase 3G report tool prints the close-out report and lints it, and as a hook it can block a
+# session's final message. Its shape rules and its decision table are what this suite holds.
+if python3 "$METHODOLOGY/tools/test_close_out_report.py" >/dev/null 2>&1; then
+    pass "close-out report unit tests green"
+else
+    fail "close-out report unit tests failed"
+fi
 
 echo "== Test 19: dashboard twins byte-identical + same DASHBOARD_VERSION =="
 diff -q "$METHODOLOGY/tools/methodology_dashboard.py" "$STARTER/methodology_dashboard.py" >/dev/null \

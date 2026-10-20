@@ -7,7 +7,7 @@
     {
       "name": "tests-sh-passed",
       "direction": "min",
-      "threshold": 261,
+      "threshold": 262,
       "command": "bash bin/tests.sh",
       "extract": "== Summary: (\\d+) passed",
       "why": "the framework's build equivalent; the passed count is a ratchet — every suite it wires in (dashboard, trim, budget, ratchet units) reports through it"
@@ -47,6 +47,13 @@
       "direction": "min",
       "threshold": 45,
       "command": "python3 tools/test_quality_ratchet.py",
+      "extract": "Ran (\\d+) tests"
+    },
+    {
+      "name": "close-out-report-unit-tests",
+      "direction": "min",
+      "threshold": 68,
+      "command": "python3 tools/test_close_out_report.py",
       "extract": "Ran (\\d+) tests"
     },
     {
