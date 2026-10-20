@@ -44,6 +44,16 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-20 · [ad hoc] Phase 3G close-out report tool: where adopters find it (layer 2 of 2)
+
+- **Action:** points adopters at the tool. `starter-kit/SAFEGUARDS.md` §Close-Out Completeness Hook gains one bullet
+  (+544 B): the tool is canonical-only, copy it to the project root; what `--check` and `--hook` do. `starter-kit/BOOTSTRAP.md`
+  Step 10 gains the Claude Code settings snippet (`.claude/settings.local.json`, untracked), checked to parse as JSON.
+  `README.md`'s tree and `CLAUDE.md`'s tables list the tool and its tests. **Deliberately not done:** no
+  `bin/_manifest.py` row, so `bin/sync` does not deliver it. A row fails five checks in `tools/test_methodology_dashboard.py`
+  (the dashboard keeps three cross-references to the manifest), so distributing the tool is a separate, larger change;
+  `SESSION_RUNNER.md` is untouched.
+
 ### 2026-10-20 · [ad hoc] Phase 3G close-out report tool: `starter-kit/close_out_report.py`, its tests and its gate (layer 1 of 2)
 
 - **Action:** adds the tool that prints and lints the close-out report `starter-kit/SESSION_RUNNER.md` §3G asks for, so a

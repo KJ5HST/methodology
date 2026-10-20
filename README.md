@@ -206,6 +206,7 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 │   ├── context-budget.json           ← Its seed config (→ .context-budget.json at the adopter root)
 │   ├── quality_ratchet.py            ← Quality ratchet (declared thresholds that only tighten)
 │   ├── quality-gates.json            ← Its seed manifest (→ .quality-gates.json; starts empty)
+│   ├── close_out_report.py           ← Prints and lints the Phase 3G close-out report (canonical-only: copy it)
 │   └── gitattributes                 ← Ledger merge-driver seed (→ .gitattributes; union for CHANGELOG.md, not HANDOFFS.md)
 │
 ├── docs/                             ← Tutorials and supporting docs
@@ -228,6 +229,7 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
     ├── test_methodology_dashboard.py ← Scoring tests for the scanner (canonical-only)
     ├── test_methodology_trim.py      ← Ledger-trimmer tests (canonical-only)
     ├── test_context_budget.py        ← Context-budget gate tests (canonical-only)
+    ├── test_close_out_report.py      ← Close-out report tool tests (canonical-only)
     └── test_quality_ratchet.py       ← Quality-ratchet tests (canonical-only)
 ```
 
