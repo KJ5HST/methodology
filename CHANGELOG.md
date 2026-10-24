@@ -44,6 +44,11 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-24 · [ad hoc] PR #94: comment to rmsharp after the merge (in progress)
+
+- **Action:** session S43 claimed on `main`. Post the operator-approved comment on merged PR #94: answers to
+  rmsharp's calls (a)–(d), three small follow-ups, and a pointer to issue #97.
+
 ### 2026-10-24 · [ad hoc] S42 close-out — PRs #92 and #94 merged, issue #97 opened
 
 - **Action:** closes the S42 claim entry (*Merge PRs #92 and #94; open an issue for a trim proof false OK (in

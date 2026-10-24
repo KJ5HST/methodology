@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S43
+date: 2026-10-24
+status: pending
+active_task: Post the comment on PR #94 (merged in S42 as d32c6c0) answering rmsharp's calls (a)–(d), with three follow-ups and a pointer to issue #97; the operator approved the full text ("post it"). Post, read back, record. IN PROGRESS.
+```
+
+```handoff
 session: S42
 date: 2026-10-24
 status: complete
