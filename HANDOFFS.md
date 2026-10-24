@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S42
+date: 2026-10-24
+status: pending
+active_task: Land PR #92 (v4.2 release docs, head 8a232bb) and PR #94 (trimmer fixes for issue #93, head 1670c5d) by local --no-ff merges (CHANGELOG.md by union), gates on the merged tree, push; open an issue for the walk-picks-the-newest-add false OK found in the re-review (oversight S532); draft the #94 comment for the operator. IN PROGRESS.
+```
+
+```handoff
 session: S41
 date: 2026-10-18
 status: complete

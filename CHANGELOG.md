@@ -44,6 +44,12 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-24 · [ad hoc] Merge PRs #92 and #94; open an issue for a trim proof false OK (in progress)
+
+- **Action:** session S42 claimed on `main`, on the operator's "do the merges. open the new issue". Both heads were
+  verified first: #92 at `8a232bb` (rmsharp's three fixes) and #94 at `1670c5d` (all nine review points fixed,
+  `SESSION_NOTES.md` split out). Merge locally, `--no-ff`, #92 first; gates on the merged tree.
+
 ### 2026-10-18 · [ad hoc] S41 close-out — PR #94 review comment posted
 
 - **Action:** S41's receipt completed in `HANDOFFS.md`. Next: wait for rmsharp's fixes, then merge #92 and #94
