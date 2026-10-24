@@ -10,8 +10,17 @@ This repository dogfoods its own methodology: every session records a durable, m
 ```handoff
 session: S43
 date: 2026-10-24
-status: pending
-active_task: Post the comment on PR #94 (merged in S42 as d32c6c0) answering rmsharp's calls (a)–(d), with three follow-ups and a pointer to issue #97; the operator approved the full text ("post it"). Post, read back, record. IN PROGRESS.
+status: complete
+self_score: 8
+predecessor_score: 7
+active_task: Post the comment on PR #94 (merged in S42 as d32c6c0) answering rmsharp's calls (a)–(d), with three follow-ups and a pointer to issue #97; the operator approved the full text ("post it"). COMPLETE: posted and read back.
+what_was_done: Claim 12d5372 → posted https://github.com/KJ5HST/methodology/pull/94#issuecomment-6390853199 (KJ5HST, 2026-10-24T23:25:14Z); read back from the API, identical to the approved text apart from a trailing newline, with no attribution lines → this close-out. Content: merged at d32c6c0 after #92; every fix re-run on both heads; the #93 numbers reproduce; (a) keep refusing (the adopter's ../ reflects ledgers moved to methodology/, not depth), (b) second PR, (c) kept, (d) open it now on main; follow-ups: the SESSION_NOTES-shard message, the PREFIX refusal's reason, three exit-3 statements; issue #97. Predecessor S42 7/10: next step (a) was exactly this; it cited line numbers on main that the comment needed, but it left the comment's CHANGELOG.md nits in the draft until the immutability check, which should have come before drafting. Learnings: none for the framework.
+next_steps: (a) WAIT for rmsharp: his follow-up SESSION_NOTES.md PR (fork branch feat/trim-session-notes-ledger-issue93, 8de50d2) and any reply on #97. When the PR opens, review it against the S41 comment's point 3 (the overwritten-every-session statements, a read-class trigger, partial grammar matches) and check that it flips tools/test_methodology_trim.py:2382. (b) Unreviewed: PR #96 (close_out_report.py; run merge-tree against main 72b6398 or later first) and issue #95. (c) This close-out is local: main is 2 commits ahead of origin (12d5372 + this), unpushed until the operator says so. (d) Still open from S39: delete the merged feat/sync-manifest-at-ref, only with the operator's OK.
+key_files: starter-kit/methodology_trim.py:1525 (follow-up 3, first bullet); :2718 (--reverify help); FRAMEWORK_APPARATUS.md:539 (exit-3 sentence); tools/test_methodology_trim.py:2382 (the assert the SESSION_NOTES PR must flip)
+gotchas: (1) The comment's line numbers are on main at d32c6c0; they shift if a later commit edits those files. (2) The comment says "open the second PR now, rebased on main" — rebased on d32c6c0 or later, so its base no longer includes the force-pushed-away 1082d3b. (3) The internal re-review (/Users/terrell/code/docs/reviews/2026-10-24-rmsharp-pr94-rereview.md) names the adopter's paths; the posted text names only what rmsharp's own reply already did.
+runtime_smoke: n/a (a posted comment, read back from the API). Build-equivalent: quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results b49e29a9e5ea · manifest 06181a10ec42 — run on a clean clone of d32c6c0 (S42); main has changed since only in CHANGELOG.md and HANDOFFS.md.
+changelog_ref: CHANGELOG.md "2026-10-24 · [ad hoc] S43 close-out — PR #94 comment posted"
+commit: 12d5372 (claim) + this commit (close-out)
 ```
 
 ```handoff

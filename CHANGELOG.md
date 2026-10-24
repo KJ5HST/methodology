@@ -44,6 +44,19 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-24 · [ad hoc] S43 close-out — PR #94 comment posted
+
+- **Action:** S43's receipt completed in `HANDOFFS.md`. Next: wait for rmsharp's `SESSION_NOTES.md` PR and any reply
+  on issue #97.
+
+### 2026-10-24 · [ad hoc] PR #94: comment to rmsharp after the merge — calls (a)–(d) answered
+
+- **Action (non-commit):** S43, with the operator's OK on the full text:
+  [comment](https://github.com/KJ5HST/methodology/pull/94#issuecomment-6390853199), read back from the API
+  (identical). It reports the merge (`d32c6c0`), answers rmsharp's four calls (keep refusing a foreign `PREFIX`; the
+  front-matter warning goes in the second PR; `1670c5d` kept; open the second PR now), lists three wording
+  follow-ups, and points to issue #97.
+
 ### 2026-10-24 · [ad hoc] PR #94: comment to rmsharp after the merge (in progress)
 
 - **Action:** session S43 claimed on `main`. Post the operator-approved comment on merged PR #94: answers to
