@@ -10,8 +10,17 @@ This repository dogfoods its own methodology: every session records a durable, m
 ```handoff
 session: S42
 date: 2026-10-24
-status: pending
-active_task: Land PR #92 (v4.2 release docs, head 8a232bb) and PR #94 (trimmer fixes for issue #93, head 1670c5d) by local --no-ff merges (CHANGELOG.md by union), gates on the merged tree, push; open an issue for the walk-picks-the-newest-add false OK found in the re-review (oversight S532); draft the #94 comment for the operator. IN PROGRESS.
+status: complete
+self_score: 7
+predecessor_score: 8
+active_task: Land PR #92 (v4.2 release docs, head 8a232bb) and PR #94 (trimmer fixes for issue #93, head 1670c5d) by local --no-ff merges, push; open an issue for the walk-picks-the-newest-add false OK found in the re-review (oversight S532); draft the #94 comment for the operator. COMPLETE: both merged and pushed, issue #97 opened, comment drafted (not posted).
+what_was_done: Claim 26af4ba → merge of PR #92 as 2e9cad5 and of PR #94 as d32c6c0, both --no-ff with CHANGELOG.md by union; every line each branch added to the ledger checked present after its merge; check-ledger --all OK → gates on a clean clone of d32c6c0 12/12 → main pushed (89a9d20's four unpushed commits went with it); GitHub reads #92 MERGED at 2e9cad5 and #94 at d32c6c0 (2026-10-24T23:06:54Z) → issue #97 opened (https://github.com/KJ5HST/methodology/issues/97), read back identical apart from a trailing newline, with a repro script run against d32c6c0's trimmer (exit 1 after the lossy trim, exit 0 after the delete and restore; the oldest-add walk gives exit 1) → the #94 comment drafted for the operator → this close-out. Predecessor S41 8/10: next step (a) named the three checks to run first, and all three were the right ones; it had no way to foresee the follow-up SESSION_NOTES.md PR. Learnings: none for the framework.
+next_steps: (a) Post the #94 comment if the operator approves the draft: a new session with its own claim and receipt, as S40/S41; the PR is merged, so the comment is the only reply rmsharp gets to his calls (a)–(d). (b) rmsharp's follow-up PR adds SESSION_NOTES.md to the trimmer (his fork's feat/trim-session-notes-ledger-issue93 at 8de50d2, 1.9.0); it must flip tools/test_methodology_trim.py:2382 and answer the three notes-file questions from the S41 comment (point 3). Issue #93 closes with it. (c) Unreviewed: PR #96 (close_out_report.py, rmsharp, 2026-10-20; merge-tree against d32c6c0 not yet run — it was clean against 1670c5d and 8a232bb separately) and issue #95. (d) Still open from S39: delete the merged feat/sync-manifest-at-ref, only with the operator's OK.
+key_files: starter-kit/methodology_trim.py:1378 (the walk issue #97 is about); :1525 (exit-3 comment, follow-up 3 in the draft); :2718 (--reverify help); FRAMEWORK_APPARATUS.md:539 (exit-3 sentence); CHANGELOG.md:47 (this session's entries)
+gotchas: (1) `git merge -F -` does not read stdin ("could not read file '-'"); write the message to a file. (2) The two CHANGELOG.md nits found in #94 (an "above" that means below, "(mutants M1 here)") sit in committed entries; the pre-commit hook refuses an edit to one, so they stay. (3) macOS `mktemp -d` ignores TMPDIR; the repro in #97 creates its repo in the system temp dir. (4) check-handoff --all reports a pending receipt as ten errors while the quality gate check-handoff-all still measures 0 — expected during a claim.
+runtime_smoke: n/a as an application launch; the merged trimmer was exercised end to end by the #97 repro (a real --write trim, committed, proof run by bash). Build-equivalent: quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results b49e29a9e5ea · manifest 06181a10ec42 — run on a clean clone of d32c6c0.
+changelog_ref: CHANGELOG.md "2026-10-24 · [ad hoc] S42 close-out — PRs #92 and #94 merged, issue #97 opened"
+commit: 26af4ba (claim) + 2e9cad5 (merge of PR #92) + d32c6c0 (merge of PR #94) + this commit (close-out)
 ```
 
 ```handoff

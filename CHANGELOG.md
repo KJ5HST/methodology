@@ -44,6 +44,35 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-24 · [ad hoc] S42 close-out — PRs #92 and #94 merged, issue #97 opened
+
+- **Action:** closes the S42 claim entry (*Merge PRs #92 and #94; open an issue for a trim proof false OK (in
+  progress)*). Three actions, entries below. `main` pushed; GitHub reads both PRs MERGED (2026-10-24T23:06:54Z).
+  Issue #93 stays open: its `SESSION_NOTES.md` shards are the follow-up PR's. A comment to rmsharp on #94 is drafted
+  for the operator, not posted.
+
+### 2026-10-24 · [ad hoc] Opened issue #97 — the trim proof reads OK after a lossy trim if the shard is deleted and restored
+
+- **Action (non-commit):** S42, on the operator's "open the new issue":
+  [issue #97](https://github.com/KJ5HST/methodology/issues/97), read back from the API. The proof's walk
+  (`git log --diff-filter=A -1`) takes the newest commit that added the shard, so after a delete and a restore it
+  judges the restore commit and prints OK. Present since 1.5.0. A self-contained repro is in the issue; taking the
+  oldest add instead gives exit 1 on it (measured).
+
+### 2026-10-24 · [ad hoc] Merge of PR #94 — trimmer 1.8.2 (refs issue #93)
+
+- **Action:** S42. `d32c6c0` merges rmsharp's `fix/trim-verify-false-red-issue93` (range `f34769f..1670c5d`, 14
+  commits, each with its own entry carried by the merge) locally, `--no-ff`, `CHANGELOG.md` by union; every line
+  the branch added to the ledger survives. Not in it: the `SESSION_NOTES.md` ledger entry, which follows in its own
+  PR. Gates on the merged tree, in a clean clone: `quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results
+  b49e29a9e5ea · manifest 06181a10ec42`.
+
+### 2026-10-24 · [ad hoc] Merge of PR #92 — v4.2 release documentation
+
+- **Action:** S42. `2e9cad5` merges rmsharp's `docs/release-v4.2` (range `f34769f..8a232bb`, 2 commits; their
+  entries — the release documentation and *Recorded: v4.2 tagged and released by rmsharp* — carried by the merge)
+  locally, `--no-ff`, `CHANGELOG.md` by union. The `v4.2` tag stays at `f34769f`.
+
 ### 2026-10-24 · [ad hoc] Merge PRs #92 and #94; open an issue for a trim proof false OK (in progress)
 
 - **Action:** session S42 claimed on `main`, on the operator's "do the merges. open the new issue". Both heads were
