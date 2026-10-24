@@ -88,6 +88,21 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
   fixes before merge (release notes describe two branch-only defects as shipped; the release has no ledger entry of
   its own; the adopter line omits that D8 lives in non-distributed `bin/`), and the answer on the tag: leave `v4.2`
   at `f34769f`.
+### 2026-10-03 · [ad hoc] v4.2 release documentation — `CLAUDE.md` §Versioning and README What's New
+
+- **Action:** `CLAUDE.md` *Current version* v4.1 → v4.2 and the v4.2 §Versioning entry; `README.md` What's New in
+  v4.2 (PR #91 / D8, which v4.1 named as not yet released). Tag and GitHub Release `v4.2` were created at `f34769f`
+  (261 passed / 0 failed; ratchet 12/12). The release itself: [`CLAUDE.md` §Versioning](CLAUDE.md#versioning) v4.2
+  (pointer, not re-narrated).
+
+### 2026-10-03 · [ad hoc] Recorded: v4.2 tagged and released by rmsharp
+
+- **Action (non-commit):** rmsharp tagged `v4.2` at `f34769f` (a lightweight tag; v3.8–v4.1 are annotated) and
+  published its [GitHub Release v4.2](https://github.com/KJ5HST/methodology/releases/tag/v4.2) (created
+  2026-10-03T01:37:10Z, published 02:55:21Z), with the README and §Versioning entries deferred to the release
+  documentation entry above. Gate run at the tagged commit: 261 passed / 0 failed; ratchet 12/12. The tag stays at
+  `f34769f` when those notes merge: a moved tag does not reach clones that already hold it. The release:
+  [`CLAUDE.md` §Versioning](CLAUDE.md#versioning) v4.2.
 
 ### 2026-10-03 · [ad hoc] PR #91: comment to rmsharp that his three approval points were fixed before the merge
 
