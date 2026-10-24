@@ -103,6 +103,240 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
   documentation entry above. Gate run at the tagged commit: 261 passed / 0 failed; ratchet 12/12. The tag stays at
   `f34769f` when those notes merge: a moved tag does not reach clones that already hold it. The release:
   [`CLAUDE.md` §Versioning](CLAUDE.md#versioning) v4.2.
+### 2026-10-19 · [issue #93] A failed history walk is "the proof did not finish", not a pass; found while testing, not in the review (`TRIM_VERSION` 1.8.2)
+
+- **Action:** not one of the maintainer's nine points; found while writing the tests for the first. The proof finds the trim
+  commit with `git log --diff-filter=A -1 -- <shard>` and discarded both its stderr and its failure. An EMPTY answer means the
+  shard is not in history yet (an uncommitted trim, proved against HEAD); a walk that FAILS, such as a treeless partial clone
+  whose remote is gone or a damaged object store, read the same way, so a committed trim was proved against a working tree
+  that equals HEAD and the proof printed `OK: L1, L2/front-matter, L3 hold` having compared nothing. Measured
+  (`docs/planning/pr94-response-evidence/finding_history_walk_failure.py`): with the parent's root tree deleted from the object
+  store, the proof exits 0 with OK under 1.5.0, 1.8.1 and the tree before this commit. The shell head now ends
+  `|| { ... exit 3; }`: a failed walk is exit 3 with its reason. `tools/test_methodology_trim.py`:
+  `TestAFailedHistoryWalkIsNotAnUncommittedTrim`, 3 tests (a committed trim proved against its commit; an uncommitted one still
+  proved against HEAD; the failed walk at exit 3 with neither OK nor "not yet committed"); 227 tests (2 skipped), up from 224;
+  the `trimmer-unit-tests` gate 224 → 227, a tightening. 2 mutants (the failure ignored, the failure at exit 1) killed. This
+  commit is separable: drop it and the nine points stand. A patch release.
+
+### 2026-10-19 · [issue #93] The timing rule is the one the proof enforces, no stronger (`TRIM_VERSION` 1.8.2)
+
+- **Action:** the first half of the maintainer's fourth point. 1.6.0 to 1.8.1 said "trim while record 0 is complete -- before
+  the claim, or after the finalize is committed -- never in the same commit", and `FRONTIER_PENDING_STUB` advised finalizing
+  first or trimming before the claim. Measured (`verify_points.py` point 4a): a trim committed on its own while record 0 is a
+  pending stub gets a passing proof, exit 0, because record 0 is untouched in that commit; the warning advised against a safe
+  order. The rule is now what the proof enforces: **give the trim a commit of its own, never in the same commit that edits
+  record 0.** One wording, pinned in the same words in `TRIM_TIMING_RULE`, the proof's two notes, both write-time warnings and
+  `FRAMEWORK_APPARATUS.md`, which now also says what is fine (a trim committed on its own while record 0 is a stub).
+  `FRONTIER_PENDING_STUB` says a trim is safe while it stays a stub provided it goes in a commit of its own, and no longer
+  advises "either finalize first or trim before the claim". Wording only: no verdict, no exit status and no finding code
+  changes. The second half of that point, an `ACTIVE TASK` edit in the trim commit failing L2 after the trimmer printed `L2_OK`,
+  concerns `SESSION_NOTES.md`'s mutable front matter and goes with that file's own change. `tools/test_methodology_trim.py`:
+  `TestTheTimingRuleIsTheOneTheProofEnforces`, 3 tests (the passing trim-alone proof; the warning's words; the constant and
+  template carry no retired phrase), and the older pinned-wording tests updated to the new phrase; 224 tests (2 skipped), up
+  from 221; the `trimmer-unit-tests` gate 221 → 224, a tightening. 4 mutants (the old constant, the old warning advice, the old
+  stub note, the old generic note) all killed. A patch release. Historic entries above that quote the old wording are left as
+  written: a committed entry is never edited.
+
+### 2026-10-19 · [issue #93] Every kind of other failure is pinned against the stub label (tests only; `TRIM_VERSION` unchanged)
+
+- **Action:** the maintainer's ninth point. The stub label needs "nothing else failed": `other_fails` is every failure that is
+  not L1 or L3, which is the L2 family in four kinds (a front-matter line lost, a front-matter line leaked into the shard, the
+  footer altered, the footer migrated into the shard). One test pinned the first. Measured on the 1.8.1 tree: narrowing
+  `other_fails` to `L2 FRONT MATTER lost` survived the whole suite (mutants M1 here), and so did "all L2", which is equivalent
+  (every failure string starts with `L1`, `L2` or `L3`, so it selects the same set). No code changes.
+  `tools/test_methodology_trim.py`: `TestTheStubLabelNeedsEveryKindOfOtherFailureToBeAbsent`, 5 tests: for HANDOFFS.md a stub
+  finalize alone (control, exit 4) and with a front-matter line leaked into the shard (exit 1, no label); for a ledger with a
+  footer (the CHANGELOG fixture with a stub marker declared on the frozen proof, because the shipped CHANGELOG.md declares
+  none) the control, the footer altered and the footer migrated into the shard (exit 1, no label). 221 tests (2 skipped), up
+  from 216; the `trimmer-unit-tests` gate 216 → 221, a tightening. 8 mutants of `other_fails` (narrowed to each single kind,
+  to each pair or triple, and emptied) all killed; the equivalent one survives, as it must.
+
+### 2026-10-19 · [issue #93] The frontier note and the record-0 diff are printed only when no other record moved (`TRIM_VERSION` 1.8.2)
+
+- **Action:** the maintainer's eighth point. The generic note ("the only missing record is the frontier one ... the shape a
+  bundled finalize leaves") and the record-0 diff speak about record 0 alone, but were printed whenever record 0 was edited,
+  even when other records were reordered as well: the proof ended at exit 1 with L1 and L3 FAIL lines and a reassuring note,
+  and said nothing of the reorder (reproduced, `verify_points.py` point 8). The stub label already required `rebuilt == br[1:]`
+  (every record but record 0 byte-identical and in order); that condition is now one name, `others_intact`, and gates the
+  generic note and the diff too. When it fails, a note says the other record(s) were reordered, edited or dropped as well, that
+  this is not the bundled-finalize shape, and that no diff is shown because it would hide the rest. No verdict and no exit
+  status changes. `tools/test_methodology_trim.py`: `TestTheFrontierNoteAndDiffAreForTheFrontierAlone`, 3 tests (control:
+  record 0 edited alone keeps note and diff; a reorder beside the edit; a stub finalize beside a reorder, still unlabelled and
+  with no diff); 216 tests (2 skipped), up from 213; the `trimmer-unit-tests` gate 213 → 216, a tightening. 4 mutants (the
+  note back, the diff back, `others_intact` always true, the wrong slice) all killed. A patch release.
+
+### 2026-10-19 · [issue #93] `--reverify` refuses a carriage return or a NUL in a lifted `RECORD_START` (`TRIM_VERSION` 1.8.2)
+
+- **Action:** the maintainer's seventh point. The lift shape for `RECORD_START` excluded only a newline, so a carriage return
+  went into the raw string literal that Python reads from the heredoc: the tokenizer reads a CR as a newline, the proof is a
+  `SyntaxError`, and bash reports the interpreter's exit 1, the FAIL code (reproduced, `verify_points.py` point 7: `--reverify`
+  exit 1 with `SyntaxError: unterminated string literal`). Testing it, a NUL did worse: bash cannot be handed one, and
+  `--reverify` itself died with `ValueError: embedded null byte`. The shape is now `[^"\r\n\x00]*`, so both are
+  `REVERIFY_NOT_LIFTABLE` at exit 3, by name. `REGEN_PATTERNS` and `STUB_PATTERN` go through `repr()`, which escapes both, and
+  the other lifted values have fixed shapes. `tools/test_methodology_trim.py`: `TestReverifyRefusesARecordStartItCannotSplice`,
+  3 tests (control; CR; NUL); 213 tests (2 skipped), up from 210; the `trimmer-unit-tests` gate 210 → 213, a tightening. 3
+  mutants (the old shape, CR allowed, NUL allowed) all killed. A patch release.
+
+### 2026-10-19 · [issue #93] `--reverify` refuses a frozen proof whose link prefix it cannot honour (`TRIM_VERSION` 1.8.2)
+
+- **Action:** the maintainer's sixth point. `--reverify` lifts the grammar lines of a frozen proof and fills today's template
+  with them, but not `PREFIX`, which is a constant of the template (`"../../"`: the writer always puts a shard two directories
+  below the root). A proof written for another depth passes as written and, re-derived under `"../../"`, cannot invert a link
+  and reads exit 1: a verdict about neither. Reproduced (`docs/planning/pr94-response-evidence/verify_points.py`, point 6): a
+  shard one directory down, `PREFIX = "../"`, frozen proof exit 0, `--reverify` exit 1. `lift_grammar` now reads the line and
+  refuses (`REVERIFY_NOT_LIFTABLE`, exit 3) when it is missing, appears twice, is not `PREFIX = "..."`, or is not
+  `REBASE_PREFIX`, naming both values. All 179 frozen proofs of the contributor's fork carry `"../../"` and still lift.
+  `tools/test_methodology_trim.py`: `TestReverifyRefusesAPrefixItCannotHonour`, 4 tests (control: the untouched proof; another
+  depth; no line; another form, and two lines); 210 tests (2 skipped), up from 206; the `trimmer-unit-tests` gate 206 → 210, a
+  tightening. 3 mutants (any value accepted, a missing line not refused, the form check dropped) all killed. A patch release.
+
+### 2026-10-19 · [issue #93] `HANDOFFS.md`'s stub marker is scoped to the receipt's own fence (`TRIM_VERSION` 1.8.2)
+
+- **Action:** the maintainer's fifth point. The marker was `^status: pending\s*$` searched over the whole record, so a COMPLETE
+  receipt with that line anywhere in its record (commentary after the fence, a second fenced block) was read as a stub, and a
+  trim commit that also lost data from it was labelled "a recognised stub finalize" at exit 4 instead of failing plainly at
+  exit 1. Reproduced (`docs/planning/pr94-response-evidence/verify_points.py`, point 5): a complete record 0 with a stray line,
+  its `what_was_done` cut from 34,000 B to 1 B in the trim commit, read exit 4 with "record 0 was a pending stub". The marker
+  is now `\A(`{3,}|~{3,})handoff[^\n]*\n(?:(?!\1)[^\n]*\n)*?status: pending[ \t\r]*$` (multiline): the line must be inside
+  the fence that opens the record, whose own opening run of backticks or tildes closes it; a lazy line-by-line scan, linear in
+  the record (guarded by a test on 400,000 lines). The write-time `FRONTIER_PENDING_STUB` warning keys on the same marker, so
+  it is quiet for such a receipt too. What it does not change: a proof frozen by 1.6.0 to 1.8.1 carries the old marker in its
+  `STUB_PATTERN` line, and `--reverify` lifts what the proof carries. `tools/test_methodology_trim.py`:
+  `TestTheHandoffsStubMarkerIsScopedToItsFence`, 7 tests, and `test_the_proofs_grammar_carries_the_ledgers_stub_pattern` now
+  uses real receipts and gains the bare-line case; 206 tests (2 skipped), up from 199; the `trimmer-unit-tests` gate 199 → 206,
+  a tightening. 6 mutants (the old marker, the fence-closing guard, the trailing-space and CR tolerance, the four-backtick
+  fence, the start anchor, the line-start requirement) all killed. A patch release.
+
+### 2026-10-19 · [issue #93] The generated proof's Python runs isolated, so a module planted in the checked tree does not run (`TRIM_VERSION` 1.8.2)
+
+- **Action:** the maintainer's second requested change. The proof reads the tree it checks, and `python3 -` puts the working
+  directory first on its import path, so a `difflib.py` or `subprocess.py` at the repository root ran inside the proof and the
+  verdict was still exit 0; `--reverify` runs a proof on a tree someone else handed you. Measured with a planted module that
+  writes a marker file and then loads the real one (`docs/planning/pr94-response-evidence/point2_planted_module.py`): under
+  1.5.0 a planted `subprocess.py` ran in the frozen proof (so the exposure is older than this pull request: the 1.5.0 template
+  imports `subprocess`, not `difflib`); under 1.8.1 both ran, in the frozen proof and in `--reverify`; now neither does. In
+  `VERIFY_TEMPLATE` the interpreter line is `python3 -I -` (isolated: no working directory on the path, no `PYTHON*`
+  environment); the proof uses the standard library only, and `LIVE`, `SHARD` and `TRIM_SHA` reach it through the process
+  environment, which `-I` does not touch. Frozen proofs keep their bytes (and so `python3 -`); `--reverify` renders today's
+  template, so it is safe on any shard. `tools/test_methodology_trim.py`: `TestAPlantedModuleDoesNotRunInTheProof`, 3 tests
+  (the fixture proved first, by putting the old interpreter line back and watching both planted modules run at exit 0; a proof
+  written now; `--reverify` of a proof frozen with the old line); 199 tests (2 skipped), up from 196; the
+  `trimmer-unit-tests` gate 196 → 199, a tightening. 3 mutants (plain `python3 -`, `-E`, `-s`) all killed. A patch release.
+
+### 2026-10-19 · [issue #93] Exit 3 is for a ref or object the clone cannot read; a path missing from a readable commit is a FAIL again (`TRIM_VERSION` 1.8.2)
+
+- **Action:** the maintainer's first requested change on the pull request. A trim commit that also `git rm`s the live ledger
+  made the generated proof end `verify: cannot read <commit>:HANDOFFS.md -- the proof did not finish; this is not a
+  verdict (exit 3)`, where 1.5.0 exited 1: a total loss read as "no verdict". Reproduced on the 1.8.1 tree and on 1.5.0
+  (`docs/planning/pr94-response-evidence/point1_removed_ledger.py`). In `VERIFY_TEMPLATE`, `show(ref, path)` now asks three
+  questions in order: can the commit be read (`git rev-parse --verify <ref>^{commit}`), can its tree be read and does the
+  path appear in it (`git ls-tree`), can the blob be read (`git show`). The first and third failing, or the tree unreadable,
+  are `unfinished()` (exit 3, unchanged); the path absent from a readable tree is the new `absent()` (a `FAIL:` line, exit
+  1). `readf()` makes the same cut in the working-tree mode: a file that does not exist is `absent()`; a file that is there
+  and cannot be read (a directory in its place) stays `unfinished()`. `FRAMEWORK_APPARATUS.md`'s exit-3 sentence is
+  qualified the same way. `tools/test_methodology_trim.py`: `TestAPathMissingFromAReadableCommitIsAFail`, 8 tests (the
+  fixture proved first; the deleted live ledger at exit 1 for the frozen proof and for `--reverify`; the live ledger and
+  the shard missing from the working tree at exit 1; the parent commit, a tree and a blob this clone cannot read at exit
+  3), and the existing shard-file test now splits missing (exit 1) from present-and-unreadable (exit 3); 196 tests (2
+  skipped), up from 188; the `trimmer-unit-tests` gate 188 → 196, a tightening. 8 mutants (`absent()` at exit 3, without
+  its FAIL line, the two missing-path sites back to the abort, `readf` treating every `OSError` as missing, the
+  tree-lookup check dropped, an unreadable blob or ref made a FAIL) all killed by the intended test. A patch release.
+
+### 2026-10-17 · [issue #93] An abort before the proof's checks exits 3, "the proof did not finish", not 1, the FAIL code (`TRIM_VERSION` 1.8.1)
+
+- **Action:** closes a gap that a 54-shard `--reverify` sweep of the adopter repository exposed in [issue #93](https://github.com/KJ5HST/methodology/issues/93):
+  the generated proof's `show()` ended in `sys.exit("verify: cannot read ...")`, which prints the text and exits 1, the FAIL
+  code, so a proof that could not read an artifact from git -- and so had compared nothing -- read as a trim that lost
+  something. Seen once in the 54-shard `--reverify` sweep of the adopter repository (`rmsharp/nprcgenekeepr`): a blob fetch
+  from the partial clone's promisor remote failed, `docs/archive/SESSION_NOTES-through-2026-09-26-2.md` read exit 1, and the
+  re-run read 0. In `VERIFY_TEMPLATE` every abort before the checks -- a `git show` that fails, a live or shard file that
+  cannot be read -- now goes through one `unfinished(why)`: the reason to stderr and exit 3, the code the proof's shell head
+  already uses when it cannot reach the repository root and the code `--reverify`'s legend gives "the proof did not finish".
+  Frozen proofs keep their bytes (exit 1 where they always did); `--reverify` renders today's template, so it reads 3 there.
+  Reproduced on that adopter's clone with the promisor remote pointed at a dead path: the frozen proof and `--reverify` under
+  1.8.0 both exit 1 with `verify: cannot read 7a55e19^:SESSION_NOTES.md`; under 1.8.1 `--reverify` exits 3 with the same
+  reason and no `FAIL:` line. `FRAMEWORK_APPARATUS.md`'s `--reverify` sentence gains the case. `tools/test_methodology_trim.py`:
+  `TestAnAbortBeforeTheChecksIsNotAVerdict`, 4 tests on a depth-1 clone of a trimmed repository (the trim commit's parent
+  absent: the field case, not a mock): the fixture proved first (the same proof holds where the parent is readable), the
+  frozen proof at exit 3 with its reason and neither `FAIL:` nor `OK:`, `--reverify` at exit 3, and a shard file that cannot
+  be read as the same abort; 188 tests (2 skipped), up from 184; the `trimmer-unit-tests` gate 184 → 188, a tightening; 6
+  mutants (exit 1 restored in `show()`, `unfinished()` at 1 and at 0, `readf()` unguarded, the reason unprinted, its words
+  dropped) all killed by the intended test. Measured on that adopter's 54 proofs with the remote alive: every shard reads the
+  same code under 1.8.1 as under 1.8.0. A patch release: no verdict on a readable tree changes.
+
+### 2026-10-16 · [issue #93] the proof prints the record-0 diff (`TRIM_VERSION` 1.8.0)
+
+- **Action:** the generated proof, and so `--reverify`, now prints a unified diff of record 0 against the record that
+  replaced it whenever the frontier was edited in the trim commit, for the recognised stub finalize (exit 4) and the
+  generic edit (exit 1) alike and for nothing else: output, not a verdict, so no exit status changes (issue #93's first
+  suggestion). A reader judges in seconds what the proof cannot. `FRAMEWORK_APPARATUS.md`'s timing-rule paragraph names
+  the diff. `tools/test_methodology_trim.py`: `TestTheProofPrintsTheRecord0Diff`, 3 tests (the stub finalize at exit 4
+  with its diff, the generic frontier edit at exit 1 with its diff, and no diff when a record other than the frontier is
+  edited); 184 tests (2 skipped), up from 181; the `trimmer-unit-tests` gate 181 → 184, a tightening. A minor release:
+  new proof output, no verdict changes.
+
+### 2026-10-05 · [issue #93] `methodology_trim.py --reverify <shard>` re-derives a frozen proof under today's template, read-only (`TRIM_VERSION` 1.7.0)
+
+- **Action:** answers the third of the three causes in [issue #93](https://github.com/KJ5HST/methodology/issues/93): a
+  generated `.verify.sh` is a frozen artifact, so a fix to the template never reaches a proof already written, and an
+  adopter holds red proofs of lossless trims with no way to ask what today's template says. `starter-kit/methodology_trim.py`
+  gains `--reverify <shard>` (the shard or its `.verify.sh`): it lifts `LIVE`, `SHARD` and the record grammar out of the
+  frozen proof, fills the CURRENT `VERIFY_TEMPLATE` through the new `render_verify` (`build_verify` is now a spec-to-values
+  wrapper over it, so there is one filler), runs it, and prints the verdict under a banner saying it is a claim about
+  today's logic and not about the artifact that was shipped. It writes nothing and leaves the frozen proof alone. The exit
+  status is the proof's own (0 holds, 1 a FAIL, 4 a recognised stub finalize) or 3 for a shard it will not re-derive; a
+  signal death reads as 3, never as a pass. **The lift is strict**, because the text is spliced into an unquoted shell
+  assignment and into Python the proof executes: each of the six required lines (`LIVE`, `SHARD`, `RECORD_KIND`,
+  `RECORD_START`, `FENCE_INFO`, `FOOTER_MODE`) must match, whole, the form the template writes; `REGEN_PATTERNS` and
+  `STUB_PATTERN` are parsed as literals and never evaluated; paths may not be absolute or contain `..`; anything else is
+  refused by name (`REVERIFY_NOT_LIFTABLE`, `REVERIFY_NO_PROOF`, `REVERIFY_SHARD_MISMATCH`, `REVERIFY_CANNOT_RUN`). A proof
+  that predates a line gets today's value and the banner says so (`REVERIFY_SUBSTITUTED`): no regenerated fields before
+  1.1.2, the stub marker from the ledger table by the live file's basename before 1.6.0. `--reverify` refuses to be
+  combined with any flag that writes or selects a ledger. `FRAMEWORK_APPARATUS.md` names the flag in the timing-rule
+  paragraph. `tools/test_methodology_trim.py`: `TestReverify`, 27 tests, including four payload tests (a shell payload
+  in `LIVE`, a Python payload in `RECORD_START`, an expression in `REGEN_PATTERNS` or `STUB_PATTERN`, a shard file name carrying
+  a shell payload), each with a control showing the payload is live when spliced naively, a writes-nothing snapshot, and a
+  round trip pinning that what the tool writes is unchanged; 181 tests (2 skipped), up from 154; the `trimmer-unit-tests` gate 154 → 181, a
+  tightening. A minor release: a new flag. What it cannot do: it produces a second verdict and changes no frozen proof, so a
+  red proof stays a red artifact.
+
+### 2026-10-05 · [issue #93] A bundled stub finalize is named in the proof (exit 4), warned about before the write, and the timing rule is stated once (`TRIM_VERSION` 1.6.0)
+
+- **Action:** fixes the first of the three causes in [issue #93](https://github.com/KJ5HST/methodology/issues/93): a
+  close-out commit that also trims always read red, because the session's own newest record goes from a `status: pending`
+  claim stub to the full record in the same commit, so its pre-trim bytes exist nowhere afterwards. Three parts, one commit.
+  **The proof** (`starter-kit/methodology_trim.py`): `LedgerSpec` gains an optional `stub_marker`; `HANDOFFS.md` declares
+  `^status: pending\s*$` (a line, `re.M`) and `CHANGELOG.md` declares none, deliberately — its lifecycle is "a committed
+  entry is never edited", so a claim's `(in progress)` entry stays as written when close-out adds its own and is a final
+  record, not a stub. The marker travels in the generated proof as `STUB_PATTERN` beside `REGEN_PATTERNS`. A frontier edit
+  whose pre-trim record 0 matches it, whose replacement no longer does, with no other failure and every other record
+  byte-identical and in order, prints one labelled `FAIL:` (the stub's size, the count of other records) instead of the
+  generic L1/L3 pair, a `NOTE:` stating the timing rule, and exits 4; every near-miss keeps exit 1 and the existing BL-27
+  note. It is still a FAIL, because BL-27's reason stands: a real loss can have this exact shape. A minor release: a new exit
+  status and a new `LedgerSpec` field. **The writer:** `check_stub_frontier` adds two advisory findings (no exit code, the
+  write proceeds): `FRONTIER_PENDING_STUB` when record 0 of the live ledger still matches the marker, and
+  `FRONTIER_FINALIZE_UNCOMMITTED` when HEAD's record 0 was a stub and the working tree no longer holds it. Both state the
+  consequence and the two ways out from one constant, `TRIM_TIMING_RULE`: trim while record 0 is complete, before the claim or
+  after the finalize is committed, never in the commit that finalizes it. **The prose:** `FRAMEWORK_APPARATUS.md` (The
+  Action Ledger, after the paragraph saying a trim earns its own commit) states the same rule, and the note a bundled
+  frontier edit prints no longer calls bundling "this repo's own established practice", which contradicted that prose.
+  `tools/test_methodology_trim.py`: `TestVerifyShNamesAStubFinalize` (8), `TestWriteTimeGuardForAStubFinalize` (12) and
+  `TestTheTimingRuleIsStatedTheSameEverywhere` (5, one anchor phrase pinned in the constant, the prose, both notes, and the
+  retired claim pinned gone); 154 tests (2 skipped), up from 129; the `trimmer-unit-tests` gate 129 → 154, a tightening. A
+  proof already written is frozen and does not change.
+
+### 2026-10-05 · [issue #93] The generated `.verify.sh`'s L2 `leaked` clause tests whole lines, not substrings (`TRIM_VERSION` 1.5.1)
+
+- **Action:** fixes the second of the three causes in [issue #93](https://github.com/KJ5HST/methodology/issues/93).
+  `starter-kit/methodology_trim.py`: `leaked` in `VERIFY_TEMPLATE` tested `ln in sfront or ln in "".join(sr)`, a substring
+  test, so an archived record that merely quoted a front-matter line mid-line read as that line having travelled into the
+  shard — a false red on a lossless trim. It now tests membership in the sets of whole lines of the shard's front matter and
+  of its records, the `> 24` length filter kept. A patch release (1.5.0 → 1.5.1): no new finding code and no exit-status
+  change. `tools/test_methodology_trim.py`: `TestVerifyShLeakedTestsWholeLines`, 5 tests, the clause's first coverage (no
+  test named `leaked` existed): the two that quote a line mid-line fail on 1.5.0 and pass now, and the three controls (a
+  whole line in the shard's front matter, a whole line in an archived record, a line under the length filter) pass on both.
+  129 tests (2 skipped), up from 124; the `trimmer-unit-tests` gate 124 → 129, a tightening. A proof already written is
+  frozen and does not change.
 
 ### 2026-10-03 · [ad hoc] PR #91: comment to rmsharp that his three approval points were fixed before the merge
 

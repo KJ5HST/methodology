@@ -27,6 +27,11 @@ WHY THREE ASSERTIONS AND NOT ONE
     None of the three is the whole-file check, and that is deliberate: the unscoped whole-file form
     is unsatisfiable on any run that regenerates the pointer (design §4.2).
 
+RE-DERIVING AN OLD PROOF
+    A generated `.verify.sh` is frozen, so a later fix to the template never reaches it. `--reverify
+    <shard>` runs TODAY'S template over the grammar lifted out of the shard's frozen proof and prints
+    that verdict, read-only and under a banner saying it is not the artifact that was shipped.
+
 DEFAULTS THAT ARE INVERTED ON PURPOSE
     Dry run is the default; `--write` is required to touch anything. The tool never commits, and
     it never runs `git mv` (design P2): a trim writes a new shard and edits the live ledger in
@@ -38,6 +43,7 @@ Python 3 stdlib only, cross-platform — this file is destined for adopter roots
 from __future__ import annotations
 
 import argparse
+import ast
 import datetime
 import os
 import re
@@ -46,7 +52,117 @@ import sys
 import tempfile
 from pathlib import Path
 
-TRIM_VERSION = "1.5.0"   # 1.5.0: Phase C2 — the Class A archive threshold, and the byte budget
+TRIM_VERSION = "1.8.2"   # 1.8.2: issue #93, the maintainer's review of the pull request -- correctness
+                         # fixes to what the tool writes and reads, patch not minor, no new finding code.
+                         # (1) Exit 3 is for a ref or an object the clone CANNOT READ. A path that is
+                         # absent from a commit (or a working tree) it CAN read is a FAIL at exit 1, as
+                         # in 1.5.0: a trim commit that also deleted the live ledger had read 3, "the proof
+                         # did not finish", which called a total loss "no verdict".
+                         # (2) The proof's Python runs isolated (`python3 -I -`): with `python3 -` the
+                         # working directory is first on the import path, so a module planted at the
+                         # repository root (`difflib.py`, `subprocess.py`) ran inside the proof and the
+                         # verdict was still exit 0; `--reverify` runs a proof on a tree someone else
+                         # handed you. Frozen proofs keep `python3 -`; `--reverify` renders today's.
+                         # (3) HANDOFFS.md's stub marker is scoped to the receipt's own fence: a complete
+                         # receipt with a `status: pending` line elsewhere in its record (commentary, a
+                         # second fenced block) was read as a stub, so a real loss from it was labelled a
+                         # recognised stub finalize at exit 4. A proof frozen before this carries the old
+                         # marker, and `--reverify` lifts what the proof carries.
+                         # (4) `--reverify` refuses a frozen proof whose PREFIX is not the template's
+                         # `../../` (exit 3, by name). It lifted every grammar line but that one, so a
+                         # proof written for another depth, passing as written, read exit 1 here.
+                         # (5) `--reverify` refuses a CR or a NUL in the lifted RECORD_START: a CR made
+                         # the spliced proof a SyntaxError that bash reported as exit 1, the FAIL code,
+                         # and a NUL crashed `--reverify` itself with a traceback.
+                         # (6) The frontier note and the record-0 diff are printed only when every other
+                         # record is byte-identical and in order (`others_intact`, the condition the stub
+                         # label already needed); an edit to record 0 beside a reorder printed both and
+                         # said nothing of the reorder. Otherwise a note says the others moved.
+                         # (7) The timing rule is the one the proof enforces, no stronger: give the trim
+                         # a commit of its own, never in the same commit that edits record 0. 1.6.0 to
+                         # 1.8.1 said to trim only while record 0 is complete (before the claim or after
+                         # the finalize), and FRONTIER_PENDING_STUB advised against a trim committed on
+                         # its own while record 0 is a stub, which passes. Wording only: no verdict moves.
+                         # (8) Found while testing (1), not in the review: the walk that finds the trim
+                         # commit (`git log --diff-filter=A`) had its failure ignored, so a walk that
+                         # FAILED read as "the shard is not in history yet" and a committed trim was
+                         # proved against a working tree equal to HEAD, printing OK having compared
+                         # nothing (present since 1.5.0). A failed walk is now exit 3.
+                         #
+                         # 1.8.1: issue #93, the abort code -- a proof that could not read an
+                         # artifact from git ended in `sys.exit("verify: cannot read ...")`, which
+                         # prints the text and exits 1, the FAIL code, so a proof that had compared
+                         # nothing read as a trim that lost something (seen once in a 54-shard
+                         # `--reverify` sweep over a partial clone: one blob fetch failed and the
+                         # shard read FAIL; exit 0 on the re-run). Every abort before the checks --
+                         # a `git show` that fails, a live or shard file that cannot be read -- now
+                         # prints its reason to stderr and exits 3: the code the shell head already
+                         # uses when it cannot reach the repository root, and the code the legend
+                         # of `--reverify` gives "the proof did not finish". Patch, not minor: no
+                         # verdict on any readable tree changes, frozen proofs keep their bytes, and
+                         # `--reverify` renders today's template, so it reads 3 where a frozen
+                         # script read 1.
+                         #
+                         # 1.8.0: issue #93, the proof prints the record-0 diff -- whenever the
+                         # frontier was edited in the trim commit (exit 4 or exit 1) the generated proof, and so
+                         # `--reverify`, prints a unified diff of record 0 against the record that
+                         # replaced it, so a reader can judge in seconds what the proof cannot. Minor,
+                         # not patch: new proof output. No verdict and no exit status changes.
+                         #
+                         # 1.7.0: issue #93, cause 3 — a proof is a FROZEN artifact, so a fix to the
+                         # template (1.5.1's whole-line `leaked`, 1.6.0's stub label) never reaches a
+                         # proof already written, and an adopter holds red proofs of lossless trims
+                         # with no way to ask what today's template says. `--reverify <shard>` lifts
+                         # LIVE, SHARD and the record grammar out of the shard's frozen `.verify.sh`,
+                         # fills THIS tool's template with them, runs it, and prints the verdict under
+                         # a banner that says it is a claim about today's logic and not the artifact
+                         # that was shipped. It writes nothing and leaves the frozen proof alone. Its
+                         # exit status is the proof's own (0 holds, 1 a FAIL, 4 a recognised stub
+                         # finalize) or 3 for a shard it will not re-derive. A line that is not in the
+                         # exact form the template writes is REFUSED by name: the lifted text is spliced
+                         # into a shell assignment and into Python the proof then executes, so the
+                         # flag is safe to point at a tree you do not trust. A frozen proof that
+                         # predates a line gets today's value (the stub marker from the ledger table
+                         # by live basename; no regenerated fields), and the banner says so. Minor,
+                         # not patch: a new flag, new finding codes, a new exit-3 path. What the tool
+                         # WRITES is unchanged (`build_verify` is `render_verify` over a spec).
+                         #
+                         # 1.6.0: issue #93, cause 1 — a commit that FINALIZES a session's pending claim
+                         # stub and trims in the same breath made the proof read record 0 as EDITED
+                         # and end red with nothing lost (BL-27 refused to excuse it: a real loss can
+                         # have that shape). The proof can now tell the stub shape from the loss
+                         # shape. A ledger spec may declare `stub_marker` (HANDOFFS.md: a line
+                         # `status: pending`; CHANGELOG.md declares none, because a committed entry
+                         # there is never edited in place), it travels in the proof as STUB_PATTERN
+                         # beside REGEN_PATTERNS, and a frontier edit whose pre-trim record 0 matches
+                         # it, whose replacement no longer does, with L2 holding and every other
+                         # record byte-identical and in order, prints a labelled FAIL INSTEAD of the
+                         # generic L1/L3 pair and exits 4. Still a FAIL by design; every near-miss
+                         # keeps exit 1. The writer also WARNS before the bad state is committed:
+                         # two advisory findings (no exit code, nothing refused),
+                         # FRONTIER_PENDING_STUB (record 0 still carries the marker when the trimmer
+                         # runs) and FRONTIER_FINALIZE_UNCOMMITTED (HEAD's record 0 was a stub that
+                         # the working tree no longer holds), each stating the timing rule: trim
+                         # while record 0 is complete, before the claim or after the finalize is
+                         # committed, never in the same commit. Minor, not patch: a new exit status,
+                         # two new finding codes and a new LedgerSpec field. The note a bundled
+                         # frontier edit prints no longer calls bundling "this repository's own
+                         # practice" (a trim earns its own commit) and states the timing rule, which
+                         # FRAMEWORK_APPARATUS.md now states in the same words. Proofs already
+                         # written are frozen artifacts and do not change.
+                         #
+                         # 1.5.1: issue #93 — the GENERATED .verify.sh's L2 "leaked" clause compared by
+                         # substring (`ln in sfront or ln in "".join(sr)`), so an archived record that
+                         # merely QUOTED a front-matter line mid-line (in backticks, inside a longer
+                         # line) read as that line having travelled into the shard: a false red on a
+                         # lossless trim. It now tests membership in the sets of WHOLE lines, which is
+                         # what a migration moves; the `> 24` length filter is kept, and a whole-line
+                         # copy into the shard (its front matter or a record) still fails. No new
+                         # finding code and no exit-status change: patch, not minor — a correctness
+                         # fix to what the tool WRITES, the class of 1.1.2 and 1.1.3. Proofs already
+                         # written are frozen artifacts and do not change.
+                         #
+                         # 1.5.0: Phase C2 — the Class A archive threshold, and the byte budget
                          # raised to meet it. An adopter's ROOT CHANGELOG.md/HANDOFFS.md now fires
                          # at 196,608 B instead of 65,536 and cuts back to 98,304 instead of
                          # 32,768, so a ledger that reported FIRES yesterday can report
@@ -275,7 +391,7 @@ class Result:
 class LedgerSpec:
     def __init__(self, basename, record_kind, footer_mode, date_of_record,
                  record_start=None, fence_info=None, regenerated=(), budget_bytes=DEFAULT_BUDGET_BYTES,
-                 content_probe=None, seed_negation=None):
+                 content_probe=None, seed_negation=None, stub_marker=None):
         self.basename = basename
         self.record_kind = record_kind        # "heading" | "fence"
         self.record_start = record_start      # compiled regex, for record_kind == "heading"
@@ -286,6 +402,13 @@ class LedgerSpec:
         self.budget_bytes = budget_bytes
         self.content_probe = content_probe    # loose "this LOOKS like a record" regex, or None
         self.seed_negation = seed_negation    # the seed comment's own "and there are no X below"
+        # What a PENDING STUB looks like (compiled with re.M, matched against one record's text), or
+        # None. A stub is a record a session commits at its claim and OVERWRITES IN PLACE at
+        # close-out. Declare one only for a ledger whose records are finalized by editing: a
+        # ledger that never edits a committed record has no stub in this sense, and a marker there
+        # would label a final record "pending" (see the HANDOFFS.md and CHANGELOG.md entries below).
+        # It travels in the generated proof as STUB_PATTERN, so a frozen script can still use it.
+        self.stub_marker = stub_marker
 
 
 def _changelog_date(text):
@@ -349,6 +472,22 @@ LEDGERS = {
         # is present AND there are no `session:` blocks below" — so the negation is `session:`,
         # not a dated heading. Fence-aware, so the seed's wrapped example does not count itself.
         seed_negation=re.compile(r"^session:\s"),
+        # Phase 1B commits this ledger's record 0 as `status: pending` and Phase 3D overwrites it to
+        # `status: complete` IN PLACE, so a pending record 0 is a stub by the runner's own design.
+        # One whole line (`status:` is a single-line key), so a receipt that merely QUOTES the
+        # marker mid-line in a long field is not one -- and that line must sit INSIDE the receipt's
+        # own fence, the ```handoff block that opens the record: a complete receipt with the same
+        # line in its commentary, or in a second fenced block, is not a stub. (The first version
+        # searched the whole record, so a real loss from such a receipt was labelled a recognised
+        # stub finalize at exit 4.) The opening run of backticks or tildes is captured, and a line
+        # that starts with it closes the fence; a lazy line-by-line scan, linear in the record.
+        # CHANGELOG.md declares none, deliberately: its
+        # lifecycle is "a committed entry is never edited" and a claim's `(in progress)` entry
+        # stays as written when close-out adds its own (FRAMEWORK_APPARATUS.md, The Action
+        # Ledger), so such an entry is a FINAL record: every claim in this repo's own ledger still
+        # reads (in progress).
+        stub_marker=re.compile(
+            r"\A(`{3,}|~{3,})handoff[^\n]*\n(?:(?!\1)[^\n]*\n)*?status: pending[ \t\r]*$", re.M),
     ),
 }
 
@@ -1231,10 +1370,20 @@ set -u
 cd "$(git rev-parse --show-toplevel)" || exit 3
 LIVE=@@LIVE@@
 SHARD=@@SHARD@@
-TRIM_SHA="$(git log --diff-filter=A -1 --format=%H -- "$SHARD" 2>/dev/null)"
+# The walk that finds the trim commit. An EMPTY answer means the shard is not in history yet (an
+# uncommitted trim, which the script below proves against HEAD). A walk that FAILS is a different
+# thing: with stderr discarded and the failure ignored it read as "empty", and a committed trim was
+# "proved" against a working tree that equals HEAD and printed OK having compared nothing.
+TRIM_SHA="$(git log --diff-filter=A -1 --format=%H -- "$SHARD" 2>/dev/null)" || {
+    echo "verify: cannot walk the history for $SHARD -- the proof did not finish; this is not a verdict (exit 3)" >&2
+    exit 3
+}
 export LIVE SHARD TRIM_SHA
-python3 - <<'PYEOF_VERIFY'
-import os, re, subprocess, sys
+# -I (isolated): no working directory on sys.path and no PYTHON* environment. This script reads the
+# tree it checks, and a plain `python3 -` would import a difflib.py or subprocess.py planted at
+# the repository root and still end at exit 0. Standard library only, so nothing needs the path.
+python3 -I - <<'PYEOF_VERIFY'
+import difflib, os, re, subprocess, sys
 from collections import Counter
 
 RECORD_KIND = "@@KIND@@"
@@ -1248,6 +1397,12 @@ PREFIX = "../../"
 # is not "lost" — every OTHER line still must survive verbatim, unchanged from before this fix.
 REGEN_PATTERNS = @@REGEN@@
 REGEN = [re.compile(p) for p in REGEN_PATTERNS]
+
+# Issue #93: what a PENDING STUB looks like in this ledger, or '' when it declares none. A frozen
+# script cannot consult the trimmer's ledger table, so the marker travels here, beside REGEN. It
+# decides only how a failing frontier edit is LABELLED (below); it never turns a failure into a pass.
+STUB_PATTERN = @@STUB@@
+STUB = re.compile(STUB_PATTERN, re.M) if STUB_PATTERN else None
 
 FENCE = re.compile(r"^(`{3,}|~{3,})(.*)$")
 LINK = re.compile(r"\]\(([^)\s]*)\)")
@@ -1362,16 +1517,56 @@ def zones(text):
     return "".join(lines[:starts[0]]), recs, "".join(lines[foot:])
 
 
+def unfinished(why):
+    # An abort BEFORE the checks is not a verdict. `sys.exit("<text>")` prints the text and exits
+    # 1, which is this script's FAIL code, so a proof that had compared nothing read as a trim that
+    # lost something. Exit 3 is "the proof did not finish": the code the shell head above uses when
+    # it cannot reach the repository root, and the code `--reverify`'s legend gives this case. It
+    # is for a ref or an object this clone CANNOT READ, and for nothing else -- see `absent`.
+    sys.stderr.write("verify: %s -- the proof did not finish; this is not a verdict (exit 3)\n"
+                     % why)
+    sys.exit(3)
+
+
+def absent(why):
+    # The opposite mistake, and the worse one: a path that is not in a commit (or a working tree)
+    # the proof CAN read is a finding about the trim, not a failure to run. A trim commit that also
+    # deletes the live ledger leaves exactly this, and "did not finish" would call a total loss
+    # "no verdict". The FAIL code, with the reason as a FAIL line (1.5.0 exited 1 here too).
+    print("FAIL: %s" % why)
+    sys.exit(1)
+
+
 def show(ref, path):
-    p = subprocess.run(["git", "show", "%s:%s" % (ref, path)], stdout=subprocess.PIPE)
+    # Three questions, in this order, because they have three different answers. Can the commit
+    # be read at all (a shallow clone lacks the trim commit's parent)? Can its tree be read, and
+    # does the path appear in it? Can the blob be read (a partial clone fetches it on demand)?
+    # Only the first and the third are "did not finish"; a path missing from a readable tree is a FAIL.
+    if subprocess.run(["git", "rev-parse", "--verify", "-q", ref + "^{commit}"],
+                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode:
+        unfinished("cannot read %s:%s" % (ref, path))
+    tree = subprocess.run(["git", "ls-tree", "--name-only", ref, "--", path], stdout=subprocess.PIPE,
+                          stderr=subprocess.DEVNULL)
+    if tree.returncode:
+        unfinished("cannot read the tree of %s (for %s)" % (ref, path))
+    if not tree.stdout.strip():
+        absent("%s is absent from %s, a commit this clone can read: there is nothing to account "
+               "for the records against" % (path, ref))
+    p = subprocess.run(["git", "show", "%s:%s" % (ref, path)], stdout=subprocess.PIPE,
+                       stderr=subprocess.DEVNULL)
     if p.returncode:
-        sys.exit("verify: cannot read %s:%s" % (ref, path))
+        unfinished("cannot read %s:%s" % (ref, path))
     return p.stdout.decode("utf-8")
 
 
 def readf(path):
-    with open(path, "r", encoding="utf-8", newline="") as fh:
-        return fh.read()
+    try:
+        with open(path, "r", encoding="utf-8", newline="") as fh:
+            return fh.read()
+    except FileNotFoundError:
+        absent("%s does not exist in the working tree" % path)
+    except OSError as e:
+        unfinished("cannot read %s (%s)" % (path, e.strerror or e))
 
 
 LIVE, SHARD = os.environ["LIVE"], os.environ["SHARD"]
@@ -1505,8 +1700,16 @@ missing = [ln for ln in bfront.splitlines()
            if ln.strip() and ln not in afront_lines and not field_reversible(ln)]
 if missing:
     fails.append("L2 FRONT MATTER lost %d line(s), first: %r" % (len(missing), missing[0][:70]))
+# Issue #93 fix: whole-line membership, not substring containment. `ln in sfront` and
+# `ln in "".join(sr)` asked whether the front-matter line occurs ANYWHERE in the shard's text,
+# so an archived record that merely QUOTED it mid-line (in backticks, in a longer line) read as
+# the line having travelled into the shard. A migration moves WHOLE lines, so the test is
+# membership in the sets of whole lines of the shard's front matter and of its records; the
+# `> 24` length filter is kept. Same class of fix as BL-28 just above, on the other clause.
+sfront_lines = set(sfront.splitlines())
+sr_lines = set("".join(sr).splitlines())
 leaked = [ln for ln in bfront.splitlines()
-          if ln.strip() and len(ln.strip()) > 24 and (ln in sfront or ln in "".join(sr))]
+          if ln.strip() and len(ln.strip()) > 24 and (ln in sfront_lines or ln in sr_lines)]
 if leaked:
     fails.append("L2 FRONT MATTER leaked %d line(s) into the shard, first: %r"
                  % (len(leaked), leaked[0][:70]))
@@ -1527,12 +1730,14 @@ else:
     if bad:
         fails.append("L3 record(s) out of order across the move: %s" % bad)
 
-# BL-27 fix 2: a same-commit close-out bundling (this repo's own established practice — a
-# session's own frontier receipt going status: pending -> complete, committed together with the
-# archive write) makes position 0 (newest) legitimately differ between this commit's parent and
-# itself. NOT an exemption — this stays a FAIL, loud, because a real loss can have this exact
-# shape too — only a NOTE naming the known pattern, so a reader does not mistake it for an
-# unqualified loss. Narrow on purpose: any OTHER record differing (bad != [0]) gets no such note.
+# BL-27 fix 2: a same-commit close-out bundling (a session's own frontier receipt going
+# status: pending -> complete, committed together with the archive write) makes position 0 (newest)
+# differ between this commit's parent and itself. That bundling is NOT this framework's practice --
+# FRAMEWORK_APPARATUS.md says a trim earns its own commit, and issue #93 measured what it costs --
+# but sessions have done it, so the proof must still judge it. NOT an exemption: this stays a FAIL,
+# loud, because a real loss can have this exact shape too -- only a NOTE naming the pattern, so a
+# reader does not mistake it for an unqualified loss. Narrow on purpose: any OTHER record differing
+# (bad != [0]) gets no such note.
 #
 # BL-36 re-expressed the gate in the new vocabulary. It was `bad == [0]` — the record-ALTERED
 # shape under the old positional comparison — which is why it never fired for the busier ledger,
@@ -1545,14 +1750,58 @@ notes = []
 frontier_edit = (len(absent_records) == 1 and br and absent_records[0] == br[0]
                  and anchor(absent_records[0]) != ""
                  and any(anchor(a) == anchor(absent_records[0]) for a in added_records))
-if fails and frontier_edit:
+
+# Issue #93, cause 1: ONE shape of frontier edit can be NAMED rather than merely noted -- a pending
+# stub that this commit finalized. The discriminator is not a guess: it is every one of (a) the
+# frontier edit above, (b) the pre-trim record 0 matches the ledger's declared stub marker, (c) the
+# record that replaced it no longer does (an edit made while still pending was not a finalize),
+# (d) nothing else failed, and (e) the OTHER records are byte-identical and still in order. A stub
+# is a claim placeholder meant to be replaced, so what its replacement removed was never data. Any
+# one missing and the edit keeps the generic note and exit 1, which is what BL-27 protected: a
+# record 0 that was COMPLETE before the trim and differs after it is a real-loss shape.
+stub_finalized = False
+successor = (next(a for a in added_records if anchor(a) == anchor(absent_records[0]))
+             if frontier_edit else None)
+# Everything but record 0 is byte-identical and in order across the move. The stub label needs it
+# (e), and so does everything below that speaks about record 0 ALONE: the frontier note and the
+# diff. Without it an edit to record 0 that also reordered or changed other records printed the
+# reassuring note and a diff of record 0 and said nothing of the rest.
+others_intact = (rebuilt == br[1:])
+if fails and frontier_edit and STUB is not None and STUB.search(absent_records[0]):
+    other_fails = [f for f in fails if not (f.startswith("L1 ") or f.startswith("L3 "))]
+    stub_finalized = (not STUB.search(successor) and not other_fails and others_intact)
+
+if stub_finalized:
+    # The generic L1/L3 pair is this edit's own symptom (record 0's pre-trim bytes are the stub, and
+    # they exist nowhere afterwards), and (d) and (e) established nothing else is wrong, so the label
+    # REPLACES the pair instead of sitting beside it. Still a FAIL: exit 4, never 0 -- labelled, not excused.
+    fails[:] = [f for f in fails if not (f.startswith("L1 ") or f.startswith("L3 "))]
+    fails.append("record 0 was a pending stub (%d B) and was finalized in the trim commit; the "
+                 "other %d record(s) are byte-identical across the move, in order, and L2 holds"
+                 % (len(absent_records[0].encode("utf-8")), len(br) - 1))
+    notes.append(
+        "exit 4, not 1: a recognised stub finalize is NAMED, but it is still a FAIL, because a "
+        "real loss can have this exact shape too. The proof certifies that nothing but record 0 "
+        "changed and that record 0 was a stub; it cannot certify that the finalized text is right. "
+        "To avoid it, give the trim a commit of its own, never in the same commit that edits record 0.")
+elif fails and frontier_edit and not others_intact:
+    notes.append(
+        "record 0 was edited AND the other record(s) are not byte-identical and in order across the "
+        "move (they were reordered, edited or dropped as well), so this is not the shape a bundled "
+        "finalize leaves and no diff of record 0 is shown: it would hide the rest. Compare the "
+        "shard's records against the parent's by hand.")
+elif fails and frontier_edit:
     notes.append(
         "the only missing record is the frontier one (position 0, newest), and an added record "
-        "carries the same anchor -- matches a known, accepted pattern (BL-27): this repository's "
-        "own practice bundles a session's close-out finalize edit into the same commit as an "
-        "archive write, so the frontier record can legitimately differ between this commit's "
-        "parent and itself. This does NOT confirm losslessness -- manually diff record 0 by hand "
-        "to be sure it is a receipt finalize, not real data loss.")
+        "carries the same anchor -- the shape (BL-27) a bundled finalize leaves: record 0 was "
+        "edited in the same commit as the archive write, so it differs between this commit's "
+        "parent and itself. That bundling is not this framework's practice: give the trim a commit "
+        "of its own, never in the same commit that edits record 0. This does NOT confirm "
+        "losslessness -- a real loss can have this exact "
+        "shape -- so diff record 0 by hand to be sure it is a finalize and not data loss."
+        + ("" if STUB is not None else
+           " This ledger declares no stub marker, so a pending-stub finalize cannot be told from "
+           "any other edit of record 0."))
 
 print("source : %s" % origin)
 print("records: %d before = %d retained + %d archived; added by the trim commit: %d"
@@ -1566,8 +1815,24 @@ for f in fails:
     print("FAIL:", f)
 for n in notes:
     print("NOTE:", n)
+if frontier_edit and others_intact:
+    # Issue #93's first suggestion. The proof cannot judge an edit to record 0 -- a stub finalize and
+    # a real loss have the same shape -- but a reader shown the edit can, in seconds. Printed for both
+    # shapes the frontier note covers (the recognised stub finalize, exit 4, and the generic edit,
+    # exit 1) and for nothing else: a record other than the frontier that differs is a plain loss,
+    # and a diff would dress it up -- so is a frontier edit with other records moved as well, where
+    # a diff of record 0 alone would hide the rest. Output only; it changes no verdict and no exit
+    # status.
+    diff = list(difflib.unified_diff(absent_records[0].splitlines(keepends=True),
+                                     successor.splitlines(keepends=True),
+                                     fromfile="record 0 before the trim commit (its parent)",
+                                     tofile="record 0 in the trim commit"))
+    print("DIFF: record 0, before the trim commit (-) against the record that replaced it (+), "
+          "%d line(s):" % len(diff))
+    for ln in diff:
+        sys.stdout.write(ln if ln.endswith("\n") else ln + "\n")
 if fails:
-    sys.exit(1)
+    sys.exit(4 if stub_finalized else 1)
 # State what actually ran, never a blanket claim: on a ledger with no footer the footer clause is
 # genuinely inapplicable, and saying "L2 holds" would be asserting something nothing tested.
 print("OK: %s hold for %s" % (", ".join(ran), SHARD))
@@ -1575,22 +1840,248 @@ PYEOF_VERIFY
 """
 
 
-def build_verify(spec, live_rel, shard_rel):
+def render_verify(live_rel, shard_rel, kind, record_start, fence_info, footer_mode, regen_patterns,
+                  stub_pattern):
+    """The proof for one shard, from the plain values that fill VERIFY_TEMPLATE.
+
+    `build_verify` calls this with a ledger spec's values and `--reverify` calls it with the values
+    lifted out of a frozen proof, so the two cannot drift: one template, one filler.
+    """
     # REGEN travels as a repr()'d list of plain (non-raw) pattern strings, not a wrapped r-string
     # like @@START@@ — spec.regenerated is 0-or-more patterns, and an r-string wrapper only ever
     # holds one. repr() doubles each backslash; the generated script parses that back as a normal
     # (non-raw) Python string literal, which un-doubles it — the round trip restores the exact
     # pattern .compile() would see. Safe only because no config pattern contains a quote character
     # (true of both entries in LEDGERS today); a pattern that did would need a different encoding.
-    regen_patterns = repr([rx.pattern for _name, rx, _fn in spec.regenerated])
+    # The stub marker travels the same way, as one repr()'d string ('' when the spec declares none),
+    # under the same caveat.
     out = VERIFY_TEMPLATE
     for key, val in (("@@SHARD@@", shard_rel), ("@@LIVE@@", live_rel), ("@@VER@@", TRIM_VERSION),
-                     ("@@KIND@@", spec.record_kind),
-                     ("@@START@@", spec.record_start.pattern if spec.record_start else ""),
-                     ("@@INFO@@", spec.fence_info or ""), ("@@FOOTER@@", spec.footer_mode),
-                     ("@@REGEN@@", regen_patterns)):
+                     ("@@KIND@@", kind), ("@@START@@", record_start), ("@@INFO@@", fence_info),
+                     ("@@FOOTER@@", footer_mode), ("@@REGEN@@", repr(list(regen_patterns))),
+                     ("@@STUB@@", repr(stub_pattern))):
         out = out.replace(key, val)
     return out
+
+
+def build_verify(spec, live_rel, shard_rel):
+    return render_verify(live_rel, shard_rel, spec.record_kind,
+                         spec.record_start.pattern if spec.record_start else "",
+                         spec.fence_info or "", spec.footer_mode,
+                         [rx.pattern for _name, rx, _fn in spec.regenerated],
+                         spec.stub_marker.pattern if spec.stub_marker else "")
+
+
+# =============================================================================================
+# `--reverify` — what does TODAY'S template say about a shard whose proof was written long ago?
+#
+# A proof is frozen on purpose: it embeds the grammar it was written against, so a later change to
+# the trimmer cannot silently change what an old shard's proof means. The cost is that a fix to the
+# template never reaches an old proof (issue #93: ten of one adopter's 54 proofs read red on trims
+# that lost nothing, and no fix to this file could turn them green). This produces a SECOND verdict
+# and leaves the artifact alone: it lifts the grammar out of the frozen script, fills the current
+# template, runs it, and writes nothing. The verdict is a claim about today's logic against that
+# shard, NOT the artifact that was shipped, and the banner says so.
+#
+# WHY THE LIFT IS STRICT. The values are spliced into a shell assignment (`LIVE=...`, unquoted) and
+# into Python source the proof then EXECUTES. So each line must match, whole, the form VERIFY_TEMPLATE
+# writes and anything else is refused by name; a looser lift would make a read-only inspection tool a
+# way to run whatever a hostile frozen script says. REGEN and STUB are parsed as literals, never
+# evaluated, and re-emitted through repr(), so they cannot carry code.
+# =============================================================================================
+
+class ReverifyRefusal(Exception):
+    """A frozen proof this tool will not splice into today's template. `code` is the finding."""
+
+    def __init__(self, code, message):
+        Exception.__init__(self, message)
+        self.code = code
+
+
+_PATH_TEXT = r"[A-Za-z0-9._/+-]+"
+_LIFT_REQUIRED = (
+    ("LIVE", "live", r"LIVE=(%s)" % _PATH_TEXT),
+    ("SHARD", "shard", r"SHARD=(%s)" % _PATH_TEXT),
+    ("RECORD_KIND", "kind", r'RECORD_KIND = "(heading|fence)"'),
+    # No quote, and no CR, LF or NUL: the value is spliced into a raw string literal that Python
+    # reads from a heredoc. A CR ends the literal (the tokenizer reads it as a newline), so the
+    # proof dies with a SyntaxError that bash reports as the FAIL code; a NUL cannot be passed to
+    # bash at all. Refused at the lift, they are exit 3 by name.
+    ("RECORD_START", "start", r'RECORD_START = r"([^"\r\n\x00]*)"'),
+    ("FENCE_INFO", "info", r'FENCE_INFO = "([A-Za-z0-9_-]*)"'),
+    ("FOOTER_MODE", "footer", r'FOOTER_MODE = "(separator|none)"'),
+)
+
+
+def _lift_line(text, key):
+    """The one line that begins `KEY=` or `KEY = `, or None when there is none. Two is a refusal:
+    a proof that says two different things is not one this tool can claim to have read."""
+    hits = re.findall(r"^%s(?:=| = ).*$" % key, text, re.M)
+    if len(hits) > 1:
+        raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
+                              "%s appears %d times in the frozen proof; refusing to guess which one "
+                              "it ran under" % (key, len(hits)))
+    return hits[0] if hits else None
+
+
+def _lift_pattern(key, value):
+    """A pattern text that will be spliced into the template: it must compile and must not collide
+    with the template's own placeholders (the filler substitutes them one after another, so a
+    placeholder inside a value would be rewritten by a later pass). Two things need no check of
+    their own: a newline, a CR or a NUL (START's form excludes them; REGEN and STUB go through
+    repr(), which escapes them) and a trailing unpaired backslash, which would end START's raw string early but does not
+    compile either."""
+    if "@@" in value:
+        raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE", "%s carries a template placeholder" % key)
+    try:
+        re.compile(value)
+    except re.error as e:
+        raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE", "%s is not a valid regular expression: %s" % (key, e))
+
+
+def lift_grammar(text):
+    """Read a frozen proof's grammar back out. Returns a dict with `version` (the trimmer that wrote
+    it, or None), `live`, `shard`, `kind`, `start`, `info`, `footer`, `regen` (a list), `stub` (a
+    string, or None when the proof predates the line) and `absent` (the soft lines it did not
+    carry). Raises ReverifyRefusal, naming the line, for anything it will not splice."""
+    m = re.search(r"methodology_trim\.py v([0-9][0-9.]*[0-9])", text)
+    out = {"version": m.group(1) if m else None, "absent": []}
+    for key, field, shape in _LIFT_REQUIRED:
+        line = _lift_line(text, key)
+        if line is None:
+            raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
+                                  "%s is not in the frozen proof: it predates the grammar lines this "
+                                  "tool lifts, or it is not a proof" % key)
+        mm = re.fullmatch(shape, line)
+        if mm is None:
+            raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
+                                  "%s is not in the form methodology_trim.py writes it: %s"
+                                  % (key, line[:70]))
+        out[field] = mm.group(1)
+    for key, field in (("LIVE", "live"), ("SHARD", "shard")):
+        if out[field].startswith("/") or ".." in out[field].split("/"):
+            raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
+                                  "%s is not a path inside the repository: %s" % (key, out[field]))
+    _lift_pattern("RECORD_START", out["start"])
+    # PREFIX is a constant of the template, not a placeholder: the writer always puts a shard two
+    # directories below the root, so today's template inverts links with REBASE_PREFIX. A proof
+    # written for another depth passes as written and cannot be re-derived here; reading it as a
+    # FAIL would be a verdict about neither, so it is refused, by name.
+    prefix_line = _lift_line(text, "PREFIX")
+    if prefix_line is None:
+        raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
+                              "PREFIX is not in the frozen proof: it predates the link prefix this tool "
+                              "re-derives with, or it is not a proof")
+    pm = re.fullmatch(r'PREFIX = "([^"\r\n]*)"', prefix_line)
+    if pm is None:
+        raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
+                              "PREFIX is not in the form methodology_trim.py writes it: %s" % prefix_line[:70])
+    if pm.group(1) != REBASE_PREFIX:
+        raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
+                              'PREFIX is "%s" in the frozen proof; this tool\'s template writes "%s" (a shard two '
+                              "directories below the root): the shard's links were rebased for a different "
+                              "depth, so re-deriving it here would be a verdict about neither"
+                              % (pm.group(1), REBASE_PREFIX))
+    for key, field in (("REGEN_PATTERNS", "regen"), ("STUB_PATTERN", "stub")):
+        line = _lift_line(text, key)
+        if line is None:
+            out["absent"].append(key)
+            out[field] = [] if field == "regen" else None
+            continue
+        rhs = line[len(key) + 3:] if line.startswith(key + " = ") else None
+        try:
+            val = ast.literal_eval(rhs) if rhs is not None else None
+        except (ValueError, SyntaxError, TypeError, MemoryError, RecursionError):
+            val = None
+        shaped = (isinstance(val, list) and all(isinstance(x, str) for x in val) if field == "regen"
+                  else isinstance(val, str))
+        if not shaped:
+            raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
+                                  "%s is not a plain %s literal: %s"
+                                  % (key, "list of strings" if field == "regen" else "string", line[:70]))
+        for pat in (val if field == "regen" else [val]):
+            if pat:
+                _lift_pattern(key, pat)
+        out[field] = val
+    return out
+
+
+def stub_pattern_for(live_rel):
+    """The stub marker the ledger table declares for a ledger, keyed by basename as the table is;
+    '' when it has no entry (a project's own local ledger) or declares none (CHANGELOG.md)."""
+    spec = LEDGERS.get(Path(live_rel).name)
+    return spec.stub_marker.pattern if spec is not None and spec.stub_marker else ""
+
+
+def reverify(arg, result):
+    path = Path(arg)
+    if path.name.endswith(".verify.sh"):
+        path = path.with_name(path.name[:-len(".verify.sh")])
+    if not path.is_file():
+        result.add("FILE_ABSENT", "%s does not exist" % path, exit_code=3)
+        return result
+    path = path.resolve()
+    repo = repo_root(path)
+    if repo is None:
+        result.add("NOT_A_REPO", "%s is not inside a git work tree" % path, exit_code=3)
+        return result
+    shard_rel = os.path.relpath(str(path), str(repo.resolve())).replace(os.sep, "/")
+    proof = path.with_name(path.name + ".verify.sh")
+    if not proof.is_file():
+        result.add("REVERIFY_NO_PROOF",
+                   "%s has no proof beside it (%s): there is no frozen grammar to lift"
+                   % (shard_rel, proof.name), exit_code=3)
+        return result
+    try:
+        g = lift_grammar(read_text(proof))
+    except ReverifyRefusal as e:
+        result.add(e.code, "%s: %s" % (proof.name, e), exit_code=3)
+        return result
+    if g["shard"] != shard_rel:
+        result.add("REVERIFY_SHARD_MISMATCH",
+                   "%s names the shard %s, not %s: its grammar was written for a different file, so "
+                   "re-deriving this one from it would be a verdict about neither"
+                   % (proof.name, g["shard"], shard_rel), exit_code=3)
+        return result
+
+    stub = g["stub"]
+    result.add("REVERIFY_BANNER",
+               "%s: re-derived by methodology_trim.py v%s from the grammar lifted out of its frozen "
+               "proof (written by v%s): ledger %s, record kind %s, footer %s. This is a claim about "
+               "today's logic against this shard, NOT the artifact that was shipped; the frozen "
+               "proof is untouched. Nothing was written."
+               % (shard_rel, TRIM_VERSION, g["version"] or "?", g["live"], g["kind"], g["footer"]))
+    if "REGEN_PATTERNS" in g["absent"]:
+        result.add("REVERIFY_SUBSTITUTED",
+                   "REGEN_PATTERNS is not in the frozen proof (it predates the declared regenerated "
+                   "fields): re-derived with none.")
+    if stub is None:
+        stub = stub_pattern_for(g["live"])
+        result.add("REVERIFY_SUBSTITUTED",
+                   "STUB_PATTERN is not in the frozen proof (it predates the stub label): %s"
+                   % ("supplied from this tool's ledger table by the live basename %s: %r"
+                      % (Path(g["live"]).name, stub) if stub else
+                      "the ledger table declares none for the live basename %s, so no stub finalize "
+                      "is recognised" % Path(g["live"]).name))
+    script = render_verify(g["live"], g["shard"], g["kind"], g["start"], g["info"], g["footer"],
+                           g["regen"], stub)
+    try:
+        run = subprocess.run(["bash", "-c", script], cwd=str(repo), stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT, encoding="utf-8", errors="replace")
+    except OSError as e:
+        result.add("REVERIFY_CANNOT_RUN",
+                   "bash is needed to run a proof and could not be started: %s" % e, exit_code=3)
+        return result
+    # A child killed by a signal reports a NEGATIVE status, which `Result.add` would read as "no
+    # worse than 0" and let through as a pass. A verdict tool must never turn "did not finish" into
+    # "holds", so anything below zero is exit 3 (the proof could not be run to a verdict).
+    rc = run.returncode if run.returncode >= 0 else 3
+    result.add("REVERIFY_VERDICT",
+               "exit %d (0: every assertion holds; 1: a FAIL; 4: a recognised stub finalize, still a "
+               "FAIL; 3: the proof did not finish). The proof's own output:\n%s"
+               % (rc, _indent(run.stdout.rstrip("\n"))),
+               exit_code=rc or None)
+    return result
 
 
 # =============================================================================================
@@ -1684,6 +2175,70 @@ def check_P1a(ledger_path, spec_for_ledger, expected_after_partition, result):
     result.add("P1A_OK", "ledger gained exactly one entry (%d → %d)"
                % (expected_after_partition, after))
     return True
+
+
+
+# =============================================================================================
+# Issue #93, cause 1 -- the PREVENT half. The generated proof can only NAME a stub finalize after
+# the fact (the VERIFY_TEMPLATE's `stub_finalized`); the writer can see the bad state coming. A
+# session's claim leaves record 0 as a pending stub, and Phase 3D overwrites it in place, so a trim
+# that lands in the finalize's commit makes the proof read record 0 as EDITED. Two orders get there:
+#
+#   A. the claim is committed and record 0 still carries the stub marker when the trimmer runs;
+#   B. the session finalized record 0 FIRST and has not committed it, so record 0 is complete here
+#      but HEAD's record 0 was a stub that the working tree no longer holds.
+#
+# Both are ADVISORY (no exit code, the write proceeds): the finding names the consequence and the
+# two ways out and refuses nothing, because a trim that bundles a finalize loses nothing and is
+# still the operator's call. It keys on the ledger's declared stub_marker, so a ledger that
+# declares none is silent, and it asks whether HEAD's stub is ABSENT from the working ledger (the
+# proof's own test), not whether record 0 moved, so a record prepended above an intact stub is quiet.
+# What it cannot see: a session that trims by hand-editing never reaches it, and which commit order
+# an adopter used is not recoverable from git (the proof sees only a stub in the parent).
+# =============================================================================================
+
+# The same words as the proof's notes (VERIFY_TEMPLATE) and FRAMEWORK_APPARATUS.md, pinned together
+# by a test: this rule used to live only in the repo's habits, and its verifier contradicted it. It is
+# the rule the proof ENFORCES, no stronger: what ends red is a trim that lands in the commit that
+# edits record 0 (the finalize that replaces a pending stub). A trim committed on its own while
+# record 0 is a stub passes, because record 0 is untouched in that commit; 1.6.0 to 1.8.1 said
+# "trim while record 0 is complete -- before the claim, or after the finalize is committed", which
+# advised against a safe order.
+TRIM_TIMING_RULE = "give the trim a commit of its own, never in the same commit that edits record 0"
+
+
+def check_stub_frontier(repo, path, spec, records, result):
+    marker = spec.stub_marker
+    if marker is None or not records:
+        return
+    live_rel = path.relative_to(repo).as_posix()
+    if marker.search(records[0]):
+        result.add(
+            "FRONTIER_PENDING_STUB",
+            "record 0 of %s is a pending stub (it matches this ledger's stub marker): a session has "
+            "claimed it and not finalized it. A trim is safe while it stays a stub, provided the trim "
+            "goes in a commit of its own: record 0 is then untouched. What ends red is the finalize "
+            "landing in the same commit as the trim, which makes the generated .verify.sh read record "
+            "0 as EDITED (exit 4: named, because nothing else went missing, but still a FAIL). %s. "
+            "Advisory: nothing is refused." % (live_rel, TRIM_TIMING_RULE.capitalize()))
+        return
+    head = git_bytes(repo, "show", "HEAD:%s" % live_rel)
+    if head is None:
+        return                      # no committed version to compare: order B cannot be judged
+    hz = classify_zones(head.decode("utf-8", "replace"), spec, Result(path))
+    if hz is None or not hz.starts:
+        return
+    h0 = hz.records()[0]
+    # \r\n folded on both sides: a checkout that converts line endings must not read as an edit.
+    now = {r.replace("\r\n", "\n") for r in records}
+    if marker.search(h0) and h0.replace("\r\n", "\n") not in now:
+        result.add(
+            "FRONTIER_FINALIZE_UNCOMMITTED",
+            "HEAD's record 0 of %s is a pending stub and the working tree no longer holds it: it "
+            "was finalized or replaced and the change is uncommitted. If that edit and this trim "
+            "land in one commit, the generated .verify.sh reads record 0 as EDITED and ends red "
+            "(exit 4: named, but still a FAIL). %s: commit the finalize first, then trim. "
+            "Advisory: nothing is refused." % (live_rel, TRIM_TIMING_RULE.capitalize()))
 
 
 # =============================================================================================
@@ -1921,6 +2476,8 @@ def evaluate(path, opts, result):
     if not check_invertible(archived, result):
         return result
 
+    check_stub_frontier(repo, path, spec, records, result)
+
     dates = [spec.date_of_record(r) for r in archived]
     dates = [d for d in dates if d]
     span = (min(dates), max(dates)) if dates else ("unknown", "unknown")
@@ -2154,9 +2711,28 @@ def main(argv=None):
     p.add_argument("--force", action="store_true", help="proceed despite the SRF-RED refusal")
     p.add_argument("--check", action="store_true",
                    help="evaluate the trigger and report; never writes, even with --write")
+    p.add_argument("--reverify", metavar="SHARD",
+                   help="re-derive a frozen shard's proof under THIS tool's template and print the "
+                        "verdict. Read-only: writes nothing. Takes the shard (or its .verify.sh) "
+                        "and no other mode flag. Exit is the proof's own (0 holds, 1 a FAIL, 4 a "
+                        "recognised stub finalize), or 3 when the shard cannot be re-derived.")
     p.add_argument("--today", help=argparse.SUPPRESS)   # test seam: deterministic dates
     p.add_argument("--version", action="version", version="methodology_trim.py v" + TRIM_VERSION)
     opts = p.parse_args(argv)
+
+    if opts.reverify is not None:
+        clash = [flag for flag, on in (("--file", opts.file), ("--write", opts.write),
+                                       ("--check", opts.check), ("--cut", opts.cut),
+                                       ("--budget-bytes", opts.budget_bytes is not None),
+                                       ("--force", opts.force)) if on]
+        if clash:
+            print("methodology_trim.py: --reverify is read-only and takes its own shard; it cannot "
+                  "be combined with %s." % ", ".join(clash), file=sys.stderr)
+            return 3
+        result = Result(Path(opts.reverify))
+        reverify(opts.reverify, result)
+        report(result, opts)
+        return result.exit
 
     if not opts.file:
         p.print_usage(sys.stderr)

@@ -22,6 +22,7 @@ TWO FIXTURES ARE REAL HISTORY, NOT INVENTED — both events happened in this rep
       same commit, making "the move was verbatim" unfalsifiable.
 """
 
+import ast
 import hashlib
 import importlib.util
 import os
@@ -1255,6 +1256,1144 @@ class TestVerifyShAppendTamperEvadesSubstringCheck(unittest.TestCase):
 
 
 # =============================================================================================
+# Issue #93, cause 2 -- the GENERATED .verify.sh's L2 "leaked" clause is a SUBSTRING test.
+#
+#     leaked = [ln for ln in bfront.splitlines()
+#               if ln.strip() and len(ln.strip()) > 24 and (ln in sfront or ln in "".join(sr))]
+#
+# `ln in sfront` and `ln in "".join(sr)` are `str in str`: they ask whether the front-matter line
+# occurs ANYWHERE in the shard's text, so an archived record that merely QUOTES a front-matter line
+# mid-line (a receipt that cites `python3 methodology_trim.py --file HANDOFFS.md ...` in backticks)
+# reads as that line having travelled into the shard. Nothing was lost; the proof goes red. Two of
+# the ten false reds in the adopter issue #93 reports are this shape.
+#
+# A migration moves WHOLE lines, so whole-line membership is the right test for it. This class is
+# the clause's first coverage -- before it, no test in this file named `leaked` at all. The fix is
+# a PATCH (1.5.1): a correctness fix to what the tool writes, no new finding code, no new exit
+# status -- the class of 1.1.2 and 1.1.3.
+#
+# THE CONTROLS ARE AS LOAD-BEARING AS THE FIX. Every one is built INSIDE the trim commit: the proof
+# reads the shard as the commit that ADDED it wrote it (`TRIM_SHA` is
+# `git log --diff-filter=A -1 -- $SHARD`), so a tamper committed afterwards is invisible to it by
+# design and a control built that way passes for the wrong reason: it can never fail.
+# =============================================================================================
+
+# > 24 characters, the length filter's threshold, so the clause is live for it.
+LEAK_FM_LINE = "Newest on top; prepend-only. Archive when above N receipts."
+
+
+class TestVerifyShLeakedTestsWholeLines(unittest.TestCase):
+
+    def _trim_with_front_matter_line(self, tmp, quote=None, record_line=None, shard_front_line=None):
+        """HANDOFFS.md whose front matter carries LEAK_FM_LINE; trim at --cut 2 and commit.
+
+        `quote`            -- text spliced into an ARCHIVED record's commentary (S5 is archived at --cut 2).
+        `record_line`      -- a line added as its OWN line in that record, so it is a whole record line.
+        `shard_front_line` -- a line added to the shard's own front matter, inside the trim commit:
+                              LEAK_FM_LINE whole is the defect the clause exists to catch.
+        Returns (repo, shard). The proof is run by the caller."""
+        p = make_handoff_repo(tmp)
+        hf = p / "HANDOFFS.md"
+        t = hf.read_text(encoding="utf-8")
+        t = t.replace("This file currently holds **0**.\n",
+                      "This file currently holds **0**.\n\n" + LEAK_FM_LINE + "\n", 1)
+        self.assertIn(LEAK_FM_LINE + "\n", t, "control: the front matter must carry the line")
+        if quote is not None:
+            before = t
+            t = t.replace("commentary about session 5.", "commentary about session 5, see " + quote, 1)
+            self.assertNotEqual(t, before, "control: the quote must land in the record")
+        if record_line is not None:
+            before = t
+            t = t.replace("commentary about session 5.", "commentary about session 5.\n" + record_line, 1)
+            self.assertNotEqual(t, before, "control: the line must land in the record")
+        hf.write_text(t, encoding="utf-8")
+        sh(p, "git", "commit", "-qa", "--amend", "-m", "seed")
+        r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0]
+        if shard_front_line is not None:
+            st = shard.read_text(encoding="utf-8")
+            first, rest = st.split("\n", 1)
+            shard.write_text(first + "\n\n" + shard_front_line + "\n" + rest, encoding="utf-8")
+        sh(p, "git", "add", "-A")
+        sh(p, "git", "commit", "-qm", "trim")
+        return p, shard
+
+    def _proof(self, p, shard):
+        return sh(p, "bash", str(shard) + ".verify.sh")
+
+    def test_an_archived_record_quoting_a_front_matter_line_mid_line_is_not_a_leak(self):
+        """The false red itself. The archived record contains the front-matter line, in backticks,
+        inside a longer line -- as the substring but never as a line of its own. Nothing moved."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trim_with_front_matter_line(tmp, quote="`%s` in the front matter." % LEAK_FM_LINE)
+            st = shard.read_text(encoding="utf-8")
+            self.assertIn(LEAK_FM_LINE, st, "control: the archived record must contain the line's text")
+            self.assertNotIn(LEAK_FM_LINE, st.splitlines(),
+                             "control: ...but never as a whole line, which is what 'leaked' means")
+            v = self._proof(p, shard)
+            self.assertNotIn("L2 FRONT MATTER leaked", v.stdout, v.stdout)
+            self.assertIn("OK: L1, L2/front-matter, L3 hold", v.stdout, v.stdout)
+            self.assertEqual(v.returncode, 0, v.stdout)
+
+    def test_a_front_matter_line_copied_whole_into_the_shards_front_matter_still_fails_L2(self):
+        """NARROWED control -- the fix must not become 'never report a leak'. A whole front-matter
+        line landing in the shard's own front matter is the defect the clause exists for."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trim_with_front_matter_line(tmp, shard_front_line=LEAK_FM_LINE)
+            self.assertIn(LEAK_FM_LINE, shard.read_text(encoding="utf-8").splitlines(),
+                          "control: the shard's own front matter must hold the whole line")
+            v = self._proof(p, shard)
+            self.assertIn("FAIL:", v.stdout, v.stdout)
+            self.assertIn("L2 FRONT MATTER leaked 1 line(s)", v.stdout, v.stdout)
+            self.assertNotEqual(v.returncode, 0)
+
+    def test_a_front_matter_line_that_is_a_whole_line_of_an_archived_record_still_fails_L2(self):
+        """NARROWED control -- the record half of the clause. Dropping `ln in <record lines>` while
+        keeping the shard-front-matter half would pass the two tests above; this is the one that
+        notices. It pins what the fix KEEPS: a record that repeats a front-matter line WHOLE still
+        reads as a leak, a stated over-report narrower than the substring test it replaces."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trim_with_front_matter_line(tmp, record_line=LEAK_FM_LINE)
+            self.assertIn(LEAK_FM_LINE, shard.read_text(encoding="utf-8").splitlines(),
+                          "control: the archived record must hold the line as a line of its own")
+            v = self._proof(p, shard)
+            self.assertIn("FAIL:", v.stdout, v.stdout)
+            self.assertIn("L2 FRONT MATTER leaked 1 line(s)", v.stdout, v.stdout)
+            self.assertNotEqual(v.returncode, 0)
+
+    def test_a_front_matter_line_quoted_mid_line_in_the_shards_own_front_matter_is_not_a_leak(self):
+        """NARROWED control for the OTHER half of the clause: the shard's front matter is also tested
+        by whole line. Making only the record half whole-line, and leaving `ln in sfront` a substring
+        test, passes every test above; this is the one that notices."""
+        with tempfile.TemporaryDirectory() as tmp:
+            quoted = "see `%s` in the live file" % LEAK_FM_LINE
+            p, shard = self._trim_with_front_matter_line(tmp, shard_front_line=quoted)
+            st = shard.read_text(encoding="utf-8")
+            self.assertIn(quoted, st.splitlines(), "control: the shard's front matter must hold the quote")
+            self.assertNotIn(LEAK_FM_LINE, st.splitlines(),
+                             "control: ...but never the line as a whole line")
+            v = self._proof(p, shard)
+            self.assertNotIn("L2 FRONT MATTER leaked", v.stdout, v.stdout)
+            self.assertIn("OK: L1, L2/front-matter, L3 hold", v.stdout, v.stdout)
+            self.assertEqual(v.returncode, 0, v.stdout)
+
+    def test_a_short_front_matter_line_repeated_whole_in_a_record_is_not_a_leak(self):
+        """NARROWED control for the length filter: the fix keeps `> 24`. `# Handoff Receipts` is 18
+        characters, a front-matter line that any record can repeat without it meaning anything."""
+        short = "# Handoff Receipts"
+        self.assertLessEqual(len(short), 24, "control: the line must sit under the filter")
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trim_with_front_matter_line(tmp, record_line=short)
+            self.assertIn(short, shard.read_text(encoding="utf-8").splitlines(),
+                          "control: the archived record must hold the short line whole")
+            v = self._proof(p, shard)
+            self.assertNotIn("L2 FRONT MATTER leaked", v.stdout, v.stdout)
+            self.assertIn("OK: L1, L2/front-matter, L3 hold", v.stdout, v.stdout)
+            self.assertEqual(v.returncode, 0, v.stdout)
+
+
+# =============================================================================================
+# Issue #93, cause 1 -- a commit that FINALIZES a session's pending claim stub and trims in the
+# same breath. Phase 1B commits record 0 of HANDOFFS.md as `status: pending`; Phase 3D overwrites
+# it to `status: complete`; if the trim lands in that finalize's commit the proof reads record 0 as
+# EDITED (its pre-trim bytes are the stub, which exist nowhere afterwards) and ends red, 8 times in
+# the adopter issue #93 reports, with nothing lost.
+#
+# BL-27 refused to excuse a bundled frontier edit ("a real loss can have this exact shape"), and
+# this keeps that: the verdict stays a FAIL. What changes is that the proof can now tell
+# the stub shape from the loss shape, because the discriminator is not a guess -- the pre-trim
+# record 0 matches the ledger's own declared stub marker (`LedgerSpec.stub_marker`, carried in the
+# proof as `STUB_PATTERN`), the record that replaced it no longer does, nothing else is absent,
+# the others are in order, and L2 holds. Then it is LABELLED, with its own exit status (4), in
+# place of the generic L1/L3 pair. Anything short of all of that stays exactly as it was: exit 1.
+#
+# THE CONTROLS ARE AS LOAD-BEARING AS THE LABEL. A marker that was too loose would stamp a real
+# edit "stub", so every near-miss below must stay exit 1 with no label -- a complete record 0
+# edited, a stub that is still a stub, a stub finalized beside another record's edit, a stub
+# finalized beside a front-matter edit, and a ledger that declares no marker at all. Every
+# tamper is made BEFORE the one commit: the proof reads the trim commit's own
+# contents.
+# =============================================================================================
+
+class TestVerifyShNamesAStubFinalize(unittest.TestCase):
+
+    def _stub_repo(self, tmp):
+        """make_handoff_repo with record 0 (S0, the frontier) committed as `status: pending`."""
+        p = make_handoff_repo(tmp)
+        hf = p / "HANDOFFS.md"
+        t = hf.read_text(encoding="utf-8")
+        t2, n = re.subn(r"(session: S0\ndate: [^\n]+\n)status: complete\n",
+                        r"\1status: pending\n", t, count=1)
+        self.assertEqual(n, 1, "control: record 0 must be seeded as a pending stub")
+        hf.write_text(t2, encoding="utf-8")
+        sh(p, "git", "commit", "-qa", "--amend", "-m", "seed")
+        return p
+
+    def _trim(self, p):
+        r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        return sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0]
+
+    def _edit_live(self, p, old, new, why):
+        live = p / "HANDOFFS.md"
+        t = live.read_text(encoding="utf-8")
+        t2 = t.replace(old, new, 1)
+        self.assertNotEqual(t2, t, "control: %s" % why)
+        live.write_text(t2, encoding="utf-8")
+
+    def _commit(self, p, msg="trim + edit, bundled"):
+        sh(p, "git", "add", "-A")
+        sh(p, "git", "commit", "-qm", msg)
+
+    def _proof(self, p, shard):
+        return sh(p, "bash", str(shard) + ".verify.sh")
+
+    def _stub_size(self, p):
+        before = sh(p, "git", "show", "HEAD^:HANDOFFS.md").stdout
+        z = mod.classify_zones(before, mod.LEDGERS["HANDOFFS.md"], mod.Result(Path("HANDOFFS.md")))
+        return len(z.records()[0].encode("utf-8"))
+
+    def test_a_pending_stub_finalized_in_the_trim_commit_is_labelled_and_exits_4(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._stub_repo(tmp)
+            shard = self._trim(p)
+            self._edit_live(p, "status: pending\n", "status: complete\n",
+                            "record 0 must be finalized in the live ledger")
+            self._commit(p, "trim + stub finalize, bundled")
+            v = self._proof(p, shard)
+            self.assertEqual(v.returncode, 4, v.stdout)
+            self.assertIn("FAIL:", v.stdout, "labelled, but still a FAIL: " + v.stdout)
+            self.assertIn("was a pending stub (%d B)" % self._stub_size(p), v.stdout, v.stdout)
+            self.assertIn("was finalized in the trim commit", v.stdout, v.stdout)
+            self.assertIn("the other 5 record(s) are byte-identical", v.stdout, v.stdout)
+            self.assertNotIn("L1 records-zone concatenation is not byte-identical", v.stdout,
+                             "the label REPLACES the generic L1/L3 pair, it does not sit beside it")
+            self.assertNotIn("MISSING from live+shard", v.stdout, v.stdout)
+            self.assertNotIn("OK:", v.stdout, "a labelled stub finalize must never read as a pass")
+            self.assertIn("NOTE: exit 4, not 1:", v.stdout, "the label explains its own exit status")
+            self.assertIn(TIMING_RULE, v.stdout, "...and states the timing rule")
+
+    def test_a_stub_that_is_still_pending_after_the_trim_is_not_called_finalized(self):
+        """NARROWED control. The label says FINALIZED, so it must not stamp a stub that was merely
+        edited while pending: the replacing record still matches the marker."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._stub_repo(tmp)
+            shard = self._trim(p)
+            self._edit_live(p, "status: pending\nactive_task: x\n",
+                            "status: pending\nactive_task: x (still claiming)\n",
+                            "record 0 must change while staying pending")
+            self._commit(p)
+            v = self._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertNotIn("pending stub", v.stdout, v.stdout)
+            self.assertIn("NOTE:", v.stdout, "the generic frontier note still applies: " + v.stdout)
+
+    def test_a_complete_record_0_edited_in_the_trim_commit_still_exits_1_with_no_stub_label(self):
+        """NARROWED control -- the real-loss shape BL-27 protected: record 0 was a COMPLETE
+        receipt before the trim and differs after it. Exit 1, the BL-27 note, never relabelled."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            shard = self._trim(p)
+            self._edit_live(p, "status: complete\nactive_task: x",
+                            "status: complete\nactive_task: x (finalized)",
+                            "record 0 must change")
+            self._commit(p)
+            v = self._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertNotIn("pending stub", v.stdout, v.stdout)
+            self.assertIn("NOTE:", v.stdout, v.stdout)
+            self.assertIn("BL-27", v.stdout, v.stdout)
+
+    def test_a_stub_finalize_beside_an_edit_to_another_record_is_not_labelled(self):
+        """NARROWED control -- 'the other N records are byte-identical' must be TRUE for the label
+        to print. A real loss riding in the same commit as a stub finalize keeps exit 1."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._stub_repo(tmp)
+            shard = self._trim(p)
+            self._edit_live(p, "status: pending\n", "status: complete\n",
+                            "record 0 must be finalized")
+            self._edit_live(p, "session: S1\n", "session: S1-TAMPERED\n",
+                            "record 1 must be edited too")
+            self._commit(p)
+            v = self._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertNotIn("pending stub", v.stdout, v.stdout)
+            self.assertIn("L3 2 record(s) present before the trim are MISSING", v.stdout, v.stdout)
+
+    def test_a_stub_finalize_beside_a_reorder_of_other_records_is_not_labelled(self):
+        """NARROWED control for the ORDER half of 'the other records are byte-identical'. Once the
+        stub is the only absent record, the others are equal as a SET by construction; a reorder is
+        the one way they can still differ, and the label must not cover it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._stub_repo(tmp)
+            shard = self._trim(p)
+            self._edit_live(p, "status: pending\n", "status: complete\n",
+                            "record 0 must be finalized")
+            marker = "```handoff\n"
+            parts = shard.read_text(encoding="utf-8").split(marker)
+            self.assertGreaterEqual(len(parts), 4, "control: the shard must hold at least 3 records")
+            parts[1], parts[2] = parts[2], parts[1]
+            shard.write_text(marker.join(parts), encoding="utf-8")
+            self._commit(p)
+            v = self._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertNotIn("pending stub", v.stdout, v.stdout)
+            self.assertIn("FAIL:", v.stdout, v.stdout)
+
+    def test_a_stub_finalize_beside_a_front_matter_edit_is_not_labelled(self):
+        """NARROWED control -- the label also needs L2 to hold. A front-matter line lost in the
+        same commit is a failure the label must not hide."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._stub_repo(tmp)
+            shard = self._trim(p)
+            self._edit_live(p, "status: pending\n", "status: complete\n",
+                            "record 0 must be finalized")
+            self._edit_live(p, "# Handoff Receipts", "# TAMPERED", "a front-matter line must be replaced")
+            self._commit(p)
+            v = self._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("L2 FRONT MATTER", v.stdout, v.stdout)
+            self.assertNotIn("pending stub", v.stdout, v.stdout)
+
+    def test_the_proofs_grammar_carries_the_ledgers_stub_pattern(self):
+        """The marker must travel IN the proof (a frozen script cannot consult a ledger table), on
+        the same footing as REGEN_PATTERNS: HANDOFFS.md declares one, CHANGELOG.md declares none."""
+        def pattern_of(proof_text):
+            m = re.search(r"^STUB_PATTERN = (.*)$", proof_text, re.M)
+            self.assertIsNotNone(m, "the proof must carry a STUB_PATTERN line")
+            return ast.literal_eval(m.group(1))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._stub_repo(tmp)
+            shard = self._trim(p)
+            pat = pattern_of((shard.parent / (shard.name + ".verify.sh")).read_text(encoding="utf-8"))
+            def receipt(line):                      # the marker is scoped to the receipt's own fence
+                return "```handoff\nsession: S1\n%s\ny: z\n```\n" % line
+            self.assertTrue(re.search(pat, receipt("status: pending"), re.M),
+                            "the HANDOFFS marker must match a pending line")
+            self.assertFalse(re.search(pat, receipt("status: complete"), re.M),
+                             "...and must not match a complete one")
+            self.assertFalse(re.search(pat, receipt("next_steps: grep `status: pending` here"), re.M),
+                             "...nor a line that merely quotes the marker")
+            self.assertFalse(re.search(pat, receipt("next_steps: the stub reads status: pending"), re.M),
+                             "...nor one that ENDS with it, so the marker is anchored at the line's start")
+            self.assertFalse(re.search(pat, "x\nstatus: pending\ny\n", re.M),
+                             "...nor a bare line outside any receipt fence (TestTheHandoffsStubMarkerIsScopedToItsFence)")
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            r = run_trim(p, "--file", "CHANGELOG.md", "--write", "--today", "2026-02-01")
+            self.assertIn("[WROTE]", r.stdout, r.stdout)
+            shard = sorted((p / "docs" / "archive").glob("CHANGELOG-through-*.md"))[0]
+            self.assertEqual(
+                pattern_of((shard.parent / (shard.name + ".verify.sh")).read_text(encoding="utf-8")), "",
+                "CHANGELOG.md declares no stub marker: its committed entries are never edited in place "
+                "(FRAMEWORK_APPARATUS.md, The Action Ledger, Lifecycle), so a claim entry that still "
+                "reads (in progress) is a FINAL record, not a stub awaiting its finalize")
+        self.assertIsNone(mod.LEDGERS["CHANGELOG.md"].stub_marker)
+        self.assertIsNotNone(mod.LEDGERS["HANDOFFS.md"].stub_marker)
+
+    def test_a_ledger_that_declares_no_stub_marker_labels_nothing_and_says_so(self):
+        """NARROWED control. CHANGELOG.md's record 0 is seeded as a claim-shaped `(in progress)`
+        entry and its body is edited in the trim commit: with no marker declared the proof cannot
+        tell this from any other frontier edit, stays exit 1, and its note SAYS that."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            cl = p / "CHANGELOG.md"
+            t = cl.read_text(encoding="utf-8")
+            t2 = t.replace("[ad hoc] entry 0\n", "[ad hoc] entry 0 claim (in progress)\n", 1)
+            self.assertNotEqual(t2, t, "control: record 0 must be seeded claim-shaped")
+            cl.write_text(t2, encoding="utf-8")
+            sh(p, "git", "commit", "-qa", "--amend", "-m", "seed")
+            r = run_trim(p, "--file", "CHANGELOG.md", "--write", "--today", "2026-02-01")
+            self.assertIn("[WROTE]", r.stdout, r.stdout)
+            shard = sorted((p / "docs" / "archive").glob("CHANGELOG-through-*.md"))[0]
+            live = cl.read_text(encoding="utf-8")
+            live2 = live.replace("see [the runner](SESSION_RUNNER.md)",
+                                 "TAMPERED see [the runner](SESSION_RUNNER.md)", 1)
+            self.assertNotEqual(live2, live, "control: record 0's body must change")
+            cl.write_text(live2, encoding="utf-8")
+            self._commit(p)
+            v = self._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertNotIn("pending stub", v.stdout, v.stdout)
+            self.assertIn("NOTE:", v.stdout, v.stdout)
+            self.assertIn("declares no stub marker", v.stdout, v.stdout)
+
+
+# =============================================================================================
+# Issue #93, cause 1, the PREVENT half -- a write-time guard. The proof can only NAME a stub
+# finalize after the fact; the writer can see the bad state coming. Two orders reach it:
+#
+#   A. the claim is committed and record 0 is still `status: pending` when the trimmer runs
+#      (the session then finalizes it and commits both): FRONTIER_PENDING_STUB.
+#   B. the session finalized record 0 FIRST, uncommitted, then ran the trimmer: record 0 is
+#      complete at write time, but HEAD's record 0 was a stub and the working tree no longer
+#      holds it: FRONTIER_FINALIZE_UNCOMMITTED.
+#
+# Both are ADVISORY (exit 0, the write proceeds): the tool names the consequence and the two ways
+# out, and refuses nothing, because a trim that bundles a finalize is lossless and is still the
+# operator's call. The guard keys on the ledger's declared stub_marker, so a ledger that declares
+# none is silent. It is silent on a clean tree, on a stub that is not the frontier, and on a
+# dirty ledger whose HEAD record 0 was never a stub (that edit is the proof's real-loss shape,
+# not this guard's).
+# =============================================================================================
+
+TIMING_RULE = "a commit of its own, never in the same commit that edits record 0"
+
+
+class TestWriteTimeGuardForAStubFinalize(unittest.TestCase):
+
+    def _repo(self, tmp, pending=(0,)):
+        """make_handoff_repo with the named records committed as `status: pending`."""
+        p = make_handoff_repo(tmp)
+        hf = p / "HANDOFFS.md"
+        t = hf.read_text(encoding="utf-8")
+        for i in pending:
+            t, n = re.subn(r"(session: S%d\ndate: [^\n]+\n)status: complete\n" % i,
+                           r"\1status: pending\n", t, count=1)
+            self.assertEqual(n, 1, "control: S%d must be seeded pending" % i)
+        hf.write_text(t, encoding="utf-8")
+        sh(p, "git", "commit", "-qa", "--amend", "-m", "seed")
+        return p
+
+    def _codes(self, p, **kw):
+        return ev(p, "HANDOFFS.md", cut="2", **kw)
+
+    def _touch_ledger(self, p):
+        """A commit that touches HANDOFFS.md must also record itself in CHANGELOG.md, or the trimmer's
+        own P1 check refuses to run (the undocumented set is non-empty) and the guard is never reached."""
+        cl = p / "CHANGELOG.md"
+        t = cl.read_text(encoding="utf-8")
+        at = t.index("### ")
+        cl.write_text(t[:at] + "### 2026-01-31 · [ad hoc] a documented commit\n\nbody\n\n" + t[at:],
+                      encoding="utf-8")
+
+    def test_a_pending_stub_at_record_0_fires_the_guard_and_names_the_one_rule(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._repo(tmp)
+            r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--today", "2026-02-01")
+            self.assertIn("[FRONTIER_PENDING_STUB]", r.stdout, r.stdout)
+            self.assertIn("[DRY_RUN]", r.stdout, "the guard is advisory: the dry run still completes")
+            self.assertEqual(r.returncode, 0, "advisory, so exit 0: " + r.stdout)
+            self.assertIn(TIMING_RULE, " ".join(r.stdout.split()), "the message names the rule")
+            self.assertEqual(sh(p, "git", "status", "--porcelain").stdout.strip(), "",
+                             "a dry run writes nothing")
+
+    def test_the_guard_does_not_refuse_the_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._repo(tmp)
+            r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+            self.assertIn("[FRONTIER_PENDING_STUB]", r.stdout, r.stdout)
+            self.assertIn("[WROTE]", r.stdout, "advisory, never a refusal: " + r.stdout)
+            self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_a_stub_finalized_in_the_tree_but_not_committed_fires_the_other_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._repo(tmp)
+            hf = p / "HANDOFFS.md"
+            t = hf.read_text(encoding="utf-8")
+            t2 = t.replace("status: pending\n", "status: complete\n", 1)
+            self.assertNotEqual(t2, t, "control: record 0 must be finalized in the working tree")
+            hf.write_text(t2, encoding="utf-8")
+            self.assertEqual(sh(p, "git", "status", "--porcelain", "HANDOFFS.md").stdout.split()[0], "M",
+                             "control: the finalize is uncommitted")
+            r = self._codes(p)
+            self.assertIn("FRONTIER_FINALIZE_UNCOMMITTED", r.codes, r.codes)
+            self.assertNotIn("FRONTIER_PENDING_STUB", r.codes,
+                             "record 0 is complete at write time, so order A does not apply")
+            self.assertEqual(r.exit, 0, "advisory")
+            msg = next(f.message for f in r.findings if f.code == "FRONTIER_FINALIZE_UNCOMMITTED")
+            self.assertIn("commit the finalize first", msg, "the way out")
+            self.assertIn(TIMING_RULE, " ".join(msg.split()))
+
+    def test_the_advised_order_gives_a_passing_proof(self):
+        """The message's way out must WORK: finalize and commit, then trim in its own commit."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._repo(tmp)
+            hf = p / "HANDOFFS.md"
+            hf.write_text(hf.read_text(encoding="utf-8").replace("status: pending\n", "status: complete\n", 1),
+                          encoding="utf-8")
+            self._touch_ledger(p)
+            sh(p, "git", "commit", "-qam", "finalize record 0")
+            r = ev(p, "HANDOFFS.md", cut="2", write=True)
+            self.assertNotIn("FRONTIER_PENDING_STUB", r.codes, r.codes)
+            self.assertNotIn("FRONTIER_FINALIZE_UNCOMMITTED", r.codes, r.codes)
+            self.assertIn("WROTE", r.codes, r.codes)
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim")
+            shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0]
+            v = sh(p, "bash", str(shard) + ".verify.sh")
+            self.assertEqual(v.returncode, 0, v.stdout)
+            self.assertIn("OK: L1, L2/front-matter, L3 hold", v.stdout, v.stdout)
+
+    def test_a_clean_ledger_with_a_complete_record_0_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r = ev(make_handoff_repo(tmp), "HANDOFFS.md", cut="2")
+            self.assertNotIn("FRONTIER_PENDING_STUB", r.codes, r.codes)
+            self.assertNotIn("FRONTIER_FINALIZE_UNCOMMITTED", r.codes, r.codes)
+
+    def test_a_stub_that_is_not_the_frontier_is_silent(self):
+        """A pending record BELOW record 0 is not what a trim commit would finalize."""
+        with tempfile.TemporaryDirectory() as tmp:
+            r = self._codes(self._repo(tmp, pending=(1,)))
+            self.assertNotIn("FRONTIER_PENDING_STUB", r.codes, r.codes)
+            self.assertNotIn("FRONTIER_FINALIZE_UNCOMMITTED", r.codes, r.codes)
+
+    def test_an_edit_to_a_record_that_was_never_a_stub_is_not_this_guards_business(self):
+        """A COMPLETE record 0 edited in the tree is the real-loss shape; the proof handles it and
+        the guard, which is about stubs, stays out."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            hf = p / "HANDOFFS.md"
+            t = hf.read_text(encoding="utf-8")
+            t2 = t.replace("active_task: x", "active_task: x (edited)", 1)
+            self.assertNotEqual(t2, t, "control: record 0 must change")
+            hf.write_text(t2, encoding="utf-8")
+            r = ev(p, "HANDOFFS.md", cut="2")
+            self.assertNotIn("FRONTIER_PENDING_STUB", r.codes, r.codes)
+            self.assertNotIn("FRONTIER_FINALIZE_UNCOMMITTED", r.codes, r.codes)
+
+    def test_a_record_prepended_above_a_committed_stub_does_not_fire_the_other_order(self):
+        """NARROWED control for order B. HEAD's stub is still in the ledger, one position down, so
+        nothing finalized it: the guard asks whether HEAD's stub is ABSENT, not whether record 0
+        moved."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._repo(tmp)
+            hf = p / "HANDOFFS.md"
+            t = hf.read_text(encoding="utf-8")
+            at = t.index("```handoff\n")
+            new = "```handoff\nsession: S99\ndate: 2026-02-02\nstatus: complete\nactive_task: y\n```\n\n---\n\n"
+            hf.write_text(t[:at] + new + t[at:], encoding="utf-8")
+            r = ev(p, "HANDOFFS.md", cut="2")
+            self.assertNotIn("FRONTIER_PENDING_STUB", r.codes, "the new record 0 is complete: " + str(r.codes))
+            self.assertNotIn("FRONTIER_FINALIZE_UNCOMMITTED", r.codes, r.codes)
+
+    def test_a_checkout_that_converts_line_endings_is_not_read_as_a_finalize(self):
+        """NARROWED control for the CRLF fold. HEAD's stub is still in the ledger below a new record,
+        but the working copy was checked out with CRLF endings, so its text differs byte for byte.
+        Line-ending conversion is not an edit, and reading it as one would cry wolf on Windows."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._repo(tmp)
+            hf = p / "HANDOFFS.md"
+            t = hf.read_text(encoding="utf-8")
+            at = t.index("```handoff\n")
+            new = "```handoff\nsession: S99\ndate: 2026-02-02\nstatus: complete\nactive_task: y\n```\n\n---\n\n"
+            t = t[:at] + new + t[at:]
+            hf.write_bytes(t.replace("\n", "\r\n").encode("utf-8"))
+            self.assertIn(b"\r\n", hf.read_bytes(), "control: the working copy must be CRLF")
+            r = ev(p, "HANDOFFS.md", cut="2")
+            self.assertIn("DRY_RUN", r.codes, "control: the guard's neighbours must still run: " + str(r.codes))
+            self.assertNotIn("FRONTIER_FINALIZE_UNCOMMITTED", r.codes, r.codes)
+            self.assertNotIn("FRONTIER_PENDING_STUB", r.codes, r.codes)
+
+    def test_a_ledger_that_declares_no_stub_marker_is_silent(self):
+        """CHANGELOG.md declares no marker: a claim entry reading (in progress) at record 0 is a FINAL
+        record there, and warning about it on every trim would teach everyone to ignore the guard."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            cl = p / "CHANGELOG.md"
+            t = cl.read_text(encoding="utf-8")
+            t2 = t.replace("[ad hoc] entry 0\n", "[ad hoc] entry 0 claim (in progress)\n", 1)
+            self.assertNotEqual(t2, t, "control: record 0 must be claim-shaped")
+            cl.write_text(t2, encoding="utf-8")
+            sh(p, "git", "commit", "-qa", "--amend", "-m", "seed")
+            r = ev(p, "CHANGELOG.md", cut="2")
+            self.assertNotIn("FRONTIER_PENDING_STUB", r.codes, r.codes)
+            self.assertNotIn("FRONTIER_FINALIZE_UNCOMMITTED", r.codes, r.codes)
+            self.assertEqual(r.exit, 0)
+
+    def _untrack_receipts(self, p):
+        sh(p, "git", "rm", "-q", "--cached", "HANDOFFS.md")
+        self._touch_ledger(p)
+        sh(p, "git", "commit", "-qam", "untrack the receipt ledger")
+        self.assertNotEqual(sh(p, "git", "show", "HEAD:HANDOFFS.md").returncode, 0,
+                            "control: HEAD must hold no HANDOFFS.md")
+        self.assertTrue((p / "HANDOFFS.md").is_file(), "control: the working file must remain")
+
+    def test_an_untracked_ledger_still_fires_order_A(self):
+        """No HEAD version of the ledger: order B cannot be judged, but order A needs only the working
+        file and still fires."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._repo(tmp)
+            self._untrack_receipts(p)
+            self.assertIn("FRONTIER_PENDING_STUB", self._codes(p).codes)
+
+    def test_an_untracked_ledger_with_a_complete_record_0_skips_order_B_without_crashing(self):
+        """NARROWED control for the missing-HEAD branch. With a COMPLETE record 0 order A does not
+        fire, so this is the only test that reaches the `git show HEAD:` lookup and sees it fail."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._repo(tmp, pending=())
+            self._untrack_receipts(p)
+            r = self._codes(p)
+            self.assertIn("DRY_RUN", r.codes, "control: the run must complete: " + str(r.codes))
+            self.assertNotIn("FRONTIER_PENDING_STUB", r.codes, r.codes)
+            self.assertNotIn("FRONTIER_FINALIZE_UNCOMMITTED", r.codes, r.codes)
+
+
+# =============================================================================================
+# Issue #93, the third layer -- SAY THE SAME THING EVERYWHERE. The rule that makes a trim lossless-
+# and-green is a timing one (give the trim a commit of its own, never in the same commit that edits
+# record 0 -- the finalize that replaces a pending stub). It lived only in the repo's habits
+# while the proof's own note told the reader that bundling was "this repository's own established
+# practice": a file's instructions and its verifier disagreeing, where only the verifier is
+# mechanical. These tests pin the same words in every place a reader meets the rule -- the writer's
+# two warnings, the proof's two notes and the distributed prose -- and pin the retired claim gone.
+# =============================================================================================
+
+class TestTheTimingRuleIsStatedTheSameEverywhere(unittest.TestCase):
+
+    def test_the_constant_the_writer_uses_carries_the_rule(self):
+        self.assertIn(TIMING_RULE, mod.TRIM_TIMING_RULE)
+
+    def test_the_distributed_prose_carries_the_rule(self):
+        prose = " ".join((REPO / "FRAMEWORK_APPARATUS.md").read_text(encoding="utf-8").split())
+        self.assertIn(TIMING_RULE, prose,
+                      "FRAMEWORK_APPARATUS.md, The Action Ledger, must state the timing rule in the same words")
+        self.assertIn("committed on its own while record 0 is a stub", prose,
+                      "...and the prose must say what is fine, not only what is not")
+
+    def test_the_proofs_generic_frontier_note_carries_the_rule_and_not_the_retired_claim(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = make_handoff_repo(tmp)
+            shard = helper._trim(p)
+            helper._edit_live(p, "status: complete\nactive_task: x",
+                              "status: complete\nactive_task: x (finalized)", "record 0 must change")
+            helper._commit(p)
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn(TIMING_RULE, v.stdout, v.stdout)
+            self.assertNotIn("established practice", v.stdout, v.stdout)
+            self.assertNotIn("own practice bundles", v.stdout, v.stdout)
+
+    def test_the_proofs_stub_note_carries_the_rule(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = helper._stub_repo(tmp)
+            shard = helper._trim(p)
+            helper._edit_live(p, "status: pending\n", "status: complete\n", "record 0 must be finalized")
+            helper._commit(p)
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 4, v.stdout)
+            self.assertIn(TIMING_RULE, v.stdout, v.stdout)
+
+    def test_the_template_no_longer_asserts_bundling_is_this_repositorys_practice(self):
+        self.assertNotIn("established practice", mod.VERIFY_TEMPLATE)
+        self.assertNotIn("own practice bundles", mod.VERIFY_TEMPLATE)
+
+
+# =============================================================================================
+# Issue #93, cause 3 -- `--reverify <shard>`. A proof is a FROZEN artifact, so a fix to the
+# template (the whole-line `leaked` test, the stub label) never reaches a proof already written, and
+# an adopter is left holding red proofs of lossless trims with no way to ask what today's template
+# says. The flag takes the shard, lifts LIVE, SHARD and the record grammar out of its frozen
+# `.verify.sh`, fills TODAY'S template with them, runs it, and prints the verdict under a banner
+# that says exactly what it is. It writes nothing -- a test asserts the repository is byte-for-byte
+# and mtime-for-mtime what it was -- and it leaves the frozen proof alone.
+#
+# TWO THINGS MAKE THE FLAG SAFE TO POINT AT A TREE YOU DO NOT TRUST, and both are tested by
+# driving the attack, not by reading the guard: the lifted text is spliced into a shell assignment
+# and into Python source that the generated proof then EXECUTES, so each lifted line must be in the
+# exact form the template writes and anything else is refused by name. And the verdict is a claim
+# about today's logic, NOT about the artifact that was shipped, so the banner says so.
+# =============================================================================================
+
+REVERIFY_REQUIRED_LINES = ("LIVE", "SHARD", "RECORD_KIND", "RECORD_START", "FENCE_INFO", "FOOTER_MODE")
+
+
+class TestReverify(unittest.TestCase):
+
+    def _trimmed(self, tmp):
+        """make_handoff_repo, trimmed at --cut 2 and committed. Returns (repo, shard path relative
+        to the repo root, as the proof names it)."""
+        p = make_handoff_repo(tmp)
+        r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        sh(p, "git", "add", "-A")
+        sh(p, "git", "commit", "-qm", "trim")
+        shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0]
+        return p, shard.relative_to(p).as_posix()
+
+    def _rv(self, p, shard, *extra):
+        return run_trim(p, "--reverify", shard, *extra)
+
+    def _snapshot(self, p):
+        """Everything a read-only mode must leave alone: every file (size and mtime) and every
+        directory outside .git, plus what git reports about the tree and its refs."""
+        seen = {}
+        for root, dirs, names in os.walk(str(p)):
+            dirs[:] = [d for d in dirs if d != ".git"]
+            for n in dirs:
+                seen[os.path.relpath(os.path.join(root, n), str(p))] = "dir"
+            for n in names:
+                fp = os.path.join(root, n)
+                st = os.stat(fp)
+                seen[os.path.relpath(fp, str(p))] = (st.st_size, st.st_mtime_ns)
+        return (seen,
+                sh(p, "git", "status", "--porcelain", "--untracked-files=all").stdout,
+                sh(p, "git", "rev-parse", "HEAD").stdout,
+                sh(p, "git", "for-each-ref").stdout,
+                sh(p, "git", "stash", "list").stdout)
+
+    def _proof_path(self, p, shard):
+        return p / (shard + ".verify.sh")
+
+    def _rewrite_proof(self, p, shard, fn, why):
+        path = self._proof_path(p, shard)
+        t = path.read_text(encoding="utf-8")
+        t2 = fn(t)
+        self.assertNotEqual(t2, t, "control: %s" % why)
+        path.write_text(t2, encoding="utf-8")
+        return t
+
+    @staticmethod
+    def _drop_line(key):
+        return lambda t: re.sub(r"^%s(?: = |=).*\n" % re.escape(key), "", t, count=1, flags=re.M)
+
+    @staticmethod
+    def _as_written_before_the_stub_label(t):
+        """The proof as a 1.5.x trimmer wrote it: no STUB_PATTERN line, and no stub marker to act
+        on. The label logic stays in the body but is disabled by STUB being None, so this frozen
+        stand-in behaves as the older template did (generic note, exit 1)."""
+        t2 = re.sub(r"# Issue #93: what a PENDING STUB.*?\nSTUB = re\.compile\(.*?\n",
+                    "STUB = None\n", t, count=1, flags=re.S)
+        return t2.replace("generated by methodology_trim.py v%s." % mod.TRIM_VERSION,
+                          "generated by methodology_trim.py v1.5.0.")
+
+    # --- the capability ---------------------------------------------------------------------
+
+    def test_a_lossless_trims_proof_rederives_green_and_the_banner_says_what_it_is(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            r = self._rv(p, shard)
+            self.assertEqual(r.returncode, 0, r.stdout)
+            self.assertIn("[REVERIFY_BANNER]", r.stdout)
+            self.assertIn("re-derived by methodology_trim.py v%s" % mod.TRIM_VERSION, r.stdout)
+            self.assertIn("written by v%s" % mod.TRIM_VERSION, r.stdout,
+                          "the banner names the version that wrote the frozen proof")
+            self.assertIn("NOT the artifact that was shipped", r.stdout)
+            self.assertIn("Nothing was written", r.stdout)
+            self.assertIn("[REVERIFY_VERDICT]", r.stdout)
+            self.assertIn("OK: L1, L2/front-matter, L3 hold", r.stdout, r.stdout)
+
+    def test_it_writes_nothing_on_a_green_a_red_and_a_refused_shard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            (p / "scratch.txt").write_text("untracked\n", encoding="utf-8")
+            with open(str(p / "CHANGELOG.md"), "a", encoding="utf-8") as fh:
+                fh.write("\nan uncommitted edit\n")
+            before = self._snapshot(p)
+            green = self._rv(p, shard)
+            self.assertEqual(green.returncode, 0, green.stdout)
+            self.assertEqual(self._snapshot(p), before, "a green re-derive must write nothing")
+            self._proof_path(p, shard).rename(p / "moved.verify.sh")
+            before = self._snapshot(p)
+            refused = self._rv(p, shard)
+            self.assertEqual(refused.returncode, 3, refused.stdout)
+            self.assertIn("[REVERIFY_NO_PROOF]", refused.stdout)
+            self.assertEqual(self._snapshot(p), before, "a refused re-derive must write nothing")
+            (p / "moved.verify.sh").rename(self._proof_path(p, shard))
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShLeakedTestsWholeLines()
+            p, shard_path = helper._trim_with_front_matter_line(tmp, record_line=LEAK_FM_LINE)
+            shard = shard_path.relative_to(p).as_posix()
+            before = self._snapshot(p)
+            red = self._rv(p, shard)
+            self.assertEqual(red.returncode, 1, "control: this fixture must re-derive RED\n" + red.stdout)
+            self.assertIn("L2 FRONT MATTER leaked", red.stdout)
+            self.assertEqual(self._snapshot(p), before, "a red re-derive must write nothing")
+
+    def test_a_frozen_red_proof_is_rederived_green_and_the_frozen_proof_is_left_alone(self):
+        """The headline. Cause 2's false red: an archived record QUOTES a front-matter line
+        mid-line. The proof as 1.5.0 wrote it reads that as a leak; today's template does not."""
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShLeakedTestsWholeLines()
+            p, shard_path = helper._trim_with_front_matter_line(
+                tmp, quote="`%s` in the front matter." % LEAK_FM_LINE)
+            shard = shard_path.relative_to(p).as_posix()
+            old = ('leaked = [ln for ln in bfront.splitlines()\n'
+                   '          if ln.strip() and len(ln.strip()) > 24 and (ln in sfront or ln in "".join(sr))]')
+            new = ('sfront_lines = set(sfront.splitlines())\n'
+                   'sr_lines = set("".join(sr).splitlines())\n'
+                   'leaked = [ln for ln in bfront.splitlines()\n'
+                   '          if ln.strip() and len(ln.strip()) > 24 and (ln in sfront_lines or ln in sr_lines)]')
+            self.assertIn(new, self._proof_path(p, shard).read_text(encoding="utf-8"),
+                          "control: the template under test must carry the whole-line clause")
+            self._rewrite_proof(
+                p, shard, lambda t: self._as_written_before_the_stub_label(t.replace(new, old, 1)),
+                "the proof must be rewritten as 1.5.0 wrote it")
+            sh(p, "git", "commit", "-qam", "the frozen proof, as 1.5.0 wrote it")
+            frozen = sh(p, "bash", str(self._proof_path(p, shard)))
+            self.assertEqual(frozen.returncode, 1, "control: the frozen proof is the false red\n" + frozen.stdout)
+            self.assertIn("L2 FRONT MATTER leaked", frozen.stdout)
+            proof_before = self._proof_path(p, shard).read_bytes()
+            shard_before = (p / shard).read_bytes()
+            r = self._rv(p, shard)
+            self.assertEqual(r.returncode, 0, r.stdout)
+            self.assertIn("OK: L1, L2/front-matter, L3 hold", r.stdout, r.stdout)
+            self.assertNotIn("L2 FRONT MATTER leaked", r.stdout)
+            self.assertIn("written by v1.5.0", r.stdout)
+            self.assertEqual(self._proof_path(p, shard).read_bytes(), proof_before,
+                             "the frozen proof is an artifact: re-deriving must not touch it")
+            self.assertEqual((p / shard).read_bytes(), shard_before)
+
+    def test_a_proof_older_than_the_stub_label_is_rederived_with_the_label_from_the_ledger_table(self):
+        """A frozen proof carries no STUB_PATTERN (it predates 1.6.0), so a re-derive that read the
+        marker only from the proof would label nothing. It comes from LEDGERS by the LIVE basename."""
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = helper._stub_repo(tmp)
+            shard_path = helper._trim(p)
+            helper._edit_live(p, "status: pending\n", "status: complete\n",
+                              "record 0 must be finalized in the live ledger")
+            helper._commit(p, "trim + stub finalize, bundled")
+            shard = shard_path.relative_to(p).as_posix()
+            self._rewrite_proof(p, shard, self._as_written_before_the_stub_label,
+                                "the proof must be rewritten as 1.5.x wrote it")
+            self.assertNotIn("STUB_PATTERN", self._proof_path(p, shard).read_text(encoding="utf-8"),
+                             "control: the frozen stand-in must carry no STUB_PATTERN line")
+            frozen = sh(p, "bash", str(self._proof_path(p, shard)))
+            self.assertEqual(frozen.returncode, 1, "control: the frozen proof cannot name it\n" + frozen.stdout)
+            self.assertNotIn("pending stub", frozen.stdout)
+            r = self._rv(p, shard)
+            self.assertEqual(r.returncode, 4, r.stdout)
+            self.assertIn("was a pending stub", r.stdout, r.stdout)
+            self.assertIn("[REVERIFY_SUBSTITUTED]", r.stdout)
+            self.assertIn("STUB_PATTERN", r.stdout)
+            self.assertIn("HANDOFFS.md", r.stdout, "the substitution names the basename it was keyed by")
+
+    def test_a_proof_with_no_regen_line_lifts_with_an_empty_list_and_says_so(self):
+        """Proofs older than 1.1.2 have no REGEN_PATTERNS. That is not a refusal -- the grammar
+        they ran under simply had no regenerated field -- but the substitution is stated."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self._rewrite_proof(p, shard, self._drop_line("REGEN_PATTERNS"),
+                                "the REGEN_PATTERNS line must be gone")
+            r = self._rv(p, shard)
+            self.assertIn("[REVERIFY_SUBSTITUTED]", r.stdout, r.stdout)
+            self.assertIn("REGEN_PATTERNS", r.stdout)
+            self.assertIn("[REVERIFY_VERDICT]", r.stdout, "it still re-derives; absence is not a refusal")
+            self.assertNotEqual(r.returncode, 3, r.stdout)
+
+    def test_the_proof_path_is_accepted_in_place_of_the_shard(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            r = self._rv(p, shard + ".verify.sh")
+            self.assertEqual(r.returncode, 0, r.stdout)
+            self.assertIn("OK: L1, L2/front-matter, L3 hold", r.stdout, r.stdout)
+
+    def test_it_runs_from_a_subdirectory_and_with_an_absolute_shard_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            r = run_trim(p / "docs", "--reverify", str(p / shard))
+            self.assertEqual(r.returncode, 0, r.stdout)
+            r = run_trim(p / "docs" / "archive", "--reverify", Path(shard).name)
+            self.assertEqual(r.returncode, 0, r.stdout)
+
+    # --- what it refuses, by name -------------------------------------------------------------
+
+    def test_a_shard_with_no_proof_beside_it_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self._proof_path(p, shard).unlink()
+            r = self._rv(p, shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NO_PROOF]", r.stdout)
+            self.assertNotIn("[REVERIFY_VERDICT]", r.stdout)
+
+    def test_a_proof_missing_any_required_grammar_line_is_refused_naming_the_line(self):
+        for key in REVERIFY_REQUIRED_LINES:
+            with self.subTest(line=key), tempfile.TemporaryDirectory() as tmp:
+                p, shard = self._trimmed(tmp)
+                self._rewrite_proof(p, shard, self._drop_line(key), "the %s line must be gone" % key)
+                r = self._rv(p, shard)
+                self.assertEqual(r.returncode, 3, r.stdout)
+                self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+                self.assertIn(key, r.stdout, "the refusal must name the line it could not find")
+                self.assertNotIn("[REVERIFY_VERDICT]", r.stdout)
+
+    def test_a_grammar_line_that_appears_twice_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self._rewrite_proof(p, shard,
+                                lambda t: t.replace('FOOTER_MODE = "none"\n', 'FOOTER_MODE = "none"\nFOOTER_MODE = "none"\n', 1),
+                                "the FOOTER_MODE line must now appear twice")
+            r = self._rv(p, shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+            self.assertIn("FOOTER_MODE", r.stdout)
+
+    def test_a_grammar_line_not_in_the_form_the_template_writes_is_refused(self):
+        cases = (("RECORD_KIND", 'RECORD_KIND = "fence"', 'RECORD_KIND = "paragraph"'),
+                 ("FOOTER_MODE", 'FOOTER_MODE = "none"', 'FOOTER_MODE = "somewhere"'),
+                 ("FENCE_INFO", 'FENCE_INFO = "handoff"', 'FENCE_INFO = "hand off; x"'),
+                 ("RECORD_START", 'RECORD_START = r""', 'RECORD_START = r"("'),
+                 ("REGEN_PATTERNS", None, "REGEN_PATTERNS = [1, 2]"),
+                 ("SHARD", None, "SHARD=docs/archive/../../etc/passwd"),
+                 ("LIVE", None, "LIVE=../../etc/passwd"),
+                 ("LIVE", None, "LIVE=/etc/passwd"),
+                 ("REGEN_PATTERNS", None, "REGEN_PATTERNS = 'not a list'"),
+                 ("STUB_PATTERN", None, "STUB_PATTERN = 5"),
+                 ("STUB_PATTERN", None, "STUB_PATTERN='no spaces round the ='"),
+                 # a no-space form whose tail would be a VALID literal if the line were sliced as
+                 # `KEY = <literal>`: only the exact-form test refuses it, not the literal parse
+                 ("STUB_PATTERN", None, "STUB_PATTERN=ab'pattern'"),
+                 ("REGEN_PATTERNS", None, "REGEN_PATTERNS=ab['x']"),
+                 ("RECORD_START", None, 'RECORD_START = r"abc\\"'),
+                 ("RECORD_START", None, 'RECORD_START = r"@@INFO@@"'),
+                 ("STUB_PATTERN", None, "STUB_PATTERN = '@@LIVE@@'"),
+                 ("REGEN_PATTERNS", None, "REGEN_PATTERNS = ['@@LIVE@@']"),
+                 ("REGEN_PATTERNS", None, "REGEN_PATTERNS = ['(']"))
+        for key, old, new in cases:
+            with self.subTest(line=new), tempfile.TemporaryDirectory() as tmp:
+                p, shard = self._trimmed(tmp)
+                if old is None:
+                    self._rewrite_proof(p, shard,
+                                        lambda t, k=key, n=new: re.sub(r"^%s(?: = |=).*$" % k, n, t, count=1, flags=re.M),
+                                        "the %s line must change" % key)
+                else:
+                    self.assertIn(old, self._proof_path(p, shard).read_text(encoding="utf-8"),
+                                  "control: the fixture must carry %r" % old)
+                    self._rewrite_proof(p, shard, lambda t, o=old, n=new: t.replace(o, n, 1),
+                                        "the %s line must change" % key)
+                r = self._rv(p, shard)
+                self.assertEqual(r.returncode, 3, r.stdout)
+                self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout, r.stdout)
+                self.assertIn(key, r.stdout)
+
+    def test_a_shell_payload_in_the_LIVE_line_is_refused_and_never_runs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            evil = "HANDOFFS.md;touch${IFS}PWNED"
+            # CONTROL: spliced the naive way, the payload really runs -- so the refusal below is
+            # what stands between this tree and it, not an accident of the fixture.
+            naive = mod.render_verify(evil, shard, "fence", "", "handoff", "none", [], "")
+            subprocess.run(["bash", "-c", naive], cwd=str(p), stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT)
+            self.assertTrue((p / "PWNED").exists(), "control: the naive splice must run the payload")
+            (p / "PWNED").unlink()
+            self._rewrite_proof(p, shard, lambda t: t.replace("LIVE=HANDOFFS.md\n", "LIVE=" + evil + "\n", 1),
+                                "the LIVE line must carry the payload")
+            r = self._rv(p, shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+            self.assertFalse((p / "PWNED").exists(), "the payload ran")
+
+    def test_a_python_payload_in_the_RECORD_START_line_is_refused_and_never_runs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            evil = '^### "; os.system("touch PWNED2"); x = r"'
+            naive = mod.render_verify("HANDOFFS.md", shard, "fence", evil, "handoff", "none", [], "")
+            subprocess.run(["bash", "-c", naive], cwd=str(p), stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT)
+            self.assertTrue((p / "PWNED2").exists(), "control: the naive splice must run the payload")
+            (p / "PWNED2").unlink()
+            self._rewrite_proof(p, shard, lambda t: t.replace('RECORD_START = r""', 'RECORD_START = r"' + evil + '"', 1),
+                                "the RECORD_START line must carry the payload")
+            r = self._rv(p, shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+            self.assertFalse((p / "PWNED2").exists(), "the payload ran")
+
+    def test_a_python_expression_in_the_REGEN_or_STUB_line_is_refused_and_never_runs(self):
+        for key in ("REGEN_PATTERNS", "STUB_PATTERN"):
+            with self.subTest(line=key), tempfile.TemporaryDirectory() as tmp:
+                p, shard = self._trimmed(tmp)
+                evil = '%s = __import__("os").system("touch PWNED3")' % key
+                self._rewrite_proof(p, shard, lambda t, k=key, e=evil: re.sub(
+                    r"^%s = .*$" % k, lambda _m: e, t, count=1, flags=re.M), "the %s line must carry the payload" % key)
+                # CONTROL: the frozen proof itself would run it, so the refusal is what stops it here.
+                sh(p, "bash", str(self._proof_path(p, shard)))
+                self.assertTrue((p / "PWNED3").exists(), "control: the payload must be live in the frozen proof")
+                (p / "PWNED3").unlink()
+                r = self._rv(p, shard)
+                self.assertEqual(r.returncode, 3, r.stdout)
+                self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+                self.assertIn(key, r.stdout)
+                self.assertFalse((p / "PWNED3").exists(), "the payload ran")
+
+    def test_a_shard_whose_own_file_name_carries_a_shell_payload_is_refused_and_never_runs(self):
+        """The shard NAME is the other unquoted splice. A name that equals what its proof says
+        would pass the 'is this the shard I was asked about' check, so the path-character class on
+        SHARD is what stops a hostile repository's file name reaching `SHARD=...` in bash."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            evil = "docs/archive/HANDOFFS-through-2026-02-02;touch${IFS}PWNED4.md"
+            (p / evil).write_bytes((p / shard).read_bytes())
+            proof = self._proof_path(p, shard).read_text(encoding="utf-8")
+            self.assertIn("SHARD=" + shard + "\n", proof, "control: the proof names its own shard")
+            (p / (evil + ".verify.sh")).write_text(proof.replace("SHARD=" + shard + "\n", "SHARD=" + evil + "\n", 1),
+                                                   encoding="utf-8")
+            # CONTROL: the frozen proof, run as written, really executes the name.
+            sh(p, "bash", str(p / (evil + ".verify.sh")))
+            self.assertTrue((p / "PWNED4.md").exists(), "control: the payload must be live in the frozen proof")
+            (p / "PWNED4.md").unlink()
+            r = self._rv(p, evil)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+            self.assertIn("SHARD", r.stdout)
+            self.assertFalse((p / "PWNED4.md").exists(), "the payload ran")
+
+    def test_the_distributed_prose_names_the_flag_and_what_its_verdict_is(self):
+        prose = " ".join((REPO / "FRAMEWORK_APPARATUS.md").read_text(encoding="utf-8").split())
+        self.assertIn("methodology_trim.py --reverify <shard>", prose)
+        self.assertIn("a claim about today's logic, not about the artifact that was shipped", prose)
+
+    def test_it_works_on_a_shard_in_another_repository_from_anywhere(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as elsewhere:
+            p, shard = self._trimmed(tmp)
+            r = run_trim(elsewhere, "--reverify", str(p / shard))
+            self.assertEqual(r.returncode, 0, r.stdout)
+            self.assertIn("OK: L1, L2/front-matter, L3 hold", r.stdout, r.stdout)
+
+    def test_a_proof_that_names_a_different_shard_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            other = "docs/archive/HANDOFFS-through-2026-02-02.md"
+            (p / other).write_bytes((p / shard).read_bytes())
+            (p / (other + ".verify.sh")).write_bytes(self._proof_path(p, shard).read_bytes())
+            r = self._rv(p, other)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_SHARD_MISMATCH]", r.stdout)
+            self.assertIn(shard, r.stdout, "the refusal names the shard the proof is really about")
+            self.assertNotIn("[REVERIFY_VERDICT]", r.stdout)
+
+    def test_a_missing_shard_and_a_shard_outside_a_repository_are_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, _shard = self._trimmed(tmp)
+            r = self._rv(p, "docs/archive/HANDOFFS-through-1999-01-01.md")
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[FILE_ABSENT]", r.stdout)
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            (d / "x.md").write_text("x\n", encoding="utf-8")
+            (d / "x.md.verify.sh").write_text("LIVE=y\n", encoding="utf-8")
+            r = run_trim(d, "--reverify", "x.md")
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[NOT_A_REPO]", r.stdout)
+
+    def test_it_refuses_to_be_combined_with_a_flag_that_writes_or_selects_a_ledger(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            before = self._snapshot(p)
+            for extra in (("--write",), ("--file", "HANDOFFS.md"), ("--check",), ("--cut", "2"),
+                          ("--force",), ("--budget-bytes", "1000")):
+                with self.subTest(extra=extra):
+                    r = self._rv(p, shard, *extra)
+                    self.assertEqual(r.returncode, 3, r.stdout)
+                    self.assertIn(extra[0], r.stdout, "the usage error names the flag it refused")
+                    self.assertNotIn("[REVERIFY_VERDICT]", r.stdout)
+            self.assertEqual(self._snapshot(p), before)
+
+    def test_a_missing_bash_is_reported_not_a_traceback(self):
+        import contextlib
+        import io
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            real = subprocess.run
+
+            def fake(cmd, *a, **k):
+                if cmd and cmd[0] == "bash":
+                    raise FileNotFoundError("bash")
+                return real(cmd, *a, **k)
+
+            out = io.StringIO()
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(str(p))
+                with mock.patch.object(mod.subprocess, "run", side_effect=fake), contextlib.redirect_stdout(out):
+                    rc = mod.main(["--reverify", shard])
+            finally:
+                os.chdir(old_cwd)
+            self.assertEqual(rc, 3, out.getvalue())
+            self.assertIn("[REVERIFY_CANNOT_RUN]", out.getvalue())
+
+    def test_a_proof_killed_by_a_signal_is_never_reported_as_holding(self):
+        """subprocess reports a signal death as a NEGATIVE status. Left alone it would read as 'no
+        worse than 0' and a proof that never finished would come out green."""
+        import contextlib
+        import io
+        from unittest import mock
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            real = subprocess.run
+
+            def fake(cmd, *a, **k):
+                if cmd and cmd[0] == "bash":
+                    return subprocess.CompletedProcess(cmd, -9, stdout="", stderr=None)
+                return real(cmd, *a, **k)
+
+            out = io.StringIO()
+            old_cwd = os.getcwd()
+            try:
+                os.chdir(str(p))
+                with mock.patch.object(mod.subprocess, "run", side_effect=fake), contextlib.redirect_stdout(out):
+                    rc = mod.main(["--reverify", shard])
+            finally:
+                os.chdir(old_cwd)
+            self.assertEqual(rc, 3, out.getvalue())
+            self.assertIn("exit 3", out.getvalue())
+            self.assertNotIn("exit -9", out.getvalue())
+
+    def test_help_lists_the_flag(self):
+        r = subprocess.run([sys.executable, str(TRIM_PY), "--help"], stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, text=True)
+        self.assertIn("--reverify", r.stdout)
+
+    # --- the lift itself, against what the builder writes and what is really on disk ------------
+
+    def test_the_lift_reads_back_what_build_verify_writes_for_every_ledger_spec(self):
+        self.assertGreaterEqual(len(mod.LEDGERS), 2, "control: the table must hold the shipped ledgers")
+        for name, spec in mod.LEDGERS.items():
+            with self.subTest(ledger=name):
+                text = mod.build_verify(spec, name, "docs/archive/%s-through-2026-01-01.md" % name[:-3])
+                g = mod.lift_grammar(text)
+                self.assertEqual(g["live"], name)
+                self.assertEqual(g["kind"], spec.record_kind)
+                self.assertEqual(g["start"], spec.record_start.pattern if spec.record_start else "")
+                self.assertEqual(g["info"], spec.fence_info or "")
+                self.assertEqual(g["footer"], spec.footer_mode)
+                self.assertEqual(g["regen"], [rx.pattern for _n, rx, _f in spec.regenerated])
+                self.assertEqual(g["stub"], spec.stub_marker.pattern if spec.stub_marker else "")
+                self.assertEqual(g["version"], mod.TRIM_VERSION)
+                self.assertEqual(g["absent"], [], "a proof written today carries every line")
+
+    def test_rendering_from_the_lifted_grammar_is_byte_identical_to_build_verify(self):
+        """The strongest pin on the refactor: a template change that the lift cannot read, or a
+        render path that drifts from build_verify, makes these two differ."""
+        for name, spec in mod.LEDGERS.items():
+            with self.subTest(ledger=name):
+                shard = "docs/archive/%s-through-2026-01-01.md" % name[:-3]
+                text = mod.build_verify(spec, name, shard)
+                g = mod.lift_grammar(text)
+                again = mod.render_verify(g["live"], g["shard"], g["kind"], g["start"], g["info"],
+                                          g["footer"], g["regen"], g["stub"])
+                self.assertEqual(again, text)
+
+    def test_the_stub_marker_comes_from_the_ledger_table_by_live_basename(self):
+        self.assertEqual(mod.stub_pattern_for("HANDOFFS.md"),
+                         mod.LEDGERS["HANDOFFS.md"].stub_marker.pattern)
+        self.assertTrue(mod.stub_pattern_for("HANDOFFS.md"), "control: HANDOFFS.md declares a marker")
+        self.assertEqual(mod.stub_pattern_for("CHANGELOG.md"), "", "CHANGELOG.md declares none")
+        self.assertEqual(mod.stub_pattern_for("docs/x/HANDOFFS.md"), mod.stub_pattern_for("HANDOFFS.md"),
+                         "keyed by the basename, as the table is")
+        self.assertEqual(mod.stub_pattern_for("SESSION_NOTES.md"), "",
+                         "a ledger the canonical table has no entry for gets no marker, never a guess")
+
+    def test_every_frozen_proof_this_repository_holds_can_be_lifted(self):
+        proofs = sorted((REPO / "docs" / "archive").glob("*.verify.sh"))
+        if not proofs:
+            self.skipTest("no frozen proofs in docs/archive/ in this checkout")
+        for pr in proofs:
+            with self.subTest(proof=pr.name):
+                g = mod.lift_grammar(pr.read_text(encoding="utf-8"))
+                self.assertEqual(g["shard"], "docs/archive/" + pr.name[:-len(".verify.sh")])
+                self.assertIn(g["live"], mod.LEDGERS, "this repository's own ledgers are canonical ones")
+
+
+# =============================================================================================
 # BL-36 — the generated proof's INJECTED constant is a 0/1 FLAG, not a count of what the trim
 # commit actually added, so `ar_cmp = ar[INJ:]` skips the wrong number of records and the whole
 # positional comparison shifts. Any trim commit bundled with a second entry to the same ledger
@@ -2285,6 +3424,815 @@ class TestPhaseC2ClassAThreshold(unittest.TestCase):
                              "a nested ledger must not be told it has the relaxed arm")
             self.assertIn("one-read cap", nest)
             self.assertIn("{:,}".format(mod.READ_CAP_BYTES), nest)
+
+
+# =============================================================================================
+# Issue #93, the first of its suggestions: when the trim commit also edited record 0 (the
+# frontier), the generated proof cannot judge the edit -- a stub finalize and a real loss have the
+# same shape -- but a reader shown the edit can, in seconds. The proof prints a unified diff of
+# record 0 against the record that replaced it. Output only: no verdict and no exit status moves.
+# =============================================================================================
+
+class TestTheProofPrintsTheRecord0Diff(unittest.TestCase):
+
+    def test_a_stub_finalize_bundled_into_the_trim_commit_exits_4_and_shows_the_diff(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = helper._stub_repo(tmp)
+            shard = helper._trim(p)
+            helper._edit_live(p, "status: pending\n", "status: complete\n", "record 0 must be finalized")
+            helper._commit(p, "trim + stub finalize, bundled")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 4, v.stdout)
+            self.assertIn("DIFF: record 0", v.stdout, v.stdout)
+            self.assertIn("-status: pending\n", v.stdout)
+            self.assertIn("+status: complete\n", v.stdout)
+            self.assertIn("@@", v.stdout, "a unified diff carries hunk headers")
+            self.assertLess(v.stdout.index("NOTE: exit 4"), v.stdout.index("DIFF: record 0"),
+                            "the verdict and its note come first, the diff after")
+
+    def test_the_diff_also_prints_for_the_generic_frontier_edit(self):
+        """The diff is for the reader's eyes in BOTH cases the frontier note covers: a recognised
+        stub finalize (exit 4, above) and the generic record-0 edit (exit 1). It is not a judgement."""
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = make_handoff_repo(tmp)
+            shard = helper._trim(p)
+            helper._edit_live(p, "commentary about session 0.", "commentary about session 0 (amended).",
+                              "record 0, a complete receipt, must change")
+            helper._commit(p, "trim + a complete record 0 edited")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertNotIn("pending stub", v.stdout)
+            self.assertIn("DIFF: record 0", v.stdout, v.stdout)
+            self.assertIn("-Self-score **8/10.** commentary about session 0.\n", v.stdout)
+            self.assertIn("+Self-score **8/10.** commentary about session 0 (amended).\n", v.stdout)
+
+    def test_no_diff_prints_when_a_record_other_than_the_frontier_is_edited(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = make_handoff_repo(tmp)
+            shard = helper._trim(p)
+            helper._edit_live(p, "commentary about session 1.", "commentary about session 1 (amended).",
+                              "record 1, retained and not the frontier, must change")
+            helper._commit(p, "trim + record 1 edited")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertNotIn("DIFF", v.stdout, "the diff is for record 0 only; another record is a plain loss")
+
+
+# =============================================================================================
+# Issue #93, the abort code. An abort BEFORE the checks is not a verdict. The
+# proof's `show()` ended in `sys.exit("verify: cannot read ...")`, which prints the text and exits
+# 1 -- the FAIL code -- so a proof that had compared nothing read as a trim that lost something.
+# Seen once in a 54-shard `--reverify` sweep over a partial clone: one blob fetch failed, the shard
+# read FAIL, and the re-run read 0. The fixture plants the field case rather than mocking it: a
+# depth-1 clone of a trimmed repository holds the trim commit and not its parent, so
+# `git show <trim>^:<ledger>` cannot be answered there and can everywhere else.
+# =============================================================================================
+
+class TestAnAbortBeforeTheChecksIsNotAVerdict(unittest.TestCase):
+
+    def _trimmed_and_shallow(self, tmp):
+        """TestReverify's fixture (make_handoff_repo, trimmed at --cut 2, committed), plus a depth-1
+        clone of it in which the trim commit is the only commit. Returns (source repo, clone, shard
+        path relative to either root, as the proof names it)."""
+        src = make_handoff_repo(str(Path(tmp) / "src"))
+        r = run_trim(src, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        sh(src, "git", "add", "-A")
+        sh(src, "git", "commit", "-qm", "trim")
+        shard = sorted((src / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0]
+        shard = shard.relative_to(src).as_posix()
+        clone = Path(tmp) / "shallow"
+        c = sh(Path(tmp), "git", "clone", "-q", "--depth", "1", "file://" + str(src.resolve()),
+               str(clone))
+        self.assertEqual(c.returncode, 0, c.stdout)
+        return src, clone, shard
+
+    def test_control_the_fixture_is_the_field_case(self):
+        """Prove the fixture first: the clone holds exactly the trim commit, names it as the shard's
+        adding commit and cannot show its parent -- and the SAME proof holds in the full repository,
+        so the missing parent is the only difference the other tests see."""
+        with tempfile.TemporaryDirectory() as tmp:
+            src, clone, shard = self._trimmed_and_shallow(tmp)
+            self.assertEqual(sh(clone, "git", "rev-list", "--count", "HEAD").stdout.strip(), "1")
+            trim = sh(clone, "git", "log", "--diff-filter=A", "-1", "--format=%H", "--", shard)
+            self.assertEqual(trim.stdout.strip(), sh(clone, "git", "rev-parse", "HEAD").stdout.strip())
+            self.assertNotEqual(sh(clone, "git", "show", "HEAD^:HANDOFFS.md").returncode, 0,
+                                "the parent must be unreadable here, or the fixture proves nothing")
+            full = sh(src, "bash", shard + ".verify.sh")
+            self.assertEqual(full.returncode, 0, full.stdout)
+            self.assertIn("OK:", full.stdout)
+
+    def test_the_frozen_proof_exits_3_with_its_reason_and_no_verdict(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _src, clone, shard = self._trimmed_and_shallow(tmp)
+            r = sh(clone, "bash", shard + ".verify.sh")
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("verify: cannot read", r.stdout)
+            self.assertIn("did not finish", r.stdout)
+            self.assertNotIn("FAIL:", r.stdout, "a proof that compared nothing has no FAIL to report")
+            self.assertNotIn("OK:", r.stdout, "and no OK either: it is not a verdict")
+
+    def test_reverify_reports_the_abort_as_exit_3_not_as_a_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _src, clone, shard = self._trimmed_and_shallow(tmp)
+            r = run_trim(clone, "--reverify", shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_VERDICT]", r.stdout)
+            self.assertIn("exit 3 (0:", r.stdout, "the legend's own 3: the proof did not finish")
+            self.assertIn("verify: cannot read", r.stdout)
+            self.assertNotIn("FAIL:", r.stdout)
+
+    def test_a_shard_that_is_there_and_cannot_be_read_is_the_same_abort(self):
+        """The other read before the checks: with the trim uncommitted the proof reads the live file
+        and the shard from the working tree. A shard that is present and cannot be read (here, a
+        directory where the file should be) is an abort, not a FAIL: nothing is known about it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+            self.assertIn("[WROTE]", r.stdout, r.stdout)
+            shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0]
+            ok = sh(p, "bash", str(shard) + ".verify.sh")
+            self.assertEqual(ok.returncode, 0, "control: the uncommitted trim's proof holds\n" + ok.stdout)
+            proof = shard.with_name(shard.name + ".verify.sh")
+            keep = proof.read_text(encoding="utf-8")
+            shard.unlink()
+            shard.mkdir()                                   # present, and not a file anyone can read
+            proof.write_text(keep, encoding="utf-8")
+            r = sh(p, "bash", str(proof))
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("verify: cannot read", r.stdout)
+            self.assertIn(shard.name, r.stdout)
+            self.assertNotIn("FAIL:", r.stdout)
+
+
+class TestAPathMissingFromAReadableCommitIsAFail(unittest.TestCase):
+    """Exit 3 means the proof could not read an artifact, so it compared nothing. It is the right
+    answer only when the ref or the object cannot be read. A path that is absent from a commit (or a
+    working tree) the proof CAN read is a finding about the trim: the thing the proof exists to
+    account for is gone, and calling that "did not finish" hides a total loss. 1.5.0 exited 1 here;
+    1.8.1 exited 3 (maintainer's point 1 on the pull request)."""
+
+    def _trimmed(self, tmp):
+        p = make_handoff_repo(tmp)
+        r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0]
+        return p, shard.relative_to(p).as_posix()
+
+    def test_control_the_proof_holds_when_the_trim_commit_only_trims(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim")
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 0, v.stdout)
+
+    def test_a_trim_commit_that_also_deletes_the_live_ledger_is_a_fail_not_an_abort(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            sh(p, "git", "rm", "-q", "-f", "HANDOFFS.md")
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim, and delete the live ledger")
+            self.assertFalse((p / "HANDOFFS.md").exists(), "control: the ledger is gone")
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("FAIL:", v.stdout)
+            self.assertIn("HANDOFFS.md is absent from", v.stdout, "the FAIL names the path")
+            self.assertNotIn("did not finish", v.stdout, "it is a verdict, not an abort")
+            self.assertNotIn("OK:", v.stdout)
+
+    def test_reverify_reads_that_total_loss_as_a_fail_too(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            sh(p, "git", "rm", "-q", "-f", "HANDOFFS.md")
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim, and delete the live ledger")
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 1, r.stdout)
+            self.assertIn("exit 1 (", r.stdout)
+            self.assertIn("HANDOFFS.md is absent from", r.stdout)
+
+    def test_a_live_ledger_missing_from_the_working_tree_is_a_fail_with_the_trim_uncommitted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            (p / "HANDOFFS.md").unlink()
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("HANDOFFS.md does not exist in the working tree", v.stdout)
+            self.assertNotIn("did not finish", v.stdout)
+
+    def test_a_shard_missing_from_the_working_tree_is_a_fail_with_the_trim_uncommitted(self):
+        """The archived records live only in the shard: if it is gone they are gone."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            (p / shard).unlink()
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("does not exist in the working tree", v.stdout)
+            self.assertNotIn("did not finish", v.stdout)
+
+    def _lose_object(self, p, rev):
+        """Delete one loose object from the repository's store, as a partial clone that has not
+        fetched it (or a damaged one) would lack it. The fixture's objects are loose, so this works."""
+        sha = sh(p, "git", "rev-parse", rev).stdout.strip()
+        self.assertEqual(len(sha), 40, sha)
+        path = p / ".git" / "objects" / sha[:2] / sha[2:]
+        self.assertTrue(path.is_file(), "control: %s must be a loose object" % rev)
+        path.chmod(0o644)
+        path.unlink()
+        return sha
+
+    def test_a_tree_this_clone_cannot_read_is_the_abort(self):
+        """HEAD resolves to a commit, but its tree is not in the store (a treeless partial clone
+        that has not fetched it): the path cannot be looked up, so nothing is known -- exit 3. The
+        trim is uncommitted here, which is the mode that reads HEAD's copy of the live ledger."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self._lose_object(p, "HEAD^{tree}")
+            self.assertEqual(sh(p, "git", "rev-parse", "--verify", "-q", "HEAD^{commit}").returncode, 0,
+                             "control: the commit is still readable; its tree is not")
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 3, v.stdout)
+            self.assertIn("did not finish", v.stdout)
+            self.assertNotIn("FAIL:", v.stdout)
+            self.assertNotIn("OK:", v.stdout)
+
+    def test_a_blob_this_clone_cannot_read_is_the_abort(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim")
+            self._lose_object(p, "HEAD^:HANDOFFS.md")
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 3, v.stdout)
+            self.assertIn("did not finish", v.stdout)
+            self.assertNotIn("FAIL:", v.stdout)
+
+    def test_a_ref_this_clone_cannot_read_is_still_the_abort(self):
+        """The line between the two: the parent commit is not in a depth-1 clone, so nothing can be
+        said about the live ledger before the trim -- exit 3, with no verdict."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim")
+            clone = Path(tmp) / "shallow"
+            c = sh(Path(tmp), "git", "clone", "-q", "--depth", "1", "file://" + str(p.resolve()), str(clone))
+            self.assertEqual(c.returncode, 0, c.stdout)
+            v = sh(clone, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 3, v.stdout)
+            self.assertIn("did not finish", v.stdout)
+            self.assertNotIn("FAIL:", v.stdout)
+
+
+# =============================================================================================
+# The proof reads the tree it checks, and `python3 -` puts the working directory first on its import
+# path. A module planted at the repository root (`difflib.py`, `subprocess.py`) then runs inside the
+# proof, and the verdict is still exit 0. `--reverify` makes this reachable on a tree someone else
+# handed you, so it runs the proof's Python in isolated mode (`-I`): no working directory on the
+# path, no PYTHON* environment (maintainer's point 2 on the pull request).
+# =============================================================================================
+
+PLANTED_MODULE = (
+    "import importlib.util, os, sys, sysconfig\n"
+    "open('planted-ran-' + __name__ + '.txt', 'w').write('the planted module ran\\n')\n"
+    "_real = os.path.join(sysconfig.get_paths()['stdlib'], __name__ + '.py')\n"
+    "_spec = importlib.util.spec_from_file_location(__name__, _real)\n"
+    "_mod = importlib.util.module_from_spec(_spec)\n"
+    "sys.modules[__name__] = _mod\n"
+    "_spec.loader.exec_module(_mod)\n")
+
+
+class TestAPlantedModuleDoesNotRunInTheProof(unittest.TestCase):
+
+    MODULES = ("difflib", "subprocess")
+
+    def _committed(self, tmp):
+        p = make_handoff_repo(tmp)
+        r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        sh(p, "git", "add", "-A")
+        sh(p, "git", "commit", "-qm", "trim")
+        shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0].relative_to(p).as_posix()
+        return p, shard
+
+    def _plant(self, p):
+        for name in self.MODULES:
+            (p / (name + ".py")).write_text(PLANTED_MODULE, encoding="utf-8")
+
+    def _ran(self, p):
+        return sorted(f.name for f in p.glob("planted-ran-*.txt"))
+
+    def _clear(self, p):
+        for f in p.glob("planted-ran-*.txt"):
+            f.unlink()
+
+    def test_control_the_fixture_does_detect_a_planted_module_under_the_old_invocation(self):
+        """Fixture proved first: with the proof's interpreter line put back to `python3 -`, both
+        planted modules run and the verdict is still 0 -- the defect, reproduced."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._committed(tmp)
+            proof = p / (shard + ".verify.sh")
+            text = proof.read_text(encoding="utf-8")
+            old = text.replace("python3 -I - <<'PYEOF_VERIFY'", "python3 - <<'PYEOF_VERIFY'")
+            self.assertNotEqual(old, text, "control: the proof must carry the isolated-mode line")
+            proof.write_text(old, encoding="utf-8")
+            self._plant(p)
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 0, v.stdout)
+            self.assertEqual(self._ran(p), ["planted-ran-difflib.txt", "planted-ran-subprocess.txt"])
+
+    def test_a_proof_written_now_runs_no_planted_module(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._committed(tmp)
+            self._plant(p)
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 0, v.stdout)
+            self.assertIn("OK:", v.stdout)
+            self.assertEqual(self._ran(p), [], "a module at the repository root must not run in the proof")
+
+    def test_reverify_runs_no_planted_module(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._committed(tmp)
+            # a proof frozen by an older trimmer carries the old interpreter line; --reverify
+            # re-renders today's template, so it must be safe regardless
+            proof = p / (shard + ".verify.sh")
+            proof.write_text(proof.read_text(encoding="utf-8").replace(
+                "python3 -I - <<'PYEOF_VERIFY'", "python3 - <<'PYEOF_VERIFY'"), encoding="utf-8")
+            self._plant(p)
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 0, r.stdout)
+            self.assertIn("exit 0 (", r.stdout)
+            self.assertEqual(self._ran(p), [], "--reverify must not execute a module from the tree it checks")
+
+
+# =============================================================================================
+# The HANDOFFS.md stub marker is `status: pending` -- inside the receipt's OWN fence. The 1.6.0
+# pattern was `^status: pending\s*$` searched over the whole record, so a COMPLETE receipt that has
+# that line anywhere (commentary after the fence, a second fenced block, a quoted example) was
+# read as a stub, and a trim commit that also lost data from it was labelled "a recognised stub
+# finalize" at exit 4 instead of failing plainly at exit 1 (maintainer's point 5).
+# =============================================================================================
+
+class TestTheHandoffsStubMarkerIsScopedToItsFence(unittest.TestCase):
+
+    RECEIPT = ("```handoff\nsession: S1\ndate: 2026-01-01\nstatus: %s\nactive_task: x\n```\n"
+               "Self-score **8/10.** commentary.\n%s\n")
+
+    def _marker(self):
+        return mod.LEDGERS["HANDOFFS.md"].stub_marker
+
+    def test_a_receipt_whose_own_fence_says_pending_is_a_stub(self):
+        self.assertTrue(self._marker().search(self.RECEIPT % ("pending", "")))
+
+    def test_a_trailing_space_or_a_crlf_ending_still_marks_it(self):
+        m = self._marker()
+        self.assertTrue(m.search((self.RECEIPT % ("pending ", "")).replace("\n", "\r\n")))
+        self.assertTrue(m.search("````handoff\nsession: S1\nstatus: pending\n````\n"),
+                        "a four-backtick fence is the same fence")
+
+    def test_a_complete_receipt_is_not_a_stub_whatever_follows_its_fence(self):
+        m = self._marker()
+        for after, why in (("status: pending", "a bare line in the commentary after the fence"),
+                           ("```\nstatus: pending\n```", "a second fenced block in the record"),
+                           ("```handoff\nstatus: pending\n```", "a quoted example receipt in a second handoff fence"),
+                           ("> status: pending", "a quoted line (it does not start the line)")):
+            self.assertIsNone(m.search(self.RECEIPT % ("complete", after)), why)
+
+    def test_a_line_that_merely_contains_the_words_is_not_the_marker(self):
+        m = self._marker()
+        self.assertIsNone(m.search((self.RECEIPT % ("complete", "")).replace(
+            "active_task: x", "active_task: set status: pending, then finish")))
+        self.assertIsNone(m.search(self.RECEIPT % ("pending-review", "")))
+
+    def test_it_does_not_run_away_on_a_large_record_with_no_marker(self):
+        """Guard for the new pattern: a lazy scan across lines must stay linear. 400,000 lines,
+        no marker, one search; a generous bound, so only a blow-up fails it."""
+        import time
+        body = ("x" * 40 + "\n") * 400000
+        rec = "```handoff\nsession: S1\nstatus: complete\n" + body + "```\n"
+        t0 = time.monotonic()
+        self.assertIsNone(self._marker().search(rec))
+        self.assertLess(time.monotonic() - t0, 5.0)
+
+    def test_a_complete_record_0_that_lost_data_is_a_plain_fail_even_with_a_stray_pending_line(self):
+        """Maintainer's case: the parent's record 0 is COMPLETE but carries a stray line, the trim
+        commit drops the line and 34,000 B of what_was_done. Exit 1, no stub label."""
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = make_handoff_repo(tmp)
+            helper._edit_live(p, "commentary about session 0.\n",
+                              "commentary about session 0.\nstatus: pending\n", "a stray line in record 0")
+            sh(p, "git", "commit", "-qa", "--amend", "-m", "seed")
+            shard = helper._trim(p)
+            live = p / "HANDOFFS.md"
+            text = live.read_text(encoding="utf-8")
+            text = text.replace("status: pending\n", "", 1)
+            text, n = re.subn(r"what_was_done: x{34000}", "what_was_done: x", text, count=1)
+            self.assertEqual(n, 1, "control: record 0 must lose its what_was_done")
+            live.write_text(text, encoding="utf-8")
+            helper._commit(p, "trim, and record 0 loses data")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertNotIn("pending stub", v.stdout)
+            self.assertNotIn("exit 4", v.stdout)
+
+    def test_the_write_time_warning_is_silent_for_a_complete_record_0_with_a_stray_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = make_handoff_repo(tmp)
+            helper._edit_live(p, "commentary about session 0.\n",
+                              "commentary about session 0.\nstatus: pending\n", "a stray line in record 0")
+            sh(p, "git", "commit", "-qa", "--amend", "-m", "seed")
+            r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--today", "2026-02-01")
+            self.assertNotIn("FRONTIER_PENDING_STUB", r.stdout, r.stdout)
+
+
+# =============================================================================================
+# `--reverify` fills TODAY's template with the grammar it lifts from a frozen proof. The template's
+# PREFIX (how a shard's relative links climb back to the repository root) is a constant, "../../",
+# because the writer always puts a shard two directories down. A frozen proof written for another
+# depth (the adopter's HEAD carries "../") passes as written, and re-derived under "../../" it
+# cannot invert a single link and reads exit 1: a verdict about neither. It has to be REFUSED, by
+# name, at exit 3 (maintainer's point 6 on the pull request).
+# =============================================================================================
+
+class TestReverifyRefusesAPrefixItCannotHonour(unittest.TestCase):
+
+    def _trimmed(self, tmp):
+        p = make_handoff_repo(tmp)
+        r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        sh(p, "git", "add", "-A")
+        sh(p, "git", "commit", "-qm", "trim")
+        shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0]
+        return p, shard.relative_to(p).as_posix()
+
+    def _rewrite(self, p, shard, fn):
+        proof = p / (shard + ".verify.sh")
+        text = proof.read_text(encoding="utf-8")
+        text2 = fn(text)
+        self.assertNotEqual(text2, text, "control: the proof must change")
+        proof.write_text(text2, encoding="utf-8")
+
+    def test_control_the_untouched_proof_lifts_and_holds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self.assertIn('PREFIX = "../../"', (p / (shard + ".verify.sh")).read_text(encoding="utf-8"))
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_a_prefix_of_another_depth_is_refused_by_name_not_read_as_a_fail(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self._rewrite(p, shard, lambda t: t.replace('PREFIX = "../../"', 'PREFIX = "../"'))
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+            self.assertIn('PREFIX is "../"', r.stdout, "the refusal names the value it found")
+            self.assertIn('"../../"', r.stdout, "...and the value this tool's template writes")
+            self.assertNotIn("[REVERIFY_VERDICT]", r.stdout, "a refusal is not a verdict")
+            self.assertNotIn("FAIL:", r.stdout)
+
+    def test_a_proof_with_no_prefix_line_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self._rewrite(p, shard, lambda t: re.sub(r'(?m)^PREFIX = .*\n', "", t, count=1))
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+            self.assertIn("PREFIX is not in the frozen proof", r.stdout)
+
+    def test_a_prefix_line_in_another_form_or_twice_is_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self._rewrite(p, shard, lambda t: t.replace('PREFIX = "../../"', "PREFIX = '../../'"))
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self._rewrite(p, shard, lambda t: t.replace('PREFIX = "../../"', 'PREFIX = "../../"\nPREFIX = "../"'))
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("PREFIX appears 2 times", r.stdout)
+
+
+# =============================================================================================
+# The same refusal for the one lifted value that is free text. RECORD_START is spliced into a raw
+# string literal that Python reads from a heredoc; a CR ends the literal and a NUL cannot be passed
+# to bash. Either must be refused at the lift, by name, at exit 3 -- not run, and not read as a
+# FAIL (maintainer's point 7 on the pull request).
+# =============================================================================================
+
+class TestReverifyRefusesARecordStartItCannotSplice(unittest.TestCase):
+
+    def _trimmed(self, tmp):
+        return TestReverifyRefusesAPrefixItCannotHonour._trimmed(self, tmp)
+
+    def test_control_a_record_start_of_the_usual_kind_lifts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 0, r.stdout)
+
+    def _with_record_start(self, tmp, ch):
+        """A proof whose RECORD_START line carries `ch` before the closing quote. Written in binary so
+        that a carriage return or a NUL reaches the file as itself."""
+        p, shard = self._trimmed(tmp)
+        proof = p / (shard + ".verify.sh")
+        raw = proof.read_bytes()
+        out, n = re.subn(rb'(?m)^(RECORD_START = r"[^"\n]*)(")$', lambda m: m.group(1) + ch + m.group(2), raw, count=1)
+        self.assertEqual(n, 1, "control: the proof must carry a RECORD_START line")
+        proof.write_bytes(out)
+        return p, shard
+
+    def test_a_carriage_return_in_record_start_is_refused_not_a_crash_read_as_a_fail(self):
+        """A raw CR ends the string literal (Python's tokenizer treats it as a newline), so the
+        spliced proof is a SyntaxError and bash reports the interpreter's exit 1 -- the FAIL code."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._with_record_start(tmp, b"\r")
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+            self.assertIn("RECORD_START", r.stdout)
+            self.assertNotIn("SyntaxError", r.stdout)
+            self.assertNotIn("[REVERIFY_VERDICT]", r.stdout)
+
+    def test_a_nul_in_record_start_is_refused_not_a_traceback(self):
+        """A NUL cannot be passed to bash at all (`embedded null byte`): without a refusal at the
+        lift, --reverify itself dies with a traceback."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._with_record_start(tmp, b"\x00")
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("[REVERIFY_NOT_LIFTABLE]", r.stdout)
+            self.assertNotIn("Traceback", r.stdout)
+
+
+# =============================================================================================
+# The frontier note ("the only missing record is the frontier one ... the shape a bundled finalize
+# leaves") and the record-0 diff speak about record 0 ALONE. They are true only when every other
+# record is byte-identical and in order across the move -- the condition the stub label already
+# requires (`rebuilt == br[1:]`). Without it, an edit to record 0 that also reordered two archived
+# records printed the reassuring note and a diff of record 0, and said nothing of the reorder
+# (maintainer's point 8 on the pull request).
+# =============================================================================================
+
+class TestTheFrontierNoteAndDiffAreForTheFrontierAlone(unittest.TestCase):
+
+    def _repo_with_record_0_edited(self, tmp):
+        helper = TestVerifyShNamesAStubFinalize()
+        p = make_handoff_repo(tmp)
+        shard = helper._trim(p)
+        helper._edit_live(p, "commentary about session 0.", "commentary about session 0 (amended).",
+                          "record 0, a complete receipt, must change")
+        return helper, p, shard
+
+    def _swap_two_archived_records(self, shard):
+        text = shard.read_text(encoding="utf-8")
+        pos = [text.index("```handoff\nsession: S%d\n" % i) for i in (2, 3, 4)]
+        a, b = text[pos[0]:pos[1]], text[pos[1]:pos[2]]
+        self.assertNotEqual(a, b)
+        shard.write_text(text[:pos[0]] + b + a + text[pos[2]:], encoding="utf-8")
+
+    def test_control_record_0_edited_alone_keeps_the_note_and_the_diff(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper, p, shard = self._repo_with_record_0_edited(tmp)
+            helper._commit(p, "trim + record 0 edited")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("the only missing record is the frontier one", v.stdout)
+            self.assertIn("DIFF: record 0", v.stdout)
+
+    def test_a_reorder_beside_the_edit_withdraws_the_note_and_the_diff_and_names_the_reorder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper, p, shard = self._repo_with_record_0_edited(tmp)
+            self._swap_two_archived_records(shard)
+            helper._commit(p, "trim + record 0 edited + two archived records swapped")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertNotIn("the shape (BL-27) a bundled finalize leaves", v.stdout,
+                             "the reassuring note is not true when other records moved")
+            self.assertNotIn("DIFF: record 0", v.stdout, "a diff of record 0 alone would hide the reorder")
+            self.assertIn("NOTE: record 0 was edited AND the other record(s) are not byte-identical and in "
+                          "order across the move", v.stdout, v.stdout)
+            self.assertIn("reordered", v.stdout)
+
+    def test_a_stub_finalize_beside_a_reorder_is_still_not_labelled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = helper._stub_repo(tmp)
+            shard = helper._trim(p)
+            helper._edit_live(p, "status: pending\n", "status: complete\n", "record 0 must be finalized")
+            self._swap_two_archived_records(shard)
+            helper._commit(p, "trim + stub finalize + a swap")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertNotIn("pending stub", v.stdout)
+            self.assertNotIn("DIFF: record 0", v.stdout)
+
+
+# =============================================================================================
+# The stub label ("record 0 was a pending stub ... finalized", exit 4) is earned by (d): nothing
+# else failed. `other_fails` is every failure that is not L1 or L3 -- the L2 family, four kinds: a
+# front-matter line LOST, a front-matter line LEAKED into the shard, the footer ALTERED, the footer
+# MIGRATED into the shard. One test pinned the first. Narrowing `other_fails` to just that kind
+# passed all 203 tests (maintainer's point 9 on the pull request), so a stub finalize beside any of
+# the other three would have been labelled and exited 4. Each kind gets its own test here.
+# =============================================================================================
+
+class TestTheStubLabelNeedsEveryKindOfOtherFailureToBeAbsent(unittest.TestCase):
+
+    # --- a ledger with no footer: HANDOFFS.md ------------------------------------------------
+
+    def _handoffs(self, tmp):
+        helper = TestVerifyShNamesAStubFinalize()
+        p = helper._stub_repo(tmp)
+        shard = helper._trim(p)
+        helper._edit_live(p, "status: pending\n", "status: complete\n", "record 0 must be finalized")
+        return helper, p, shard
+
+    def test_control_a_stub_finalize_alone_is_labelled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper, p, shard = self._handoffs(tmp)
+            helper._commit(p)
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 4, v.stdout)
+            self.assertIn("record 0 was a pending stub", v.stdout)
+
+    def test_a_front_matter_line_leaked_into_the_shard_beside_a_finalize_is_not_labelled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper, p, shard = self._handoffs(tmp)
+            text = shard.read_text(encoding="utf-8")
+            line = "This file currently holds **0**."          # a long front-matter line of the live ledger
+            self.assertNotIn(line + "\n", text.split("```handoff", 1)[0], "control: not already in the shard")
+            i = text.index("```handoff")
+            shard.write_text(text[:i] + line + "\n\n" + text[i:], encoding="utf-8")   # records untouched
+            helper._commit(p)
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("L2 FRONT MATTER leaked", v.stdout, v.stdout)
+            self.assertNotIn("pending stub", v.stdout)
+            self.assertNotIn("exit 4", v.stdout)
+
+    # --- a ledger with a footer: CHANGELOG.md, with a stub marker declared for the test ---------
+
+    def _footed(self, tmp):
+        """A CHANGELOG fixture with a footer whose record 0 carries a `(in progress)` line, trimmed;
+        the frozen proof's STUB_PATTERN is set to match that line (the real CHANGELOG.md declares no
+        marker, so this is the only way to put a stub beside a footer), and the stub is finalized in
+        the live ledger. Returns (repo, shard path relative to it)."""
+        p = make_repo(tmp, footer=True)
+        cl = p / "CHANGELOG.md"
+        s = cl.read_text(encoding="utf-8")
+        old = "entry 0\n\nsee"
+        self.assertEqual(s.count(old), 1)
+        cl.write_text(s.replace(old, "entry 0\n\n(in progress)\nsee"), encoding="utf-8")
+        sh(p, "git", "commit", "-qa", "--amend", "-m", "seed")
+        r = run_trim(p, "--file", "CHANGELOG.md", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        shard = sorted((p / "docs" / "archive").glob("CHANGELOG-through-*.md"))[0]
+        proof = shard.with_name(shard.name + ".verify.sh")
+        text = proof.read_text(encoding="utf-8")
+        text2 = text.replace("STUB_PATTERN = ''", "STUB_PATTERN = " + repr(r"^\(in progress\)$"))
+        self.assertNotEqual(text2, text, "control: the proof must carry an empty STUB_PATTERN")
+        proof.write_text(text2, encoding="utf-8")
+        live = (p / "CHANGELOG.md")
+        t2 = live.read_text(encoding="utf-8")
+        self.assertEqual(t2.count("(in progress)\n"), 1, "control: record 0 is retained and still a stub")
+        live.write_text(t2.replace("(in progress)\n", "", 1), encoding="utf-8")
+        return p, shard
+
+    def _commit_and_prove(self, p, shard):
+        sh(p, "git", "add", "-A")
+        sh(p, "git", "commit", "-qm", "trim + finalize")
+        return sh(p, "bash", shard.relative_to(p).as_posix() + ".verify.sh")
+
+    def test_control_the_footed_fixture_labels_a_stub_finalize_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._footed(tmp)
+            v = self._commit_and_prove(p, shard)
+            self.assertEqual(v.returncode, 4, v.stdout)
+            self.assertIn("record 0 was a pending stub", v.stdout)
+
+    def test_an_altered_footer_beside_a_finalize_is_not_labelled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._footed(tmp)
+            live = p / "CHANGELOG.md"
+            text = live.read_text(encoding="utf-8")
+            self.assertEqual(text.count("prepend-only."), 1)
+            live.write_text(text.replace("prepend-only.", "prepend-only (edited)."), encoding="utf-8")
+            v = self._commit_and_prove(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("L2 FOOTER is not byte-identical", v.stdout, v.stdout)
+            self.assertNotIn("pending stub", v.stdout)
+
+    def test_a_footer_migrated_into_the_shard_beside_a_finalize_is_not_labelled(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._footed(tmp)
+            text = shard.read_text(encoding="utf-8")
+            i = text.index("### ")
+            shard.write_text(text[:i] + FOOTER.strip() + "\n\n" + text[i:], encoding="utf-8")   # records untouched
+            v = self._commit_and_prove(p, shard)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("L2 FOOTER migrated into the shard", v.stdout, v.stdout)
+            self.assertNotIn("pending stub", v.stdout)
+
+
+# =============================================================================================
+# The rule had been stated too strongly: "trim while record 0 is complete -- before the claim, or
+# after the finalize is committed". A trim committed on its own while record 0 is a pending stub
+# passes (record 0 is untouched in that commit), yet the write-time warning advised against it. The
+# real rule is the one the proof enforces: do not put the trim in the commit that EDITS record 0
+# (maintainer's point 4 on the pull request).
+# =============================================================================================
+
+class TestTheTimingRuleIsTheOneTheProofEnforces(unittest.TestCase):
+
+    def test_a_trim_committed_on_its_own_while_record_0_is_a_stub_passes(self):
+        """The measurement behind the rewording: the stub is retained, untouched, in the trim commit."""
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = helper._stub_repo(tmp)
+            shard = helper._trim(p)
+            helper._commit(p, "trim, alone: record 0 is still a pending stub")
+            v = helper._proof(p, shard)
+            self.assertEqual(v.returncode, 0, v.stdout)
+            self.assertIn("OK:", v.stdout)
+
+    def test_the_write_time_warning_says_the_trim_is_fine_in_a_commit_of_its_own(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            helper = TestVerifyShNamesAStubFinalize()
+            p = helper._stub_repo(tmp)
+            r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--today", "2026-02-01")
+            self.assertIn("FRONTIER_PENDING_STUB", r.stdout, r.stdout)
+            self.assertIn(TIMING_RULE, " ".join(r.stdout.split()))
+            self.assertIn("goes in a commit of its own", " ".join(r.stdout.split()),
+                          "the warning must say what is safe")
+            self.assertNotIn("either finalize record 0 and commit that first", r.stdout,
+                             "the retired advice: a trim before the finalize is fine")
+            self.assertNotIn("or trim before the claim", r.stdout)
+
+    def test_the_constant_does_not_claim_the_trim_must_wait_for_a_complete_record(self):
+        self.assertNotIn("before the claim", mod.TRIM_TIMING_RULE)
+        self.assertNotIn("after the finalize is committed", mod.TRIM_TIMING_RULE)
+        self.assertNotIn("before the claim", mod.VERIFY_TEMPLATE)
+
+
+# =============================================================================================
+# Found while testing the maintainer's point 1, and not one of the nine. The proof finds the trim
+# commit with `git log --diff-filter=A -- <shard>`, discarding stderr. If that walk FAILS (a
+# treeless partial clone whose remote is gone; a damaged object store) TRIM_SHA is empty, the
+# proof runs in its "trim not yet committed" mode -- HEAD's copy of the live ledger against the
+# working tree's, the same file -- and prints OK for a trim that is committed and was never
+# compared. Present in 1.5.0. A walk that fails is "the proof did not finish", exit 3.
+# =============================================================================================
+
+class TestAFailedHistoryWalkIsNotAnUncommittedTrim(unittest.TestCase):
+
+    def _trimmed(self, tmp, commit):
+        p = make_handoff_repo(tmp)
+        r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", r.stdout, r.stdout)
+        shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0].relative_to(p).as_posix()
+        if commit:
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim")
+        return p, shard
+
+    def test_control_a_committed_trim_is_proved_against_its_commit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp, commit=True)
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 0, v.stdout)
+            self.assertIn("the trim commit", v.stdout)
+            self.assertNotIn("not yet committed", v.stdout)
+
+    def test_control_an_uncommitted_trim_is_still_proved_against_head(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp, commit=False)
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 0, v.stdout)
+            self.assertIn("not yet committed", v.stdout)
+
+    def test_a_history_walk_that_fails_is_the_abort_not_a_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp, commit=True)
+            sha = sh(p, "git", "rev-parse", "HEAD^^{tree}").stdout.strip()
+            obj = p / ".git" / "objects" / sha[:2] / sha[2:]
+            self.assertTrue(obj.is_file(), "control: the parent's root tree must be a loose object")
+            obj.chmod(0o644)
+            obj.unlink()
+            self.assertNotEqual(sh(p, "git", "log", "--diff-filter=A", "-1", "--format=%H", "--", shard).returncode,
+                                0, "control: the walk must fail here")
+            v = sh(p, "bash", shard + ".verify.sh")
+            self.assertEqual(v.returncode, 3, v.stdout)
+            self.assertIn("did not finish", v.stdout)
+            self.assertNotIn("OK:", v.stdout, "a proof that compared nothing must not say OK")
+            self.assertNotIn("not yet committed", v.stdout, "and must not pretend the trim is uncommitted")
 
 
 if __name__ == "__main__":

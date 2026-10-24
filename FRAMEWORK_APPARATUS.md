@@ -525,6 +525,23 @@ An archive is a **shard** — a new frozen file, same format, same newest-on-top
 here — one ledger, one shard, one commit, one revert. It does **not** belong in Phase 0, which is
 read-only apart from the reconcile backfill.
 
+**Give the trim a commit of its own, never in the same commit that edits record 0.** A session's
+claim leaves record 0 of `HANDOFFS.md` as a `status: pending` stub that close-out overwrites in
+place. A trim that lands in that same commit makes the generated `.verify.sh` read the receipt as
+*edited*, because its pre-trim bytes are the stub: the proof ends red (exit 4, named as a stub
+finalize since nothing else went missing, but still a FAIL) with nothing lost, and it prints the
+diff of the stub against the receipt that replaced it, so a reader can see in seconds what the
+proof cannot judge. A trim committed on its own while record 0 is a stub is fine: record 0 is
+untouched in that commit. `methodology_trim.py` warns when it sees the state coming
+(`FRONTIER_PENDING_STUB`, `FRONTIER_FINALIZE_UNCOMMITTED`); the warning is advisory and refuses
+nothing. A `.verify.sh` already written is frozen and never changes; to ask what today's template
+says about an old shard, run `methodology_trim.py --reverify <shard>` — read-only, it prints a verdict
+that is a claim about today's logic, not about the artifact that was shipped. A proof that cannot
+read a commit or an object from git (a shallow or partial clone without the trim commit's parent)
+exits 3 and prints no verdict, never a `FAIL:` line; run it where the history is present. A path that
+is absent from a commit the proof *can* read (a trim commit that also deletes the live ledger) is not a
+failure to run: it is a `FAIL:` at exit 1.
+
 **Not everything that grows can be archived this way.** Archiving moves *history*. A file that grows
 because someone keeps adding *procedure* has no past to move — extract a section to a sibling file
 and leave a pointer instead. A backlog of open items is live state rather than history: that is a
