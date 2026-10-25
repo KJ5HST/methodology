@@ -44,6 +44,11 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-24 · [ad hoc] Delete the merged branch `feat/sync-manifest-at-ref` (in progress)
+
+- **Action:** session S44 claimed on `main`, on the operator's "delete it". The branch is PR #91's (D8), merged at
+  `e107356`; local and origin both point at `9ac2d4b`, 0 commits ahead of `main`.
+
 ### 2026-10-24 · [ad hoc] S43 close-out — PR #94 comment posted
 
 - **Action:** S43's receipt completed in `HANDOFFS.md`. Next: wait for rmsharp's `SESSION_NOTES.md` PR and any reply

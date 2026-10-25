@@ -8,6 +8,13 @@ This repository dogfoods its own methodology: every session records a durable, m
 ---
 
 ```handoff
+session: S44
+date: 2026-10-24
+status: pending
+active_task: Delete the merged branch feat/sync-manifest-at-ref (local and origin, both at 9ac2d4b, an ancestor of main via the PR #91 merge e107356) on the operator's "delete it". IN PROGRESS.
+```
+
+```handoff
 session: S43
 date: 2026-10-24
 status: complete
