@@ -44,6 +44,12 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ## 2026-10
 
+### 2026-10-24 · [ad hoc] S44 close-out — merged branch feat/sync-manifest-at-ref deleted
+
+- **Action (non-commit):** closes the S44 claim entry. `git branch -d` (the safe form, which refuses an unmerged
+  branch) and `git push origin --delete`; after `fetch --prune` no ref remains, and the GitHub API returns 404 for the
+  branch. Its commits stay reachable from `main` through `e107356`.
+
 ### 2026-10-24 · [ad hoc] Delete the merged branch `feat/sync-manifest-at-ref` (in progress)
 
 - **Action:** session S44 claimed on `main`, on the operator's "delete it". The branch is PR #91's (D8), merged at

@@ -10,8 +10,17 @@ This repository dogfoods its own methodology: every session records a durable, m
 ```handoff
 session: S44
 date: 2026-10-24
-status: pending
-active_task: Delete the merged branch feat/sync-manifest-at-ref (local and origin, both at 9ac2d4b, an ancestor of main via the PR #91 merge e107356) on the operator's "delete it". IN PROGRESS.
+status: complete
+self_score: 8
+predecessor_score: 9
+active_task: Delete the merged branch feat/sync-manifest-at-ref (local and origin, both at 9ac2d4b, an ancestor of main via the PR #91 merge e107356) on the operator's "delete it". COMPLETE.
+what_was_done: Claim 4a44f94 → checked first: local and origin both at 9ac2d4b, 0 commits ahead of main, both ancestors of main, no worktree on it → git branch -d (not -D; it refuses an unmerged branch) and git push origin --delete → fetch --prune shows no ref; the GitHub API returns 404 for the branch → this close-out. Predecessor S43 9/10: its next step (d) named this exact action and its precondition (the operator's OK), and the branch state matched its description. Learnings: none for the framework.
+next_steps: (a) WAIT for rmsharp: the follow-up SESSION_NOTES.md PR (fork branch feat/trim-session-notes-ledger-issue93, 8de50d2) and any reply on issue #97; review the PR against the S41 comment's point 3 and check it flips tools/test_methodology_trim.py:2382. (b) Unreviewed: PR #96 (close_out_report.py; run merge-tree against current main first) and issue #95. (c) This close-out is local: main is 2 commits ahead of origin (4a44f94 + this), unpushed until the operator says so. (d) The two parked branches from S39 are untouched.
+key_files: CHANGELOG.md:47 (this session's entries); HANDOFFS.md:10 (this receipt)
+gotchas: (1) Anyone with an old clone still has the remote-tracking ref until they fetch with --prune; the commits stay reachable from main through e107356, so nothing is lost. (2) PR #91's page still links the branch name; GitHub shows it as deleted, which is normal.
+runtime_smoke: n/a (a branch deletion, verified with fetch --prune and the GitHub API). Build-equivalent: quality_ratchet: 12/12 pass · 0 fail · 0 unmeasured · results b49e29a9e5ea · manifest 06181a10ec42 — run on a clean clone of d32c6c0 (S42); main has changed since only in CHANGELOG.md and HANDOFFS.md.
+changelog_ref: CHANGELOG.md "2026-10-24 · [ad hoc] S44 close-out — merged branch feat/sync-manifest-at-ref deleted"
+commit: 4a44f94 (claim) + this commit (close-out)
 ```
 
 ```handoff
