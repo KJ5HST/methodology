@@ -161,6 +161,24 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
   documentation entry above. Gate run at the tagged commit: 261 passed / 0 failed; ratchet 12/12. The tag stays at
   `f34769f` when those notes merge: a moved tag does not reach clones that already hold it. The release:
   [`CLAUDE.md` §Versioning](CLAUDE.md#versioning) v4.2.
+### 2026-10-26 · [issue #93] The maintainer's three follow-ups on the merged pull request: two messages and three exit-3 statements say what is true (`TRIM_VERSION` 1.9.1)
+
+- **Action:** after merging #94 the maintainer listed three small follow-ups "for that PR or a separate one"; they go in this
+  pull request. (1) `--reverify`, re-deriving a proof written before the stub label, said "the ledger table declares none for the
+  live basename" for a file the table has no entry for at all; it now says "has no entry for <file>" for that case and "the ledger
+  table's entry for <file> declares no stub marker" for `CHANGELOG.md`, whose entry declares none on purpose. (2) The `PREFIX`
+  refusal's reason read "rebased for a different depth", which does not fit an adopter whose ledgers moved to `methodology/`
+  (`LIVE=methodology/CHANGELOG.md`); it now reads "the proof was written for a different layout". (3) Three statements of what exit
+  3 means were incomplete: the `unfinished` comment in `starter-kit/methodology_trim.py` ("and for nothing else"), the `--reverify`
+  legend (3 only for a shard that cannot be re-derived) and `FRAMEWORK_APPARATUS.md` §The shard convention. They now name an
+  unreadable working-tree file, a failed history walk and an unreachable repository root as well as an unreadable ref or object,
+  and the document says that a proof written before 1.8.1 is frozen and exits 1 where git cannot read the commit or object
+  (measured by running a proof written by each trimmer in a depth-1 clone: 1.8.0 exits 1, 1.8.1 and this version exit 3).
+  `tools/test_methodology_trim.py`: five tests, each red against the old wording first (two for the substitution, one for the
+  `PREFIX` refusal, one for the legend, one pinning the two `FRAMEWORK_APPARATUS.md` sentences); 250 tests (2 skipped), up from
+  245; the `trimmer-unit-tests` gate 245 → 250, a tightening. A patch: wording only, so no exit code, finding code or verdict
+  changes. The front-matter warning the maintainer asked to have in this pull request is the next commit.
+
 ### 2026-10-19 · [issue #93] `SESSION_NOTES.md` joins the ledger table (`TRIM_VERSION` 1.9.0)
 
 - **Action:** the change the maintainer asked to have as its own pull request, kept separate from the proof fixes. Seven of the

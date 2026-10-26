@@ -2065,6 +2065,51 @@ class TestReverify(unittest.TestCase):
             self.assertIn("[REVERIFY_SUBSTITUTED]", r.stdout)
             self.assertIn("STUB_PATTERN", r.stdout)
             self.assertIn("HANDOFFS.md", r.stdout, "the substitution names the basename it was keyed by")
+            self.assertIn("status: pending", self._stub_pattern_note(r),
+                          "...and its own line shows the marker it supplied")
+
+    def _stub_pattern_note(self, r):
+        """The one [REVERIFY_SUBSTITUTED] line that names STUB_PATTERN (a finding prints on one line)."""
+        lines = [ln for ln in r.stdout.splitlines()
+                 if "[REVERIFY_SUBSTITUTED]" in ln and "STUB_PATTERN" in ln]
+        self.assertEqual(len(lines), 1, r.stdout)
+        return lines[0]
+
+    def test_a_ledger_the_table_has_no_entry_for_is_said_to_have_no_entry(self):
+        """The maintainer's follow-up on #94: for a shard of a file that is not in the ledger table
+        at all (a project's own ledger), the substitution said 'the ledger table declares none for
+        the live basename', which reads as 'the entry declares no marker'. It must say the table has
+        no entry, and keep re-deriving with no stub marker."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self._rewrite_proof(
+                p, shard,
+                lambda t: self._as_written_before_the_stub_label(t).replace(
+                    "LIVE=HANDOFFS.md", "LIVE=LOCAL_LEDGER.md"),
+                "the proof must name a live ledger the table lacks")
+            note = self._stub_pattern_note(self._rv(p, shard))
+            self.assertIn("has no entry for LOCAL_LEDGER.md", note)
+            self.assertNotIn("declares", note, "the entry-less case must not claim an entry declares anything")
+            self.assertIn("no stub finalize is recognised", note)
+
+    def test_a_table_entry_that_declares_no_marker_is_said_to_declare_none(self):
+        """The other case the old sentence covered: CHANGELOG.md IS in the table and declares no stub
+        marker on purpose. That is what 'declares none' is true of, so it keeps the word."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            r = run_trim(p, "--file", "CHANGELOG.md", "--cut", "2", "--write", "--today", "2026-02-01")
+            self.assertIn("[WROTE]", r.stdout, r.stdout)
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim the changelog")
+            shard = sorted((p / "docs" / "archive").glob("CHANGELOG-through-*.md"))[0].relative_to(p).as_posix()
+            self._rewrite_proof(p, shard, self._as_written_before_the_stub_label,
+                                "the proof must be rewritten as 1.5.x wrote it")
+            self.assertNotIn("STUB_PATTERN", self._proof_path(p, shard).read_text(encoding="utf-8"),
+                             "control: the frozen stand-in must carry no STUB_PATTERN line")
+            note = self._stub_pattern_note(self._rv(p, shard))
+            self.assertIn("entry for CHANGELOG.md declares no stub marker", note)
+            self.assertNotIn("has no entry", note, "CHANGELOG.md has an entry")
+            self.assertIn("no stub finalize is recognised", note)
 
     def test_a_proof_with_no_regen_line_lifts_with_an_empty_list_and_says_so(self):
         """Proofs older than 1.1.2 have no REGEN_PATTERNS. That is not a refusal -- the grammar
@@ -2344,6 +2389,23 @@ class TestReverify(unittest.TestCase):
         r = subprocess.run([sys.executable, str(TRIM_PY), "--help"], stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT, text=True)
         self.assertIn("--reverify", r.stdout)
+
+    def test_help_gives_exit_3_for_every_no_verdict_case_not_only_an_unrederivable_shard(self):
+        """The maintainer's follow-up on #94: the legend gave 3 only for a shard that cannot be
+        re-derived, but the proof it runs also exits 3 when it cannot read what it needs."""
+        r = subprocess.run([sys.executable, str(TRIM_PY), "--help"], stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, text=True)
+        text = " ".join(r.stdout.split())
+        self.assertIn("or 3 when no verdict was reached", text)
+        self.assertIn("the proof could not read what it needs", text)
+
+    def test_framework_apparatus_lists_every_exit_3_and_the_pre_1_8_1_exception(self):
+        """The same follow-up for FRAMEWORK_APPARATUS.md: the unreadable cases beyond a git object,
+        and that a proof frozen before 1.8.1 exits 1 where today's exits 3."""
+        prose = " ".join((REPO / "FRAMEWORK_APPARATUS.md").read_text(encoding="utf-8").split())
+        self.assertIn("a working-tree file, the history or the repository root, exits 3", prose)
+        self.assertIn("A proof written before 1.8.1 is frozen: where git cannot read the commit or "
+                      "object it exits 1", prose)
 
     # --- the lift itself, against what the builder writes and what is really on disk ------------
 
@@ -3900,6 +3962,19 @@ class TestReverifyRefusesAPrefixItCannotHonour(unittest.TestCase):
             self.assertIn('PREFIX is "../"', r.stdout, "the refusal names the value it found")
             self.assertIn('"../../"', r.stdout, "...and the value this tool's template writes")
             self.assertNotIn("[REVERIFY_VERDICT]", r.stdout, "a refusal is not a verdict")
+
+    def test_the_refusal_says_a_different_layout_not_a_different_depth(self):
+        """The maintainer's follow-up on #94: the adopter whose proofs carry PREFIX "../" moved its
+        ledgers to methodology/ (LIVE=methodology/CHANGELOG.md), so the cause is the layout the proof
+        was written for, not a depth; 'rebased for a different depth' sent a reader to the wrong place."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p, shard = self._trimmed(tmp)
+            self._rewrite(p, shard, lambda t: t.replace('PREFIX = "../../"', 'PREFIX = "../"'))
+            r = run_trim(p, "--reverify", shard)
+            self.assertEqual(r.returncode, 3, r.stdout)
+            self.assertIn("written for a different layout", r.stdout)
+            self.assertNotIn("different depth", r.stdout)
+            self.assertIn("a verdict about neither", r.stdout, "the reason the refusal exists is kept")
             self.assertNotIn("FAIL:", r.stdout)
 
     def test_a_proof_with_no_prefix_line_is_refused(self):

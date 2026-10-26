@@ -52,7 +52,20 @@ import sys
 import tempfile
 from pathlib import Path
 
-TRIM_VERSION = "1.9.0"   # 1.9.0: issue #93, SESSION_NOTES.md joins LEDGERS -- seven of the adopter's ten failing
+TRIM_VERSION = "1.9.1"   # 1.9.1: issue #93, the maintainer's follow-ups on the merged pull request -- wording only,
+                         # patch not minor: no new finding code, and no exit code or verdict changes. (1) The
+                         # `--reverify` STUB_PATTERN substitution says which of two cases a shard is in: the ledger
+                         # table has NO ENTRY for the live basename (a project's own ledger), or its entry declares
+                         # no stub marker (CHANGELOG.md, on purpose); the old sentence said "declares none" for
+                         # both. (2) The PREFIX refusal says the proof "was written for a different layout", not
+                         # that its links were "rebased for a different depth": the adopter whose proofs carry
+                         # "../" moved its ledgers under methodology/. (3) Exit 3 is described as every no-verdict
+                         # case: the `unfinished` comment, the `--reverify` legend and FRAMEWORK_APPARATUS.md name
+                         # the unreadable working-tree file, the failed history walk and the unreachable repository
+                         # root as well as an unreadable ref or object, and say that a proof frozen before 1.8.1
+                         # exits 1 where git cannot read the commit or object.
+                         #
+                         # 1.9.0: issue #93, SESSION_NOTES.md joins LEDGERS -- seven of the adopter's ten failing
                          # proofs are SESSION_NOTES.md shards, a ledger the table did not list, so no stub
                          # marker reached them and `--reverify` could print only the generic failures. The
                          # entry: the runner's two record shapes (`### What Session N Did`, `### Session N-1
@@ -1579,7 +1592,9 @@ def unfinished(why):
     # 1, which is this script's FAIL code, so a proof that had compared nothing read as a trim that
     # lost something. Exit 3 is "the proof did not finish": the code the shell head above uses when
     # it cannot reach the repository root, and the code `--reverify`'s legend gives this case. It
-    # is for a ref or an object this clone CANNOT READ, and for nothing else -- see `absent`.
+    # is for something the proof CANNOT READ -- a ref or an object this clone lacks, a working-tree
+    # file it cannot open, a history walk that fails, a repository root it cannot reach -- and for
+    # nothing else: a path merely absent from a commit it CAN read is a finding, see `absent`.
     sys.stderr.write("verify: %s -- the proof did not finish; this is not a verdict (exit 3)\n"
                      % why)
     sys.exit(3)
@@ -2022,8 +2037,9 @@ def lift_grammar(text):
     _lift_pattern("RECORD_START", out["start"])
     # PREFIX is a constant of the template, not a placeholder: the writer always puts a shard two
     # directories below the root, so today's template inverts links with REBASE_PREFIX. A proof
-    # written for another depth passes as written and cannot be re-derived here; reading it as a
-    # FAIL would be a verdict about neither, so it is refused, by name.
+    # written for another layout (a different depth, or ledgers moved under another directory) passes
+    # as written and cannot be re-derived here; reading it as a FAIL would be a verdict about
+    # neither, so it is refused, by name.
     prefix_line = _lift_line(text, "PREFIX")
     if prefix_line is None:
         raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
@@ -2036,8 +2052,8 @@ def lift_grammar(text):
     if pm.group(1) != REBASE_PREFIX:
         raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
                               'PREFIX is "%s" in the frozen proof; this tool\'s template writes "%s" (a shard two '
-                              "directories below the root): the shard's links were rebased for a different "
-                              "depth, so re-deriving it here would be a verdict about neither"
+                              "directories below the root): the proof was written for a different layout, "
+                              "so re-deriving it here would be a verdict about neither"
                               % (pm.group(1), REBASE_PREFIX))
     for key, field in (("REGEN_PATTERNS", "regen"), ("STUB_PATTERN", "stub")):
         line = _lift_line(text, key)
@@ -2114,12 +2130,18 @@ def reverify(arg, result):
                    "fields): re-derived with none.")
     if stub is None:
         stub = stub_pattern_for(g["live"])
+        live_name = Path(g["live"]).name
+        if stub:
+            how = ("supplied from this tool's ledger table by the live basename %s: %r"
+                   % (live_name, stub))
+        elif live_name in LEDGERS:
+            how = ("the ledger table's entry for %s declares no stub marker, so no stub finalize "
+                   "is recognised" % live_name)
+        else:
+            how = ("the ledger table has no entry for %s, so no stub finalize is recognised"
+                   % live_name)
         result.add("REVERIFY_SUBSTITUTED",
-                   "STUB_PATTERN is not in the frozen proof (it predates the stub label): %s"
-                   % ("supplied from this tool's ledger table by the live basename %s: %r"
-                      % (Path(g["live"]).name, stub) if stub else
-                      "the ledger table declares none for the live basename %s, so no stub finalize "
-                      "is recognised" % Path(g["live"]).name))
+                   "STUB_PATTERN is not in the frozen proof (it predates the stub label): %s" % how)
     script = render_verify(g["live"], g["shard"], g["kind"], g["start"], g["info"], g["footer"],
                            g["regen"], stub)
     try:
@@ -2772,7 +2794,9 @@ def main(argv=None):
                    help="re-derive a frozen shard's proof under THIS tool's template and print the "
                         "verdict. Read-only: writes nothing. Takes the shard (or its .verify.sh) "
                         "and no other mode flag. Exit is the proof's own (0 holds, 1 a FAIL, 4 a "
-                        "recognised stub finalize), or 3 when the shard cannot be re-derived.")
+                        "recognised stub finalize), or 3 when no verdict was reached: the shard cannot "
+                        "be re-derived, or the proof could not read what it needs (a commit or "
+                        "object, a file, the history, the repository root).")
     p.add_argument("--today", help=argparse.SUPPRESS)   # test seam: deterministic dates
     p.add_argument("--version", action="version", version="methodology_trim.py v" + TRIM_VERSION)
     opts = p.parse_args(argv)
