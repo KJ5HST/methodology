@@ -201,7 +201,7 @@ New to the methodology? The **[tutorials](docs/tutorials/)** are a hands-on, pro
 │   ├── HANDOFFS.md                   ← Durable close-out receipts template
 │   ├── ROADMAP.md                    ← Feature inventory & future plans template
 │   ├── methodology_dashboard.py      ← Health scanner (also in tools/)
-│   ├── methodology_trim.py           ← Ledger trimmer (archives cold CHANGELOG/HANDOFFS entries losslessly)
+│   ├── methodology_trim.py           ← Ledger trimmer (archives cold CHANGELOG, HANDOFFS and SESSION_NOTES entries losslessly)
 │   ├── context_budget.py             ← Context-budget gate (ceilings on the files a session must read)
 │   ├── context-budget.json           ← Its seed config (→ .context-budget.json at the adopter root)
 │   ├── quality_ratchet.py            ← Quality ratchet (declared thresholds that only tighten)

@@ -161,6 +161,72 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
   documentation entry above. Gate run at the tagged commit: 261 passed / 0 failed; ratchet 12/12. The tag stays at
   `f34769f` when those notes merge: a moved tag does not reach clones that already hold it. The release:
   [`CLAUDE.md` §Versioning](CLAUDE.md#versioning) v4.2.
+### 2026-10-26 · [issue #93] A third write-time warning: an uncommitted edit to a ledger's front matter (`TRIM_VERSION` 1.10.0)
+
+- **Action:** the maintainer's answer on #94 (b) was to put the front-matter warning in the second pull request; his review had
+  observed that an `ACTIVE TASK` edit in the trim commit fails L2 after the trimmer printed `L2_OK`. The cause: the proof's L2
+  requires every non-blank line of the parent's front matter to survive verbatim in the trim commit (a declared regenerated
+  field's own value excepted), while the writer's `assert_L2` compares the working tree before and after its own run, so an edit
+  above the first record that is uncommitted at write time is invisible to the writer and lost to the proof.
+  `starter-kit/methodology_trim.py` gains `check_front_matter_frontier`, called beside `check_stub_frontier`: it runs the proof's
+  test at write time against HEAD's copy and, when lines are lost, adds `FRONTIER_FRONT_MATTER_UNCOMMITTED` (advisory, exit 0,
+  nothing refused). The finding gives the count, quotes the first lost line, says the proof will end red ("L2 FRONT MATTER lost")
+  although the writer reports `[L2_OK]`, and gives the way out: commit the front-matter edit first, then trim in a commit of its
+  own. It is silent where the proof is: an edit that only adds lines, blank lines, a reorder (whole-line membership), a declared
+  regenerated field's value alone (the `holds **N**` count), converted line endings, a HEAD that holds no version of the ledger
+  and a HEAD the grammar cannot classify. `FRAMEWORK_APPARATUS.md`'s timing-rule paragraph names the third warning.
+  `tools/test_methodology_trim.py`: `TestWriteTimeGuardForAFrontMatterEdit`, 19 tests, and one test that pins the rule's words
+  between the writer and the document. The consequence the finding names is measured, not assumed: the write reports `[L2_OK]`
+  and the committed trim's proof then exits 1 with `L2 FRONT MATTER lost 1 line(s)`, while the advised order exits 0. Mutation
+  round on the new function: 12 mutants, 11 killed; the survivor ignores the regenerated pattern's prefix group, which is literal
+  text in every declared pattern, so it cannot differ between two lines that matched the same pattern (equivalent). 270 tests (2
+  skipped), up from 250; the `trimmer-unit-tests` gate 250 → 270, a tightening. A minor release: a new finding code. Not done
+  here: an edit that was committed together with an earlier trim, and a trim made by hand, are not seen.
+
+### 2026-10-26 · [issue #93] The maintainer's three follow-ups on the merged pull request: two messages and three exit-3 statements say what is true (`TRIM_VERSION` 1.9.1)
+
+- **Action:** after merging #94 the maintainer listed three small follow-ups "for that PR or a separate one"; they go in this
+  pull request. (1) `--reverify`, re-deriving a proof written before the stub label, said "the ledger table declares none for the
+  live basename" for a file the table has no entry for at all; it now says "has no entry for <file>" for that case and "the ledger
+  table's entry for <file> declares no stub marker" for `CHANGELOG.md`, whose entry declares none on purpose. (2) The `PREFIX`
+  refusal's reason read "rebased for a different depth", which does not fit an adopter whose ledgers moved to `methodology/`
+  (`LIVE=methodology/CHANGELOG.md`); it now reads "the proof was written for a different layout". (3) Three statements of what exit
+  3 means were incomplete: the `unfinished` comment in `starter-kit/methodology_trim.py` ("and for nothing else"), the `--reverify`
+  legend (3 only for a shard that cannot be re-derived) and `FRAMEWORK_APPARATUS.md` §The shard convention. They now name an
+  unreadable working-tree file, a failed history walk and an unreachable repository root as well as an unreadable ref or object,
+  and the document says that a proof written before 1.8.1 is frozen and exits 1 where git cannot read the commit or object
+  (measured by running a proof written by each trimmer in a depth-1 clone: 1.8.0 exits 1, 1.8.1 and this version exit 3).
+  `tools/test_methodology_trim.py`: five tests, each red against the old wording first (two for the substitution, one for the
+  `PREFIX` refusal, one for the legend, one pinning the two `FRAMEWORK_APPARATUS.md` sentences); 250 tests (2 skipped), up from
+  245; the `trimmer-unit-tests` gate 245 → 250, a tightening. A patch: wording only, so no exit code, finding code or verdict
+  changes. The front-matter warning the maintainer asked to have in this pull request is the next commit.
+
+### 2026-10-19 · [issue #93] `SESSION_NOTES.md` joins the ledger table (`TRIM_VERSION` 1.9.0)
+
+- **Action:** the change the maintainer asked to have as its own pull request, kept separate from the proof fixes. Seven of the
+  ten failing proofs in the adopter repository [issue #93](https://github.com/KJ5HST/methodology/issues/93) reports on
+  (`rmsharp/nprcgenekeepr`) are `SESSION_NOTES.md` shards; the ledger table had no entry for that file, so no stub marker reached
+  them and `--reverify` could print only the generic L1/L3 failures. `starter-kit/methodology_trim.py`'s `LEDGERS` gains
+  `SESSION_NOTES.md`: the runner's two record shapes (`### What Session N Did`, `### Session N-1 Handoff Evaluation (by Session
+  N)`), no footer, a best-effort record date, and a stub marker that requires BOTH Phase 1B lines, the `**Status:** Session
+  claimed` line and the `(IN PROGRESS)` tag, anywhere in the record with the status line starting a line (a finished record in
+  3 of 12 adopters' notes files still carries the status line, and 2 of those 3 dropped the tag, so the line alone would have
+  called finished records stubs). `_session_notes_date`'s comment now says what is true: the date labels a shard's span AND
+  decides where `--cut DATE` falls, and a record whose only date is the fallback can be cut by a date that is not its own (the
+  cut is lossless either way). `FRAMEWORK_APPARATUS.md`'s timing-rule paragraph names the notes stub; `README.md`'s file tree
+  lists the third ledger. `tools/test_methodology_trim.py`: `TestSessionNotesIsATrimmableLedger`, 18 tests (the grammar and the
+  marker's two parts, the fixture proved first, the seed read as fresh, a trim end to end with the proof before and after the
+  commit, the labelled finalize with its diff, four narrowed controls, the write-time guard, the 1.5.0-proof re-derivation, a
+  grammar mismatch refused loudly, the Class A arm at the root only), and two existing tests updated from the old truth; 245 tests
+  (2 skipped), up from 227; the `trimmer-unit-tests` gate 227 → 245, a tightening. Measured on that adopter's 54 proofs (at its
+  commit 82433662): `--reverify` reads 46 at exit 0 and 8 at exit 4 with this entry, and 46 at exit 0, 1 at exit 4 and 7 at
+  exit 1 without it; the proof fixes of 1.8.2 change none of the 54 verdicts. A minor release: a third ledger the tool can
+  trim. Not settled here, and said so rather than hidden: a notes file over the seed `.context-budget.json` caps (400 lines,
+  120,000 B) can fail `context_budget.py` while `--check` reports no trim due (the Class A arm is 196,608 B); a trim leaves
+  headings the pattern does not match (a lowercase `did`) as front matter without saying so; and an `ACTIVE TASK` edit in the
+  trim commit fails L2 after the trimmer printed `L2_OK`. What it does not do: a recognised stub finalize stays a FAIL at exit
+  4, because the proof can see that a stub was replaced and not what the replacement dropped.
+
 ### 2026-10-19 · [issue #93] A failed history walk is "the proof did not finish", not a pass; found while testing, not in the review (`TRIM_VERSION` 1.8.2)
 
 - **Action:** not one of the maintainer's nine points; found while writing the tests for the first. The proof finds the trim

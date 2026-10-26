@@ -526,19 +526,29 @@ here — one ledger, one shard, one commit, one revert. It does **not** belong i
 read-only apart from the reconcile backfill.
 
 **Give the trim a commit of its own, never in the same commit that edits record 0.** A session's
-claim leaves record 0 of `HANDOFFS.md` as a `status: pending` stub that close-out overwrites in
-place. A trim that lands in that same commit makes the generated `.verify.sh` read the receipt as
+claim leaves record 0 of `HANDOFFS.md` as a `status: pending` stub, and record 0 of `SESSION_NOTES.md`
+as the Phase 1B stub (a `**Deliverable:** … (IN PROGRESS)` line and a `**Status:** Session claimed`
+line); close-out overwrites both in place. A trim that lands in that same commit makes the generated `.verify.sh` read the receipt as
 *edited*, because its pre-trim bytes are the stub: the proof ends red (exit 4, named as a stub
 finalize since nothing else went missing, but still a FAIL) with nothing lost, and it prints the
 diff of the stub against the receipt that replaced it, so a reader can see in seconds what the
 proof cannot judge. A trim committed on its own while record 0 is a stub is fine: record 0 is
 untouched in that commit. `methodology_trim.py` warns when it sees the state coming
 (`FRONTIER_PENDING_STUB`, `FRONTIER_FINALIZE_UNCOMMITTED`); the warning is advisory and refuses
-nothing. A `.verify.sh` already written is frozen and never changes; to ask what today's template
+nothing. The front matter has the same hazard. The proof requires every non-blank line of the parent's
+front matter to survive in the trim commit, so an edit above the first record that is uncommitted when
+the trim runs (a `SESSION_NOTES.md` session rewrites its `ACTIVE TASK` at every claim) ends the proof
+red (`L2 FRONT MATTER lost`) after the trimmer itself printed `L2_OK`: the trimmer compares the working
+tree before and after its own run, the proof compares the trim commit with its parent.
+`FRONTIER_FRONT_MATTER_UNCOMMITTED` warns when it sees that coming, with the same advice: commit the
+front-matter edit first, then give the trim a commit of its own. A `.verify.sh` already written is frozen and never changes; to ask what today's template
 says about an old shard, run `methodology_trim.py --reverify <shard>` — read-only, it prints a verdict
 that is a claim about today's logic, not about the artifact that was shipped. A proof that cannot
-read a commit or an object from git (a shallow or partial clone without the trim commit's parent)
-exits 3 and prints no verdict, never a `FAIL:` line; run it where the history is present. A path that
+read something it needs, whether a commit or an object from git (a shallow or partial clone without
+the trim commit's parent), a working-tree file, the history or the repository root, exits 3 and prints
+no verdict, never a `FAIL:` line; run it where the history is present. (A proof written before 1.8.1
+is frozen: where git cannot read the commit or object it exits 1, with the cause on stderr;
+`--reverify` renders today's template and gives 3.) A path that
 is absent from a commit the proof *can* read (a trim commit that also deletes the live ledger) is not a
 failure to run: it is a `FAIL:` at exit 1.
 
