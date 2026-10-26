@@ -1849,6 +1849,13 @@ class TestTheTimingRuleIsStatedTheSameEverywhere(unittest.TestCase):
     def test_the_constant_the_writer_uses_carries_the_rule(self):
         self.assertIn(TIMING_RULE, mod.TRIM_TIMING_RULE)
 
+    def test_the_front_matter_rule_is_the_same_rule_in_the_writer_and_the_prose(self):
+        self.assertIn(FRONT_MATTER_RULE, mod.TRIM_FRONT_MATTER_RULE)
+        prose = " ".join((REPO / "FRAMEWORK_APPARATUS.md").read_text(encoding="utf-8").split())
+        self.assertIn("FRONTIER_FRONT_MATTER_UNCOMMITTED", prose,
+                      "FRAMEWORK_APPARATUS.md must name the third warning beside the other two")
+        self.assertIn("commit the front-matter edit first, then give the trim a commit of its own", prose)
+
     def test_the_distributed_prose_carries_the_rule(self):
         prose = " ".join((REPO / "FRAMEWORK_APPARATUS.md").read_text(encoding="utf-8").split())
         self.assertIn(TIMING_RULE, prose,
@@ -4719,6 +4726,268 @@ class TestSessionNotesIsATrimmableLedger(unittest.TestCase):
             self.assertIn("SESSION_NOTES.md", r.stdout, "the substitution names the basename it was keyed by")
             self.assertIn("DIFF: record 0", r.stdout)
 
+
+
+# =============================================================================================
+# Issue #93, the third order -- an uncommitted edit to a ledger's FRONT MATTER. The proof's L2
+# requires every non-blank line of the parent's front matter to survive verbatim in the trim
+# commit (a declared regenerated field's own value excepted), while the writer's own L2 compares
+# the working tree before and after THIS run. An edit above the first record that is uncommitted
+# when the trimmer runs is invisible to the writer and fatal to the proof if it lands in the trim
+# commit: [L2_OK] at write time, "L2 FRONT MATTER lost" afterwards. The maintainer saw it with an
+# `ACTIVE TASK` edit in SESSION_NOTES.md's front matter, the one front matter that sessions
+# rewrite, but the proof's rule is general, so the guard is too.
+#
+# ADVISORY like its two siblings (exit 0, the write proceeds). It mirrors the proof's test, no
+# more: it fires when a non-blank line HEAD's front matter holds is absent from the working
+# tree's, and is silent when the edit only ADDS lines, when only blank lines differ, when only a
+# declared regenerated field's value moved, when the lines merely changed places, when a checkout
+# converted the line endings, and when HEAD holds no version to compare.
+# =============================================================================================
+
+FRONT_MATTER_CODE = "FRONTIER_FRONT_MATTER_UNCOMMITTED"
+FRONT_MATTER_RULE = "a commit of its own, never in the same commit that edits the front matter"
+
+
+class TestWriteTimeGuardForAFrontMatterEdit(unittest.TestCase):
+
+    TITLE = "# Handoff Receipts\n"
+
+    def _edit(self, p, name, old, new):
+        f = p / name
+        t = f.read_text(encoding="utf-8")
+        t2 = t.replace(old, new, 1)
+        self.assertNotEqual(t2, t, "control: %r must be present and change" % old)
+        f.write_text(t2, encoding="utf-8")
+
+    def _uncommitted(self, p, name):
+        self.assertEqual(sh(p, "git", "status", "--porcelain", name).stdout.split()[0], "M",
+                         "control: the edit must be uncommitted")
+
+    def _document_commit(self, p):
+        """A commit that touches a ledger must record itself in CHANGELOG.md, or the trimmer's own P1
+        check refuses to run and the guard is never reached (as in the stub-finalize guard's tests)."""
+        cl = p / "CHANGELOG.md"
+        t = cl.read_text(encoding="utf-8")
+        at = t.index("### ")
+        cl.write_text(t[:at] + "### 2026-01-31 · [ad hoc] a documented commit\n\nbody\n\n" + t[at:],
+                      encoding="utf-8")
+
+    def _proof(self, p):
+        shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))[0]
+        return sh(p, "bash", str(shard) + ".verify.sh")
+
+    # --- it fires, and says what is true -----------------------------------------------------
+
+    def test_an_uncommitted_front_matter_edit_fires_and_names_the_way_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._edit(p, "HANDOFFS.md", self.TITLE, "# Handoff Receipts (hand edited)\n")
+            self._uncommitted(p, "HANDOFFS.md")
+            r = ev(p, "HANDOFFS.md", cut="2")
+            self.assertIn(FRONT_MATTER_CODE, r.codes, r.codes)
+            self.assertEqual(r.exit, 0, "advisory: nothing is refused")
+            msg = next(f.message for f in r.findings if f.code == FRONT_MATTER_CODE)
+            flat = " ".join(msg.split())
+            self.assertIn("1 line(s)", flat, "the count of lines HEAD holds and the tree lost")
+            self.assertIn("'# Handoff Receipts'", flat, "the first lost line is quoted")
+            self.assertIn("Commit the front-matter edit first", flat, "the way out")
+            self.assertIn(FRONT_MATTER_RULE, flat, "the one rule, in words")
+            self.assertIn("Advisory: nothing is refused", flat)
+
+    def test_the_cli_prints_the_finding_and_still_completes_the_dry_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._edit(p, "HANDOFFS.md", self.TITLE, "# Handoff Receipts (hand edited)\n")
+            r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--today", "2026-02-01")
+            self.assertIn("[%s]" % FRONT_MATTER_CODE, r.stdout, r.stdout)
+            self.assertIn("[DRY_RUN]", r.stdout)
+            self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_the_guard_does_not_refuse_the_write(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._edit(p, "HANDOFFS.md", self.TITLE, "# Handoff Receipts (hand edited)\n")
+            r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+            self.assertIn("[%s]" % FRONT_MATTER_CODE, r.stdout, r.stdout)
+            self.assertIn("[WROTE]", r.stdout, "advisory, never a refusal: " + r.stdout)
+            self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_the_consequence_it_names_is_real(self):
+        """The message says the writer reports L2_OK and the proof ends red. Both halves, measured:
+        the write passes its own L2, and the committed trim's proof reads the edited line as lost."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._edit(p, "HANDOFFS.md", self.TITLE, "# Handoff Receipts (hand edited)\n")
+            r = ev(p, "HANDOFFS.md", cut="2", write=True)
+            self.assertIn(FRONT_MATTER_CODE, r.codes, r.codes)
+            self.assertIn("L2_OK", r.codes, "the writer's L2 compares the tree before and after this run")
+            self.assertIn("WROTE", r.codes, r.codes)
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "front-matter edit and trim, bundled")
+            v = self._proof(p)
+            self.assertEqual(v.returncode, 1, v.stdout)
+            self.assertIn("L2 FRONT MATTER lost 1 line(s)", v.stdout, v.stdout)
+
+    def test_the_advised_order_gives_a_passing_proof(self):
+        """The message's way out must WORK: commit the edit, then trim in a commit of its own."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._edit(p, "HANDOFFS.md", self.TITLE, "# Handoff Receipts (hand edited)\n")
+            self._document_commit(p)
+            sh(p, "git", "commit", "-qam", "edit the front matter")
+            r = ev(p, "HANDOFFS.md", cut="2", write=True)
+            self.assertNotIn(FRONT_MATTER_CODE, r.codes, r.codes)
+            self.assertIn("WROTE", r.codes, r.codes)
+            sh(p, "git", "add", "-A")
+            sh(p, "git", "commit", "-qm", "trim")
+            v = self._proof(p)
+            self.assertEqual(v.returncode, 0, v.stdout)
+            self.assertIn("OK: L1, L2/front-matter, L3 hold", v.stdout, v.stdout)
+
+    # --- the ledgers it covers ----------------------------------------------------------------
+
+    def test_it_fires_for_an_active_task_edit_in_the_notes_file(self):
+        """The case the maintainer named: SESSION_NOTES.md's ACTIVE TASK, rewritten every session."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_session_notes_repo(tmp)
+            self._edit(p, "SESSION_NOTES.md", "**Task:** x\n", "**Task:** y\n")
+            r = ev(p, "SESSION_NOTES.md", cut="4")
+            self.assertIn(FRONT_MATTER_CODE, r.codes, r.codes)
+            msg = next(f.message for f in r.findings if f.code == FRONT_MATTER_CODE)
+            self.assertIn("'**Task:** x'", " ".join(msg.split()), "it quotes the line HEAD held")
+
+    def test_it_fires_for_the_changelog_too(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._edit(p, "CHANGELOG.md", "Front matter.\n", "Front matter, hand edited.\n")
+            r = ev(p, "CHANGELOG.md", cut="2")
+            self.assertIn(FRONT_MATTER_CODE, r.codes, r.codes)
+
+    def test_it_counts_every_lost_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._edit(p, "CHANGELOG.md", "Front matter.\n", "Front matter, hand edited.\n")
+            self._edit(p, "CHANGELOG.md", "# Changelog\n", "# Changelog (hand edited)\n")
+            r = ev(p, "CHANGELOG.md", cut="2")
+            msg = next(f.message for f in r.findings if f.code == FRONT_MATTER_CODE)
+            self.assertIn("2 line(s)", msg)
+            self.assertIn("'# Changelog'", msg, "the first lost line in HEAD's order is the one quoted")
+            self.assertNotIn("Front matter.", msg)
+
+    # --- the silences: the proof's own test, no stronger ------------------------------------
+
+    def test_a_clean_tree_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            r = ev(make_handoff_repo(tmp), "HANDOFFS.md", cut="2")
+            self.assertNotIn(FRONT_MATTER_CODE, r.codes, r.codes)
+
+    def test_an_edit_that_only_adds_lines_is_silent(self):
+        """The proof lets front matter GAIN lines (the shard pointer, a new heading); only a lost
+        line ends red."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._edit(p, "HANDOFFS.md", self.TITLE, self.TITLE + "\nA note added by hand.\n")
+            self._uncommitted(p, "HANDOFFS.md")
+            r = ev(p, "HANDOFFS.md", cut="2")
+            self.assertNotIn(FRONT_MATTER_CODE, r.codes, r.codes)
+
+    def test_a_blank_line_difference_is_silent(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._edit(p, "HANDOFFS.md", self.TITLE + "\n", self.TITLE + "\n\n\n")
+            self._uncommitted(p, "HANDOFFS.md")
+            r = ev(p, "HANDOFFS.md", cut="2")
+            self.assertNotIn(FRONT_MATTER_CODE, r.codes, r.codes)
+
+    def test_a_front_matter_with_every_blank_line_removed_is_silent(self):
+        """The proof skips blank lines (`if ln.strip()`), so HEAD's blank lines are never 'lost',
+        even when the working tree holds none at all to match them against."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            f = p / "HANDOFFS.md"
+            front, rest = f.read_text(encoding="utf-8").split("---\n\n", 1)
+            self.assertIn("\n\n", front, "control: HEAD's front matter holds blank lines")
+            f.write_text(front.replace("\n\n", "\n") + "---\n" + rest, encoding="utf-8")
+            self._uncommitted(p, "HANDOFFS.md")
+            r = ev(p, "HANDOFFS.md", cut="2")
+            self.assertNotIn(FRONT_MATTER_CODE, r.codes, r.codes)
+
+    def test_a_change_to_a_declared_regenerated_value_alone_is_silent(self):
+        """`This file currently holds **N**` is rewritten by every trim; the proof excuses it, so a
+        warning about it would be noise on every run that touched the count."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._edit(p, "HANDOFFS.md", "holds **0**", "holds **9**")
+            self._uncommitted(p, "HANDOFFS.md")
+            r = ev(p, "HANDOFFS.md", cut="2")
+            self.assertNotIn(FRONT_MATTER_CODE, r.codes, r.codes)
+
+    def test_a_regenerated_value_edit_beside_a_real_edit_still_fires_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._edit(p, "HANDOFFS.md", "holds **0**", "holds **9**")
+            self._edit(p, "HANDOFFS.md", self.TITLE, "# Handoff Receipts (hand edited)\n")
+            r = ev(p, "HANDOFFS.md", cut="2")
+            msg = next(f.message for f in r.findings if f.code == FRONT_MATTER_CODE)
+            self.assertIn("1 line(s)", msg, "only the title is lost; the count line has its partner")
+
+    def test_a_regenerated_field_line_with_other_text_changed_still_fires(self):
+        """The carve-out is the field's own value, not the whole line: a reword just outside the
+        field is a real edit, as in the proof (BL-27)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._edit(p, "HANDOFFS.md", "holds **0**.", "holds **9**!")
+            self._uncommitted(p, "HANDOFFS.md")
+            r = ev(p, "HANDOFFS.md", cut="2")
+            self.assertIn(FRONT_MATTER_CODE, r.codes, r.codes)
+
+    def test_lines_that_only_changed_places_are_silent(self):
+        """The proof tests membership in the set of whole lines, not order."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._edit(p, "CHANGELOG.md", "Front matter.\nRetained entries: **0**.\n",
+                       "Retained entries: **0**.\nFront matter.\n")
+            self._uncommitted(p, "CHANGELOG.md")
+            r = ev(p, "CHANGELOG.md", cut="2")
+            self.assertNotIn(FRONT_MATTER_CODE, r.codes, r.codes)
+
+    def test_converted_line_endings_are_not_an_edit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            f = p / "HANDOFFS.md"
+            f.write_bytes(f.read_bytes().replace(b"\n", b"\r\n"))
+            self._uncommitted(p, "HANDOFFS.md")
+            r = ev(p, "HANDOFFS.md", cut="2")
+            self.assertNotIn(FRONT_MATTER_CODE, r.codes, r.codes)
+
+    def test_a_head_the_grammar_cannot_classify_is_silent_not_a_crash(self):
+        """HEAD's copy declares footer_mode 'none' yet ends in a standalone '---' with prose after
+        it, which classify_zones refuses (ZONE_UNCLASSIFIED). The guard compares nothing then; it
+        must not raise, and it must not call the front matter lost."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            f = p / "HANDOFFS.md"
+            clean = f.read_text(encoding="utf-8")
+            f.write_text(clean + "\n---\n\nTrailing prose the config cannot name.\n", encoding="utf-8")
+            self._document_commit(p)
+            sh(p, "git", "commit", "-qam", "trailing prose after the last receipt")
+            f.write_text(clean.replace(self.TITLE, "# Handoff Receipts (hand edited)\n", 1), encoding="utf-8")
+            self._uncommitted(p, "HANDOFFS.md")
+            r = ev(p, "HANDOFFS.md", cut="2")
+            self.assertNotIn(FRONT_MATTER_CODE, r.codes, r.codes)
+
+    def test_a_ledger_with_no_committed_version_is_silent(self):
+        """Nothing in HEAD to compare, so nothing can be lost."""
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            sh(p, "git", "rm", "-q", "--cached", "HANDOFFS.md")
+            self._document_commit(p)
+            sh(p, "git", "commit", "-qam", "untrack the receipts")
+            self.assertEqual(sh(p, "git", "cat-file", "-e", "HEAD:HANDOFFS.md").returncode != 0, True,
+                             "control: HEAD must hold no HANDOFFS.md")
+            r = ev(p, "HANDOFFS.md", cut="2")
+            self.assertNotIn(FRONT_MATTER_CODE, r.codes, r.codes)
 
 
 # =============================================================================================

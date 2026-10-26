@@ -535,7 +535,13 @@ diff of the stub against the receipt that replaced it, so a reader can see in se
 proof cannot judge. A trim committed on its own while record 0 is a stub is fine: record 0 is
 untouched in that commit. `methodology_trim.py` warns when it sees the state coming
 (`FRONTIER_PENDING_STUB`, `FRONTIER_FINALIZE_UNCOMMITTED`); the warning is advisory and refuses
-nothing. A `.verify.sh` already written is frozen and never changes; to ask what today's template
+nothing. The front matter has the same hazard. The proof requires every non-blank line of the parent's
+front matter to survive in the trim commit, so an edit above the first record that is uncommitted when
+the trim runs (a `SESSION_NOTES.md` session rewrites its `ACTIVE TASK` at every claim) ends the proof
+red (`L2 FRONT MATTER lost`) after the trimmer itself printed `L2_OK`: the trimmer compares the working
+tree before and after its own run, the proof compares the trim commit with its parent.
+`FRONTIER_FRONT_MATTER_UNCOMMITTED` warns when it sees that coming, with the same advice: commit the
+front-matter edit first, then give the trim a commit of its own. A `.verify.sh` already written is frozen and never changes; to ask what today's template
 says about an old shard, run `methodology_trim.py --reverify <shard>` — read-only, it prints a verdict
 that is a claim about today's logic, not about the artifact that was shipped. A proof that cannot
 read something it needs, whether a commit or an object from git (a shallow or partial clone without

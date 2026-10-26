@@ -161,6 +161,28 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
   documentation entry above. Gate run at the tagged commit: 261 passed / 0 failed; ratchet 12/12. The tag stays at
   `f34769f` when those notes merge: a moved tag does not reach clones that already hold it. The release:
   [`CLAUDE.md` §Versioning](CLAUDE.md#versioning) v4.2.
+### 2026-10-26 · [issue #93] A third write-time warning: an uncommitted edit to a ledger's front matter (`TRIM_VERSION` 1.10.0)
+
+- **Action:** the maintainer's answer on #94 (b) was to put the front-matter warning in the second pull request; his review had
+  observed that an `ACTIVE TASK` edit in the trim commit fails L2 after the trimmer printed `L2_OK`. The cause: the proof's L2
+  requires every non-blank line of the parent's front matter to survive verbatim in the trim commit (a declared regenerated
+  field's own value excepted), while the writer's `assert_L2` compares the working tree before and after its own run, so an edit
+  above the first record that is uncommitted at write time is invisible to the writer and lost to the proof.
+  `starter-kit/methodology_trim.py` gains `check_front_matter_frontier`, called beside `check_stub_frontier`: it runs the proof's
+  test at write time against HEAD's copy and, when lines are lost, adds `FRONTIER_FRONT_MATTER_UNCOMMITTED` (advisory, exit 0,
+  nothing refused). The finding gives the count, quotes the first lost line, says the proof will end red ("L2 FRONT MATTER lost")
+  although the writer reports `[L2_OK]`, and gives the way out: commit the front-matter edit first, then trim in a commit of its
+  own. It is silent where the proof is: an edit that only adds lines, blank lines, a reorder (whole-line membership), a declared
+  regenerated field's value alone (the `holds **N**` count), converted line endings, a HEAD that holds no version of the ledger
+  and a HEAD the grammar cannot classify. `FRAMEWORK_APPARATUS.md`'s timing-rule paragraph names the third warning.
+  `tools/test_methodology_trim.py`: `TestWriteTimeGuardForAFrontMatterEdit`, 19 tests, and one test that pins the rule's words
+  between the writer and the document. The consequence the finding names is measured, not assumed: the write reports `[L2_OK]`
+  and the committed trim's proof then exits 1 with `L2 FRONT MATTER lost 1 line(s)`, while the advised order exits 0. Mutation
+  round on the new function: 12 mutants, 11 killed; the survivor ignores the regenerated pattern's prefix group, which is literal
+  text in every declared pattern, so it cannot differ between two lines that matched the same pattern (equivalent). 270 tests (2
+  skipped), up from 250; the `trimmer-unit-tests` gate 250 → 270, a tightening. A minor release: a new finding code. Not done
+  here: an edit that was committed together with an earlier trim, and a trim made by hand, are not seen.
+
 ### 2026-10-26 · [issue #93] The maintainer's three follow-ups on the merged pull request: two messages and three exit-3 statements say what is true (`TRIM_VERSION` 1.9.1)
 
 - **Action:** after merging #94 the maintainer listed three small follow-ups "for that PR or a separate one"; they go in this

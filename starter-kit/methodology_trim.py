@@ -52,7 +52,19 @@ import sys
 import tempfile
 from pathlib import Path
 
-TRIM_VERSION = "1.9.1"   # 1.9.1: issue #93, the maintainer's follow-ups on the merged pull request -- wording only,
+TRIM_VERSION = "1.10.0"  # 1.10.0: issue #93, FRONTIER_FRONT_MATTER_UNCOMMITTED -- a third write-time warning, beside
+                         # FRONTIER_PENDING_STUB and FRONTIER_FINALIZE_UNCOMMITTED. The proof's L2 requires every
+                         # non-blank line of the parent's front matter to survive in the trim commit, while the
+                         # writer's own L2 compares the working tree before and after its run, so an edit above
+                         # the first record that is uncommitted when the trimmer runs is invisible to the writer
+                         # and ends the proof red ("L2 FRONT MATTER lost") if it lands in the trim commit, after
+                         # the writer printed L2_OK. The maintainer saw it with SESSION_NOTES.md's ACTIVE TASK;
+                         # the rule is general, so the guard is. It runs the proof's own test (whole-line
+                         # membership, blank lines skipped, a declared regenerated field's own value excused), so
+                         # an edit that only adds lines, a reorder and converted line endings are silent. Advisory,
+                         # exit 0, nothing refused. Minor, not patch: a new finding code.
+                         #
+                         # 1.9.1: issue #93, the maintainer's follow-ups on the merged pull request -- wording only,
                          # patch not minor: no new finding code, and no exit code or verdict changes. (1) The
                          # `--reverify` STUB_PATTERN substitution says which of two cases a shard is in: the ledger
                          # table has NO ENTRY for the live basename (a project's own ledger), or its entry declares
@@ -2321,6 +2333,69 @@ def check_stub_frontier(repo, path, spec, records, result):
 
 
 # =============================================================================================
+# The third order: an uncommitted edit to the FRONT MATTER.
+#
+# The proof's L2 requires every non-blank line of the parent's front matter to survive verbatim in
+# the trim commit's (see `field_reversible` in VERIFY_TEMPLATE for the one exception), while this
+# run's own L2 (`assert_L2`) compares the working tree before and after the trim. So a front-matter
+# edit that is uncommitted when the trimmer runs is invisible here and fatal to the proof if it
+# lands in the trim commit: [L2_OK] at write time, "L2 FRONT MATTER lost N line(s)" afterwards. A
+# session rewrites SESSION_NOTES.md's ACTIVE TASK at every claim, which is how it was seen; the
+# proof's rule is general, so the guard is too.
+#
+# ADVISORY like the two above. It runs the proof's own test, no stronger: a non-blank line HEAD's
+# front matter holds that the working tree's does not (whole-line membership, so a reorder is
+# silent), excused only where the proof excuses it, a declared regenerated field's own value. An
+# edit that only ADDS lines is silent because the proof lets front matter gain lines. It is silent
+# when HEAD holds no version to compare, as the finalize check is. What it cannot see: an edit
+# committed together with an earlier trim, and a trim made by hand.
+# =============================================================================================
+
+TRIM_FRONT_MATTER_RULE = "give the trim a commit of its own, never in the same commit that edits the front matter"
+
+
+def _regenerated_partner(line, spec, now_lines):
+    """True when `line` differs from a line of `now_lines` only inside a declared regenerated
+    field's value: the proof's `field_reversible`, so the two cannot disagree about the count."""
+    for _name, rx, _fn in spec.regenerated:
+        m = rx.search(line)
+        if not m:
+            continue
+        residue = line[:m.start()] + line[m.end():]
+        for nl in now_lines:
+            nm = rx.search(nl)
+            if (nm and nm.group(1) == m.group(1) and nm.group(3) == m.group(3)
+                    and nl[:nm.start()] + nl[nm.end():] == residue):
+                return True
+    return False
+
+
+def check_front_matter_frontier(repo, path, spec, zones, result):
+    live_rel = path.relative_to(repo).as_posix()
+    head = git_bytes(repo, "show", "HEAD:%s" % live_rel)
+    if head is None:
+        return                      # no committed version to compare: nothing can be lost
+    hz = classify_zones(head.decode("utf-8", "replace"), spec, Result(path))
+    if hz is None:
+        return
+    # splitlines() folds \r\n, so a checkout that converts line endings does not read as an edit.
+    now = set(zones.front.splitlines())
+    lost = [ln for ln in hz.front.splitlines()
+            if ln.strip() and ln not in now and not _regenerated_partner(ln, spec, now)]
+    if lost:
+        result.add(
+            "FRONTIER_FRONT_MATTER_UNCOMMITTED",
+            "the front matter of %s has %d line(s) that HEAD holds and the working tree no longer "
+            "does (first: %r): an uncommitted edit above the first record. If that edit and this "
+            "trim land in one commit, the generated .verify.sh reads those lines as LOST from the "
+            "front matter and ends red (\"L2 FRONT MATTER lost\", exit 1) although this tool's own "
+            "L2 reports [L2_OK]: the writer compares the working tree before and after the trim, "
+            "the proof compares the trim commit with its parent. %s. Commit the front-matter edit "
+            "first, then trim. Advisory: nothing is refused."
+            % (live_rel, len(lost), lost[0][:70], TRIM_FRONT_MATTER_RULE.capitalize()))
+
+
+# =============================================================================================
 # Zero records — "I found nothing" and "I could not read this" are different answers.
 #
 # This branch used to give one answer to both, at exit 0, in the words reserved for a fresh seed:
@@ -2556,6 +2631,7 @@ def evaluate(path, opts, result):
         return result
 
     check_stub_frontier(repo, path, spec, records, result)
+    check_front_matter_frontier(repo, path, spec, zones, result)
 
     dates = [spec.date_of_record(r) for r in archived]
     dates = [d for d in dates if d]
