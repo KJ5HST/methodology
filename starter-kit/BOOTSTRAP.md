@@ -379,10 +379,10 @@ two, and the split is not cosmetic:
 | Class | Files | On update |
 |---|---|---|
 | **Tracked** (canonical owns them) | `SESSION_RUNNER.md`, `FRAMEWORK_LEARNINGS.md`, `SAFEGUARDS.md`, `RECOMMENDED_SKILLS.md`, `BOOTSTRAP.md`, the `*_TEMPLATE.md` files, `methodology_dashboard.py`, `methodology_trim.py`, `context_budget.py`, `quality_ratchet.py`, and everything under `docs/methodology/` | **overlay** — replace with the latest |
-| **Adopter-owned** | `CHANGELOG.md`, `HANDOFFS.md`, `SESSION_NOTES.md`, `ROADMAP.md`, `.context-budget.json`, `.quality-gates.json` | **never overwrite** — these hold *your* history (or, for `.context-budget.json` and `.quality-gates.json`, your project's own tuned budgets and declared gates) |
+| **Adopter-owned** | `CHANGELOG.md`, `HANDOFFS.md`, `SESSION_NOTES.md`, `ROADMAP.md`, `.context-budget.json`, `.quality-gates.json`, `.gitattributes` | **never overwrite** — these hold *your* history (or, for `.context-budget.json` and `.quality-gates.json`, your project's own tuned budgets and declared gates) |
 
 Overlaying the second row replaces your action ledger and your close-out receipts with empty
-templates. `bin/sync` refuses to do it by construction — `bin/_manifest.py` classes those six as
+templates. `bin/sync` refuses to do it by construction — `bin/_manifest.py` classes those seven as
 seeds, installed once and never again — but an agent working from prose has only this sentence to
 stop it. Say it explicitly.
 

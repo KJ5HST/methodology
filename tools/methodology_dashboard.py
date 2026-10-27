@@ -41,8 +41,10 @@ SETUP
 CUSTOMIZATION
 -------------
 - EXCLUDE_DIRS: Add directory names to skip during project discovery.
-  By default, common non-project directories are excluded. If you have
-  the methodology repo cloned as a sibling, add its directory name here.
+  By default, common non-project directories are excluded. The methodology
+  repo itself is deliberately NOT excluded — it is scored like any other
+  project, and --sync skips it as a target on its own (it authors this file
+  rather than receiving it).
 
 - WALK_SKIP: Directories skipped during file traversal (build artifacts,
   vendor dependencies, etc.).
@@ -65,6 +67,7 @@ CUSTOMIZATION
   is exact where detection is a guess.
 """
 
+import ast
 import hashlib
 import json
 import os
@@ -83,10 +86,30 @@ from collections import defaultdict
 # Every other copy (portfolio root + per-project) is a synced copy of the canonical and must
 # carry the same value. A copy whose DASHBOARD_VERSION is older than the canonical is stale —
 # re-sync from the canonical. Bump on any change to the canonical script.
-DASHBOARD_VERSION = "2.11.3"
+# 2.19.0: BL-88 (docs/planning/dashboard-read-cap-class-adopter-drift-plan.md). The Class B read-cap
+# row stops asserting a trimmer config it never read (P1, cb9b0ed, which shipped without a bump) and
+# names a remedy only where the scanned project's own trimmer SOURCE declares the file, taking Class
+# A's severity there (P2). Changed output on a distributed tool: MINOR. Fork-only -- upstream's line
+# continues from 2.11.1, so the two stay apart until a dashboard PR reconciles them. (2.18.0, the
+# resync's merge of upstream's 2.11.x line, is described in git: `git log -S'2.18.0'` on this file.)
+# 2.21.0: BL-99. The manifest-history walk reads the FIRST-PARENT line (`_gate_manifest_history`):
+# a repo that had merged a lineage with a different manifest printed "floor lowered" / "gate
+# removed" rows nobody caused (9 of the 10 on this fork after the 2026-10 resync) and could miss a
+# real loosening a merge resolved to. Changed output on a distributed tool: MINOR.
+# 2.20.0: BL-95 R1, the 2026-10 resync (docs/planning/upstream-resync-2026-10-plan.md, D5). The
+# `.gitattributes` seed (starter-kit/gitattributes, arriving from upstream's v4.1) is installed
+# content: dotfiles are categorized as config by name (CONFIG_FILES), and the seed has its own row
+# and signature set in _FRAMEWORK_INSTALLED_CONTENT. Changed output on a distributed tool: MINOR.
+# Fork-only -- upstream's line continues from 2.11.3, so the two stay apart until a dashboard PR
+# reconciles them.
+DASHBOARD_VERSION = "2.21.0"
 
 ROOT = Path(__file__).parent
-EXCLUDE_DIRS = {"methodology", "BrogueCE-iOS", ".git", "__pycache__", "node_modules", ".venv", "venv"}
+# `"methodology"` was here and is deliberately gone (plan D4(c)): the scanner was structurally
+# blind to its own home in portfolio mode — the one repo whose methodology signals it is best
+# placed to check, and the subject of upstream issue #59. The self-scan is safe now that Layer 4
+# classifies repo role; before that it read its own home as a 5%-adoption risk.
+EXCLUDE_DIRS = {"BrogueCE-iOS", ".git", "__pycache__", "node_modules", ".venv", "venv"}
 WALK_SKIP = {".git", ".claude", "node_modules", "__pycache__", ".venv", "venv", "target",
              "build", "dist", ".build", "DerivedData", "Pods", ".gradle"}
 
@@ -96,10 +119,12 @@ SOURCE_EXTS = {
     ".kt", ".scala", ".lua", ".sh", ".bash", ".zsh", ".pl", ".r",
 }
 TEST_PATTERNS = {"test_", "_test.", ".test.", ".spec.", "tests/", "__tests__/", "test/"}
-# .qmd/.rmd (Quarto / R Markdown) are literate-document formats — prose with embedded code, the
-# same bucket .md already lives in, not source's. Without an entry here, a file with either
-# extension outside a docs/ path fell through categorize_file's whole ladder to "other": not
-# source, not docs, not even LOC-counted (LOC is skipped entirely for "other").
+# `.qmd`/`.rmd` (Quarto / R Markdown) are literate-document formats, not source — an R package's
+# vignettes and articles are prose-with-embedded-code, the same bucket `.md` already lives in, not
+# `.r`'s. Before this, a file with either extension outside a `docs/` path fell through
+# categorize_file's whole ladder to "other": not source, not docs, not even LOC-counted (LOC is
+# skipped for "other"). BL-34 — found scanning `nprcgenekeepr` (28 `.rmd` + 12 `.qmd`, 11 of the 12
+# invisible with 0 LOC because only one lived under `docs/`).
 DOC_EXTS = {".md", ".txt", ".rst", ".adoc", ".org", ".qmd", ".rmd"}
 CONFIG_FILES = {
     "Dockerfile", "Makefile", "CMakeLists.txt", "Rakefile", "Gemfile",
@@ -128,8 +153,10 @@ LANG_MAP = {
     ".kt": "Kotlin", ".scala": "Scala", ".lua": "Lua", ".sh": "Shell",
     ".bash": "Shell", ".zsh": "Shell", ".html": "HTML", ".css": "CSS",
     ".scss": "SCSS", ".less": "LESS", ".sql": "SQL",
-    # .r was already in SOURCE_EXTS (so R LOC always counted toward Source) but had no
-    # LANG_MAP entry, so it never got its own "Code by Language" row.
+    # BL-34 — `.r` was already in SOURCE_EXTS (so R LOC always counted toward Source), but had no
+    # LANG_MAP entry, so it never got its own "Code by Language" row. Found against `nprcgenekeepr`
+    # (603 `.r` files, 77,773 LOC — the bulk of that project's Source total — invisible in the
+    # per-language breakdown).
     ".r": "R",
 }
 
@@ -187,7 +214,7 @@ METHODOLOGY_MAX = sum(weight for _, weight, _ in METHODOLOGY_ITEMS)
 FRAMEWORK_ITEMS = [
     ("ITERATIVE_METHODOLOGY.md", 15, "file"),      # the theory layer the runner cross-references
     ("starter-kit/SAFEGUARDS.md", 15, "file"),     # the enforcement half of the runner
-    ("workstreams", 15, "dir"),                    # 9 of the 25 distributed sources live here
+    ("workstreams", 15, "dir"),                    # 9 of the 24 distributed sources live here
     ("bin/sync", 15, "file"),                      # what separates HAVING a methodology from PUBLISHING one
     ("bin/tests.sh", 10, "file"),                  # the framework's build equivalent
     ("CHANGELOG.md", 10, "file"),                  # its OWN action ledger (FM #27)
@@ -241,6 +268,293 @@ _BACKLOG_DONE_TOKENS = ("DONE", "COMPLETE", "COMPLETED", "SHIPPED", "FIXED", "RE
                         "CLOSED", "✅")  # U+2705 WHITE HEAVY CHECK MARK
 _BACKLOG_LOCATIONS = ("BACKLOG.md", "docs/BACKLOG.md", "docs/planning/BACKLOG.md")
 
+# --- D4(b): the agent Read cap ----------------------------------------------------------------
+# A SECOND large-file question, deliberately NOT a widening of the BL-5 code-smell check in
+# assess_risks(). BL-5 asks "is this MODULE unwieldy?" — a judgment about structure, false for a
+# 2,500-line chapter, which is why .md is excluded there and `vendor` after it: two consecutive
+# narrowings, both earned by measured false positives. This asks "does a file a session must read
+# IN FULL still fit in one read?" — a fact about the harness, true or false whatever the file is
+# for. Separating them is ADDED POLICY: the ratified design says only that a 2,090-line .md must
+# be able to trip *a* large-file risk, and taking that literally would regress BL-5's test.
+#
+# UNIT: BYTES, converted from the TOKEN cap the harness actually enforces. Re-denominated at
+# Phase B (2026-08-26); it was LINES, and lines were not merely imprecise but STRICTLY DOMINATED.
+# Measured over 18 watched ledgers in 5 repos: the 2,000-line threshold fired on 3 and stayed
+# silent on 8 that a byte threshold at ANY point in the measured 2.2705-3.0300 B/token band
+# catches, and it caught NOTHING a byte threshold misses. The B/line spread over that same
+# population is 8.6x; the B/token spread is 1.33x. So this is not a re-tuning: one axis reports
+# the quantity the cap is denominated in and the other does not.
+# VALUE: harness behaviour, not a repo property and not taste — and DERIVED, never written as one
+# opaque number, because a number goes stale when the harness moves and the command does not.
+# What was measured, with the reproduction beside it:
+#   * the cap states itself: "exceeds maximum allowed tokens (25000)".
+#   * truncation is ANNOUNCED, never silent — a PARTIAL-view banner giving the delivered span,
+#     the file's true length, the token count and the cap, warning against answering from it.
+#   * it does NOT deliver a fixed number of lines. A 3,000-line file came back WHOLE; a 536-line
+#     one did not. Delivery is whatever prefix fits the TOKEN cap.
+#   * an explicit `limit` spanning an over-cap region neither truncates nor bypasses: it ERRORS
+#     with NO content, which is also what makes it a free, exact token meter.
+#   * PAST 256 KiB THERE IS NO PREFIX AT ALL. A default read is refused outright — "File content
+#     (256.1KB) exceeds maximum allowed size (256KB)" — so the familiar consolation that
+#     "truncation is ordered, and the top of the file still arrives" holds only BETWEEN the two
+#     boundaries. 5 of those 18 fleet ledgers are already past this one.
+# RE-MEASURE rather than restating those five sentences. The reproduction is
+# docs/planning/read-cap-premise-correction-plan.md Appendix A, and it is the ONLY instrument that
+# can falsify them: no test in this repository can, because nothing here invokes the agent's Read
+# tool. A green suite is evidence that nothing ELSE broke.
+# BASIS — the failure already happened here, and was found by accident rather than by any check:
+#   git show 3aee4e3^:CHANGELOG.md | wc -l    -> 2,090
+# Phase 0's reconcile then computed a frontier against a record it could not fully see.
+# Re-measured since: that file is 186,704 B — roughly 2.97x the token cap but UNDER the 256 KiB
+# refusal, so a default read of it came back as a truncated prefix with a banner, not as nothing.
+# (An earlier draft of this comment said it was past the refusal. It is not: 186,704 < 262,144.
+# A fixture-control assertion caught that, which is the only reason it is not shipped here.)
+# The incident dates when the problem was NOTICED, not when it began, and the 2,000-line number
+# derived from it recorded a symptom's size rather than a threshold.
+# Same names, same values and same stated reason as starter-kit/methodology_trim.py's, so the
+# reporter and the remedy cannot disagree about where the cliff is; a canonical test pins the
+# literals together. Note precisely what that buys: it keeps the two copies CONSISTENT, and it
+# kept them consistent throughout the period both were WRONG.
+READ_CAP_TOKENS = 25_000
+MIN_BYTES_PER_TOKEN = 2.27       # the measured FLOOR, not the mean — a guard that must not stay
+                                 # silent on a truncating file assumes the densest content it will
+                                 # meet. NOT context_budget.py's bytes_per_token, which estimates
+                                 # a different quantity (opening context vs CLAUDE.md size).
+READ_CAP_BYTES = int(READ_CAP_TOKENS * MIN_BYTES_PER_TOKEN)     # 56,750 B — computed, not written
+READ_REFUSE_BYTES = 256 * 1024                                  # the hard, zero-content boundary
+
+# PHASE C2 — the Class A pair, mirrored from methodology_trim.py and pinned to it by a canonical
+# test, exactly as the four constants above are. THE REASON THEY EXIST HERE rather than only in
+# the trimmer: this scanner re-implements the trimmer's trigger in collect_trim_metrics (it must,
+# because it reports on repos where the tool is not installed), so a threshold that moved in the
+# trimmer alone would leave this file emitting "the archive trigger fires" beside a `--check` that
+# says it does not — naming a command whose output contradicts the row.
+#
+# THESE ARE NOT A REPLACEMENT FOR READ_CAP_BYTES; the two answer different questions and BOTH are
+# reported. READ_CAP_BYTES answers "does one Read deliver this whole file?", which stays true of a
+# Class A ledger and is why its risk row survives rather than being deleted (plan §7 rejects
+# option D on exactly that ground). CLASS_A_FIRE_BYTES answers "is a trim worth doing?", and for a
+# newest-on-top ledger whose truncation drops the OLDEST records the honest denominator for that
+# is the hard refusal, not the cap.
+CLASS_A_FIRE_BYTES = 192 * 1024   # 196,608 — see methodology_trim.py's block for the derivation
+CLASS_A_STOP_BYTES = 96 * 1024    # 98,304  — reported, never applied here; this tool never trims
+
+# The files a session opens to establish state, restricted to the ones the ADOPTER owns.
+#
+# THE JUSTIFICATION THAT STOOD HERE WAS FALSE FOR TWO OF THE SIX NAMES, and it is corrected rather
+# than quietly dropped (Phase B / BL-52). It read "the files a session is instructed to read IN
+# FULL ... step 6 (reconcile CHANGELOG.md and HANDOFFS.md against git log)". Step 6 is
+# SESSION_RUNNER.md's reconcile, and its own stated mechanics are FRONTIER-BASED:
+# `git log -1 --format=%H -- CHANGELOG.md`, then the commits after it. That reads git HISTORY, not
+# the file. The HANDOFFS.md half is frontier-based the same way, and the one thing step 6 does
+# look for INSIDE the file — a still-`pending` receipt — is at the TOP by construction and
+# SAFEGUARDS.md prescribes a grep for it. Phase 3A reads ONE receipt, not the ledger.
+# Measured, not just re-read: across 85 session transcripts of this repo each root ledger was read
+# WHOLE exactly ONCE and read in PART 1,696 / 1,797 times. Roughly 1 in 85.
+# Two further corrections to what was claimed: the runner says "in full" about exactly ONE file,
+# SAFEGUARDS.md, which is deliberately NOT in this set (it is a TRACKED dest — see the test
+# below); and no protocol text names `docs/BACKLOG.md` or `docs/planning/BACKLOG.md` at all, so
+# those two are here by analogy to the root basename.
+# THE SET IS NEVERTHELESS UNCHANGED, and that is a decision rather than an oversight. The row
+# reports a real property — whether one read delivers the file — which stays true whoever reads
+# it and however rarely. What was wrong was the REASON given, and a reason nobody re-checks is how
+# this defect got here. Narrowing the population was deferred to a separate, fleet-visible call —
+# and Phase C1 has since MADE that call: it PARTITIONED the six names without removing any, and
+# the two `docs/**` locations were kept deliberately, on evidence, for the reason stated with the
+# classes below. So the sentence above is still true, and it is now true by decision twice over
+# rather than by deferral.
+#
+# Written as a literal, NOT derived from METHODOLOGY_ITEMS, because two of that checklist's file
+# entries — SESSION_RUNNER.md and SAFEGUARDS.md — are TRACKED dests in bin/_manifest.py: files we
+# install and keep current. Flagging those would re-earn Layer 7's narrowing at fleet scale, since
+# one canonical breach would light up every adopter at once over a file they cannot edit. Every
+# name below is a SEED dest (bin/sync writes a short stub once; adopter-owned forever after) or
+# never a dest at all, so every line past the cap is the adopter's own record. A canonical test
+# asserts that against bin/_manifest.py rather than restating it in a comment here.
+#
+# ROADMAP.md is a SEED too and is deliberately absent: the runner cites it as a pointer, never as
+# a file read whole to compute anything. Absent above all: a book chapter. Nobody is instructed to
+# read chap07.md in full, so truncating it produces no wrong answer — flagging it would re-create
+# the very false positive BL-5's ext filter, one signal over, exists to kill.
+#
+# --- Phase C1: THE POPULATION IS TWO CLASSES, AND THE DIFFERENCE IS NOT COSMETIC ---------------
+# The six names above were one set, and the paragraph before this one records what that cost: a
+# justification that was FALSE for two of them, standing because nobody re-derived it. The split
+# below is read off two INDEPENDENT, machine-checkable facts, never off judgment:
+#
+#   Class A   the trimmer has a config entry for it (its basename is a key of LEDGERS), AND the
+#             protocol consumes it through a FRONTIER (`git log -1 --format=%H -- <file>`) or one
+#             record at a time (Phase 3A), never as a whole file. Records are dated/fenced and
+#             newest-on-top, so delivery being an ORDERED PREFIX means truncation removes the
+#             OLDEST records -- the ones nothing was reading. Measured across 85 transcripts of
+#             this repo: each root ledger was read WHOLE exactly ONCE, in PART 1,696/1,797 times.
+#
+#   Class B   the trimmer answers NO_CONFIG by design, AND the instructed access path IS the file
+#             (SESSION_RUNNER.md steps 2 and 3), with NO REMEDY the reader can reach -- no
+#             distributed file says what to do about an oversized one, which is the gap that
+#             separates this class from A far more sharply than any threshold does.
+#             ⚠ BL-88 P2: in a project whose OWN trimmer declares a Class B basename -- read from
+#             that trimmer's source by _parse_trim_ledgers, never by running it -- the NO_CONFIG
+#             conjunct and the NO-REMEDY half of the second are false FOR THAT PROJECT, so its row
+#             names the remedy and takes Class A's severity. The access path is still the file,
+#             and the name stays Class B: membership is declared, never read from LEDGERS.
+#             ⚠ ORDERING: no Class B file has an ordering that GUARANTEES the needed part is in
+#             the delivered prefix -- and the qualifier is the whole claim, so it is not dropped
+#             here. An earlier draft of this comment said flatly "there is no record ordering that
+#             puts the needed part at the top", which is FALSE of SESSION_NOTES.md: step 2 tells a
+#             session to "focus on the ACTIVE TASK section at the top", the seed puts that heading
+#             at line 9, and across 11 fleet repos it sits at byte offsets 132-23,013 -- inside
+#             READ_CAP_BYTES in all 10 that have it. The true statement is that nothing ENFORCES
+#             it, and the fleet shows both ways that fails: one file carries 23 KB of prose above
+#             its ACTIVE TASK, and ONE (mts-system, 269,652 B) has no such heading at all -- zero
+#             `## ` headings, its records opening at `### Session N`. Past READ_REFUSE_BYTES
+#             ordering buys nothing for either class anyway. Where the absolute
+#             form IS true is the backlogs: a backlog's bottom items are as live as its top ones,
+#             so a truncated read silently loses OPEN WORK and the reader is told THAT something
+#             was cut, never WHAT. (This correction is the paragraph above happening again --
+#             a class justification asserted for all its names while holding for only some. It was
+#             caught by review, not by a check, because no check here can reach prose.)
+#
+# WHY BOTH SETS ARE WRITTEN OUT AND THE UNION IS DERIVED, RATHER THAN THE REVERSE. Deriving the
+# CLASS from the trimmer would make widening LEDGERS silently reassign a file -- exactly what
+# read-cap-phase-c-plan.md section 10 dragon 6 says must FAIL rather than follow. So each class is
+# DECLARED and a canonical test PINS Class A against the trimmer's own LEDGERS table; adding a
+# name there without moving it here turns that test red, which is the point. Deriving the UNION
+# instead is what makes "the population did not change" provable rather than asserted -- Phase C1
+# moves no threshold (plan sections 8 and 9; section 7's A1 row, which reads otherwise, is the
+# summary that drifted, and the threshold move is Phase C2).
+#
+# DISPOSITION OF THE TWO `docs/**` BACKLOG LOCATIONS: KEEP, BY ANALOGY, AND THE ANALOGY IS SAID
+# OUT LOUD. Plan section 9 requires this be DECIDED rather than inherited. Neither is named as a
+# file to read anywhere in SESSION_RUNNER.md or SAFEGUARDS.md, and across the whole DISTRIBUTED
+# .md corpus (23 files at S176, taken off bin/_manifest.py's SOURCE column) both appear ZERO
+# times. `docs/planning/BACKLOG.md` appeared once, in fork Learning #26, which cites this repo's
+# own backlog as a WORKED EXAMPLE, not as a file anyone is told to open -- and that row left the
+# distributed corpus for docs/FORK_LEARNINGS.md at the S176 resync. So they are watched by analogy
+# to the root basename, and that is a weaker warrant than the other four have. They are kept
+# anyway, for the reason plan section 7 rejects option D on:
+# the row reports a REAL PROPERTY -- does one read deliver this file? -- which stays true however
+# rarely anyone reads it, and dropping a name is a fleet-visible narrowing that buys nothing.
+# Measured cost of keeping them: `docs/BACKLOG.md` matches NO file in the 5-repo fleet, so it
+# emits nothing; `docs/planning/BACKLOG.md` matches exactly one, THIS repo's, at 0.54x the cap.
+# A canonical test pins the "no protocol basis" half of that reasoning, so the day a protocol
+# edit gives one of them a basis, this comment is forced to be revisited instead of quietly
+# becoming false -- which is the failure the paragraph above records.
+READ_CAP_CLASS_A = frozenset(("CHANGELOG.md", "HANDOFFS.md"))
+READ_CAP_CLASS_B = frozenset(("SESSION_NOTES.md",) + _BACKLOG_LOCATIONS)
+
+# DERIVED, never re-listed. Phase C1's whole claim is that it repartitions this set without
+# changing it, and a third literal spelling of the six names would make that claim unprovable.
+READ_CAP_WATCHED = READ_CAP_CLASS_A | READ_CAP_CLASS_B
+
+
+def read_cap_class(rel_posix):
+    """"A", "B", or None for a name this scanner does not watch.
+
+    The one place that knows the partition. Callers ask the question rather than re-deriving it
+    from a membership test against the trimmer's grammar table -- which is what collect_trim_metrics
+    did before Phase C1, and which was correct only because the two happened to coincide. They
+    still coincide, and a canonical test asserts that they do; the difference is that the
+    coincidence is now checked rather than relied on."""
+    if rel_posix in READ_CAP_CLASS_A:
+        return "A"
+    if rel_posix in READ_CAP_CLASS_B:
+        return "B"
+    return None
+
+# --- S38: the trim-trigger row ------------------------------------------------------------------
+# D4(b) above reports a file that is ALREADY truncating. This reports the file that is heading
+# there, and names what to do about it. The two are separate risks on purpose and neither
+# subsumes the other: the ledgers in this repo are both well under the line cap today and both
+# already over the byte budget, so a cap-only reporter is silent about the live problem.
+#
+# THE ARCHITECTURE, AND WHY THE DASHBOARD COMPUTES RATHER THAN ASKS. The design (§1.3) says the
+# dashboard "reads the number rather than re-deriving it" AND that S38 owes an agreement test --
+# "with the trimmer present, the dashboard's displayed headroom equals --check's". Those cannot
+# both hold. A number OBTAINED by parsing `--check` makes that test an identity, which cannot
+# fail; the repo has already paid for that mistake once (fork Learning #16 -- three losslessness
+# guards inert at their call site behind a 13/13 mutation score). The owed test is only
+# meaningful if the two sides are computed independently, so this module computes the line
+# metric itself and the test compares it against a real `--check` run.
+#
+# That also keeps the rows READ-ONLY, which the ratified architecture requires, and matches
+# §7.1's stated precedent: check_stale_version()/parse_version() interrogate another executable
+# BY REGEX, without importing or running it. Nothing here executes a file it discovered.
+#
+# What is genuinely the trimmer's and cannot be re-derived is the BYTE BUDGET -- a judgment
+# calibrated in design §5.4, not a formula. It is read out of the tool's source by regex, the
+# same way parse_version reads DASHBOARD_VERSION. No budget -> the byte half abstains out loud
+# (decision D4: a 0 from an unread source must not be reported as a clean state), and the line
+# half, whose formula is published in CHANGELOG.md's own front matter, still answers.
+TRIM_TOOL_NAME = "methodology_trim.py"
+
+# The framework repo authors the tool under starter-kit/ and does not install a copy at its own
+# root, exactly as it does for methodology_dashboard.py. So the root probe misses HERE, and the
+# fallback is what lets the "present" branch be observed on the one repo whose trigger fires.
+#
+# ITS ORIGINAL REASON EXPIRED AT S39' AND THE SURVIVING ONE IS NARROWER. When this was written the
+# tool was canonical-only, so the root probe missed on EVERY repo in existence and the present
+# branch would have shipped never having run anywhere. `bin/sync` now installs the trimmer at
+# adopter roots, so the root probe is the live path for every adopter and this fallback covers
+# exactly one case: the framework repo scanning itself. Measured on a real sync rather than
+# reasoned about -- find_trim_tool() on a freshly synced throwaway repo returns
+# `methodology_trim.py` (the ROOT candidate), v1.0.0, budget 65536, and the fleet-wide `low`
+# "watched but unmeasured" abstention row is gone from its risk list.
+#   python3 -c "import sys;sys.path.insert(0,'bin');import _manifest as m;\
+#     print([e for e in m.DISTRIBUTION if 'trim' in e[0]])"
+#   -> [('starter-kit/methodology_trim.py', 'methodology_trim.py', 'tracked')]  since S39'
+TRIM_TOOL_FRAMEWORK_REL = "starter-kit/" + TRIM_TOOL_NAME
+
+_TRIM_VERSION_RE = re.compile(r'''^TRIM_VERSION\s*=\s*["']([^"']+)["']''', re.MULTILINE)
+
+# DEFAULT_BUDGET_BYTES is written `64 * 1024`, NOT as a plain integer -- a digits-only regex
+# matches nothing and silently reports "no budget", which looks exactly like "tool absent". The
+# product form is parsed explicitly and multiplied; no eval, and a test pins the parsed value
+# against the trimmer's real module constant so the two cannot drift apart unnoticed.
+_TRIM_BUDGET_RE = re.compile(
+    r"^DEFAULT_BUDGET_BYTES\s*=\s*([0-9_]+(?:\s*\*\s*[0-9_]+)*)", re.MULTILINE)
+
+# TRIM_LINE_FIRE_BELOW IS GONE (Phase B). It was a SECOND distributed copy of design §5.2's
+# published rate rule -- "archive when headroom falls below 15 records" -- pinned to the trimmer's
+# literal by a canonical test. The rule itself was deleted from the trimmer, not re-tuned: it is
+# denominated in records of headroom TO the cap, and a one-read CHANGELOG.md holds 20.9 records
+# while a one-read HANDOFFS.md holds 4.3, so "cut until headroom is back above 30" is
+# unsatisfiable on both at every honest cap. Keeping a copy here would leave the reporter
+# advertising a threshold the remedy no longer has. The read metric is now a LEVEL and needs no
+# rate constant on either side.
+
+TRIM_ARCHIVE_DIR = "docs/archive"
+
+# U+00B7 MIDDLE DOT, spelled as an ESCAPE rather than pasted. Not for ASCII purity -- this file
+# already carries 136 em-dashes and a handful of other non-ASCII characters. The reason is that
+# a middle dot is visually indistinguishable from its lookalikes (U+2022, U+2027, U+30FB) inside
+# a regex, where picking the wrong one silently stops matching and the count quietly drifts. The
+# escape names the codepoint so a reviewer can check it. It is load-bearing, not decoration: the
+# trimmer anchors a CHANGELOG record on the dated, SOURCE-TAGGED heading, so a looser
+# `^### <date>` would count headings the trimmer does not and break the agreement test.
+#   python3 -c "import collections,pathlib;print(collections.Counter(c for c in \
+#     pathlib.Path('tools/methodology_dashboard.py').read_text() if ord(c)>127))"
+_MIDDLE_DOT = "\u00b7"
+
+# The ledgers the trimmer actually has a config entry for. READ_CAP_WATCHED is deliberately
+# WIDER -- it holds six names, including SESSION_NOTES.md and three BACKLOG.md locations -- and
+# the trimmer answers NO_CONFIG on every one of those by design ("there is deliberately no
+# generic fallback: a generic rule is what would mis-zone a differently-shaped ledger"). Naming
+# the trimmer as the remedy for a file it refuses would be a pointer the adopter cannot follow,
+# which is the misdirection §7.3 exists to prevent. A canonical test asserts these keys against
+# the trimmer's own LEDGERS table rather than restating them here.
+TRIM_GRAMMARS = {
+    "CHANGELOG.md": ("heading",
+                     re.compile(r"^### \d{4}-\d{2}-\d{2} " + _MIDDLE_DOT + r" \[")),
+    "HANDOFFS.md": ("fence", "handoff"),
+}
+# Applied per LINE by _trim_record_count, so `^` is a string anchor here and re.MULTILINE is
+# deliberately absent. Compiling it with MULTILINE and then calling .findall over the whole text
+# would count the same headings, but only until a fenced example contained one -- which the two
+# seed ledgers both do, and which is the case that must not be counted.
+
+_TRIM_FENCE_RE = re.compile(r"^(`{3,}|~{3,})(.*)$")
+
 # Doc-only / research-repo scoring reshape (BL-5). A document-only repo (papers, dissertations,
 # technical reports, regulatory analyses — the Research-Documentation workstream population, and
 # partly this framework's own doc corpus) has nothing to unit-test, so the code-centric Testing
@@ -291,6 +605,32 @@ def git_cmd(path, *args, timeout=5):
         return result.stdout.strip()
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
         return ""
+
+
+def git_show(path, spec, timeout=10):
+    """`git show <spec>` as TEXT, unstripped, or None when it fails.
+
+    Deliberately not git_cmd: that helper .strip()s its output and returns "" on failure. Both
+    are wrong for a blob whose LINE COUNT is the thing being measured -- stripping silently
+    drops leading and trailing blank lines, and "" makes an unreadable baseline look like an
+    empty file rather than a reason to abstain.
+
+    ENCODING IS PINNED, not left to the locale. `text=True` alone decodes with
+    locale.getpreferredencoding(), so the same repo read under a non-UTF-8 LC_ALL decodes the
+    middle dot in a dated CHANGELOG heading (0xC2 0xB7) as two characters, the record regex stops
+    matching, the baseline record count collapses toward zero and the reported headroom inflates.
+    The trimmer's own baseline read is `git_bytes(...).decode("utf-8", "replace")`, which is
+    locale-independent; this matches it exactly, errors and all, so the two cannot drift apart on
+    a machine neither of them chose."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(path), "show", spec],
+            capture_output=True, text=True, timeout=timeout,
+            encoding="utf-8", errors="replace",
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return None
+    return result.stdout if result.returncode == 0 else None
 
 
 def count_lines(filepath):
@@ -347,27 +687,130 @@ CANONICAL_REL = Path("methodology") / "starter-kit" / "methodology_dashboard.py"
 _VERSION_RE = re.compile(r'''^DASHBOARD_VERSION\s*=\s*["']([^"']+)["']''', re.MULTILINE)
 
 # Non-markdown files `bin/sync` installs into an ADOPTER project root, as adopter-relative dest
-# paths. Installing the methodology must not change how the adopter's OWN code is measured: this
-# scanner is thousands of lines against a 200-LOC doc-only cap, so counting it as adopter source made
-# `bin/sync` destroy the very fair-scoring v3.2 shipped (a synced Quarto book flipped doc_only
-# True -> False and got its "No test infrastructure" penalty back). The signal did not mean what
-# it appeared to mean: it meant *we put our own scanner in your repo and then counted it against
-# you*. See §"Layer 7" of the campaign plan, which lives on the fork's `main` only:
+# paths, each paired with HOW THAT FILE PROVES IT IS OURS. Installing the methodology must not
+# change how the adopter's OWN code is measured: these executables are thousands of lines against a
+# 200-LOC doc-only cap, so counting them as adopter source made `bin/sync` destroy the very
+# fair-scoring v3.2 shipped (a synced Quarto book flipped doc_only True -> False and got its "No
+# test infrastructure" penalty back). The signal did not mean what it appeared to mean: it meant
+# *we put our own tools in your repo and then counted them against you*. See §"Layer 7" of the
+# campaign plan, which lives on the fork's `main` only:
 # https://github.com/rmsharp/methodology/blob/main/docs/planning/dashboard-signal-integrity-plan.md
 #
 # Mirrors the non-markdown dests in bin/_manifest.py; a canonical test asserts the two agree, so
 # the pair cannot drift silently (that plan's §8 learning 1 — make the cross-reference
-# machine-checkable, not re-greppable). Markdown dests are deliberately NOT listed: this tuple
+# machine-checkable, not re-greppable). Markdown dests are deliberately NOT listed: this table
 # exists to correct the source-LOC read, and a general "skip framework files" rule is exactly the
 # laundering hole the exclusion must not become.
-# The context-budget gate (context_budget.py, TRACKED; its .context-budget.json seed config)
-# added two more non-markdown dests to bin/_manifest.py without this tuple being extended to
-# match — exactly the silent drift the paragraph above warns about, caught by the
-# machine-checkable cross-reference test below, not by inspection.
-FRAMEWORK_INSTALLED_SOURCE = ("methodology_dashboard.py", "methodology_trim.py",
-                              "context_budget.py", "quality_ratchet.py",
-                              ".context-budget.json", ".quality-gates.json",
-                              ".gitattributes")
+#
+# WHY A TABLE AND NOT A TUPLE (S39', when the trimmer became the second installed executable).
+# The membership list and the content gate were separate before, and that made one specific wrong
+# edit both easy and green: `test_exclusion_list_matches_the_manifest` goes red the moment the
+# manifest grows a non-markdown dest, and the cheapest way to green it is to append the name here.
+# Measured, that edit accomplishes NOTHING — with `methodology_trim.py` on the old tuple and no
+# content branch for it, the adopter fixture still read doc_only False, source_loc 1,632 and a HIGH
+# "No test infrastructure". A green 323-test suite over a live fleet-wide regression. Deriving
+# FRAMEWORK_INSTALLED_SOURCE from these keys makes that edit unwritable: a name reaches the
+# exclusion only by declaring how it identifies itself.
+#
+# Each value is (version_pattern, structural_signatures). A file passes if the version pattern
+# matches, or if it carries >= _FRAMEWORK_SIGNATURE_MIN of the signatures. An EMPTY signature tuple
+# means "no structural fallback": sum(...) over it is 0, which cannot reach the minimum of 2, so the
+# version constant is then the only way in. That is correct for a tool with no pre-constant releases
+# in the wild, and it is pinned by a test rather than left to arithmetic a reader has to redo.
+#
+# The two patterns are deliberately DISTINCT rather than one generic version matcher. Widening
+# _VERSION_RE would have been the smaller diff and it has two other consumers — parse_version() and
+# check_stale_version(), which drives the "methodology_dashboard.py is stale" warning — so it would
+# have changed staleness reporting as a side effect. Distinct patterns also mean neither tool's
+# constant can launder the other's file, which a shared any-marker rule would have allowed.
+# Structural signatures of the SCANNER, for copies too old to carry DASHBOARD_VERSION. Two must
+# match. Three are ordinary function names, so two hits are suggestive rather than proof — this is
+# a heuristic, and the .methodology-profile marker is the documented override. Measured need: a
+# live adopter (feedback-loop-comparison) still runs a 1,614-line pre-version copy, and a
+# DASHBOARD_VERSION-only gate silently skipped it — the fix quietly not applying is the same class
+# of defect as the fix being wrong. (Moved up from below `is_framework_installed` at S39' so it is
+# defined before the table that consumes it; the constant and its rationale are unchanged.)
+_FRAMEWORK_SIGNATURES = (
+    "METHODOLOGY_ITEMS",
+    "def collect_all",
+    "def score_health",
+    "def assess_risks",
+    "https://github.com/KJ5HST/methodology",
+)
+_FRAMEWORK_SIGNATURE_MIN = 2
+
+# Arriving via upstream/main's PR #66 (context-budget gate, FM #28): a version constant, for a
+# copy new enough to carry one (mirrors _VERSION_RE's own shape).
+_CONTEXT_BUDGET_VERSION_RE = re.compile(r'''^VERSION\s*=\s*["']([^"']+)["']''', re.MULTILINE)
+_CONTEXT_BUDGET_SIGNATURES = (
+    "context_budget.py — size budgets",
+    "CONFIG_NAME",
+    "HISTORY_NAME",
+    "growth_run",
+)
+# The seed config has no version constant of its own — signatures are the only way in (see the
+# version_re-is-None guard in is_framework_installed). Structurally unreachable today:
+# is_framework_installed() is only called when category == "source", and categorize_file()
+# always buckets a .json extension as "config" (CONFIG_EXTS), never "source" — so this entry
+# can never affect source-LOC either way. Given a real signature anyway so the completeness
+# test below needs no special case that could hide a future gap if that call-site guard, or
+# this file's extension, ever changes.
+_CONTEXT_BUDGET_JSON_SIGNATURES = (
+    "bytes_per_token",
+    "fixed_harness_tokens",
+    "growth_run",
+    "calibrate_against",
+)
+
+# Arriving via upstream/main's PR #82 (the quality ratchet): a third installed executable, with its
+# own `VERSION` constant and upstream's four structural signatures. Its pattern is the same text as
+# the context-budget gate's, because both tools name their constant `VERSION` -- so, unlike the
+# scanner's and the trimmer's, those two constants do satisfy each other's check (see
+# is_framework_installed's docstring).
+_QUALITY_RATCHET_VERSION_RE = re.compile(r'''^VERSION\s*=\s*["']([^"']+)["']''', re.MULTILINE)
+_QUALITY_RATCHET_SIGNATURES = (
+    "quality_ratchet.py — declared quality thresholds",
+    "CONFIG_NAME",
+    "def precommit",
+    "def run_gates",
+)
+# Its seed config, like .context-budget.json above: no version constant, the same structural
+# unreachability, and a real signature set for the same reason. The seed's `_example` gate carries
+# these keys even while `gates` is empty, so a freshly seeded file matches.
+_QUALITY_GATES_JSON_SIGNATURES = (
+    "results_file",
+    "\"direction\"",
+    "\"threshold\"",
+    "quality_ratchet.py",
+)
+
+# The ledger merge-driver seed (starter-kit/gitattributes, installed once as `.gitattributes`): no
+# version constant, and like the two JSON seeds above it can never reach source-LOC (a dotfile is
+# categorized as config by name), so its signatures exist for the completeness test. They are lines
+# of the shipped seed's own comments and rules.
+_GITATTRIBUTES_SIGNATURES = (
+    "Methodology ledgers",
+    "CHANGELOG.md merge=union",
+    "HANDOFFS.md is deliberately NOT listed",
+)
+
+_FRAMEWORK_INSTALLED_CONTENT = {
+    "methodology_dashboard.py": (_VERSION_RE, _FRAMEWORK_SIGNATURES),
+    # The trimmer has no pre-constant releases in the wild — v1.0.0 is its first shipped version and
+    # it has declared TRIM_VERSION since it was written — so it gets no structural fallback. See the
+    # empty-tuple paragraph above for why that is a refusal and not a hole.
+    TRIM_TOOL_NAME:            (_TRIM_VERSION_RE, ()),
+    "context_budget.py":       (_CONTEXT_BUDGET_VERSION_RE, _CONTEXT_BUDGET_SIGNATURES),
+    "quality_ratchet.py":      (_QUALITY_RATCHET_VERSION_RE, _QUALITY_RATCHET_SIGNATURES),
+    ".context-budget.json":    (None, _CONTEXT_BUDGET_JSON_SIGNATURES),
+    ".quality-gates.json":     (None, _QUALITY_GATES_JSON_SIGNATURES),
+    ".gitattributes":          (None, _GITATTRIBUTES_SIGNATURES),
+}
+
+# Derived, never hand-written — see the paragraph above. Order follows the dict, which follows
+# bin/_manifest.py's DISTRIBUTION order, because the manifest-agreement test compares ORDERED
+# tuples (its sibling markdown assertions are set-compared and say so).
+FRAMEWORK_INSTALLED_SOURCE = tuple(_FRAMEWORK_INSTALLED_CONTENT)
 
 # The markdown half of the same problem, and the mirror of the defect above. `bin/sync` also
 # installs 23 markdown files, which on its own satisfies detect_doc_only's corpus
@@ -438,8 +881,8 @@ FRAMEWORK_AMBIGUOUS_DOCS = (
 # bin/_manifest.py keeps checking all 23 names rather than silently narrowing to a subset.
 FRAMEWORK_INSTALLED_DOCS = FRAMEWORK_DISTINCTIVE_DOCS + FRAMEWORK_AMBIGUOUS_DOCS
 
-# How many of the six ambiguous root names must co-occur to stand in for a docs/methodology/ path.
-# `bin/sync` writes all six, and README.md's manual Option B copies them as a set, so a genuine
+# How many of the seven ambiguous root names must co-occur to stand in for a docs/methodology/ path.
+# `bin/sync` writes all seven, and README.md's manual Option B copies them as a set, so a genuine
 # install clears this easily. A doc repo that happens to own three of these EXACT names is not a
 # coincidence worth protecting. One or two is (BOOTSTRAP.md alone; BOOTSTRAP.md + SAFEGUARDS.md).
 FRAMEWORK_AMBIGUOUS_EVIDENCE_MIN = 3
@@ -463,134 +906,28 @@ FRAMEWORK_SEED_DOCS = (
 )
 
 
-# Content verification is PER FILE: a signature set proves an installed file IS the one it
-# claims to be, and methodology_dashboard.py's OWN signatures prove nothing about a DIFFERENT
-# installed file. The gap this closes: context_budget.py and .context-budget.json were added to
-# FRAMEWORK_INSTALLED_SOURCE above, but is_framework_installed checked every name against the
-# scanner's own signatures below — which context_budget.py never matches — so the exclusion
-# silently never fired for it even though the name-list agreement test passed
-# (test_exclusion_list_matches_the_manifest checks the LIST, not the runtime predicate). A
-# canonical test asserts every FRAMEWORK_INSTALLED_SOURCE name has an entry here, so a future
-# addition to that tuple cannot repeat this gap silently. Two signature hits (or a version
-# match) are suggestive rather than proof — a heuristic, same as before — and the
-# .methodology-profile marker remains the documented override for any repo this still gets wrong.
-_FRAMEWORK_FILE_SIGNATURES = {
-    "methodology_dashboard.py": {
-        # Measured need for the signature fallback: a live adopter (feedback-loop-comparison)
-        # still runs a 1,614-line pre-version copy, and a DASHBOARD_VERSION-only gate silently
-        # skipped it — the fix quietly not applying is the same class of defect as the fix being
-        # wrong. Three of these are ordinary function names, hence min_hits=2, not 1.
-        "version_re": _VERSION_RE,
-        "signatures": (
-            "METHODOLOGY_ITEMS",
-            "def collect_all",
-            "def score_health",
-            "def assess_risks",
-            "https://github.com/KJ5HST/methodology",
-        ),
-        "min_hits": 2,
-    },
-    "methodology_trim.py": {
-        # Its own constant is TRIM_VERSION, not VERSION or DASHBOARD_VERSION, so it needs its own
-        # pattern rather than the scanner's: a shared _VERSION_RE would never match and the file
-        # would fall through to the signature path on every scan, which is the silent-skip defect
-        # the comment above this table describes.
-        "version_re": re.compile(r'''^TRIM_VERSION\s*=\s*["']([^"']+)["']''', re.MULTILINE),
-        "signatures": (
-            "LEDGERS",
-            "def classify_zones",
-            "def apply_regenerated",
-            "def build_pointer_block",
-        ),
-        "min_hits": 2,
-    },
-    "context_budget.py": {
-        "version_re": re.compile(r'''^VERSION\s*=\s*["']([^"']+)["']''', re.MULTILINE),
-        "signatures": (
-            "context_budget.py — size budgets",
-            "CONFIG_NAME",
-            "HISTORY_NAME",
-            "growth_run",
-        ),
-        "min_hits": 2,
-    },
-    ".context-budget.json": {
-        # Structurally unreachable today: is_framework_installed() is only called when
-        # category == "source" (see its one call site), and categorize_file() always buckets a
-        # .json extension as "config" (CONFIG_EXTS), never "source" — so this entry can never
-        # affect source-LOC either way. Given a real signature anyway so the completeness test
-        # below needs no special case that could hide a future gap if that call-site guard, or
-        # this file's extension, ever changes.
-        "version_re": None,
-        "signatures": (
-            "bytes_per_token",
-            "fixed_harness_tokens",
-            "growth_run",
-            "calibrate_against",
-        ),
-        "min_hits": 2,
-    },
-    "quality_ratchet.py": {
-        # The quality-ratchet gate (quality-ratchet plan D2): 494 LOC of python installed at the
-        # adopter root by bin/sync — the same class as context_budget.py above, and the same
-        # per-file signature discipline (PR #71: a name in the tuple whose content is checked
-        # against the SCANNER's signatures is never excluded). Its own version constant is
-        # VERSION, like context_budget.py's.
-        "version_re": re.compile(r'''^VERSION\s*=\s*["']([^"']+)["']''', re.MULTILINE),
-        "signatures": (
-            "quality_ratchet.py — declared quality thresholds",
-            "CONFIG_NAME",
-            "def precommit",
-            "def run_gates",
-        ),
-        "min_hits": 2,
-    },
-    ".quality-gates.json": {
-        # Config, like .context-budget.json above — same structural unreachability, same reason
-        # for carrying a real signature set anyway. The seed's `_example` gate carries these keys
-        # even while `gates` is empty, so a freshly seeded file matches.
-        "version_re": None,
-        "signatures": (
-            "results_file",
-            "\"direction\"",
-            "\"threshold\"",
-            "quality_ratchet.py",
-        ),
-        "min_hits": 2,
-    },
-    ".gitattributes": {
-        # The ledger merge-driver SEED (parallel-sessions plan, Phase 1). Config like the two JSON
-        # seeds above — categorized "config" by name in CONFIG_FILES, so structurally unreachable
-        # here today — and given a real signature set for the same reason they are: the
-        # completeness test needs no special case that could hide a future gap.
-        "version_re": None,
-        "signatures": (
-            "Methodology ledgers",
-            "CHANGELOG.md merge=union",
-            "HANDOFFS.md is deliberately NOT listed",
-        ),
-        "min_hits": 2,
-    },
-}
-
-
 def is_framework_installed(rel_path, fpath):
     """True for a source file `bin/sync` installed at the adopter's project ROOT.
 
     Root-anchored, not basename-matched: an adopter's own `src/methodology_dashboard.py` stays
     their source, and the canonical repo's `tools/` + `starter-kit/` copies stay ITS source — it
-    authors that file, so its own health score must keep paying for it.
+    authors those files, so its own health score must keep paying for them.
 
-    Content-verified, PER FILE (see _FRAMEWORK_FILE_SIGNATURES): each name in
-    FRAMEWORK_INSTALLED_SOURCE carries its own version pattern and signature set, because a
-    signature set that proves one file's identity proves nothing about a different file merely
-    sharing the same name-list entry. The **whole file** is read, not a fixed prefix — an
-    earlier version searched only the first 4096 bytes, and the real constant sits close enough
-    to that boundary that ordinary growth of this module header would have crossed it, silently
-    switching the exclusion off and regressing every doc-only adopter to the defect this exists
-    to fix. (Measured at 2.10.1: byte 3,409, only 687 bytes clear of the old window. That margin
-    is a snapshot, not an invariant — it was 1,572 bytes one commit earlier, and a single
-    docstring addition consumed 56% of it, which is exactly the hazard.
+    Content-verified, PER NAME: each installed executable proves itself with its own constant —
+    the scanner with `DASHBOARD_VERSION` (or, for copies predating it, at least two structural
+    signatures of the scanner), the trimmer with `TRIM_VERSION`, the context-budget gate and the
+    quality ratchet each with its own `VERSION`. The pairing lives in `_FRAMEWORK_INSTALLED_CONTENT`,
+    which this reads rather than re-stating, and which FRAMEWORK_INSTALLED_SOURCE is derived from — so
+    no name can be excluded without declaring how it identifies itself. No tool's constant satisfies
+    another entry's check, except that the last two name theirs alike: each one's `VERSION` satisfies
+    the other's. The **whole file** is
+    read,
+    not a fixed prefix — an earlier version searched only the first 4096 bytes, and the real
+    constant sits close enough to that boundary that ordinary growth of this module header would
+    have crossed it, silently switching the exclusion off and regressing every doc-only adopter
+    to the defect this exists to fix. (Measured at 2.10.1: byte 3,409, only 687 bytes clear of
+    the old window. That margin is a snapshot, not an invariant — it was 1,572 bytes one commit
+    earlier, and a single docstring addition consumed 56% of it, which is exactly the hazard.
     test_predicate_reads_the_whole_file_not_a_prefix is what actually holds the line.)
     A silent cliff inside the fix for a silent-signal bug is
     not a tradeoff worth keeping; the read costs nothing, since the file is read for line-counting
@@ -601,19 +938,58 @@ def is_framework_installed(rel_path, fpath):
     deliberately pastes a version marker into their application to dodge a score — nothing
     file-local could, and the only thing they would win is a wrong dashboard for themselves.
     """
-    name = str(rel_path).replace("\\", "/")
-    sig = _FRAMEWORK_FILE_SIGNATURES.get(name)
-    if sig is None:
+    content = _FRAMEWORK_INSTALLED_CONTENT.get(str(rel_path).replace("\\", "/"))
+    if content is None:
         return False
+    version_re, signatures = content
     try:
         with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
             text = fh.read()
     except OSError:
         return False
-    if sig["version_re"] is not None and sig["version_re"].search(text):
+    # version_re is None for a file with no version constant of its own (e.g.
+    # .context-budget.json) — signatures are then the only way in.
+    if version_re is not None and version_re.search(text):
         return True
-    hits = sum(1 for s in sig["signatures"] if s in text)
-    return hits >= sig["min_hits"]
+    hits = sum(1 for sig in signatures if sig in text)
+    return hits >= _FRAMEWORK_SIGNATURE_MIN
+
+
+# The losslessness proof `methodology_trim.py --write` leaves beside each shard it creates. Not a
+# distributed file — the adopter's own tool WROTE it into their repo — which is why it needs its own
+# predicate rather than an entry in the table above.
+#
+# WHY THIS EXISTS, and it is the defect S39' would otherwise have shipped. The exclusion above keeps
+# the two installed executables out of the adopter's source count. It says nothing about what those
+# executables PRODUCE. A single `--write` emits a fixed 220-line bash script into `docs/archive/`,
+# and `.sh` is in SOURCE_EXTS — so a doc-only adopter who actually USES the tool we just shipped
+# lands 220 lines of "their own source" against DOC_ONLY_SOURCE_LOC_MAX = 200, flips to `code`, and
+# re-earns the false HIGH "No test infrastructure" risk that v3.2 exists to remove. Every subsequent
+# trim adds another. Measured, not reasoned about: a real `--write` on a 28-record fixture gives
+# `source_loc 220`, `doc_only False`. Shipping the tool while its ordinary use re-creates the
+# regression the shipping work exists to prevent is shipping the defect by a different route.
+#
+# Three conditions, all required, so this cannot become a laundering hole: the file sits under the
+# archive directory the trimmer writes to, it carries the `.verify.sh` suffix the trimmer gives it,
+# and its content carries the generator banner. An adopter cannot get an arbitrary script exempted
+# without putting it in that directory, under that name, with our banner in it — and the only thing
+# they would win is a wrong dashboard for themselves (the same threat model as above).
+_GENERATED_PROOF_SUFFIX = ".verify.sh"
+_GENERATED_PROOF_BANNER = "generated by methodology_trim.py"
+
+
+def is_generated_proof(rel_path, fpath):
+    """True for a losslessness-proof script `methodology_trim.py --write` generated in this repo."""
+    rel_posix = str(rel_path).replace("\\", "/")
+    if not rel_posix.startswith(TRIM_ARCHIVE_DIR + "/"):
+        return False
+    if not rel_posix.endswith(_GENERATED_PROOF_SUFFIX):
+        return False
+    try:
+        with open(fpath, "r", encoding="utf-8", errors="ignore") as fh:
+            return _GENERATED_PROOF_BANNER in fh.read()
+    except OSError:
+        return False
 
 
 def find_canonical(start):
@@ -649,7 +1025,11 @@ def version_key(v):
 
 def check_stale_version():
     """Best-effort staleness check: if a newer canonical exists locally, warn on stderr.
-    Silent when the canonical can't be found or when this copy IS the canonical."""
+    Silent when the canonical can't be found or when this copy IS the canonical.
+
+    Issue #67 point 1: the remedy used to be the portfolio-wide --sync only -- disproportionate
+    for a one-file problem. Now names both: the scoped fix for THIS copy first, the full sweep
+    second."""
     self_path = Path(__file__).resolve()
     canonical = find_canonical(self_path.parent)
     if not canonical or canonical == self_path:
@@ -669,39 +1049,350 @@ def check_stale_version():
         sys.stderr.write(
             f"  ⚠ methodology_dashboard.py is stale: this copy is v{DASHBOARD_VERSION}, "
             f"canonical is v{canon_ver}.\n"
-            f"    Re-sync THIS project:  cp {canonical} {self_path}\n"
-            f"    Re-sync the PORTFOLIO: python3 {canonical} --sync --dry-run\n"
-            f"                           (rewrites EVERY discovered sibling repo — preview with\n"
-            f"                            --dry-run first, then re-run without it to apply)\n"
+            f"    Update just this copy:      python3 {canonical} --sync {self_path.parent}\n"
+            f"    Update the whole portfolio: python3 {canonical} --sync   "
+            f"(writes every discovered project — preview first with --dry-run)\n"
         )
 
 
-def sync_dashboards(start, dry_run=False):
-    """Copy the canonical dashboard to the portfolio root + every discovered project.
-    In --dry-run mode nothing is written; the planned actions are printed. Returns the
-    count of files that were (or would be) changed.
+# --- S38 helpers: locating the trimmer, and computing the line metric without it ------------------
+
+def find_trim_tool(path, role="adopter"):
+    """Locate the ledger trimmer for the SCANNED project, or None.
+
+    Root-anchored on the scanned project, mirroring is_framework_installed -- an adopter's own
+    `tools/methodology_trim.py` is their file, not ours. The starter-kit/ fallback applies only
+    to a framework repo, which authors the tool there and installs no root copy of it (see
+    TRIM_TOOL_FRAMEWORK_REL for why that branch exists at all).
+
+    Content-verified by regex, exactly as parse_version verifies a dashboard copy: a bare
+    `.is_file()` would accept a directory or an unrelated same-named script. Nothing here
+    imports or executes the file it found -- §7.1's precedent, and the reason the rows stay
+    read-only. That holds for `ledgers` too (BL-88 P2): _parse_trim_ledgers PARSES the source
+    and runs none of it."""
+    candidates = [path / TRIM_TOOL_NAME]
+    if role == "framework":
+        candidates.append(path / TRIM_TOOL_FRAMEWORK_REL)
+    for cand in candidates:
+        if not cand.is_file():
+            continue
+        try:
+            text = cand.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        m = _TRIM_VERSION_RE.search(text)
+        if m:
+            return {"path": cand, "version": m.group(1),
+                    "budget": _parse_trim_budget(text),
+                    "ledgers": _parse_trim_ledgers(text)}
+    return None
+
+
+def _parse_trim_budget(text):
+    """The trimmer's byte budget, read out of its source. None when it cannot be read.
+
+    None is a real answer here, not a zero: the budget is a calibrated judgment (design §5.4)
+    that no formula recovers, so an unparseable one makes the byte half of the trigger
+    unanswerable and it says so rather than substituting a guess."""
+    m = _TRIM_BUDGET_RE.search(text)
+    if not m:
+        return None
+    total = 1
+    for part in m.group(1).split("*"):
+        part = part.strip().replace("_", "")
+        if not part.isdigit():
+            return None
+        total *= int(part)
+    return total or None
+
+
+# BL-88 P2: the attribute uses of LEDGERS a reading survives -- each one only READS the table.
+# Anything else on the name (`.pop`, `.update`, `.setdefault`, `.clear`, ...) could change what
+# the literal says, so the reading abstains rather than follow it.
+_TRIM_LEDGERS_READ_ONLY = frozenset(("get", "keys", "items", "values", "copy"))
+
+
+def _parse_trim_ledgers(text):
+    """The basenames a trimmer's LEDGERS table declares, read out of its SOURCE. None when the
+    source alone cannot say.
+
+    BL-88 P2 (docs/planning/dashboard-read-cap-class-adopter-drift-plan.md §8). The operator
+    decided this is a SOURCE-TEXT read, never an execution: no adopter code runs inside the
+    scanner -- §7.1's precedent and find_trim_tool's own contract. `ast.parse` honours that, since
+    it builds a syntax tree and runs nothing, and it is used instead of a grep because a grep
+    cannot tell an entry from a mention: nprcgenekeepr's widened trimmer spells SESSION_NOTES.md
+    on three lines -- a comment, the key, and a `basename=` argument -- and one of them is a key.
+
+    ABSTAIN, NEVER GUESS. The answer is the keys of ONE module-level `LEDGERS = {...}` display
+    whose keys are all string constants, and only while nothing else in the file binds the name
+    (assignment, import, def, class, except-as), stores into it, deletes from it, or calls a
+    method on it that is not a read. Anything else returns None. The asymmetry is the reason: None
+    leaves the Class B row exactly as P1 wrote it, so a false negative costs nothing, while a key
+    the running tool would not have makes the row name a remedy that does not work. What no
+    source read can see -- a mutation through `globals()` or from another module -- is the residue
+    accepted in exchange for never executing the file."""
+    try:
+        tree = ast.parse(text)
+    except (SyntaxError, ValueError, MemoryError, RecursionError):
+        # ValueError: a null byte, on the 3.10 interpreter the suite runs (SyntaxError from 3.12).
+        # MemoryError: the parser's own stack on a pathologically deep expression. RecursionError
+        # is what other interpreters raise for that case; no input reaches it on 3.10.
+        return None
+    name = "LEDGERS"
+    display = None
+    for stmt in tree.body:
+        if (isinstance(stmt, ast.Assign) and len(stmt.targets) == 1
+                and isinstance(stmt.targets[0], ast.Name) and stmt.targets[0].id == name):
+            display = stmt       # a second one is caught by the walk below, as any binding is
+    if display is None or not isinstance(display.value, ast.Dict):
+        return None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id == name:
+            if not isinstance(node.ctx, ast.Load) and node is not display.targets[0]:
+                return None
+        elif isinstance(node, ast.alias):
+            if (node.asname or node.name.split(".")[0]) == name:
+                return None
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef,
+                               ast.ExceptHandler)):
+            if node.name == name:
+                return None
+        elif isinstance(node, (ast.Subscript, ast.Attribute)):
+            on_name = isinstance(node.value, ast.Name) and node.value.id == name
+            if on_name and isinstance(node, ast.Subscript) and not isinstance(node.ctx, ast.Load):
+                return None
+            if (on_name and isinstance(node, ast.Attribute)
+                    and node.attr not in _TRIM_LEDGERS_READ_ONLY):
+                return None
+    keys = set()
+    for k in display.value.keys:
+        if not (isinstance(k, ast.Constant) and isinstance(k.value, str)):
+            return None      # a computed key -- or None, which is how ast spells `**` unpacking
+        keys.add(k.value)
+    return sorted(keys)
+
+
+def _trim_record_count(text, basename):
+    """Records in a ledger under its declared grammar, FENCE-AWARE.
+
+    Fence-awareness is not defensive polish. `starter-kit/CHANGELOG.md` carries three dated
+    headings and `starter-kit/HANDOFFS.md` one ```handoff block, and in both files every one of
+    them sits inside a documentation fence -- a fence-blind counter reads 3 and 1 where the
+    truth is 0, and would report a confident slope for a freshly seeded ledger holding no
+    records at all.
+
+    Returns None -- ABSTAIN, never a count of zero -- for a basename this module has no grammar
+    for, and for a text the trimmer's own zone classifier would REFUSE. Both matter: the trimmer
+    treats a refusal as a reason to abstain and says so ("that is not a count of zero. Treating it
+    as zero makes `de` the whole current record count and prints a confidently inflated headroom
+    for a baseline the tool would itself refuse to read"), so a counter that always answers would
+    print a number exactly where `--check` prints none."""
+    grammar = TRIM_GRAMMARS.get(basename)
+    if grammar is None:
+        return None
+    kind, pat = grammar
+    n = 0
+    fence = None
+    last_start = -1
+    hrs = []
+    for idx, raw in enumerate(text.split("\n")):
+        line = raw.rstrip()
+        m = _TRIM_FENCE_RE.match(line)
+        inside_before = fence is not None
+        if m:
+            marker, info = m.group(1), m.group(2).strip()
+            if fence is None:
+                fence = marker
+                # No `and not inside_before` conjunct here, deliberately. This branch is reached
+                # only when fence is None, which IS inside_before being False, so the conjunct
+                # could never be false and no mutant could falsify it -- a comment wearing a
+                # guard's clothes. It was written, observed unkillable, and removed. The fact it
+                # asserted is real and is stated instead: a fence OPENER is never itself nested,
+                # which is what makes a ```handoff line a record start rather than noise.
+                if kind == "fence" and info == pat:
+                    n += 1
+                    last_start = idx
+            elif marker[0] == fence[0] and len(marker) >= len(fence) and not info:
+                # `and not info` is the trimmer's rule and it is load-bearing, not pedantry: a
+                # closer carries no info string. Without it a nested ```python inside an open
+                # fence reads as a closer here and as ordinary fenced content there, and every
+                # record after it is counted by one side and not the other -- measured at 1 vs 2
+                # on a three-fence fixture.
+                fence = None
+            continue
+        if inside_before:
+            continue
+        if kind == "heading" and pat.match(line):
+            n += 1
+            last_start = idx
+        if line.strip() == "---":
+            hrs.append(idx)
+
+    # The trimmer ASSERTS a footer_mode='none' declaration rather than trusting it: a standalone
+    # '---' after the last record with content under it is content the config cannot name, and it
+    # refuses. Mirror the refusal, do not model the whole zone split -- the dashboard has no need
+    # to know where the footer starts, only whether the trimmer would have answered at all.
+    if kind == "fence" and n and hrs:
+        for i in hrs:
+            if i > last_start and "\n".join(text.split("\n")[i + 1:]).strip():
+                return None
+    return n
+
+
+# ⚠ PHASE B REMOVED THIS FUNCTION'S ONLY PRODUCTION CONSUMER, and it is kept deliberately rather
+# than deleted or quietly left to rot. `trim_line_headroom` called it to find the baseline commit
+# a RATE needs; the read metric is a LEVEL and needs no baseline, so nothing in this module calls
+# it today. It is NOT dead by accident: it is the archive-event detector, it encodes a defect that
+# cost a session to find (a shard committed before the ledger existed is not an archive event,
+# because nothing shrank), and 18 assertions still pin that behaviour. Deleting it would discard
+# earned coverage; giving it a new consumer would be a feature this session did not scope. Whether
+# the S38 row should surface an archive baseline at all is part of Phase C's decision about that
+# row's shape — decide it there, and delete or re-wire this then. Recorded, not drifted into
+# (FM #17).
+def _newest_archive_sha(path, basename):
+    """The commit that ADDED the most recent shard of this ledger, or None.
+
+    Ordered by position in the commit graph, never by timestamp: two archives committed in the
+    same second are ordinary, and a timestamp tie falls back to sha order, which is arbitrary.
+    The trimmer orders the same way and for the same reason; the agreement test is what holds
+    the two together."""
+    adir = path / TRIM_ARCHIVE_DIR
+    if not adir.is_dir():
+        return None
+    stem = basename[:-3] if basename.endswith(".md") else basename
+    shas = []
+    for shard in sorted(adir.glob("%s-*.md" % stem)):
+        try:
+            rel = shard.relative_to(path).as_posix()
+        except ValueError:
+            continue
+        sha = git_cmd(path, "log", "--diff-filter=A", "-1", "--format=%H", "--", rel)
+        if not sha:
+            continue
+        # An archive EVENT is a commit in which the ledger actually SHRANK -- the trimmer's own
+        # filter, and skipping it is not cosmetic. A shard committed separately from the trim
+        # (the ordinary two-step manual archive), or copied in beside new entries, adds a sha
+        # here that the trimmer discards; the two then compute against different baselines and
+        # the row an operator reads stops matching `--check`, which is the one thing §1.3 names
+        # as worse than a single gauge. It does not bite on this repo -- every shard here really
+        # did shrink its ledger -- so the agreement test passed on luck of history until a
+        # fixture was built for it.
+        pre = git_show(path, "%s^:%s" % (sha, basename))
+        post = git_show(path, "%s:%s" % (sha, basename))
+        if pre is None or post is None:
+            continue
+        if len(pre.encode("utf-8")) <= len(post.encode("utf-8")):
+            continue
+        shas.append(sha)
+    if not shas:
+        return None
+    if len(shas) == 1:
+        return shas[0]
+    # Ordered by position in the commit graph, never by timestamp: two archives committed in the
+    # same second are ordinary, and a timestamp tie falls back to sha order, which is arbitrary.
+    #
+    # ABSTAIN rather than degrade. git_cmd returns "" on timeout, which is indistinguishable from
+    # success -- and an empty walk collapses every rank to the same sentinel, leaving the stable
+    # sort in FILENAME order, which for a date-stamped shard naming scheme silently selects the
+    # OLDEST. That is the precise ordering this function's contract forbids, arrived at with no
+    # error and no marker. If the walk cannot rank every candidate, say nothing.
+    walk = (git_cmd(path, "rev-list", "--topo-order", "HEAD") or "").split()
+    rank = {sha: i for i, sha in enumerate(walk)}
+    if any(s not in rank for s in shas):
+        return None
+    shas.sort(key=lambda s: rank[s])
+    return shas[0]
+
+
+# `trim_line_headroom()` WAS HERE and was deleted with the rate rule it re-implemented (Phase B).
+# It recomputed the trimmer's line headroom independently -- deliberately, so this half still
+# answered when the trimmer was absent -- and it carried the whole abstention apparatus that a
+# RATE needs: no baseline archive, an unreadable baseline blob, fewer than one record since the
+# split. A LEVEL needs none of it. `size_bytes > READ_CAP_BYTES` is answerable from the file
+# alone, with no git history and no baseline, so the read half now answers for every watched
+# ledger in every repo -- including a freshly-bootstrapped one that has never archived, which is
+# exactly the state in which the old rate abstained and reported nothing.
+
+
+_KNOWN_FLAGS = {"--sync", "--dry-run", "--force", "--no-open", "--with-submodules", "--help", "-h"}
+
+
+def _extract_sync_target(args):
+    """First non-flag token in argv (any position, not only after --sync): the optional
+    single-project sync scope. Order-independent — '--sync /path' and '--sync --force /path'
+    both resolve to '/path'. None => sync the whole portfolio (today's unchanged default).
+
+    Issue #67 point 2. Every current flag is dash-prefixed, so this is really just "the first
+    bare word" — a FUTURE value-taking flag (e.g. a hypothetical --out FILE) would have its own
+    value misread as the sync target; `_KNOWN_FLAGS` does no independent filtering against that
+    today. Not a structural guard; any future value-taking flag needs its own dedicated test."""
+    for a in args:
+        if a not in _KNOWN_FLAGS and not a.startswith("-"):
+            return a
+    return None
+
+
+def sync_dashboards(start, dry_run=False, target=None, force=False):
+    """Copy the canonical dashboard to a single TARGET_DIR (if given) or to the portfolio root +
+    every discovered project (target=None, today's default). In --dry-run mode nothing is
+    written; the planned actions — including which targets --force would be needed for — are
+    printed. Returns the count of files ACTUALLY written (0 for a dry run).
 
     NOTE: a live sync writes methodology_dashboard.py into every project, including the
     repos where it is still git-tracked — those need the Phase 3 `git rm --cached` +
-    per-repo commit discipline. Tracked targets are flagged in the output."""
+    per-repo commit discipline. Tracked targets are flagged in the output.
+
+    Issue #67 points 2/3/4 (docs/planning/issue67-fork-side-fix-plan.md, D1-D4): a write is
+    gated (skipped without --force) when the target is already git-tracked, or is a brand-new
+    file landing in a repo whose own .gitignore does not already cover it. The gate is computed
+    BEFORE branching on dry_run, so a --dry-run preview shows [SKIPPED] honestly instead of
+    promising a write --force would still be needed for."""
     canonical = find_canonical(start)
     if not canonical:
         sys.stderr.write("  Cannot locate canonical methodology/starter-kit/"
                          "methodology_dashboard.py — nothing synced.\n")
         return 0
     # .../starter-kit/methodology_dashboard.py -> starter-kit -> methodology -> portfolio root
+    canon_repo = canonical.parent.parent.resolve()           # .../methodology
     portfolio_root = canonical.parent.parent.parent
     canon_text = canonical.read_text()
+    canon_ver_display = parse_version(canonical) or DASHBOARD_VERSION   # see SS6 item 4: never
+                                                                          # DASHBOARD_VERSION alone —
+                                                                          # that's the RUNNING copy's
+                                                                          # own version, not the
+                                                                          # canonical's, whenever a
+                                                                          # local stale copy invokes
+                                                                          # --sync on itself.
 
-    targets = [portfolio_root / "methodology_dashboard.py"]
-    for proj in discover_projects(portfolio_root):
-        targets.append(proj / "methodology_dashboard.py")
+    if target is not None:
+        target_dir = Path(target).resolve()
+        if not target_dir.is_dir():
+            sys.stderr.write(f"  Target directory does not exist: {target_dir} — nothing synced.\n")
+            return 0
+        if target_dir == canon_repo or (target_dir / "methodology_dashboard.py") == canonical:
+            sys.stderr.write("  Refusing to sync the canonical's own authoring repo as a target.\n")
+            return 0
+        targets = [target_dir / "methodology_dashboard.py"]
+        scope_label = f"1 target ({target_dir})"
+    else:
+        # discover_projects() has TWO consumers — the portfolio scan and this WRITE path — so
+        # widening it widens both. Dropping "methodology" from EXCLUDE_DIRS (D4(c)) is wanted for
+        # the scan and NOT wanted here: it would make --sync create a third copy of this file at
+        # the canonical repo's own root, unignored and beside the two it already authors. The
+        # `t == canonical` skip below does not catch that, because canonical is
+        # .../starter-kit/<name> and the new target is .../<name>. Skip the authoring repo
+        # explicitly.
+        targets = [portfolio_root / "methodology_dashboard.py"]
+        for proj in discover_projects(portfolio_root):
+            if proj.resolve() == canon_repo:
+                continue
+            targets.append(proj / "methodology_dashboard.py")
+        scope_label = f"portfolio root + {len(targets) - 1} project(s)"
 
-    print(f"Canonical: {canonical} (v{DASHBOARD_VERSION})")
-    print(f"{'DRY RUN — no files written.' if dry_run else 'Syncing.'} "
-          f"Targets: portfolio root + {len(targets) - 1} project(s)\n")
+    print(f"Canonical: {canonical} (v{canon_ver_display})")
+    print(f"{'DRY RUN — no files written.' if dry_run else 'Syncing.'} Targets: {scope_label}\n")
 
-    changed = inspected = 0
+    written = skipped = inspected = 0
     for t in targets:
         t = t.resolve()
         if t == canonical:
@@ -714,22 +1405,34 @@ def sync_dashboards(start, dry_run=False):
             action = "create"
         else:
             action = "update"
+
+        tracked = bool(git_cmd(t.parent, "ls-files", "--error-unmatch", t.name))
+        ignored = action == "create" and bool(git_cmd(t.parent, "check-ignore", t.name))
+        gated = action != "unchanged" and (tracked or (action == "create" and not ignored))
+
         note = ""
-        if t.exists() and git_cmd(t.parent, "ls-files", "--error-unmatch", t.name):
-            note = "  [git-tracked — needs Phase 3 untrack]"
-        if action != "unchanged":
-            changed += 1
+        if gated and not force:
+            skipped += 1
+            note = ("  [SKIPPED — git-tracked; pass --force, then Phase 3 untrack]" if tracked else
+                    "  [SKIPPED — new, ungitignored file; pass --force to create]")
+        elif action != "unchanged":
             if not dry_run:
                 shutil.copyfile(canonical, t)
+            written += 1
+            if tracked:
+                note = "  [git-tracked — needs Phase 3 untrack]"
+
         try:
             label = t.relative_to(portfolio_root)
         except ValueError:
             label = t
-        print(f"  {action:<9s} {label}{note}")
+        shown = "skip" if (gated and not force) else action
+        print(f"  {shown:<9s} {label}{note}")
 
     verb = "Would change" if dry_run else "Changed"
-    print(f"\n  {verb} {changed} of {inspected} target(s).")
-    return changed
+    tail = f" ({skipped} skipped — rerun with --force to include them)" if skipped else ""
+    print(f"\n  {verb} {written} of {inspected} target(s).{tail}")
+    return 0 if dry_run else written
 
 
 def print_usage():
@@ -741,16 +1444,58 @@ def print_usage():
     print("  --no-open          Do not open the generated dashboard.html in a browser.")
     print("  --with-submodules  In single-project mode, also scan git submodules as")
     print("                     separate entries (default: scan the project only).")
-    print("  --sync             Copy the canonical dashboard to the portfolio root and")
-    print("                     EVERY discovered project (use --dry-run to preview first).")
-    print("                     Scoped from the canonical's location, not the working")
-    print("                     directory: to update one project, copy the file instead.")
+    print("  --sync [DIR]       Copy the canonical dashboard to DIR (a single project) if")
+    print("                     given, or to the portfolio root and every discovered")
+    print("                     project if omitted. Combine with --dry-run to preview,")
+    print("                     --force to also write tracked/brand-new targets.")
     print("  --dry-run          With --sync, show planned changes without writing.")
-    print("                     On its own it is an error, never a silent full run.")
+    print("                     Alone, it is an error (nothing else in this tool writes")
+    print("                     speculatively).")
+    print("  --force            With --sync, also write targets that are git-tracked or")
+    print("                     brand-new (and not already .gitignore'd). Without it,")
+    print("                     those targets are listed but skipped.")
     print("  -h, --help         Show this help and exit.")
 
 
 # === DISCOVERY ===
+
+# BL-29: the two directories this script is actually checked into its OWN home repo at (see
+# bin/_manifest.py — starter-kit/methodology_dashboard.py is the TRACKED distribution source;
+# tools/methodology_dashboard.py is the canonical-only portfolio copy). Every OTHER copy —
+# every adopter-installed copy, the portfolio-root copy — sits directly at the level it is meant
+# to scan (bin/_manifest.py TRACKED dest; sync_dashboards()'s own target list), so
+# resolve_single_project_root() only ever needs to bridge these two specific, known nestings.
+_CANONICAL_IN_REPO_DIRS = ("tools", "starter-kit")
+
+
+def resolve_single_project_root(script_dir):
+    """Return the directory `main()` should treat as "the project to scan".
+
+    Ordinarily `script_dir` (== `ROOT`, `Path(__file__).parent`) IS that directory. The
+    methodology repo's own two checked-in copies are the one exception: `tools/` and
+    `starter-kit/` both file this script one level BELOW the repo it belongs to, so
+    `(script_dir / ".git").exists()` reads false there even while running the framework's own
+    tool against the framework's own home — exactly the case `main()`'s `single_project`
+    title-text branch already assumed could happen, but discovery never bridged. Reproduced live:
+    `python3 tools/methodology_dashboard.py --no-open` printed "No projects found" run from this
+    repo's own root, while the portfolio-root copy scanned this repo correctly.
+
+    Narrow on purpose, not a generic upward walk — a generic walk could let an accidental copy
+    anywhere in an unrelated subdirectory tree claim its ancestor as "the project". The parent is
+    substituted only when its own name is one of the two locations this file is actually checked
+    in at, AND the parent both is a git repo and carries `bin/_manifest.py` — the same structural
+    marker `detect_repo_role()` already trusts to prove "this is the framework's own publishing
+    repo", which no adopter can acquire via `bin/sync` (bin/ ships nothing through it).
+    """
+    if (script_dir / ".git").exists():
+        return script_dir
+    parent = script_dir.parent
+    if (script_dir.name in _CANONICAL_IN_REPO_DIRS
+            and (parent / ".git").exists()
+            and (parent / "bin" / "_manifest.py").is_file()):
+        return parent
+    return script_dir
+
 
 def discover_projects(root, with_submodules=False):
     """Discover projects to scan.
@@ -838,10 +1583,23 @@ def collect_git_metrics(path):
         except ValueError:
             pass
 
-    # First commit date
-    first_log = git_cmd(path, "log", "--reverse", "--format=%ai", "-1")
-    if first_log:
-        first_date_str = first_log[:10]
+    # First commit date. NOT `log --reverse --format=%ai -1`, which reads as "the oldest commit"
+    # and is not: git applies `-n1` while walking, BEFORE `--reverse` re-orders what survived, so
+    # that form returns the NEWEST commit. `first_commit_date` tracked HEAD and
+    # `project_age_days` measured "days since the last commit" under the name "project age".
+    #
+    # Precisely — an earlier draft of this comment said the `commits < 10 and age > 30` risk below
+    # "could never fire at all", and that overclaims: for a STALE repo whose newest commit is
+    # itself over 30 days old the risk still fired, for the wrong reason. What the bug really did
+    # was make the risk unreachable for every ACTIVE low-commit repo — exactly the young project
+    # it exists to flag — while reporting a wrong age everywhere.
+    # `--max-parents=0` names the root commit(s) directly and needs no ordering flag. A repo can
+    # have MORE THAN ONE root (a merge of unrelated histories), so take the oldest rather than
+    # whichever git happens to print first.
+    root_log = git_cmd(path, "log", "--max-parents=0", "--format=%ai")
+    root_dates = [ln[:10] for ln in root_log.splitlines() if ln.strip()]
+    if root_dates:
+        first_date_str = min(root_dates)
         try:
             first_date = datetime.strptime(first_date_str, "%Y-%m-%d")
             metrics["first_commit_date"] = first_date_str
@@ -892,11 +1650,13 @@ def collect_file_metrics(path):
         # discounts it. See FRAMEWORK_INSTALLED_DOCS for why the two questions differ.
         "framework_docs": {"count": 0, "loc": 0},
         "largest_files": [],
+        "read_cap_watch": [],
         "directory_depth_max": 0,
         "directory_count": 0,
     }
 
     all_files = []
+    watched = []
     dirs_seen = set()
     # Seed-named docs are held aside during the walk: whether they are OURS depends on evidence
     # that only appears elsewhere in the tree, which the walk may not have reached yet.
@@ -920,7 +1680,8 @@ def collect_file_metrics(path):
             # Layer 7: reclassify only what WE installed, and only where it would otherwise be
             # counted as the adopter's code. Checked after categorize_file so a file that is
             # already test/docs/config is untouched.
-            if category == "source" and is_framework_installed(rel_path, fpath):
+            if category == "source" and (is_framework_installed(rel_path, fpath)
+                                         or is_generated_proof(rel_path, fpath)):
                 category = "vendor"
             rel_posix = str(rel_path).replace("\\", "/")
 
@@ -970,9 +1731,34 @@ def collect_file_metrics(path):
                 all_files.append({"path": str(rel_path), "loc": loc, "ext": ext,
                                   "vendor": category == "vendor"})
 
+            # D4(b): keyed by NAME, never by size rank, and deliberately outside the `loc > 0`
+            # branch above so an empty watched file still reports its 0.
+            #
+            # This list must NOT inherit largest_files' top-ten window, and the reason is not
+            # hypothetical: in this repo `docs/planning/BACKLOG.md` is ALREADY outside that
+            # window, so a size threshold reading largest_files could not see it at any size —
+            # D4(b)'s own defect class, re-created inside the fix for it. The two ledgers are
+            # inside the window today and can leave it without changing by a byte, since the
+            # window is a RANK. No distance is quoted here on purpose: the first draft of this
+            # comment named one, a reviewer re-derived it and it was wrong, and any such figure
+            # rots as the tree grows. Re-derive it instead:
+            #   python3 -c "import sys;sys.path.insert(0,'tools');from methodology_dashboard \
+            #     import collect_all;from pathlib import Path;\
+            #     d=collect_all(Path('.').resolve());\
+            #     print([f['path'] for f in d['files']['largest_files']])"
+            if rel_posix in READ_CAP_WATCHED:
+                # `lines` is kept and still reported: it is what a human scans a ledger by, and
+                # dashboard_history.jsonl has carried the key since S38. It is no longer what the
+                # verdict is computed from.
+                try:
+                    watched_bytes = fpath.stat().st_size
+                except OSError:
+                    watched_bytes = None
+                watched.append({"path": rel_posix, "lines": loc, "bytes": watched_bytes})
+
     # A root BOOTSTRAP.md — or a CHANGELOG.md — is ours only in a repo that also carries proof the
     # framework was installed: a docs/methodology/ path (nothing lands there by accident), or the
-    # six TRACKED root names co-occurring past FRAMEWORK_AMBIGUOUS_EVIDENCE_MIN. Neither the
+    # seven TRACKED root names co-occurring past FRAMEWORK_AMBIGUOUS_EVIDENCE_MIN. Neither the
     # ambiguous names nor the seeds are evidence FOR themselves, which is the Layer 8 correction:
     # letting them self-evidence is what discounted a non-adopter's own documentation.
     if saw_distinctive_framework_doc or len(ambiguous_names) >= FRAMEWORK_AMBIGUOUS_EVIDENCE_MIN:
@@ -983,6 +1769,8 @@ def collect_file_metrics(path):
     metrics["directory_count"] = len(dirs_seen)
     all_files.sort(key=lambda f: f["loc"], reverse=True)
     metrics["largest_files"] = all_files[:10]
+    metrics["read_cap_watch"] = sorted(
+        watched, key=lambda f: (f["bytes"] if f["bytes"] is not None else -1), reverse=True)
 
     # Convert defaultdicts
     metrics["by_extension"] = dict(metrics["by_extension"])
@@ -1464,6 +2252,191 @@ def evaluate_changelog_freshness(path, git):
                 f"{rel} present but never used — still the untouched seed on a repo with "
                 "real commit history",
             ))
+
+    return result
+
+
+def collect_trim_metrics(path, files, role="adopter"):
+    """S38 -- the trim-trigger row: one verdict per grow-and-must-be-read ledger, and the
+    remedy. Since Phase B both halves are LEVELS in bytes -- the one-read cap and the context
+    budget -- where the first half used to be a records-per-line RATE with a baseline commit.
+
+    The remedy BRANCHES on whether the trimmer is installed for the scanned project (§7.3):
+    present names a command the adopter can actually run, built from the located path; absent
+    never does. Every advisory names the file it was computed against rather than saying "the
+    ledger" -- a generic noun in this position once sent an adopter to update a product
+    release-notes file while the real finding stayed suppressed.
+
+    ONE DEPARTURE FROM §7.3, LABELLED AS SUCH RATHER THAN DRESSED AS A READING. The design says
+    the absent branch "names the documented manual procedure". There is no such procedure to
+    name: no distributed file documents ledger archiving, which is precisely what queue item S40
+    is for (design §11 Phase 5 says so itself -- "Today zero distributed files say anything on
+    the subject"). Verified over the WHOLE distributed set, not a convenient corner of it -- the
+    design's own check greps `starter-kit/*.md`, which matches 11 of the 27 manifest entries, and
+    a claim about "no distributed file" cannot be settled by a net that misses 12 of them
+    (`HOW_TO_USE.md`, `ITERATIVE_METHODOLOGY.md`, `FRAMEWORK_APPARATUS.md`, and nine `workstreams/*.md`):
+      python3 -c "import sys;sys.path.insert(0,'bin');import _manifest as m;\
+        print('\n'.join(sorted(e[0] for e in m.DISTRIBUTION if e[0].endswith('.md'))))" \
+        | xargs grep -l -i archiv
+    -> `starter-kit/FRAMEWORK_LEARNINGS.md` (fork Learning #15's prose about PROVING a split
+       lossless, not a procedure for performing one; that row has since left for
+       docs/FORK_LEARNINGS.md), `HOW_TO_USE.md` (a worked example project's
+       `POST /projects/:id/archive` endpoint), and, since S39', `starter-kit/BOOTSTRAP.md` (the
+       one-line inventory entry describing what the newly distributed tool DOES -- a tool
+       description, not a policy: it states no size norm, no trigger, and no procedure). None of
+       the three documents ledger archiving, so the verdict is unchanged and the departure below
+       still stands. The narrower `starter-kit/*.md` grep reached the same verdict, which is luck,
+       not method -- and this result line is itself the demonstration, having gone from two files
+       to three inside the very session that shipped the tool. Re-run it; do not read it.
+    The `.md` filter is not cosmetic either: run unfiltered and the distributed set also returns
+    THIS FILE, because the paragraph you are reading contains the word. A measurement that
+    includes the measurer is the trap one over from the narrow-population one, and the fix for
+    both is to state the population beside the number.
+    So the absent branch states the measurement and says plainly that the byte half did not run.
+    Inventing a destination would be the exact misdirection §7.3 exists to prevent. WHEN S40
+    LANDS, this branch should point at the seed ledger's own archiving section.
+    """
+    result = {
+        "tool_present": False,
+        "tool_path": None,
+        "tool_version": None,
+        "budget_bytes": None,
+        # BL-88 P2: the basenames the installed trimmer's OWN LEDGERS table declares, parsed from
+        # its source -- None when it is absent or the reading abstained. Not to be confused with
+        # "ledgers" below, which is THIS row's population: the watched Class A files it measured.
+        "tool_ledgers": None,
+        "ledgers": [],
+        "signals": [],
+    }
+
+    # Same gate as the D4(b) risk: a project that never adopted the methodology is not told its
+    # CHANGELOG.md is too long. Bound here rather than at risk time so the collector's output is
+    # already scoped when assess_risks re-emits it verbatim.
+    owes_ledger = (path / "SESSION_RUNNER.md").is_file() or role == "framework"
+    if not owes_ledger:
+        return result
+
+    tool = find_trim_tool(path, role=role)
+    if tool is not None:
+        result["tool_present"] = True
+        result["tool_version"] = tool["version"]
+        result["budget_bytes"] = tool["budget"]
+        result["tool_ledgers"] = tool["ledgers"]
+        try:
+            result["tool_path"] = tool["path"].relative_to(path).as_posix()
+        except ValueError:
+            result["tool_path"] = tool["path"].name
+
+    # The population is CLASS A -- the watched names the trimmer has a config entry for -- which
+    # is what keeps the row from pointing at a file the tool refuses.
+    #
+    # PHASE C1 CHANGED THE SPELLING, NOT THE SET, AND ON EVERY INPUT collect_all CAN PRODUCE IT
+    # CHANGES NOTHING AT ALL -- said plainly because an earlier draft of this comment overstated it.
+    # This filtered on `basename in TRIM_GRAMMARS`. collect_file_metrics only ever admits an exact
+    # member of READ_CAP_WATCHED into read_cap_watch, so through collect_all the two filters are
+    # EQUIVALENT, not merely equivalent-today: no path exists that the old filter accepts and the
+    # new one rejects. The change is therefore not a bug fix and is not claimed as one.
+    # WHAT IT DOES BUY, which is why it was made: this function takes `files` as a PARAMETER, so
+    # its contract is wider than collect_all's output. Asked by basename, it answers "does the
+    # trimmer know a grammar for a file with this name" -- which would hand a `docs/x/CHANGELOG.md`
+    # a `--check` remedy if a caller ever passed one. Asked by class, it answers "is this one of
+    # the watched files the trimmer can act on", which is the actual precondition for the remedy
+    # below, and it makes an unclassified name a NO rather than a guess from the filename. A
+    # canonical test drives that case directly, because collect_all cannot construct it.
+    for w in files.get("read_cap_watch", []):
+        if read_cap_class(w["path"]) != "A":
+            continue
+        fpath = path / w["path"]
+        try:
+            size_bytes = fpath.stat().st_size
+        except OSError:
+            continue
+        # PHASE C2. This re-implements methodology_trim.py's Trigger, so it must move with it.
+        # Every path that reaches here has already been filtered to class "A" by the guard above,
+        # and w["path"] is repo-root-relative, so the ROOT SCOPING the trimmer applies is already
+        # satisfied here by construction: read_cap_class() is a path lookup and answers None for a
+        # nested ledger, which the guard skips. Stated rather than assumed, because the trimmer
+        # reaches the same conclusion by a DIFFERENT route (an explicit relative_to check against
+        # spec.basename) — the two must not drift, and a canonical test drives the nested case.
+        read_fires = size_bytes > CLASS_A_FIRE_BYTES
+        refused = size_bytes > READ_REFUSE_BYTES
+        budget = result["budget_bytes"]
+        byte_fires = None if budget is None else size_bytes > budget
+        entry = {
+            "path": w["path"], "lines": w["lines"], "bytes": size_bytes,
+            "read_fires": read_fires, "refused": refused, "byte_fires": byte_fires,
+            "fires": bool(read_fires or byte_fires),
+        }
+        result["ledgers"].append(entry)
+
+        if not entry["fires"]:
+            continue
+
+        reasons = []
+        if refused:
+            # Stated separately and FIRST, because it is a different failure, not a worse one:
+            # between the two boundaries a read returns a truncated prefix and says so, and past
+            # this one it returns nothing at all -- so the front matter a reader is relying on is
+            # not there either.
+            reasons.append("{:,} B, PAST THE {:,} B HARD REFUSAL -- a default read of this file "
+                           "returns NO CONTENT AT ALL, front matter included"
+                           .format(size_bytes, READ_REFUSE_BYTES))
+        elif read_fires:
+            # "archive threshold", and STILL not the substring "read cap": the D4(b) risk row is
+            # greppable on "read cap" and seven assertions plus the diagnostic trail in
+            # dashboard_history.jsonl depend on that staying exclusive to it. The same discipline
+            # keeps BL-5's "Large files detected" disjoint from both. Phase C2 changed the NUMBER
+            # this row keys on, not that rule.
+            #
+            # WHY THE WORDING CHANGED WITH THE NUMBER. It used to say "against a 56,750 B one-read
+            # budget -- a whole-file read comes back TRUNCATED". Both halves would now be wrong
+            # here: the threshold is no longer the one-read budget, and truncation is no longer
+            # what this row is about -- a Class A ledger is expected to sit past the cap and the
+            # D4(b) row says so separately. What this row means at 192 KiB is that the file is
+            # closing on the boundary where a read stops returning ANYTHING.
+            reasons.append("{:,} B against the {:,} B Class A archive threshold -- within {:,} B "
+                           "of the {:,} B hard refusal, past which a default read returns NO "
+                           "CONTENT AT ALL"
+                           .format(size_bytes, CLASS_A_FIRE_BYTES,
+                                   READ_REFUSE_BYTES - size_bytes, READ_REFUSE_BYTES))
+        if byte_fires:
+            reasons.append("{:,} B against a {:,} B budget".format(size_bytes, budget))
+        why = "; ".join(reasons)
+
+        # `--check` and NOT `--write`, deliberately. A trigger firing is not the same as a trim
+        # being the right move, and the tool knows the difference: on this repo `--write`
+        # against HANDOFFS.md refuses twice over -- once because the undocumented set is
+        # non-empty (a trim commit would advance the Phase 0 frontier and hide those commits
+        # permanently) and once because SRF is past RED, where archiving resets the level and
+        # not the rate. An advisory promising "--write to archive" would name a command that
+        # declines, which is the misdirection this wording exists to avoid. `--check` reports
+        # the full trigger and the refusal, writes nothing, and keeps this row read-only.
+        if result["tool_present"]:
+            remedy = ("run `python3 %s --file %s --check` for the full report and whether a "
+                      "trim is the right move" % (result["tool_path"], w["path"]))
+        else:
+            remedy = ("%s is not installed here, so this must be archived by hand"
+                      % TRIM_TOOL_NAME)
+        result["signals"].append(
+            ("medium", "%s: %s -- the archive trigger fires; %s" % (w["path"], why, remedy)))
+
+    # THE ABSTENTION DISCLOSURE WAS HERE, AND PHASE B DELETED THE STATE IT DETECTED rather than
+    # the disclosure alone -- which is why this note replaces it instead of the code being quietly
+    # dropped. It fired once per repo where NEITHER half could measure a watched ledger: the line
+    # RATE had no baseline archive AND the byte budget was unreadable. Decision D4 forbids
+    # reporting a 0 from an unread source as a clean state, and a ledger about which this scanner
+    # said nothing at all was exactly that.
+    #
+    # The read half is a LEVEL now. It answers from the file's own size, with no git history, no
+    # baseline commit and no trimmer installed, so it answers for every watched ledger in every
+    # repo -- including a freshly-bootstrapped one that has never archived, which was the
+    # commonest way into the old silent state. The conjunction can no longer be true.
+    #
+    # AND NARROWING IT TO THE BYTE HALF ALONE WOULD BE A REGRESSION, NOT A SALVAGE. That is what
+    # an early draft did: it fired whenever the budget was unavailable and told the whole adopter
+    # fleet its ledgers were "unmeasured" over a budget no distributed file has ever named. The
+    # conjunction was the fix for that. Restoring half of it would restore the bug -- so if a
+    # future change gives the read half a way to abstain, re-add the CONJUNCTION, not this.
 
     return result
 
@@ -2010,9 +2983,21 @@ def _gate_manifest_history(path):
     `_deleted` / `_unreadable` — never skipped. Skipping it dropped the deletion AND both pairs
     around it from the comparison (PR #82 review, 2a): an empty gate set is exactly the input
     that makes "every gate is missing" true, and that is the one case _gate_loosenings already
-    handles."""
-    log = git_cmd(path, "log", f"--max-count={GATES_HISTORY_MAX}", "--format=%h|%ad",
-                  "--date=short", "--", GATES_MANIFEST)
+    handles.
+
+    FIRST-PARENT ON PURPOSE (BL-99). Each version is later compared with the next older ROW, so
+    the rows must be one line of ancestry. A plain `git log -- <path>` follows both parents of a
+    merge whose manifest matches neither, and lists the two lineages interleaved by commit date:
+    the newer of two sibling commits is then compared with a commit that is not its ancestor and
+    reports a floor "lowered" that nobody lowered. It also follows only ONE parent of a merge that
+    matches the other, so a merge that resolves to the lower of two floors is never compared with
+    the line it merged into, and a real loosening reads as nothing. `--first-parent` compares every
+    version, a merge included, with the line it landed on -- the base `quality_ratchet.py
+    --precommit` uses (staged against HEAD), and what SAFEGUARDS' "a loosening resolved into a
+    merge is caught by the dashboard" needs. The price: a loosening made on a side branch is
+    reported at the merge that carried it in, not at the side commit (`git diff <sha>^1 <sha>`)."""
+    log = git_cmd(path, "log", "--first-parent", f"--max-count={GATES_HISTORY_MAX}",
+                  "--format=%h|%ad", "--date=short", "--", GATES_MANIFEST)
     hist = []
     for line in log.splitlines():
         sha, _, date = line.partition("|")
@@ -2088,7 +3073,9 @@ def collect_gate_metrics(path):
 
 
 def _manifest_has_history(path):
-    return bool(git_cmd(path, "log", "--max-count=1", "--format=%h", "--", GATES_MANIFEST))
+    # The same line of ancestry the walk reads, so "has a history" and "was walked" cannot differ.
+    return bool(git_cmd(path, "log", "--first-parent", "--max-count=1", "--format=%h", "--",
+                        GATES_MANIFEST))
 
 
 def _fold_history(m, hist):
@@ -2235,12 +3222,12 @@ def detect_doc_only(path, files, render):
         return {"is_doc_only": False, "reason": reason}
 
     # 4. Corpus disjunction (only when source is negligible): a real doc corpus OR a render
-    #    toolchain — the latter catches a pure-LaTeX (or other toolchain-only) repo whose
-    #    .tex files are not counted as docs (so its doc_loc is ~0; .qmd/.rmd ARE counted, so a
-    #    pure Quarto/R-Markdown corpus now clears the doc_loc/doc_files arms directly and no
-    #    longer depends on this fallback), the exact source_loc≈0 research repo that must not
-    #    be missed.
-    #    Framework-installed markdown is discounted here and ONLY here: bin/sync ships 21 doc
+    #    toolchain — the latter catches a pure-LaTeX (or other toolchain-only) repo whose .tex
+    #    files are not counted as docs (so its doc_loc is ~0; BL-34 added `.qmd`/`.rmd` to
+    #    DOC_EXTS, so a pure-Quarto/R-Markdown corpus now clears the doc_loc/doc_files arms
+    #    directly and no longer depends on this fallback), the exact source_loc≈0 research repo
+    #    that must not be missed.
+    #    Framework-installed markdown is discounted here and ONLY here: bin/sync ships 22 doc
     #    files, which clears DOC_ONLY_DOC_FILES_MIN by itself, so counting them would let the
     #    installer answer the question "is this a document project?" — the mirror of the very
     #    defect the source exclusion above fixes. `.get` keeps older synthetic `files` dicts
@@ -2568,6 +3555,157 @@ def assess_risks(metrics):
     for sev, desc in cl.get("signals", []):
         risks.append({"severity": sev, "description": desc})
 
+    # D4(b) — silent truncation, not a code smell. A second risk on purpose: it shares only the
+    # adjective with "Large files detected" above, and shares no substring with it, so the two stay
+    # independently greppable in dashboard_history.jsonl and the diagnostic trail that produced
+    # BL-5's and Layer 7's narrowings survives intact.
+    #
+    # Gated on `owes_ledger` (bound above), which is ADDED POLICY and the reason it is here rather
+    # than beside the BL-5 check: a project that never adopted the methodology is not told its
+    # CHANGELOG.md is too long. Ungated, this fires on any repo that happens to keep a long
+    # changelog — the assumption whose measured cost is recorded in FRAMEWORK_INSTALLED_SOURCE's
+    # own comment. Severity is `high` (also added policy) because this is the only expense in the
+    # set that produces silently WRONG answers rather than merely expensive ones. This row names no
+    # remedy, and BOTH halves of the reason it used to give have since expired: the conditional
+    # naming it deferred to queue item S38 shipped in 2.12.0 (collect_trim_metrics), and the
+    # trimmer it called unreachable is in bin/_manifest.py as of S39'. What keeps the row bare is
+    # now a scope boundary rather than a missing tool — the remedy is emitted by the trim row,
+    # which owns the conditional wording and the abstentions; duplicating it here would give a
+    # ledger past both thresholds two remedies for one problem. The dedup between the two rows is
+    # raised and undecided (S38's residual 1), so this comment states the coupling rather than
+    # pretending the rows are independent. ONE EXCEPTION since BL-88 P2: a Class B file whose
+    # project's own trimmer declares it gets its remedy HERE, because the trim row's population
+    # is Class A and never reaches that file -- still one remedy per problem, not two.
+    if owes_ledger:
+        for w in metrics["files"]["read_cap_watch"]:
+            wb = w.get("bytes")
+            if wb is None:
+                continue
+            if wb > READ_REFUSE_BYTES:
+                # A DIFFERENT failure from truncation, not a worse degree of it, and it gets its
+                # own row text for that reason. The consolation that makes truncation survivable
+                # -- delivery is ordered top-down, so the front matter and the newest records
+                # still arrive -- is FALSE here. Nothing arrives.
+                risks.append({
+                    "severity": "high",
+                    "description": f"{w['path']} is {wb:,} B ({w['lines']:,} lines) — past the "
+                                   f"{READ_REFUSE_BYTES:,} B hard limit, which is a HARDER "
+                                   "boundary than the agent read cap and behaves differently: a "
+                                   "default read is REFUSED OUTRIGHT and returns NO CONTENT AT "
+                                   "ALL, front matter included. Ordered truncation does not save "
+                                   "you here — there is no delivered prefix to be ordered. Read "
+                                   "it with explicit offset/limit, or archive it"})
+            elif wb > READ_CAP_BYTES:
+                # PHASE C2 — THIS ROW IS NOW PER-CLASS, WHICH IS HOW THE DEDUP ENDS.
+                # S38's residual 1 asked whether this row and the trim row should be deduplicated.
+                # The answer plan §7 gives for option A1 is "make the rows DIFFERENT, not delete
+                # one", and this is where that lands. Both rows still fire on a Class B file,
+                # because for those two thresholds still coincide. On a Class A file they now
+                # separate: the trim row is silent until 192 KiB, and this row keeps reporting the
+                # one-read property — which is REAL and stays true — at a severity that says what
+                # the reader should DO about it, which is nothing.
+                #
+                # ⚠ THE SEVERITY DROP IS THE FLEET-VISIBLE PART OF THIS PHASE, and it is a
+                # judgment, not a derivation. §10 dragon 7: a guard can be correct and not worth
+                # acting on. A Class A ledger between the cap and the archive threshold is the
+                # adjudicated case (BL-52 third addendum) — ordered truncation drops the OLDEST
+                # records, Phase 0 works from `git log`, and Phase 3A reads one receipt. Calling
+                # that HIGH taught a reader to ignore the row, which is worse than not emitting it.
+                # It is not dropped to "info" either: the property is real and a session that
+                # genuinely needs the whole file still gets a partial answer.
+                cls = read_cap_class(w["path"])
+                if cls == "A":
+                    risks.append({
+                        "severity": "low",
+                        "description": f"{w['path']} is {wb:,} B ({w['lines']:,} lines) — past "
+                                       f"the {READ_CAP_BYTES:,} B one-read budget for the agent "
+                                       f"read cap, but this is a CLASS A ledger and that is "
+                                       "expected rather than a fault. Delivery is an ordered "
+                                       "prefix and the file is newest-on-top, so what a "
+                                       "whole-file read drops is the OLDEST records; the front "
+                                       "matter and the newest ones still arrive, which is what "
+                                       "the protocol reads (Phase 0 reconciles from `git log`, "
+                                       "Phase 3A reads ONE record). NO ACTION IS EXPECTED here: "
+                                       f"the archive threshold for this class is {CLASS_A_FIRE_BYTES:,} B, "
+                                       f"{CLASS_A_FIRE_BYTES - wb:,} B away. If you need the "
+                                       "whole file, read it with an explicit offset/limit"})
+                else:
+                    # BL-88 — THIS ROW MAY ASSERT ONLY WHAT THIS MODULE EVALUATED. It used to print
+                    # "the trimmer answers NO_CONFIG for it": a fact about a NEIGHBOURING TOOL's
+                    # config table, read from nothing. That was true here only because LEDGERS and
+                    # the declared classes coincide -- which a canonical test pins -- and FALSE in
+                    # any tree that widened LEDGERS. This module is DISTRIBUTED to exactly such
+                    # trees while its suite is not (absent from bin/_manifest.py), so the claim was
+                    # being evaluated where nothing could check it: one adopter's trimmer gained a
+                    # SESSION_NOTES.md spec and this row went on denying it. The class stays
+                    # DECLARED (READ_CAP_CLASS_A/B above, and section 10 dragon 6 with it); only the
+                    # prose stops speaking for the trimmer.
+                    #
+                    # AND THE REASON IS NOW PER-NAME. The comment above READ_CAP_CLASS_B already
+                    # records that carrying the backlog justification to every Class B name is
+                    # FALSE of SESSION_NOTES.md, and states the true weaker form -- but that
+                    # correction reached the comment and never reached this row, so the row
+                    # contradicted its own module. Measured across 12 fleet repos: every
+                    # SESSION_NOTES.md with an `## ACTIVE TASK` heading has it at byte 132-9,490,
+                    # inside READ_CAP_BYTES in all of them; one repo has no such heading at all,
+                    # which is the case the weaker form exists for.
+                    #
+                    # P2 — AND WHERE IT HAS EVALUATED SOMETHING, IT MAY SAY SO. collect_trim_metrics
+                    # reads the scanned project's own trimmer SOURCE (_parse_trim_ledgers: a parse,
+                    # never an execution -- the operator's decision). Where that reading lists this
+                    # file's BASENAME -- the key the trimmer itself looks up,
+                    # `LEDGERS.get(path.name)` at any depth -- the conjunct that sets Class B apart
+                    # from A, NO REMEDY the reader can reach, is checked false FOR THIS PROJECT, so
+                    # the row appends the remedy and takes Class A's severity. Anything else -- no
+                    # trimmer, a reading that abstained, a name it does not list, a metrics dict
+                    # from an older copy -- leaves P1's row byte for byte, and a canonical test pins
+                    # that against P1's output frozen as a literal: the failure path is the
+                    # criterion. The CLASS does not move (dragon 6): read_cap_class() and both sets
+                    # are untouched and the trim row's population stays Class A even here -- prose
+                    # and severity consult a reading; membership does not.
+                    if w["path"] in _BACKLOG_LOCATIONS:
+                        why = ("a backlog's bottom items are as live as its top ones, so what "
+                               "truncates may be open work")
+                    else:
+                        why = ("nothing ENFORCES that the part you need is inside that prefix — "
+                               "the protocol says to focus on the ACTIVE TASK section at the top "
+                               "and the seed puts it there, but no check holds it there, and a "
+                               "file carrying no such heading has no ordering to rely on")
+                    desc = (f"{w['path']} is {wb:,} B ({w['lines']:,} lines) — past the "
+                            f"{READ_CAP_BYTES:,} B one-read budget for the agent read cap, "
+                            f"which is denominated in tokens ({READ_CAP_TOKENS:,}) and "
+                            f"converted here at the densest content measured "
+                            f"({MIN_BYTES_PER_TOKEN} B/token). A session reading it whole "
+                            "gets a PARTIAL view — truncated to the prefix that fits the "
+                            "token cap, and it SAYS SO in a banner naming the true "
+                            "length, so the failure is loud rather than silent; an "
+                            "explicit line range spanning the excess errors outright, "
+                            "returning nothing. This is a CLASS B file and the "
+                            f"instructed access path IS the file: {why}, and you are "
+                            "told THAT something was cut, never WHAT")
+                    trim = metrics.get("trim", {})
+                    tool = trim.get("tool_path")
+                    base = w["path"].rsplit("/", 1)[-1]
+                    if (trim.get("tool_present") and tool
+                            and base in (trim.get("tool_ledgers") or ())):
+                        risks.append({
+                            "severity": "low",
+                            "description": desc + (
+                                f". BUT THIS PROJECT HAS A REMEDY: its own `{tool}` declares a "
+                                f"`LEDGERS` entry for `{base}` (read from its source, never "
+                                f"run), so run `python3 {tool} --file {w['path']} --check` for "
+                                "the full report and whether a trim is the right move")})
+                    else:
+                        risks.append({"severity": "high", "description": desc})
+
+    # S38: the trim-trigger rows, re-emitted VERBATIM from the collector -- the same arrangement
+    # the Component C signals above use. The collector owns the gate, the population and the
+    # conditional remedy wording; nothing is re-decided here, so there is one place to read to
+    # know what an operator was told. Absent key tolerated: a metrics dict built by an older
+    # copy of this module has no "trim" entry, and that is not a finding.
+    for sev, desc in metrics.get("trim", {}).get("signals", []):
+        risks.append({"severity": sev, "description": desc})
+
     # Sort by severity
     severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     risks.sort(key=lambda r: severity_order.get(r["severity"], 99))
@@ -2666,6 +3804,10 @@ def collect_all(path):
     metrics["doc_only"] = detect_doc_only(path, files, metrics["render"])
     # Quality gates (D6): declared thresholds, last measured outcomes, git-only loosening history.
     metrics["gates"] = collect_gate_metrics(path)
+
+    # S38: the trim-trigger row. Wired after the metrics dict is built (it reads the collected
+    # read_cap_watch line counts) and before the scores block, which re-emits its signals.
+    metrics["trim"] = collect_trim_metrics(path, files, role=role_info["role"])
 
     metrics["scores"] = {
         "health": score_health(metrics),
@@ -3637,7 +4779,9 @@ def main():
         return
 
     if "--sync" in args:
-        sync_dashboards(Path(__file__).resolve().parent, dry_run="--dry-run" in args)
+        target = _extract_sync_target(args)
+        sync_dashboards(Path(__file__).resolve().parent, dry_run="--dry-run" in args,
+                         target=target, force="--force" in args)
         return
 
     # A flag named --dry-run must never write (issue #67). It is consulted ONLY inside the --sync
@@ -3646,19 +4790,18 @@ def main():
     # promises, and silently, since nothing said the flag had been ignored. Refuse rather than
     # no-op: a silent no-op leaves the caller unable to tell "nothing to do" from "flag ignored",
     # which is the same class of unreadable signal as the defect above.
-    if "--dry-run" in args:
+    if "--dry-run" in args:                                                    # issue #67 pt. 4
         sys.stderr.write(
-            "  --dry-run applies to --sync only; on its own it would have run a full scan and\n"
-            "  written dashboard.html + dashboard_history.jsonl. Refusing rather than writing.\n"
-            "    Preview a sync:   python3 methodology_dashboard.py --sync --dry-run\n"
-            "    Generate normally: python3 methodology_dashboard.py\n"
+            "  --dry-run only means something together with --sync (nothing else in this\n"
+            "  tool writes speculatively).\n"
+            "  Usage: python3 methodology_dashboard.py --sync [DIR] --dry-run\n"
         )
         sys.exit(2)
 
     # Warn (best-effort) if this copy is older than the canonical.
     check_stale_version()
 
-    root = ROOT
+    root = resolve_single_project_root(ROOT)
     with_submodules = "--with-submodules" in args
 
     project_paths = discover_projects(root, with_submodules=with_submodules)

@@ -7,7 +7,7 @@
     {
       "name": "tests-sh-passed",
       "direction": "min",
-      "threshold": 261,
+      "threshold": 271,
       "command": "bash bin/tests.sh",
       "extract": "== Summary: (\\d+) passed",
       "why": "the framework's build equivalent; the passed count is a ratchet — every suite it wires in (dashboard, trim, budget, ratchet units) reports through it"
@@ -23,7 +23,7 @@
     {
       "name": "dashboard-unit-tests",
       "direction": "min",
-      "threshold": 229,
+      "threshold": 354,
       "command": "python3 tools/test_methodology_dashboard.py",
       "extract": "Ran (\\d+) tests",
       "why": "test count never drops; green/red is carried by tests-sh-passed"
