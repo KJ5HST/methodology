@@ -4236,11 +4236,11 @@ class TestAFailedHistoryWalkIsNotAnUncommittedTrim(unittest.TestCase):
 
 
 # =============================================================================================
-# BL-101 P3 -- a ledger under methodology/ (plan sections 4.3, 4.8, 7.2 row P3; coupling C7).
+# A ledger under methodology/.
 #
 # The trimmer derives where a shard goes, and how a link is rebased, from the DIRECTORY the trimmed
 # ledger sits in. Legacy (a root ledger): shards in docs/archive/, links climb two levels. New (a
-# ledger under methodology/): shards in methodology/archive/ (decision D5), links climb one, and a
+# ledger under methodology/): shards in methodology/archive/, links climb one, and a
 # link that already starts with ../ is now ordinary, because the ledger is one level down and a
 # project file is exactly such a link. The legacy output must stay byte-for-byte what it was.
 # =============================================================================================
@@ -4281,8 +4281,8 @@ def to_new_layout(p, runner=True, product=False):
 
 
 def with_parent_link(p, rel="methodology/CHANGELOG.md"):
-    """Add one entry-level link that climbs out of methodology/ -- the convention the plan gives a new
-    ledger for a link to a project file (C6) -- to EVERY record, in a commit of its own."""
+    """Add one entry-level link that climbs out of methodology/ -- the convention for a new
+    ledger's link to a project file -- to EVERY record, in a commit of its own."""
     f = p / rel
     f.write_text(f.read_text(encoding="utf-8").replace("[abs](https://example.com/a)",
                                                        "[up](../docs/x.md), [abs](https://example.com/a)"),
@@ -4566,7 +4566,7 @@ class TestALayoutTheTrimmerWillNotGuess(unittest.TestCase):
 
 
 class TestTheHistoryAcrossTwoArchiveDirectories(unittest.TestCase):
-    """D5 moves the archive LAST: a project whose ledger already moved still holds the shards its legacy
+    """The archive moves LAST: a project whose ledger already moved still holds the shards its legacy
     trims wrote under docs/archive/. They are its history, and a new shard's name must not reuse theirs."""
 
     def legacy_then_moved(self, tmp):

@@ -54,17 +54,17 @@ import sys
 import tempfile
 from pathlib import Path
 
-TRIM_VERSION = "1.9.0"   # 1.9.0: BL-101 P3 (the methodology/ directory plan, section 7.2, coupling C7) -- a ledger
+TRIM_VERSION = "1.9.0"   # 1.9.0: a ledger
                          # may sit under methodology/. Where a shard goes and how a link is rebased now come
                          # from the DIRECTORY of the ledger being trimmed (`layout_for`): a root ledger keeps
                          # docs/archive/ and the two-level prefix, exactly as before and byte for byte; a
-                         # ledger under methodology/ writes methodology/archive/ (decision D5) and climbs one
+                         # ledger under methodology/ writes methodology/archive/ and climbs one
                          # level, and a link target that already starts with ../ is ordinary there (the
                          # ledger is one level down and a project file is exactly such a link), so the
                          # rebase stays invertible. The action ledger is found by the embedded layout
                          # resolver, whose framework-anchor tie rule needs no request, and a half-migrated tree is refused
                          # by name (LAYOUT_HALF_MIGRATED). The trigger reads the shards of BOTH archive
-                         # directories, since D5 moves the archive last, and a shard name is never reused
+                         # directories, since the archive moves last, and a shard name is never reused
                          # across them. `--reverify` needs no new lift: the layout comes from the lifted
                          # LIVE path. Minor, not patch: a new finding code and a second output location.
                          # What a trim in the legacy layout WRITES is unchanged.
@@ -335,16 +335,16 @@ BYTE_STOP_FRACTION = 0.5       # hysteresis — stops a trim re-firing on the ne
 SRF_RED = 1.00                 # plan §3.3 H3: at or above this, a reset is the wrong move
 ARCHIVE_DIR = "docs/archive"   # layout: ok -- the legacy half of the shard-directory table (LEGACY below)
 REBASE_PREFIX = "../../"       # docs/archive/<shard>.md -> repo root is exactly two levels
-NEW_DIR = "methodology"        # layout: ok -- the directory a migrated project keeps its framework files in (plan 4.1)
-NEW_ARCHIVE_DIR = NEW_DIR + "/archive"   # decision D5: the archive moves with the ledgers
+NEW_DIR = "methodology"        # layout: ok -- the directory a migrated project keeps its framework files in
+NEW_ARCHIVE_DIR = NEW_DIR + "/archive"   # the archive moves with the ledgers
 TOOL = "methodology_trim.py"   # layout: ok -- this tool's own file name, printed in messages and written into proofs
 LEDGER_NAME = "CHANGELOG.md"   # layout: ok -- the action ledger's own file name: the resolver's anchor
 RUNNER = "SESSION_RUNNER.md"   # layout: ok -- the framework anchor the resolver reads, named in a refusal
-APPARATUS = "FRAMEWORK_APPARATUS.md"   # layout: ok -- a document cited by bare name inside the proof (names are relative to the runner's directory, plan 4.4)
+APPARATUS = "FRAMEWORK_APPARATUS.md"   # layout: ok -- a document cited by bare name inside the proof (names are relative to the runner's directory)
 SHARD_SUFFIX_MAX = 99          # BL-41 — bound on collision disambiguation; past it, refuse
 
 # === LAYOUT ===
-# A ledger sits at its project's root (legacy) or under methodology/ (new): the plan's section 4.3. The
+# A ledger sits at its project's root (legacy) or under methodology/ (new). The
 # block is the resolver, embedded byte for byte; the canonical suite asserts that. The trimmer uses it
 # for ONE question, where the action ledger is, because a trim of any file writes its entry there.
 
@@ -742,7 +742,7 @@ def shard_name_taken(shard_path):
 
 def shard_name_taken_anywhere(repo, name):
     """True if a shard of this NAME exists in any archive directory. A project that moved its ledger
-    still holds the shards its legacy trims wrote under docs/archive/ (D5 moves the archive last), and
+    still holds the shards its legacy trims wrote under docs/archive/ (the archive moves last), and
     "-through-<date>" is a span label, so a name is never reused across the two."""
     return any(shard_name_taken(repo / d / name) for d in ARCHIVE_DIRS)
 
@@ -1130,7 +1130,7 @@ def archive_events(repo, spec, layout=LEGACY):
     Derived by GLOB over the archive directory, never from hardcoded literal paths: `bin/tests.sh`
     wires exactly one shard by literal path in two places, so a second shard would never be checked
     and the suite would still pass (design §8.2). A ledger under methodology/ reads BOTH directories:
-    the shards its legacy trims wrote are its history, since the archive moves last (D5).
+    the shards its legacy trims wrote are its history, since the archive moves last.
     """
     stem = spec.basename[:-3] if spec.basename.endswith(".md") else spec.basename
     dirs = [layout.archive_dir] + [d for d in ARCHIVE_DIRS if d != layout.archive_dir and layout == NEW]
@@ -1183,7 +1183,7 @@ def is_root_class_a(repo, path, spec):
     same constant. Returns False on anything it cannot resolve, which routes the caller to the
     tighter arm.
 
-    BL-101 P3: a ledger a project moved under methodology/ is the same ledger at its new address, the
+    A ledger a project moved under methodology/ is the same ledger at its new address, the
     one the protocol reads, so it earns the same arm. `starter-kit/CHANGELOG.md` and a ledger nested
     anywhere else still do not."""
     try:
@@ -2468,7 +2468,7 @@ def evaluate(path, opts, result):
         result.add("NOT_A_REPO", "%s is not inside a git work tree" % path, exit_code=3)
         return result
 
-    # BL-101 P3. Every trim writes an entry into the ACTION ledger, wherever the trimmed file sits, so
+    # Every trim writes an entry into the ACTION ledger, wherever the trimmed file sits, so
     # where that ledger is must be settled before anything else reads the tree. A tree that holds it
     # in both places and that the framework anchor does not decide is half-migrated: never guessed.
     ledger_rel, ledger_found = _ledger_resolution(repo)
@@ -2806,8 +2806,8 @@ def evaluate(path, opts, result):
 
 def _ledger_resolution(repo):
     """(repository-relative path of the action ledger, the copies found). The path is None for a tree the
-    resolver calls half-migrated. The framework anchor decides a tie without being asked (decided
-    2026-10-06 and 2026-10-07, plan 7.2a and 7.2b): a project's own product changelog may sit at the root beside the ledger. A tree with no
+    resolver calls half-migrated. The framework anchor decides a tie without being asked:
+    a project's own product changelog may sit at the root beside the ledger. A tree with no
     ledger yet gets the legacy default, as it always did."""
     kind, _directory, found = resolve_layout(repo, LEDGER_NAME)
     if kind == "half":
