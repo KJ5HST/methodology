@@ -29,6 +29,37 @@ import subprocess
 import sys
 from pathlib import Path
 
+# === LAYOUT ===
+# A project keeps its methodology files at its root (legacy) or under methodology/ (new).
+# This block is the resolver, embedded byte for byte; the canonical suite asserts that.
+
+# --- layout resolver: BEGIN ---
+import os as _os
+from pathlib import Path as _Path
+
+
+def resolve_layout(root, anchor="SESSION_RUNNER.md"):
+    """Return (kind, directory, found): kind is new|legacy|half|none, directory a Path or None,
+    found the anchor paths that exist. A half-migrated tree has no directory, by design.
+    A file found in both places is the framework's under methodology/ when the runner is under
+    methodology/ and not at the root: the root copy is the project's own and is left alone, kind new,
+    and found still names both. Any other tie stays half, and the runner cannot decide a tie about itself."""
+    root = _Path(root)
+    new, old = root / "methodology" / anchor, root / anchor
+    found = tuple(p for p in (new, old) if _os.path.isfile(p))
+    if len(found) == 2:
+        if _os.path.isfile(root / "methodology" / "SESSION_RUNNER.md") and not _os.path.isfile(root / "SESSION_RUNNER.md"):
+            return "new", new.parent, found
+        return "half", None, found
+    if not found:
+        return "none", None, ()
+    return ("new", new.parent, found) if found[0] == new else ("legacy", root, found)
+# --- layout resolver: END ---
+
+LEDGER_NAME = "CHANGELOG.md"  # layout: ok -- the ledger's own file name: the resolver's anchor
+NEW_DIR = "methodology"
+ARCHIVE_PARTS = ("docs", "archive")  # layout: ok -- where a trim has written shards so far; a ledger under methodology/ also has archive/ beside it
+
 HEADING_RE = re.compile(r"^### (\d{4}-\d{2}-\d{2}) · (.*)$")
 TAG_RE = re.compile(r"\[(?:issue #\d+|BL-[^\]\s]+|ad hoc)\]")
 SENTINEL = "METHODOLOGY-SEED-SENTINEL"
@@ -94,19 +125,55 @@ def repo_root() -> Path:
         return Path.cwd()
 
 
+def default_ledger():
+    """(path of the ledger, the copies found). The path is None for a tree holding the ledger at the root AND
+    under methodology/ with no runner under methodology/ to decide between them: never guessed."""
+    root = repo_root()
+    kind, directory, found = resolve_layout(root, LEDGER_NAME)
+    if kind == "half":
+        return None, found
+    return (directory if directory is not None else root) / LEDGER_NAME, found
+
+
+def shard_dirs(path: Path) -> list:
+    """The directories a ledger's archived shards may sit in: docs/archive/ at the project root (where a trim
+    has written them so far) and, for a ledger under methodology/, the archive/ beside it (the archive moves last)."""
+    base = path.parent
+    # A directory called methodology is a project's methodology/ subdirectory unless it is itself a repository
+    # root: the authoring repository is named methodology and keeps its ledger and docs/archive/ at its root.
+    nested = base.name == NEW_DIR and not (base / ".git").exists()
+    top = base.parent if nested else base
+    dirs = [top.joinpath(*ARCHIVE_PARTS)]
+    if nested:
+        dirs.append(base / ARCHIVE_PARTS[-1])
+    return dirs
+
+
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Structural checks on a CHANGELOG.md action ledger.")
-    ap.add_argument("--file", help="ledger to check (default: CHANGELOG.md at the repository root)")
+    ap = argparse.ArgumentParser(description="Structural checks on a %s action ledger." % LEDGER_NAME)
+    ap.add_argument("--file", help="ledger to check (default: %s, at the repository root or under %s/)"
+                    % (LEDGER_NAME, NEW_DIR))
     ap.add_argument("--all", action="store_true",
-                    help="also check the archived shards, docs/archive/CHANGELOG-*.md, beside the ledger")
+                    help="also check the archived shards, %s/%s-*.md, beside the ledger"
+                    % ("/".join(ARCHIVE_PARTS), LEDGER_NAME[:-3]))
     args = ap.parse_args()
-    path = Path(args.file) if args.file else repo_root() / "CHANGELOG.md"
+    if args.file:
+        path = Path(args.file)
+    else:
+        path, found = default_ledger()
+        if path is None:
+            print("check-ledger: %s exists at the root AND under %s/ with no runner under %s/ to decide "
+                  "between them (a half-migrated tree): %s. Finish or revert the move, or name the ledger "
+                  "with --file." % (LEDGER_NAME, NEW_DIR, NEW_DIR, " and ".join(str(f) for f in found)),
+                  file=sys.stderr)
+            return 2
     if not path.is_file():
         print("check-ledger: no ledger at %s" % path, file=sys.stderr)
         return 2
     files = [path]
     if args.all:
-        files += sorted((path.parent / "docs" / "archive").glob("CHANGELOG-*.md"))
+        for d in shard_dirs(path):
+            files += sorted(d.glob("%s-*.md" % LEDGER_NAME[:-3]))
     total = 0
     for f in files:
         findings = check(f.read_text(encoding="utf-8", errors="replace"))

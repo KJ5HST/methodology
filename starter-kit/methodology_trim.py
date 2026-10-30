@@ -44,15 +44,32 @@ from __future__ import annotations
 
 import argparse
 import ast
+import collections
 import datetime
 import os
+import posixpath
 import re
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-TRIM_VERSION = "1.8.2"   # 1.8.2: issue #93, the maintainer's review of the pull request -- correctness
+TRIM_VERSION = "1.9.0"   # 1.9.0: a ledger
+                         # may sit under methodology/. Where a shard goes and how a link is rebased now come
+                         # from the DIRECTORY of the ledger being trimmed (`layout_for`): a root ledger keeps
+                         # docs/archive/ and the two-level prefix, exactly as before and byte for byte; a
+                         # ledger under methodology/ writes methodology/archive/ and climbs one
+                         # level, and a link target that already starts with ../ is ordinary there (the
+                         # ledger is one level down and a project file is exactly such a link), so the
+                         # rebase stays invertible. The action ledger is found by the embedded layout
+                         # resolver, whose framework-anchor tie rule needs no request, and a half-migrated tree is refused
+                         # by name (LAYOUT_HALF_MIGRATED). The trigger reads the shards of BOTH archive
+                         # directories, since the archive moves last, and a shard name is never reused
+                         # across them. `--reverify` needs no new lift: the layout comes from the lifted
+                         # LIVE path. Minor, not patch: a new finding code and a second output location.
+                         # What a trim in the legacy layout WRITES is unchanged.
+                         #
+                         # 1.8.2: issue #93, the maintainer's review of the pull request -- correctness
                          # fixes to what the tool writes and reads, patch not minor, no new finding code.
                          # (1) Exit 3 is for a ref or an object the clone CANNOT READ. A path that is
                          # absent from a commit (or a working tree) it CAN read is a FAIL at exit 1, as
@@ -316,9 +333,64 @@ DEFAULT_BUDGET_BYTES = 192 * 1024  # 196,608 — the per-file byte budget, still
 # rather than on taste; the arithmetic is in read-cap-premise-correction-plan.md, Phase B.
 BYTE_STOP_FRACTION = 0.5       # hysteresis — stops a trim re-firing on the next record
 SRF_RED = 1.00                 # plan §3.3 H3: at or above this, a reset is the wrong move
-ARCHIVE_DIR = "docs/archive"
+ARCHIVE_DIR = "docs/archive"   # layout: ok -- the legacy half of the shard-directory table (LEGACY below)
 REBASE_PREFIX = "../../"       # docs/archive/<shard>.md -> repo root is exactly two levels
+NEW_DIR = "methodology"        # layout: ok -- the directory a migrated project keeps its framework files in
+NEW_ARCHIVE_DIR = NEW_DIR + "/archive"   # the archive moves with the ledgers
+TOOL = "methodology_trim.py"   # layout: ok -- this tool's own file name, printed in messages and written into proofs
+LEDGER_NAME = "CHANGELOG.md"   # layout: ok -- the action ledger's own file name: the resolver's anchor
+RUNNER = "SESSION_RUNNER.md"   # layout: ok -- the framework anchor the resolver reads, named in a refusal
+APPARATUS = "FRAMEWORK_APPARATUS.md"   # layout: ok -- a document cited by bare name inside the proof (names are relative to the runner's directory)
 SHARD_SUFFIX_MAX = 99          # BL-41 — bound on collision disambiguation; past it, refuse
+
+# === LAYOUT ===
+# A ledger sits at its project's root (legacy) or under methodology/ (new). The
+# block is the resolver, embedded byte for byte; the canonical suite asserts that. The trimmer uses it
+# for ONE question, where the action ledger is, because a trim of any file writes its entry there.
+
+# --- layout resolver: BEGIN ---
+import os as _os
+from pathlib import Path as _Path
+
+
+def resolve_layout(root, anchor="SESSION_RUNNER.md"):
+    """Return (kind, directory, found): kind is new|legacy|half|none, directory a Path or None,
+    found the anchor paths that exist. A half-migrated tree has no directory, by design.
+    A file found in both places is the framework's under methodology/ when the runner is under
+    methodology/ and not at the root: the root copy is the project's own and is left alone, kind new,
+    and found still names both. Any other tie stays half, and the runner cannot decide a tie about itself."""
+    root = _Path(root)
+    new, old = root / "methodology" / anchor, root / anchor
+    found = tuple(p for p in (new, old) if _os.path.isfile(p))
+    if len(found) == 2:
+        if _os.path.isfile(root / "methodology" / "SESSION_RUNNER.md") and not _os.path.isfile(root / "SESSION_RUNNER.md"):
+            return "new", new.parent, found
+        return "half", None, found
+    if not found:
+        return "none", None, ()
+    return ("new", new.parent, found) if found[0] == new else ("legacy", root, found)
+# --- layout resolver: END ---
+
+# Where a shard goes and how a link is rebased follow the DIRECTORY of the ledger being trimmed:
+#   ledger_dir    the directory the ledger's own relative links are written against ('' = the root)
+#   archive_dir   where this layout's shards and their proofs are written
+#   rebase_prefix the climb from archive_dir back to ledger_dir, applied to every in-domain link
+#   parent_links  whether a link target that already starts with ../ is ordinary (it is, one level down)
+ShardLayout = collections.namedtuple("ShardLayout", "ledger_dir archive_dir rebase_prefix parent_links")
+LEGACY = ShardLayout("", ARCHIVE_DIR, REBASE_PREFIX, False)
+NEW = ShardLayout(NEW_DIR, NEW_ARCHIVE_DIR, "../", True)
+ARCHIVE_DIRS = (ARCHIVE_DIR, NEW_ARCHIVE_DIR)   # every directory a shard of any layout may sit in
+
+
+def layout_for(live_rel):
+    """The shard layout of the ledger at `live_rel` (repository-relative, posix): new when it sits directly
+    in methodology/, legacy for anything else (a root ledger, or a nested one such as starter-kit/)."""
+    return NEW if posixpath.dirname(live_rel) == NEW_DIR else LEGACY
+
+
+def ledger_link(layout, rel):
+    """The link target for the repository-relative path `rel` as written INSIDE a ledger of this layout."""
+    return posixpath.relpath(rel, layout.ledger_dir) if layout.ledger_dir else rel
 
 # --- "is this plausibly a fresh seed?" — a DIFFERENT question from "is it over its budget" ----
 # Deliberately its own literal rather than an alias of DEFAULT_BUDGET_BYTES, and deliberately not
@@ -422,8 +494,8 @@ def _handoff_date(text):
 
 
 LEDGERS = {
-    "CHANGELOG.md": LedgerSpec(
-        basename="CHANGELOG.md",
+    "CHANGELOG.md": LedgerSpec(   # layout: ok -- a ledger's own file name, matched at any depth by basename
+        basename="CHANGELOG.md",   # layout: ok -- the same name, the spec's key
         record_kind="heading",
         # Anchored on the dated, source-tagged heading the ledger's own audit grep uses.
         record_start=re.compile(r"^### \d{4}-\d{2}-\d{2} · \["),
@@ -447,8 +519,8 @@ LEDGERS = {
         # guard. HANDOFFS.md keeps one because its records are fences, where that is not true.
         seed_negation=None,
     ),
-    "HANDOFFS.md": LedgerSpec(
-        basename="HANDOFFS.md",
+    "HANDOFFS.md": LedgerSpec(   # layout: ok -- a ledger's own file name, matched at any depth by basename
+        basename="HANDOFFS.md",   # layout: ok -- the same name, the spec's key
         record_kind="fence",
         fence_info="handoff",
         # Declared to have NO footer: trailing prose below the last fence belongs to that receipt.
@@ -668,6 +740,13 @@ def shard_name_taken(shard_path):
     return shard_path.exists() or Path(str(shard_path) + ".verify.sh").exists()
 
 
+def shard_name_taken_anywhere(repo, name):
+    """True if a shard of this NAME exists in any archive directory. A project that moved its ledger
+    still holds the shards its legacy trims wrote under docs/archive/ (the archive moves last), and
+    "-through-<date>" is a span label, so a name is never reused across the two."""
+    return any(shard_name_taken(repo / d / name) for d in ARCHIVE_DIRS)
+
+
 def _indent(s, pad="    | "):
     return "\n".join(pad + ln for ln in s.splitlines())
 
@@ -684,7 +763,7 @@ _LINK = re.compile(r"\]\(([^)\s]*)\)")
 _SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
 
 
-def _in_domain(target):
+def _in_domain(target, parent_links=False):
     if not target:
         return False
     if _SCHEME.match(target):          # absolute URL / mailto:
@@ -693,8 +772,8 @@ def _in_domain(target):
         return False
     if target.startswith("/"):         # absolute path
         return False
-    if target.startswith("../"):       # already relative — prefixing it is not invertible
-        return False
+    if target.startswith("../") and not parent_links:   # already relative — prefixing it is not invertible
+        return False                                     # (in the new layout it is: the prefix is one ../)
     return True
 
 
@@ -719,20 +798,20 @@ def _map_links(text, fn):
     return "".join(out)
 
 
-def transform_record(text):
-    return _map_links(text, lambda t: REBASE_PREFIX + t if _in_domain(t) else None)
+def transform_record(text, layout=LEGACY):
+    return _map_links(text, lambda t: layout.rebase_prefix + t if _in_domain(t, layout.parent_links) else None)
 
 
-def invert_record(text):
+def invert_record(text, layout=LEGACY):
     def back(t):
-        if not t.startswith(REBASE_PREFIX):
+        if not t.startswith(layout.rebase_prefix):
             return None
-        stripped = t[len(REBASE_PREFIX):]
-        return stripped if _in_domain(stripped) else None
+        stripped = t[len(layout.rebase_prefix):]
+        return stripped if _in_domain(stripped, layout.parent_links) else None
     return _map_links(text, back)
 
 
-def check_invertible(records, result):
+def check_invertible(records, result, layout=LEGACY):
     """Apply the transform then its inverse and assert the round-trip is the identity.
 
     "Uniform because uniform is invertible and therefore provable" — operationally, this. A record
@@ -741,14 +820,14 @@ def check_invertible(records, result):
     """
     bad = []
     for idx, rec in enumerate(records):
-        if invert_record(transform_record(rec)) != rec:
+        if invert_record(transform_record(rec, layout), layout) != rec:
             bad.append(idx)
     if bad:
         result.add(
             "TRANSFORM_NOT_INVERTIBLE",
-            "the ../../ rebase does not round-trip to the identity on record(s) %s — refusing. A "
+            "the %s rebase does not round-trip to the identity on record(s) %s — refusing. A "
             "record carrying an already-relative ('../') link target cannot be rebased provably."
-            % ", ".join(str(b) for b in bad),
+            % (layout.rebase_prefix, ", ".join(str(b) for b in bad)),
             exit_code=2,
         )
         return False
@@ -760,7 +839,7 @@ def check_invertible(records, result):
 # one RED with a corrupted triple and watch it fail before any green is trusted.
 # =============================================================================================
 
-def assert_L1(before_records, retained_records, shard_records, result):
+def assert_L1(before_records, retained_records, shard_records, result, layout=LEGACY):
     """records(live_after) ++ invert(transform(records(shard))) == records(live_before).
 
     Scoped to the RECORDS zone. The unscoped whole-file form is unsatisfiable on any run that
@@ -774,7 +853,7 @@ def assert_L1(before_records, retained_records, shard_records, result):
     total length: not loss, just the two halves swapped. Found by implementing it; recorded in the
     S37 close-out rather than silently corrected.
     """
-    reconstructed = "".join(retained_records) + "".join(invert_record(r) for r in shard_records)
+    reconstructed = "".join(retained_records) + "".join(invert_record(r, layout) for r in shard_records)
     original = "".join(before_records)
     if reconstructed != original:
         i = _first_diff(reconstructed, original)
@@ -790,7 +869,7 @@ def assert_L1(before_records, retained_records, shard_records, result):
 
 
 def assert_L2(before_zones, after_front, after_footer, shard_text, declared_inserts, reversals,
-              result):
+              result, layout=LEGACY):
     """Zone pinning — every FOOTER byte stays live and is absent from the shard; the FRONT MATTER
     diff is confined to the declared regenerated fields and the pointer block.
 
@@ -814,7 +893,7 @@ def assert_L2(before_zones, after_front, after_footer, shard_text, declared_inse
         # substring test misses it — including on the real 020ba3f footer, whose one link is
         # exactly the kind the transform rewrites.
         if footer.strip() and (footer.strip() in shard_text
-                               or footer.strip() in invert_record(shard_text)):
+                               or footer.strip() in invert_record(shard_text, layout)):
             result.add(
                 "L2_FOOTER_MOVED",
                 "the FOOTER zone appears in the shard. In a newest-on-top file the footer sits "
@@ -1045,28 +1124,34 @@ class Trigger:
         return byte_ok and read_ok
 
 
-def archive_events(repo, spec):
+def archive_events(repo, spec, layout=LEGACY):
     """[(sha, pre_size, post_size, relpath)] for every shard of this ledger, oldest first.
 
-    Derived by GLOB over docs/archive/, never from hardcoded literal paths: `bin/tests.sh` wires
-    exactly one shard by literal path in two places, so a second shard would never be checked and
-    the suite would still pass (design §8.2).
+    Derived by GLOB over the archive directory, never from hardcoded literal paths: `bin/tests.sh`
+    wires exactly one shard by literal path in two places, so a second shard would never be checked
+    and the suite would still pass (design §8.2). A ledger under methodology/ reads BOTH directories:
+    the shards its legacy trims wrote are its history, since the archive moves last.
     """
-    adir = repo / ARCHIVE_DIR
-    if not adir.is_dir():
-        return []
     stem = spec.basename[:-3] if spec.basename.endswith(".md") else spec.basename
+    dirs = [layout.archive_dir] + [d for d in ARCHIVE_DIRS if d != layout.archive_dir and layout == NEW]
     events = []
-    for shard in sorted(adir.glob("%s-*.md" % stem)):
-        rel = shard.relative_to(repo).as_posix()
-        sha = git(repo, "log", "--diff-filter=A", "-1", "--format=%H", "--", rel)
-        if not sha:
+    for d in dirs:
+        adir = repo / d
+        if not adir.is_dir():
             continue
-        pre = size_at(repo, sha + "^", spec.basename)
-        post = size_at(repo, sha, spec.basename)
-        if pre is None or post is None or pre <= post:
-            continue
-        events.append((sha, pre, post, rel))
+        for shard in sorted(adir.glob("%s-*.md" % stem)):
+            rel = shard.relative_to(repo).as_posix()
+            sha = git(repo, "log", "--diff-filter=A", "-1", "--format=%H", "--", rel)
+            if not sha:
+                continue
+            # The ledger sat where THIS shard's own layout puts it when the shard was written: a shard in
+            # the legacy directory was trimmed from a root ledger, even if the ledger has moved since.
+            ledger_path = posixpath.join(NEW_DIR, spec.basename) if d == NEW_ARCHIVE_DIR else spec.basename
+            pre = size_at(repo, sha + "^", ledger_path)
+            post = size_at(repo, sha, ledger_path)
+            if pre is None or post is None or pre <= post:
+                continue
+            events.append((sha, pre, post, rel))
     # Order by position in the commit graph, NEWEST first, then reverse — never by %ct. Two
     # archives committed in the same second are ordinary (a script, a test), and a timestamp tie
     # falls back to sha order, which is arbitrary: "the most recent archive" would then be a coin
@@ -1084,7 +1169,7 @@ def archive_events(repo, spec):
 
 
 def is_root_class_a(repo, path, spec):
-    """Is this file a Class A ledger AT THE REPOSITORY ROOT?
+    """Is this file a Class A ledger AT THE REPOSITORY ROOT, or directly under methodology/?
 
     PHASE C2, and the whole point is that this asks a different question from `LEDGERS.get(name)`.
     That lookup is by BASENAME at any depth, so `starter-kit/CHANGELOG.md` and a hypothetical
@@ -1096,12 +1181,16 @@ def is_root_class_a(repo, path, spec):
     and answers None -- neither A nor B -- for a nested one. The two tools were already asking
     different questions here; before C2 the difference cost nothing because both arms used the
     same constant. Returns False on anything it cannot resolve, which routes the caller to the
-    tighter arm."""
+    tighter arm.
+
+    A ledger a project moved under methodology/ is the same ledger at its new address, the
+    one the protocol reads, so it earns the same arm. `starter-kit/CHANGELOG.md` and a ledger nested
+    anywhere else still do not."""
     try:
         rel = path.resolve().relative_to(repo).as_posix()
     except (ValueError, OSError):
         return False
-    return rel == spec.basename
+    return rel in (spec.basename, posixpath.join(NEW_DIR, spec.basename))
 
 
 def evaluate_trigger(repo, path, spec, zones, budget, result):
@@ -1111,7 +1200,7 @@ def evaluate_trigger(repo, path, spec, zones, budget, result):
     text = read_text(path)
     t.size_bytes = len(text.encode("utf-8"))
 
-    events = archive_events(repo, spec)
+    events = archive_events(repo, spec, layout_for(posixpath.relpath(str(path.resolve()), str(repo))))
 
     # --- SRF: reported for BOTH boundaries, because they differ by 3x on the same file ---------
     if not events:
@@ -1229,13 +1318,17 @@ def assemble_live(front, retained, footer):
     return front + "".join(retained) + footer
 
 
-def build_pointer_block(spec, shard_rel, verify_rel, count, span, live_rel):
+def build_pointer_block(spec, shard_rel, verify_rel, count, span, live_rel, layout=None):
+    """The block a trim writes into the live ledger's front matter. The displayed path is repository-rooted;
+    the link target is written against the ledger's own directory, which is the root in the legacy layout."""
+    layout = layout or layout_for(live_rel)
     first, last = span
     return (
         "**Archived %d record(s), %s → %s** into [`%s`](%s) — same format, same order, frozen.\n"
         "Losslessness is proved by [`%s`](%s), which re-derives L1/L2/L3 from git; run it rather\n"
-        "than trusting this sentence. Written by `methodology_trim.py` v%s.\n\n"
-        % (count, first, last, shard_rel, shard_rel, verify_rel, verify_rel, TRIM_VERSION)
+        "than trusting this sentence. Written by `%s` v%s.\n\n"
+        % (count, first, last, shard_rel, ledger_link(layout, shard_rel),
+           verify_rel, ledger_link(layout, verify_rel), TOOL, TRIM_VERSION)
     )
 
 
@@ -1279,10 +1372,11 @@ def apply_regenerated(front, spec, ctx, result):
     return out, reversals
 
 
-def build_shard(spec, live_rel, shard_rel, records, span, cut_key):
+def build_shard(spec, live_rel, shard_rel, records, span, cut_key, layout=None):
+    layout = layout or layout_for(live_rel)
     first, last = span
-    body = "".join(transform_record(r) for r in records)
-    back = REBASE_PREFIX + live_rel
+    body = "".join(transform_record(r, layout) for r in records)
+    back = posixpath.relpath(live_rel, posixpath.dirname(shard_rel) or ".")   # the live ledger, from the shard
     head = (
         "# %s — archive: %s → %s\n"
         "\n"
@@ -1304,21 +1398,29 @@ LEDGER_ENTRY_TEMPLATE = (
     "### %(date)s · [ad hoc] Ledger trim: `%(live)s` → `%(shard)s` "
     "(%(n)d record(s), %(before)s B → %(after)s B)\n"
     "\n"
-    "**Written by:** `methodology_trim.py` v%(ver)s — a tool action, not a session's judgment.\n"
-    "Moved the oldest **%(n)d** record(s) (%(first)s → %(last)s) out of [`%(live)s`](%(live)s) into\n"
-    "[`%(shard)s`](%(shard)s). Losslessness is asserted by L1 (records-zone concatenation), L2 (zone\n"
-    "pinning) and L3 (record partition), and is **re-derivable** — run [`%(verify)s`](%(verify)s)\n"
+    "**Written by:** `%(tool)s` v%(ver)s — a tool action, not a session's judgment.\n"
+    "Moved the oldest **%(n)d** record(s) (%(first)s → %(last)s) out of [`%(live)s`](%(live_link)s) into\n"
+    "[`%(shard)s`](%(shard_link)s). Losslessness is asserted by L1 (records-zone concatenation), L2 (zone\n"
+    "pinning) and L3 (record partition), and is **re-derivable** — run [`%(verify)s`](%(verify_link)s)\n"
     "rather than trusting a digest printed here. Live file %(before)s B → %(after)s B (%(pct)s).\n"
     "\n"
 )
 
 
-def build_ledger_entry(live_rel, shard_rel, verify_rel, n, span, before_b, after_b, today):
+def build_ledger_entry(live_rel, shard_rel, verify_rel, n, span, before_b, after_b, today, ledger_rel=None):
+    """The entry a trim prepends to the ACTION ledger. Its link targets are written against that ledger's
+    own directory (`ledger_rel`'s), which is the root in the legacy layout, so they are not the trimmed
+    file's: a HANDOFFS.md trim writes into CHANGELOG.md, and the two sit in one directory only by layout."""
     first, last = span
+    base = posixpath.dirname(ledger_rel) if ledger_rel else ""
+
+    def link(rel):
+        return posixpath.relpath(rel, base) if base else rel
     pct = "−%.1f%%" % (100.0 * (before_b - after_b) / before_b) if before_b else "n/a"
     return LEDGER_ENTRY_TEMPLATE % {
         "date": today, "live": live_rel, "shard": shard_rel, "verify": verify_rel,
-        "n": n, "first": first, "last": last, "ver": TRIM_VERSION,
+        "live_link": link(live_rel), "shard_link": link(shard_rel), "verify_link": link(verify_rel),
+        "tool": TOOL, "n": n, "first": first, "last": last, "ver": TRIM_VERSION,
         "before": "{:,}".format(before_b), "after": "{:,}".format(after_b), "pct": pct,
     }
 
@@ -1355,7 +1457,7 @@ def insert_ledger_entry(ledger_text, spec, entry, today, result):
 # =============================================================================================
 
 VERIFY_TEMPLATE = r"""#!/usr/bin/env bash
-# Losslessness proof for @@SHARD@@ — generated by methodology_trim.py v@@VER@@.
+# Losslessness proof for @@SHARD@@ — generated by @@TOOL@@ v@@VER@@.
 #
 # Self-contained and FROZEN: it embeds the record grammar it was written against, so a later change
 # to the trimmer cannot silently change what this shard's proof means. Re-derives L1 (records-zone
@@ -1390,7 +1492,8 @@ RECORD_KIND = "@@KIND@@"
 RECORD_START = r"@@START@@"
 FENCE_INFO = "@@INFO@@"
 FOOTER_MODE = "@@FOOTER@@"
-PREFIX = "../../"
+PREFIX = "@@PREFIX@@"
+PARENT_LINKS = @@PARENT@@
 
 # BL-27 fix 1: the same declared front-matter fields assert_L2's reversal exception already knows
 # about (design's regenerated-field table), so a line that changed ONLY inside one of these spans
@@ -1458,7 +1561,7 @@ def spans(line):
 
 
 def indomain(t):
-    return bool(t) and not SCHEME.match(t) and not t.startswith(("#", "/", "../"))
+    return bool(t) and not SCHEME.match(t) and not t.startswith(("#", "/") if PARENT_LINKS else ("#", "/", "../"))
 
 
 def maplinks(text, fn):
@@ -1733,7 +1836,7 @@ else:
 # BL-27 fix 2: a same-commit close-out bundling (a session's own frontier receipt going
 # status: pending -> complete, committed together with the archive write) makes position 0 (newest)
 # differ between this commit's parent and itself. That bundling is NOT this framework's practice --
-# FRAMEWORK_APPARATUS.md says a trim earns its own commit, and issue #93 measured what it costs --
+# @@APPARATUS@@ says a trim earns its own commit, and issue #93 measured what it costs --
 # but sessions have done it, so the proof must still judge it. NOT an exemption: this stays a FAIL,
 # loud, because a real loss can have this exact shape too -- only a NOTE naming the pattern, so a
 # reader does not mistake it for an unqualified loss. Narrow on purpose: any OTHER record differing
@@ -1855,8 +1958,11 @@ def render_verify(live_rel, shard_rel, kind, record_start, fence_info, footer_mo
     # (true of both entries in LEDGERS today); a pattern that did would need a different encoding.
     # The stub marker travels the same way, as one repr()'d string ('' when the spec declares none),
     # under the same caveat.
+    layout = layout_for(live_rel)
     out = VERIFY_TEMPLATE
     for key, val in (("@@SHARD@@", shard_rel), ("@@LIVE@@", live_rel), ("@@VER@@", TRIM_VERSION),
+                     ("@@TOOL@@", TOOL), ("@@APPARATUS@@", APPARATUS),
+                     ("@@PREFIX@@", layout.rebase_prefix), ("@@PARENT@@", repr(layout.parent_links)),
                      ("@@KIND@@", kind), ("@@START@@", record_start), ("@@INFO@@", fence_info),
                      ("@@FOOTER@@", footer_mode), ("@@REGEN@@", repr(list(regen_patterns))),
                      ("@@STUB@@", repr(stub_pattern))):
@@ -1944,7 +2050,7 @@ def lift_grammar(text):
     it, or None), `live`, `shard`, `kind`, `start`, `info`, `footer`, `regen` (a list), `stub` (a
     string, or None when the proof predates the line) and `absent` (the soft lines it did not
     carry). Raises ReverifyRefusal, naming the line, for anything it will not splice."""
-    m = re.search(r"methodology_trim\.py v([0-9][0-9.]*[0-9])", text)
+    m = re.search(re.escape(TOOL) + r" v([0-9][0-9.]*[0-9])", text)
     out = {"version": m.group(1) if m else None, "absent": []}
     for key, field, shape in _LIFT_REQUIRED:
         line = _lift_line(text, key)
@@ -1955,18 +2061,19 @@ def lift_grammar(text):
         mm = re.fullmatch(shape, line)
         if mm is None:
             raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
-                                  "%s is not in the form methodology_trim.py writes it: %s"
-                                  % (key, line[:70]))
+                                  "%s is not in the form %s writes it: %s"
+                                  % (key, TOOL, line[:70]))
         out[field] = mm.group(1)
     for key, field in (("LIVE", "live"), ("SHARD", "shard")):
         if out[field].startswith("/") or ".." in out[field].split("/"):
             raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
                                   "%s is not a path inside the repository: %s" % (key, out[field]))
     _lift_pattern("RECORD_START", out["start"])
-    # PREFIX is a constant of the template, not a placeholder: the writer always puts a shard two
-    # directories below the root, so today's template inverts links with REBASE_PREFIX. A proof
-    # written for another depth passes as written and cannot be re-derived here; reading it as a
-    # FAIL would be a verdict about neither, so it is refused, by name.
+    # PREFIX follows the ledger's layout (`layout_for`, from the lifted LIVE path): a root ledger's
+    # shard sits two directories below the root and climbs "../../", a ledger under methodology/
+    # writes its shard one directory below it and climbs "../". A proof written for another depth
+    # passes as written and cannot be re-derived here; reading it as a FAIL would be a verdict about
+    # neither, so it is refused, by name.
     prefix_line = _lift_line(text, "PREFIX")
     if prefix_line is None:
         raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
@@ -1975,13 +2082,16 @@ def lift_grammar(text):
     pm = re.fullmatch(r'PREFIX = "([^"\r\n]*)"', prefix_line)
     if pm is None:
         raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
-                              "PREFIX is not in the form methodology_trim.py writes it: %s" % prefix_line[:70])
-    if pm.group(1) != REBASE_PREFIX:
+                              "PREFIX is not in the form %s writes it: %s" % (TOOL, prefix_line[:70]))
+    layout = layout_for(out["live"])
+    if pm.group(1) != layout.rebase_prefix:
         raise ReverifyRefusal("REVERIFY_NOT_LIFTABLE",
-                              'PREFIX is "%s" in the frozen proof; this tool\'s template writes "%s" (a shard two '
-                              "directories below the root): the shard's links were rebased for a different "
+                              'PREFIX is "%s" in the frozen proof; this tool\'s template writes "%s" (a shard %s): '
+                              "the shard's links were rebased for a different "
                               "depth, so re-deriving it here would be a verdict about neither"
-                              % (pm.group(1), REBASE_PREFIX))
+                              % (pm.group(1), layout.rebase_prefix,
+                                 "two directories below the root" if layout is LEGACY
+                                 else "one directory below its ledger"))
     for key, field in (("REGEN_PATTERNS", "regen"), ("STUB_PATTERN", "stub")):
         line = _lift_line(text, key)
         if line is None:
@@ -2046,11 +2156,11 @@ def reverify(arg, result):
 
     stub = g["stub"]
     result.add("REVERIFY_BANNER",
-               "%s: re-derived by methodology_trim.py v%s from the grammar lifted out of its frozen "
+               "%s: re-derived by %s v%s from the grammar lifted out of its frozen "
                "proof (written by v%s): ledger %s, record kind %s, footer %s. This is a claim about "
                "today's logic against this shard, NOT the artifact that was shipped; the frozen "
                "proof is untouched. Nothing was written."
-               % (shard_rel, TRIM_VERSION, g["version"] or "?", g["live"], g["kind"], g["footer"]))
+               % (shard_rel, TOOL, TRIM_VERSION, g["version"] or "?", g["live"], g["kind"], g["footer"]))
     if "REGEN_PATTERNS" in g["absent"]:
         result.add("REVERIFY_SUBSTITUTED",
                    "REGEN_PATTERNS is not in the frozen proof (it predates the declared regenerated "
@@ -2358,6 +2468,23 @@ def evaluate(path, opts, result):
         result.add("NOT_A_REPO", "%s is not inside a git work tree" % path, exit_code=3)
         return result
 
+    # Every trim writes an entry into the ACTION ledger, wherever the trimmed file sits, so
+    # where that ledger is must be settled before anything else reads the tree. A tree that holds it
+    # in both places and that the framework anchor does not decide is half-migrated: never guessed.
+    ledger_rel, ledger_found = _ledger_resolution(repo)
+    if ledger_rel is None:
+        result.add("LAYOUT_HALF_MIGRATED",
+                   "the action ledger is in both places (%s), and the framework anchor does not decide "
+                   "which is authoritative: that needs %s under %s/ and not at the root. This is a "
+                   "half-migrated tree. A trim writes an entry into the action ledger and will not "
+                   "guess which file that is. Finish the move (the older file is renamed onto the "
+                   "newer, or removed) or revert it, then run the trim again."
+                   % (", ".join(f.relative_to(repo).as_posix() for f in ledger_found), RUNNER, NEW_DIR),
+                   exit_code=2)
+        return result
+    live_rel = path.relative_to(repo).as_posix()
+    layout = layout_for(live_rel)
+
     text = read_text(path)
     zones = classify_zones(text, spec, result)
     if zones is None:
@@ -2373,10 +2500,10 @@ def evaluate(path, opts, result):
     if opts.cut and not opts.cut.isdigit() and not _safe_cut_key(opts.cut.lstrip("@")):
         result.add("CUT_KEY_UNSAFE",
                    "cut key %r would not produce a flat, single-level shard name. §4.5(b) makes "
-                   "the flat docs/archive/<BASENAME>-through-<CUTKEY>.md shape mandatory precisely "
+                   "the flat %s/<BASENAME>-through-<CUTKEY>.md shape mandatory precisely "
                    "because a nested or differently-cased name is silently excluded from the glob, "
                    "and the trigger then computes against the wrong baseline."
-                   % opts.cut.lstrip("@"), exit_code=3)
+                   % (opts.cut.lstrip("@"), layout.archive_dir), exit_code=3)
         return result
 
     budget = opts.budget_bytes or spec.budget_bytes
@@ -2444,7 +2571,7 @@ def evaluate(path, opts, result):
         result.add("NOTHING_TO_DO", "under budget and above the line floor — nothing to do")
         return result
 
-    if not check_P1(repo, ledger_rel_for(repo), result):
+    if not check_P1(repo, ledger_rel, result):
         return result
 
     if trigger.srf and trigger.srf[0] is not None and trigger.srf[0] >= SRF_RED and not opts.force:
@@ -2473,7 +2600,7 @@ def evaluate(path, opts, result):
         result.add("NOTHING_TO_DO", "the computed cut archives zero records")
         return result
 
-    if not check_invertible(archived, result):
+    if not check_invertible(archived, result, layout):
         return result
 
     check_stub_frontier(repo, path, spec, records, result)
@@ -2491,9 +2618,9 @@ def evaluate(path, opts, result):
     if not _safe_cut_key(cut_key):
         result.add("CUT_KEY_UNSAFE",
                    "cut key %r would not produce a flat, single-level shard name. §4.5(b) makes the "
-                   "flat docs/archive/<BASENAME>-through-<CUTKEY>.md shape mandatory precisely "
+                   "flat %s/<BASENAME>-through-<CUTKEY>.md shape mandatory precisely "
                    "because a nested or differently-cased name is silently excluded from the glob, "
-                   "and the trigger then computes against the wrong baseline." % cut_key,
+                   "and the trigger then computes against the wrong baseline." % (cut_key, layout.archive_dir),
                    exit_code=3)
         return result
 
@@ -2509,7 +2636,7 @@ def evaluate(path, opts, result):
             "--cut <earlier date> if you want a clean calendar seam." % cut_key)
 
     stem = spec.basename[:-3]
-    base_rel = "%s/%s-through-%s.md" % (ARCHIVE_DIR, stem, cut_key)
+    base_rel = "%s/%s-through-%s.md" % (layout.archive_dir, stem, cut_key)
 
     # Write-once, and it stays write-once: overwriting would destroy the earlier shard's records
     # while L1/L2/L3 all still pass — they quantify only over THIS run's triple, so it is the one
@@ -2526,7 +2653,7 @@ def evaluate(path, opts, result):
     # to a name that does not exist — and the rename is REPORTED, because a shard whose name no
     # longer uniquely says "through this date" must not arrive silently.
     shard_rel, suffix = base_rel, 1
-    while shard_name_taken(repo / shard_rel):
+    while shard_name_taken_anywhere(repo, posixpath.basename(shard_rel)):
         suffix += 1
         if suffix > SHARD_SUFFIX_MAX:
             result.add("SHARD_EXISTS",
@@ -2534,9 +2661,9 @@ def evaluate(path, opts, result):
                        "collision destroys the earlier shard's records while all three assertions "
                        "still pass, because none of them quantifies over any other file in %s. "
                        "Archive by hand, or clear the stale names."
-                       % (base_rel, SHARD_SUFFIX_MAX, ARCHIVE_DIR), exit_code=2)
+                       % (base_rel, SHARD_SUFFIX_MAX, layout.archive_dir), exit_code=2)
             return result
-        shard_rel = "%s/%s-through-%s-%d.md" % (ARCHIVE_DIR, stem, cut_key, suffix)
+        shard_rel = "%s/%s-through-%s-%d.md" % (layout.archive_dir, stem, cut_key, suffix)
 
     if shard_rel != base_rel:
         result.add("SHARD_NAME_DISAMBIGUATED",
@@ -2549,12 +2676,12 @@ def evaluate(path, opts, result):
     shard_path = repo / shard_rel
     verify_rel = shard_rel + ".verify.sh"
 
-    live_rel = path.relative_to(repo).as_posix()
     plan = TrimPlan()
     plan.retained, plan.archived = retained, archived
     plan.shard_rel, plan.verify_rel, plan.cut_key, plan.span = shard_rel, verify_rel, cut_key, span
-    plan.shard_text = build_shard(spec, live_rel, shard_rel, archived, span, cut_key)
-    plan.pointer_block = build_pointer_block(spec, shard_rel, verify_rel, len(archived), span, live_rel)
+    plan.shard_text = build_shard(spec, live_rel, shard_rel, archived, span, cut_key, layout=layout)
+    plan.pointer_block = build_pointer_block(spec, shard_rel, verify_rel, len(archived), span, live_rel,
+                                            layout=layout)
 
     front, reversals = apply_regenerated(zones.front, spec, {"retained": len(retained)}, result)
     front = insert_pointer(front, plan.pointer_block)
@@ -2562,7 +2689,6 @@ def evaluate(path, opts, result):
 
     plan.before_bytes = len(text.encode("utf-8"))
     today = opts.today or datetime.date.today().isoformat()
-    ledger_rel = ledger_rel_for(repo)
     trims_the_ledger = (live_rel == ledger_rel)
 
     # The reported "after" size must be the size of the file actually written — and when the trimmed
@@ -2573,7 +2699,7 @@ def evaluate(path, opts, result):
     month_heading = ""
     for _ in range(5):
         entry = build_ledger_entry(live_rel, shard_rel, verify_rel, len(archived), span,
-                                   plan.before_bytes, plan.after_bytes, today)
+                                   plan.before_bytes, plan.after_bytes, today, ledger_rel)
         if trims_the_ledger:
             candidate, month_heading = insert_ledger_entry(live_after_core, spec, entry,
                                                            today, Result(path))
@@ -2631,11 +2757,11 @@ def evaluate(path, opts, result):
     injected = 1 if trims_the_ledger else 0
     after_records = live_zones.records()[injected:]
     shard_records = shard_zones.records()
-    shard_source = [invert_record(r) for r in shard_records]
+    shard_source = [invert_record(r, layout) for r in shard_records]
 
-    ok = assert_L1(records, after_records, shard_records, result)
+    ok = assert_L1(records, after_records, shard_records, result, layout)
     ok = assert_L2(zones, live_zones.front, live_zones.footer, plan.shard_text,
-                   [plan.pointer_block, month_heading], reversals, result) and ok
+                   [plan.pointer_block, month_heading], reversals, result, layout) and ok
     ok = assert_L3(records, after_records, shard_source, result) and ok
     if not ok:
         return result
@@ -2678,8 +2804,21 @@ def evaluate(path, opts, result):
     return result
 
 
+def _ledger_resolution(repo):
+    """(repository-relative path of the action ledger, the copies found). The path is None for a tree the
+    resolver calls half-migrated. The framework anchor decides a tie without being asked:
+    a project's own product changelog may sit at the root beside the ledger. A tree with no
+    ledger yet gets the legacy default, as it always did."""
+    kind, _directory, found = resolve_layout(repo, LEDGER_NAME)
+    if kind == "half":
+        return None, found
+    if kind == "new":
+        return posixpath.join(NEW_DIR, LEDGER_NAME), found
+    return LEDGER_NAME, found
+
+
 def ledger_rel_for(repo):
-    return "CHANGELOG.md"
+    return _ledger_resolution(repo)[0]
 
 
 def report(result, opts):
@@ -2690,8 +2829,9 @@ def report(result, opts):
         print("\n  WRITTEN (uncommitted — this tool never commits):")
         for w in result.written:
             print("    %s" % w)
-        live = [w for w in result.written if not w.startswith(ARCHIVE_DIR)]
-        shards = [w for w in result.written if w.startswith(ARCHIVE_DIR)]
+        prefixes = tuple(d + "/" for d in ARCHIVE_DIRS)
+        live = [w for w in result.written if not w.startswith(prefixes)]
+        shards = [w for w in result.written if w.startswith(prefixes)]
         print("\n  Rollback:  git checkout -- %s && rm -f %s"
               % (" ".join(live), " ".join(shards)))
         print("  Verify:    bash %s" % (result.plan.verify_rel if result.plan else ""))
@@ -2700,7 +2840,7 @@ def report(result, opts):
 
 def main(argv=None):
     p = argparse.ArgumentParser(
-        prog="methodology_trim.py",
+        prog=TOOL,
         description="Trim a grow-and-must-be-read ledger into a frozen shard, provably losslessly.")
     p.add_argument("--file", action="append", default=[], metavar="PATH",
                    help="the ledger to trim (repeatable). Required.")
@@ -2717,7 +2857,7 @@ def main(argv=None):
                         "and no other mode flag. Exit is the proof's own (0 holds, 1 a FAIL, 4 a "
                         "recognised stub finalize), or 3 when the shard cannot be re-derived.")
     p.add_argument("--today", help=argparse.SUPPRESS)   # test seam: deterministic dates
-    p.add_argument("--version", action="version", version="methodology_trim.py v" + TRIM_VERSION)
+    p.add_argument("--version", action="version", version=TOOL + " v" + TRIM_VERSION)
     opts = p.parse_args(argv)
 
     if opts.reverify is not None:
@@ -2726,8 +2866,8 @@ def main(argv=None):
                                        ("--budget-bytes", opts.budget_bytes is not None),
                                        ("--force", opts.force)) if on]
         if clash:
-            print("methodology_trim.py: --reverify is read-only and takes its own shard; it cannot "
-                  "be combined with %s." % ", ".join(clash), file=sys.stderr)
+            print("%s: --reverify is read-only and takes its own shard; it cannot "
+                  "be combined with %s." % (TOOL, ", ".join(clash)), file=sys.stderr)
             return 3
         result = Result(Path(opts.reverify))
         reverify(opts.reverify, result)
@@ -2736,11 +2876,11 @@ def main(argv=None):
 
     if not opts.file:
         p.print_usage(sys.stderr)
-        print("methodology_trim.py: --file is required", file=sys.stderr)
+        print("%s: --file is required" % TOOL, file=sys.stderr)
         return 3
     if opts.write and not opts.check and len(opts.file) > 1:
-        print("methodology_trim.py: one --file per --write. A batched trim has a rollback that "
-              "cannot be expressed as one revert, and the 5-file per-commit cap applies regardless.",
+        print("%s: one --file per --write. A batched trim has a rollback that "
+              "cannot be expressed as one revert, and the 5-file per-commit cap applies regardless." % TOOL,
               file=sys.stderr)
         return 3
 

@@ -24,9 +24,12 @@ Design notes:
 import sys
 sys.dont_write_bytecode = True
 
+import contextlib
 import filecmp
+import copy
 import importlib.util
 import hashlib
+import io
 import json
 import os
 import re
@@ -34,6 +37,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -67,7 +71,11 @@ def base_metrics(**over):
         "methodology": {"compliance_score": 0, "compliance_pct": 0, "items": {}},
         "coverage_configs": [],
         "changelog": {"present": False, "is_fresh": False, "signals": []},
-        "files": {"largest_files": []},
+        # `read_cap_watch` is indexed directly by the D4(b) risk, not `.get`-with-default: a silent
+        # default is exactly how a signal in this scanner went permanently unreachable with no test
+        # failing. So it must exist here. base_metrics shallow-merges top-level keys only, so every
+        # existing caller passing files={"largest_files": [...]} keeps read_cap_watch == [].
+        "files": {"largest_files": [], "read_cap_watch": []},
         "vulnerabilities": {},
         "render": {"score": 0, "toolchain_present": False,
                    "render_dep_verified": False, "signals": []},
@@ -107,9 +115,9 @@ class TestDetection(unittest.TestCase):
         self.assertEqual(r["reason"], "heuristic")
 
     def test_pure_latex_research_via_toolchain(self):
-        # .tex isn't counted as docs (.qmd/.rmd now are; .tex stays out), so doc_loc≈0; only
-        # toolchain_present rescues it. Real-scan proof:
-        # TestFrameworkInstalledExclusion.test_a_pure_quarto_repo_below_doc_thresholds_still_doc_only_via_toolchain.
+        # .tex isn't counted as docs (.qmd/.rmd are in DOC_EXTS, but .tex stays out), so
+        # doc_loc≈0; only toolchain_present rescues it. Real-scan proof: TestFrameworkInstalledExclusion
+        # .test_a_pure_quarto_repo_below_doc_thresholds_still_doc_only_via_toolchain.
         r = md.detect_doc_only(self.p, files(src=0, docs_loc=0, docs_count=0),
                                {"toolchain_present": True})
         self.assertTrue(r["is_doc_only"])
@@ -165,13 +173,16 @@ class TestDetection(unittest.TestCase):
         self.assertEqual(md.DOC_ONLY_DOC_FILES_MIN, 3)
 
 
-class TestLanguageAndDocExtensionCoverage(unittest.TestCase):
-    """Two independent gaps in the same three constants, found scanning a real R package:
+class TestBL34LanguageAndDocExtensions(unittest.TestCase):
+    """Found while answering a question about an adopter project's "Code by
+    Language" card. Two independent gaps in the same three constants:
     - `.r` was already in SOURCE_EXTS (R always counted toward Source LOC) but had no LANG_MAP
-      entry, so it never got its own "Code by Language" row.
-    - `.qmd`/`.rmd` (Quarto / R Markdown) were in neither SOURCE_EXTS nor DOC_EXTS, so a file with
-      either extension outside a docs/ path fell through categorize_file's whole ladder to
-      "other" -- not source, not docs, not even LOC-counted (LOC is skipped entirely for "other").
+      entry, so it never got its own "Code by Language" row (603 files / 77,773 LOC, invisible).
+    - `.qmd`/`.rmd` were in neither SOURCE_EXTS nor DOC_EXTS, so a file with either extension
+      outside a `docs/` path fell through categorize_file's whole ladder to "other" — not source,
+      not docs, not even LOC-counted (LOC is skipped entirely for "other").
+    RED-first (Learning #12): both gaps confirmed by direct execution against an adopter project
+    before either constant was touched.
     """
 
     def setUp(self):
@@ -187,7 +198,7 @@ class TestLanguageAndDocExtensionCoverage(unittest.TestCase):
         self.assertIn("R", m["by_language"], "an .R file must appear in Code by Language")
         self.assertEqual(m["by_language"]["R"]["count"], 1)
         self.assertEqual(m["by_category"]["source"]["count"], 1,
-                         "R must still count as Source -- this only adds the missing language row")
+                         "R must still count as Source -- the change only adds the missing language row")
 
     def test_r_extension_is_case_insensitive(self):
         # collect_file_metrics lowercases fpath.suffix, so the conventional uppercase ".R" and a
@@ -2316,6 +2327,92 @@ class TestQualityGateSignals(unittest.TestCase):
         kinds = [(l["name"], l["kind"], l["from"], l["to"]) for l in m["gates"]["loosened"]]
         self.assertEqual(kinds, [("cov", "floor lowered", 80.0, 1.0), ("cov", "removed", 80.0, None)])
 
+    def _git_at(self, p, when, *args, check=True):
+        # The plain `git log` orders by COMMITTER date, so a test about how two lineages interleave
+        # has to set it: commits made in the same second tie, and a tie is not a topology.
+        env = {**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when}
+        return subprocess.run(["git", "-C", str(p), "-c", "user.email=t@t", "-c", "user.name=t", *args],
+                              check=check, capture_output=True, text=True, env=env).stdout.strip()
+
+    def _two_lineages(self, base, side, mainline, merged, side_date, main_date):
+        """A repo whose manifest forks into two lineages and is joined by a --no-ff merge whose
+        resolution is `merged`. Returns (path, merge sha). `side` and `mainline` each change the
+        manifest relative to `base`; the dates say which of the two the plain `git log` lists first."""
+        p = self._repo({**self.CODE, ".quality-gates.json": base})
+        trunk = self._git(p, "symbolic-ref", "--short", "HEAD")
+        self._git(p, "checkout", "-q", "-b", "side")
+        (p / ".quality-gates.json").write_text(side)
+        self._git_at(p, side_date, "add", "-A"); self._git_at(p, side_date, "commit", "-q", "-m", "side")
+        self._git(p, "checkout", "-q", trunk)
+        (p / ".quality-gates.json").write_text(mainline)
+        self._git_at(p, main_date, "add", "-A"); self._git_at(p, main_date, "commit", "-q", "-m", "mainline")
+        # Both lineages changed the manifest, so the merge conflicts: resolve it to `merged`.
+        self._git_at(p, "2030-03-01T12:00:00", "merge", "--no-ff", "--no-commit", "side", check=False)
+        (p / ".quality-gates.json").write_text(merged)
+        self._git_at(p, "2030-03-01T12:00:00", "add", "-A")
+        self._git_at(p, "2030-03-01T12:00:00", "commit", "-q", "-m", "merge side")
+        return p, self._git(p, "rev-parse", "--short", "HEAD")
+
+    def test_a_merged_lineage_is_not_read_as_one_line(self):
+        # `git log -- <manifest>` without --first-parent follows BOTH parents of a merge whose
+        # manifest matches neither, so it lists the two lineages interleaved by commit date, and the
+        # fold compares each row with the next older ROW: the newer of two sibling commits was
+        # compared with a commit that is not its ancestor. Here the mainline (120, tightened from
+        # 100) is listed above the side branch (148 plus a gate), and the scan printed "cov floor
+        # lowered 148 -> 120" and "ledger removed" -- changes nobody made: every version below is a
+        # tightening against its own parent, and the merge keeps the better of both and adds a gate.
+        # (A merge that matched ONE parent would hide this: git follows only that parent.)
+        base = self._manifest(self._gate("cov", "min", 100))
+        side = self._manifest(self._gate("cov", "min", 148), self._gate("ledger", "max", 0))
+        mainline = self._manifest(self._gate("cov", "min", 120))
+        merged = self._manifest(self._gate("cov", "min", 148), self._gate("ledger", "max", 0),
+                                self._gate("lint", "max", 0))
+        p, _merge = self._two_lineages(base, side, mainline, merged=merged,
+                                       side_date="2030-01-01T12:00:00", main_date="2030-02-01T12:00:00")
+        m = md.collect_all(p)
+        self.assertEqual(m["gates"]["loosened"], [])
+        self.assertEqual(m["gates"]["commands_changed"], [])
+        self.assertFalse([r for r in m["scores"]["risks"] if "thresholds only tighten" in r["description"]])
+
+    def test_a_loosening_a_merge_resolves_to_is_reported_at_the_merge(self):
+        # The other direction, and the one SAFEGUARDS depends on: merge commits skip the pre-commit
+        # hook, so "a loosening resolved into a merge is caught by the dashboard's read of the
+        # manifest's history". Both lineages tighten against `base` (120 and 110), and the merge
+        # resolves to the LOWER of the two -- a loosening of the line it merged into (120 -> 110).
+        # The merge matches the side branch, so the plain log follows only that parent: the
+        # mainline's 120 was never compared with anything, and the scan reported nothing.
+        base = self._manifest(self._gate("cov", "min", 100))
+        side = self._manifest(self._gate("cov", "min", 110))
+        mainline = self._manifest(self._gate("cov", "min", 120))
+        p, merge = self._two_lineages(base, side, mainline, merged=side,
+                                      side_date="2030-01-01T12:00:00", main_date="2030-02-01T12:00:00")
+        m = md.collect_all(p)
+        self.assertEqual([(l["name"], l["kind"], l["from"], l["to"], l["sha"])
+                          for l in m["gates"]["loosened"]],
+                         [("cov", "floor lowered", 120.0, 110.0, merge)])
+
+    def test_a_loosening_a_side_branch_carried_in_is_attributed_to_the_merge(self):
+        # A loosening made on a side branch reaches the line the repo is on only through the merge,
+        # so the merge is where it is reported -- compared with the line it merged INTO, which is the
+        # comparison the pre-commit ratchet makes against HEAD. Trace it with
+        # `git diff <sha>^1 <sha> -- .quality-gates.json`: a clean merge shows no combined diff.
+        base = self._manifest(self._gate("cov", "min", 100))
+        side = self._manifest(self._gate("cov", "min", 50))
+        p = self._repo({**self.CODE, ".quality-gates.json": base})
+        trunk = self._git(p, "symbolic-ref", "--short", "HEAD")
+        self._git(p, "checkout", "-q", "-b", "side")
+        (p / ".quality-gates.json").write_text(side)
+        self._git(p, "add", "-A"); self._git(p, "commit", "-q", "-m", "lower the floor")
+        self._git(p, "checkout", "-q", trunk)
+        (p / "README.md").write_text("# App\n\nChanged on the trunk.\n")
+        self._git(p, "add", "-A"); self._git(p, "commit", "-q", "-m", "unrelated trunk change")
+        self._git(p, "merge", "--no-ff", "-q", "-m", "merge side", "side")      # clean: no conflict
+        merge = self._git(p, "rev-parse", "--short", "HEAD")
+        m = md.collect_all(p)
+        self.assertEqual([(l["name"], l["kind"], l["from"], l["to"], l["sha"])
+                          for l in m["gates"]["loosened"]],
+                         [("cov", "floor lowered", 100.0, 50.0, merge)])
+
     def test_a_direction_flip_is_a_loosening(self):
         cfg1 = self._manifest(self._gate("cov", "min", 80))
         cfg2 = self._manifest(self._gate("cov", "max", 80))
@@ -2401,10 +2498,19 @@ class TestFmtRatioAndTwins(unittest.TestCase):
                         "tools/ and starter-kit/ dashboards must be byte-identical")
 
     def test_dashboard_version(self):
-        self.assertEqual(md.DASHBOARD_VERSION, "2.11.3")
+        """⚠ PINNED TWICE ON PURPOSE — the module attribute AND the starter-kit source text. Bump
+        BOTH or this goes red. 2.19.0: the Class B
+        read-cap row asserts only what it evaluated and names a remedy it has read from the
+        project's own trimmer source -- changed output on a distributed tool, so MINOR.
+        2.20.0: the `.gitattributes` seed becomes installed content -- changed output
+        on a distributed tool, so MINOR. 2.21.0: the manifest-history walk is first-parent,
+        so a merged lineage no longer prints loosenings nobody caused -- changed output, so MINOR.
+        2.22.0: the dashboard reads a project that keeps its methodology files under
+        methodology/ as it reads one that keeps them at the root -- changed output, so MINOR."""
+        self.assertEqual(md.DASHBOARD_VERSION, "2.22.0")
         starter_src = Path(STARTER_PY).read_text(encoding="utf-8")
-        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.11\.3"', starter_src, re.MULTILINE),
-                        "starter-kit twin must also declare DASHBOARD_VERSION 2.11.3")
+        self.assertTrue(re.search(r'^DASHBOARD_VERSION\s*=\s*"2\.22\.0"', starter_src, re.MULTILINE),
+                        "starter-kit twin must also declare DASHBOARD_VERSION 2.22.0")
 
 
 class TestCliRemedyProportionality(unittest.TestCase):
@@ -2456,30 +2562,12 @@ class TestCliRemedyProportionality(unittest.TestCase):
         self.assertTrue((proj / "dashboard.html").exists(),
                         "a plain run must still generate the dashboard")
 
-    def test_stale_warning_leads_with_the_project_scoped_remedy(self):
-        # A <portfolio>/methodology/starter-kit/ canonical, plus a project holding a copy old
-        # enough to trip the staleness check.
-        canon_dir = self.p / "methodology" / "starter-kit"
-        canon_dir.mkdir(parents=True)
-        shutil.copy(TOOLS_PY, canon_dir / "methodology_dashboard.py")
-        proj = self._project()
-        stale = (canon_dir / "methodology_dashboard.py").read_text(encoding="utf-8")
-        stale = re.sub(r'^DASHBOARD_VERSION = .*$', 'DASHBOARD_VERSION = "2.6.1"',
-                       stale, count=1, flags=re.MULTILINE)
-        (proj / "methodology_dashboard.py").write_text(stale, encoding="utf-8")
-
-        r = subprocess.run([sys.executable, "methodology_dashboard.py", "--no-open"],
-                           cwd=proj, capture_output=True, text=True)
-        err = r.stderr
-        self.assertIn("is stale", err, "the staleness finding itself must still be reported")
-        self.assertIn("cp ", err,
-                      "the per-project remedy (a copy) must be offered — it is the safe action")
-        # The portfolio remedy may still be offered, but never as a bare --sync: that is the
-        # 26-file/25-repo write this issue is about. If --sync appears, --dry-run must too.
-        for line in err.splitlines():
-            if "--sync" in line:
-                self.assertIn("--dry-run", line,
-                              "--sync must never be advertised without --dry-run first: %r" % line)
+    # NOTE: upstream's third test in this class is deliberately not carried:
+    # `test_stale_warning_leads_with_the_project_scoped_remedy` asserts a literal `"cp "` in the
+    # stale-copy warning, and this branch's warning prints a `--sync` scoped to the one project
+    # instead, so it would fail against the design that replaced it, not catch a defect. The two
+    # tests above assert behaviour this branch keeps (a bare `--dry-run` exits 2 and writes
+    # nothing; a plain run writes dashboard.html) and are restored as upstream wrote them.
 
 
 class TestEndToEnd(unittest.TestCase):
@@ -2594,6 +2682,36 @@ def installed_scanner(loc=3070, version="2.10.0", marker=True):
     return head + "".join(f"def gen_{i}():\n    return {i}\n" for i in range(loc // 2))
 
 
+def installed_trimmer(loc=1600, version="1.0.0", marker=True):
+    """Text that stands in for the ledger trimmer `bin/sync` installs at an adopter's root.
+
+    The SECOND executable adopters receive, and it proves itself by a DIFFERENT constant than the
+    scanner does. Measured against the real tool rather than assumed:
+
+        grep -c DASHBOARD_VERSION starter-kit/methodology_trim.py                      -> 0
+        for s in METHODOLOGY_ITEMS 'def collect_all' 'def score_health' \\
+                 'def assess_risks' https://github.com/KJ5HST/methodology; do \\
+          grep -c -- "$s" starter-kit/methodology_trim.py; done                        -> 0 0 0 0 0
+
+    So the earlier predicate answered False for this file on BOTH of its arms, and putting the
+    name on the exclusion tuple alone would not have changed that — the content gate is the work.
+
+    Those two are ZERO-counts, which is why they are quoted and the tool's line count and the
+    line number of its TRIM_VERSION are NOT. Both of those were published here with real measured
+    values and both were falsified before this session ended, by this session's own later edit to
+    the trimmer's module docstring. A count that moves whenever anyone touches a comment is a
+    liability in a docstring; re-derive it (`wc -l starter-kit/methodology_trim.py`) if you need
+    it. `loc` below is a nominal default chosen to sit well above DOC_ONLY_SOURCE_LOC_MAX, not a
+    claim about the shipped file's size — the test that pins the fixture against the REAL artifact
+    is test_every_shipped_executable_is_recognized_from_its_real_source. `version` defaults to the
+    shipped one; unlike the scanner there are no pre-constant copies in the wild to lag behind.
+    """
+    head = '#!/usr/bin/env python3\n"""stand-in."""\n'
+    if marker:
+        head += f'TRIM_VERSION = "{version}"\n'
+    return head + "".join(f"def gen_{i}():\n    return {i}\n" for i in range(loc // 2))
+
+
 class TestFrameworkInstalledExclusion(unittest.TestCase):
     """Layer 7 — `bin/sync` installs a 3,070-line scanner into the adopter's ROOT while the
     doc-only cap is 200 LOC, so the source-cap short-circuit fired before the corpus disjunction
@@ -2617,12 +2735,13 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
                         "commit", "-q", "-m", "init"], check=True)
         return p
 
-    # The synced doc corpus: a Quarto book. .qmd files are now doc-extensions, so this two-chapter
-    # fixture's own doc_loc (~400) clears DOC_ONLY_DOC_LOC_MIN on its own -- it still proves
-    # is_doc_only stays True, just no longer in isolation from the corpus arm. See
-    # QUARTO_MINIMAL + test_a_pure_quarto_repo_below_doc_thresholds_still_doc_only_via_toolchain
-    # below for the fixture that isolates the render-toolchain arm of the disjunction — the exact
-    # source_loc≈0 research repo BL-5 exists for.
+    # The synced doc corpus: a Quarto book. If .qmd files were NOT doc-extensions,
+    # the render-toolchain arm of the disjunction would be the ONLY thing that could carry this fixture
+    # — the exact source_loc≈0 research repo the doc-only rule exists for. Since .qmd/.rmd are in DOC_EXTS,
+    # this two-chapter fixture's own doc_loc (~400) now ALSO clears DOC_ONLY_DOC_LOC_MIN on its
+    # own — it still proves is_doc_only stays True, just no longer in isolation from the corpus
+    # arm. `test_a_pure_quarto_repo_below_doc_thresholds_still_doc_only_via_toolchain` below is the
+    # fixture that isolates the toolchain arm.
     QUARTO = {
         "_quarto.yml": "project:\n  type: book\n",
         "ch1.qmd": "# Ch1\n" + "prose\n" * 200,
@@ -2630,9 +2749,8 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
         "README.md": "# Monograph\n\nA Quarto book.\n" * 4,
     }
 
-    # A single short chapter -- doc_loc and doc_files both stay under the corpus-disjunction
-    # thresholds even with .qmd counted as docs, so is_doc_only can ONLY be reached via
-    # render.toolchain_present.
+    # A single short chapter — doc_loc and doc_files both stay under the thresholds even with
+    # .qmd counted as docs, so is_doc_only can ONLY be reached via render.toolchain_present.
     QUARTO_MINIMAL = {
         "_quarto.yml": "project:\n  type: book\n",
         "index.qmd": "# Index\none line of prose\n",
@@ -2650,10 +2768,10 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
                            "the excluded LOC must remain visible, not vanish from the inventory")
 
     def test_a_pure_quarto_repo_below_doc_thresholds_still_doc_only_via_toolchain(self):
-        """Guard-the-guard: adding .qmd to DOC_EXTS must not make the toolchain arm of the corpus
-        disjunction unreachable through real scanning. QUARTO_MINIMAL's own doc_loc/doc_files are
-        asserted BELOW both thresholds, so is_doc_only=True here can only be explained by
-        render.toolchain_present -- the same real-scan proof QUARTO used to carry alone."""
+        """Guard-the-guard: adding .qmd to DOC_EXTS must not make the toolchain arm of the
+        corpus disjunction unreachable through real scanning. QUARTO_MINIMAL's own doc_loc/doc_files
+        are asserted BELOW both thresholds, so is_doc_only=True here can only be explained by
+        render.toolchain_present — the same real-scan proof QUARTO used to carry alone."""
         p = self._repo(dict(self.QUARTO_MINIMAL))
         m = md.collect_all(p)
         docs = m["files"]["by_category"]["docs"]
@@ -2812,6 +2930,34 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
         self.assertEqual(m["files"]["by_category"]["vendor"]["count"], 1)
         self.assertEqual(m["tests"]["source_loc"], 0)
 
+    def test_every_shipped_executable_is_recognized_from_its_real_source(self):
+        """The generalization of the test above, and the one that was MISSING: nothing iterated
+        FRAMEWORK_INSTALLED_SOURCE, so every content fixture hardcoded the scanner. A future name
+        added to the table with a content rule that does not match its own shipped file would ship
+        the v3.2 regression under a green suite — the tuple would agree with the manifest and the
+        predicate would still answer False.
+
+        Reads each name's REAL artifact out of starter-kit/, resolved through the manifest rather
+        than by assuming `starter-kit/<dest>`: the source path is the manifest's business, and
+        hardcoding it here would re-introduce exactly the duplicated cross-reference the
+        manifest-agreement test exists to prevent."""
+        src_for = {dest: src for src, dest, _d in self._manifest().DISTRIBUTION}
+        # 6 once upstream's quality ratchet ships quality_ratchet.py
+        # and its .quality-gates.json seed, and the loop below checks both against their real files.
+        # 7 with upstream's v4.1 `.gitattributes` seed.
+        self.assertEqual(len(md.FRAMEWORK_INSTALLED_SOURCE), 7,
+                         "population guard: update this test's expectations deliberately when a "
+                         "further executable ships, rather than letting the loop silently cover less")
+        for dest in md.FRAMEWORK_INSTALLED_SOURCE:
+            real = Path(os.path.dirname(HERE), src_for[dest]).read_text(encoding="utf-8")
+            p = self._repo({dest: real, "README.md": "# adopter\n"})
+            self.assertTrue(
+                md.is_framework_installed(Path(dest), p / dest),
+                f"{dest} is on the exclusion table but its own shipped source does not satisfy "
+                f"the content rule declared for it — the exclusion is inert for this file")
+            self.assertEqual(md.collect_all(p)["tests"]["source_loc"], 0,
+                             f"{dest} was recognized but still counted as adopter source")
+
     def test_pre_version_copies_are_recognized_by_structure(self):
         """A live adopter still runs a 1,614-line copy that predates DASHBOARD_VERSION entirely.
         A version-only gate silently skipped it — the fix not applying is as bad as it being
@@ -2834,6 +2980,187 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
         self.assertFalse(md.is_framework_installed(
             Path("methodology_dashboard.py"), p / "methodology_dashboard.py"))
         self.assertGreater(md.collect_all(p)["tests"]["source_loc"], 200)
+
+    # --- The SECOND installed executable ------------------------------------------------
+    #
+    # The scanner's own exclusion fixed this defect for the scanner. Shipping the trimmer re-opens it for a file that
+    # proves itself by a different constant, so the fix does not generalize for free: the two
+    # RED-first tests below were driven against the earlier scanner and watched to FAIL
+    # (doc_only=False, source_loc=1632, the HIGH "No test infrastructure" risk back).
+
+    def test_a_synced_doc_repo_with_the_trimmer_is_still_doc_only(self):
+        """RED: reported False (source_loc 1,632 > the 200 cap) before the trimmer was recognized."""
+        p = self._repo({**self.QUARTO, "methodology_trim.py": installed_trimmer()})
+        m = md.collect_all(p)
+        self.assertTrue(m["doc_only"]["is_doc_only"],
+                        "installing the trimmer must not change a doc repo's classification")
+        self.assertEqual(m["tests"]["source_loc"], 0,
+                         "the adopter wrote no source; only the installed trimmer was present")
+        self.assertGreater(m["files"]["by_category"]["vendor"]["loc"], 800,
+                           "the excluded LOC must remain visible, not vanish from the inventory")
+
+    def test_trimmer_alone_does_not_reintroduce_the_no_test_risk(self):
+        """RED: the HIGH risk was present on a doc repo carrying only the trimmer."""
+        def risks_of(m):
+            return [r["description"] for r in m["scores"]["risks"]]
+
+        synced = md.collect_all(
+            self._repo({**self.QUARTO, "methodology_trim.py": installed_trimmer()}))
+        self.assertNotIn("No test infrastructure", risks_of(synced))
+
+    def test_both_installed_executables_are_excluded_together(self):
+        """A REAL `bin/sync` leaves both at the root; excluding one and not the other still
+        breaks the adopter, so the whole-install case is pinned rather than inferred."""
+        p = self._repo({**self.QUARTO,
+                        "methodology_dashboard.py": installed_scanner(),
+                        "methodology_trim.py": installed_trimmer()})
+        m = md.collect_all(p)
+        self.assertTrue(m["doc_only"]["is_doc_only"])
+        self.assertEqual(m["tests"]["source_loc"], 0)
+        self.assertGreater(m["files"]["by_category"]["vendor"]["loc"], 4000,
+                           "both executables must land in vendor, not one of them")
+
+    def test_a_lookalike_trimmer_without_its_version_constant_is_not_excluded(self):
+        """GUARD-THE-GUARD, and green before the fix as well as after — it constrains the fix, it
+        does not prove it (an absence assertion is trivially true before the name
+        exists). It earns its place by producer mutation: deleting the trimmer's content check
+        makes it fail. An adopter's own 1,000-line `methodology_trim.py` is THEIRS."""
+        app = ("# our own ledger trimmer\n" + "y = 2\n" * 1000)
+        p = self._repo({"methodology_trim.py": app, "README.md": "# adopter\n"})
+        self.assertFalse(md.is_framework_installed(
+            Path("methodology_trim.py"), p / "methodology_trim.py"))
+        self.assertGreater(md.collect_all(p)["tests"]["source_loc"], 200)
+
+    def test_adopters_own_nested_trimmer_is_not_excluded(self):
+        """Root-anchored for the trimmer too, not basename-matched."""
+        p = self._repo({"tools/methodology_trim.py": installed_trimmer(loc=1000),
+                        "README.md": "# app\n"})
+        m = md.collect_all(p)
+        self.assertGreater(m["tests"]["source_loc"], 200)
+        self.assertEqual(m["files"]["by_category"]["vendor"]["count"], 0)
+
+    def test_the_scanner_marker_does_not_launder_the_trimmer_or_the_reverse(self):
+        """Each name proves itself with ITS OWN constant. A shared any-of-these-markers rule would
+        make the two interchangeable, so a file could be exempted by carrying the wrong tool's
+        constant — the laundering hole the per-file table exists to close."""
+        wrong_marker_trimmer = ('#!/usr/bin/env python3\nDASHBOARD_VERSION = "2.12.0"\n'
+                                + "y = 2\n" * 1000)
+        p = self._repo({"methodology_trim.py": wrong_marker_trimmer, "README.md": "# a\n"})
+        self.assertFalse(md.is_framework_installed(
+            Path("methodology_trim.py"), p / "methodology_trim.py"),
+            "a file named methodology_trim.py must not be exempted by the SCANNER's constant")
+        wrong_marker_scanner = ('#!/usr/bin/env python3\nTRIM_VERSION = "1.0.0"\n'
+                                + "y = 2\n" * 1000)
+        q = self._repo({"methodology_dashboard.py": wrong_marker_scanner, "README.md": "# a\n"})
+        self.assertFalse(md.is_framework_installed(
+            Path("methodology_dashboard.py"), q / "methodology_dashboard.py"),
+            "and not the reverse either")
+
+    def test_a_lookalike_trimmer_carrying_the_SCANNERS_signatures_is_not_excluded(self):
+        """The trimmer's entry declares an EMPTY structural-signature tuple, meaning 'no fallback —
+        TRIM_VERSION or nothing'. Without this test that field is unexercised: the harness proved
+        that swapping `()` for the scanner's five signatures survives the whole suite, which would
+        let a file named methodology_trim.py be exempted by carrying two scanner function names it
+        has no business having. RED-first against that mutant."""
+        impostor = ("# our own trimmer\n"
+                    "def collect_all(items):\n    return list(items)\n"
+                    "def score_health(m):\n    return 0\n" + "y = 2\n" * 1000)
+        p = self._repo({"methodology_trim.py": impostor, "README.md": "# adopter\n"})
+        self.assertFalse(md.is_framework_installed(
+            Path("methodology_trim.py"), p / "methodology_trim.py"),
+            "the trimmer declares no structural fallback — only TRIM_VERSION may exempt it")
+        self.assertGreater(md.collect_all(p)["tests"]["source_loc"], 200)
+
+    # --- what the shipped tool WRITES, which the exclusion above says nothing about --------------
+
+    def _real_trim_output(self, tmp):
+        """Run the REAL trimmer's --write on a real fixture ledger and return the repo path.
+
+        Deliberately not a stand-in: the whole defect is that the generated artifact's size and
+        shape come from the tool, so a hand-written fixture would be asserting my guess about its
+        output rather than its output."""
+        subprocess.run(["git", "init", "-q", str(tmp)], check=True)
+        hdr = "# Changelog — Authoritative Action Ledger\n\nIntro prose.\n\n---\n\n## 2026-01\n\n"
+        recs = "".join(f"### 2026-01-{i:02d} · [ad hoc] Entry {i}\n\nBody line {i}.\n\n"
+                       for i in range(28, 0, -1))
+        (tmp / "CHANGELOG.md").write_text(hdr + recs, encoding="utf-8")
+        (tmp / "README.md").write_text("# adopter\n" * 5, encoding="utf-8")
+        subprocess.run(["git", "-C", str(tmp), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(tmp), "-c", "user.email=t@t", "-c", "user.name=t",
+                        "commit", "-q", "-m", "init"], check=True)
+        trimmer = os.path.join(os.path.dirname(HERE), "starter-kit", "methodology_trim.py")
+        r = subprocess.run([sys.executable, trimmer, "--file", str(tmp / "CHANGELOG.md"),
+                            "--write", "--cut", "10"], capture_output=True, text=True)
+        proofs = list((tmp / "docs" / "archive").glob("*.verify.sh"))
+        self.assertEqual(len(proofs), 1,
+                         f"fixture control: --write must emit exactly one proof script; "
+                         f"stdout={r.stdout[-400:]} stderr={r.stderr[-400:]}")
+        return proofs[0]
+
+    def test_the_generated_proof_script_is_not_counted_as_adopter_source(self):
+        """RED: `source_loc` was 220 against a 200 cap, `doc_only` False — a doc-only adopter who
+        USES the tool this session ships re-earned the exact v3.2 regression the shipping work
+        exists to prevent, by a different route."""
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        p = Path(td.name)
+        proof = self._real_trim_output(p)
+        # Fixture control: the artifact must actually be big enough to trip the cap, or this test
+        # would pass for the wrong reason on a future, shorter template.
+        self.assertGreater(md.count_lines(proof), md.DOC_ONLY_SOURCE_LOC_MAX,
+                           "fixture control: the generated proof must exceed the source cap, "
+                           "otherwise this test cannot observe the defect it is written for")
+        m = md.collect_all(p)
+        self.assertEqual(m["tests"]["source_loc"], 0,
+                         "the tool's own generated proof is not the adopter's source")
+        self.assertGreater(m["files"]["by_category"]["vendor"]["loc"], 0,
+                           "and it must stay visible in the inventory, not vanish")
+
+    def test_the_proof_exclusion_is_anchored_on_all_three_conditions(self):
+        """Guard-the-guard, and each condition is broken separately — a predicate proven only by
+        its happy path is a predicate whose ANDs are untested."""
+        banner = "#!/usr/bin/env bash\n# generated by methodology_trim.py v1.0.0\n" + "x=1\n" * 300
+        cases = {
+            "docs/archive/s.verify.sh": True,                       # all three hold
+            "s.verify.sh": False,                                   # wrong directory
+            "docs/archive/s.sh": False,                             # wrong suffix
+        }
+        for rel, expected in cases.items():
+            p = self._repo({rel: banner, "README.md": "# a\n"})
+            self.assertEqual(md.is_generated_proof(Path(rel), p / rel), expected,
+                             f"{rel}: expected is_generated_proof == {expected}")
+        # ...and the content condition, at the one path where the other two DO hold.
+        rel = "docs/archive/s.verify.sh"
+        p = self._repo({rel: "#!/usr/bin/env bash\n" + "x=1\n" * 300, "README.md": "# a\n"})
+        self.assertFalse(md.is_generated_proof(Path(rel), p / rel),
+                         "a script at the right path and suffix but without the generator banner "
+                         "is the adopter's own — the content check is what stops that")
+
+    def test_every_excluded_source_name_declares_a_content_check(self):
+        """THE STRUCTURAL GUARD, and the reason this session exists rather than appending a name.
+
+        The failure this closes: `test_exclusion_list_matches_the_manifest` goes red when the
+        manifest grows a non-markdown dest, and the cheapest way to make it green is to append the
+        name to FRAMEWORK_INSTALLED_SOURCE — which passes that test while `is_framework_installed`
+        still has no rule for the file. Deriving the tuple FROM the content table makes that edit
+        impossible to write. Asserted as an ordered tuple because the manifest test compares
+        ordered tuples."""
+        self.assertEqual(md.FRAMEWORK_INSTALLED_SOURCE,
+                         tuple(md._FRAMEWORK_INSTALLED_CONTENT),
+                         "the exclusion tuple must BE the content table's keys, in order — a name "
+                         "with no declared content check must not be expressible")
+        for name, (version_re, signatures) in md._FRAMEWORK_INSTALLED_CONTENT.items():
+            # None is legal (see is_framework_installed's own guard) for a file with no version
+            # constant of its own — signatures are then the only way in, and an empty signature
+            # tuple alongside a None version_re would be a genuine, silent no-op entry, so a
+            # compiled pattern OR a non-empty signature tuple is required, never neither.
+            self.assertTrue(version_re is None or hasattr(version_re, "search"),
+                            f"{name} declares a version_re that is neither None nor compiled")
+            self.assertIsInstance(signatures, tuple,
+                                  f"{name}'s structural fallback must be a tuple (possibly empty)")
+            if version_re is None:
+                self.assertTrue(signatures,
+                                f"{name} has no version_re AND no signatures — unreachable, inert entry")
 
     def _manifest(self):
         manifest_path = os.path.join(os.path.dirname(HERE), "bin", "_manifest.py")
@@ -2893,17 +3220,13 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
 
     # --- per-file signatures: the BL-31 follow-up gap (a listed name proves nothing about a
     # DIFFERENT file's content) --------------------------------------------------------------
-
-    def test_every_framework_installed_source_name_has_a_signature(self):
-        """The completeness gate the fix is really about. FRAMEWORK_INSTALLED_SOURCE and
-        _FRAMEWORK_FILE_SIGNATURES must enumerate the SAME names, or a future addition to the
-        tuple repeats the exact gap this test exists to close: listed for exclusion, verified
-        against the WRONG file's signatures (or none at all), never actually excluded."""
-        self.assertEqual(set(md.FRAMEWORK_INSTALLED_SOURCE),
-                         set(md._FRAMEWORK_FILE_SIGNATURES.keys()),
-                         "every FRAMEWORK_INSTALLED_SOURCE name needs its own entry in "
-                         "_FRAMEWORK_FILE_SIGNATURES — a name-list addition with no matching "
-                         "signature silently never excludes anything")
+    #
+    # test_every_framework_installed_source_name_has_a_signature (upstream's own name for this
+    # same completeness gate) is deliberately not carried over: this fork's design derives
+    # FRAMEWORK_INSTALLED_SOURCE FROM _FRAMEWORK_INSTALLED_CONTENT's own keys (see the constant's
+    # definition), so the two can never disagree by construction, and
+    # test_every_excluded_source_name_declares_a_content_check above already asserts the
+    # stronger, ordered-tuple form of the same invariant.
 
     def test_the_real_context_budget_artifact_is_recognized(self):
         """Guard-the-guard, mirrors test_the_real_shipped_artifact_is_recognized: uses the REAL
@@ -2938,7 +3261,7 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
         The names come from bin/_manifest.py, never from the constant under test, so a file the
         manifest installs and the scanner does not know about fails here by name.
         `.context-budget.json` is bucketed `config` before the predicate is consulted (see its
-        _FRAMEWORK_FILE_SIGNATURES entry), so its end-to-end half cannot fail on its signatures:
+        _FRAMEWORK_INSTALLED_CONTENT entry), so its end-to-end half cannot fail on its signatures:
         the direct predicate call holds those, and its category is asserted so that reason stays
         checked."""
         mod = self._manifest()
@@ -2976,7 +3299,7 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
                                      f"{dest} passes end to end only because it is config — if "
                                      "that changes, its signature entry decides this test")
                 self.assertTrue(md.is_framework_installed(Path(dest), CANONICAL_ROOT / src),
-                                f"the real {src} must match its own _FRAMEWORK_FILE_SIGNATURES "
+                                f"the real {src} must match its own _FRAMEWORK_INSTALLED_CONTENT "
                                 "entry")
         with self.subTest(installed="all, as bin/sync writes them"):
             assert_still_doc_only(real)
@@ -3144,7 +3467,7 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
         """The MIRROR defect, unmasked by the source exclusion and closed by operator decision.
 
         RED against the source-exclusion-only tree: this repo read doc_only=True and LOST its
-        "No test infrastructure" risk, because bin/sync's 23 installed markdown files clear
+        "No test infrastructure" risk, because bin/sync's 21 installed markdown files clear
         DOC_ONLY_DOC_FILES_MIN (3) on their own. Installing the methodology must not answer the
         question "is this a document project?" in EITHER direction.
         """
@@ -3253,6 +3576,3445 @@ class TestFrameworkInstalledExclusion(unittest.TestCase):
         self.assertIn("source_loc 0 &amp;le; 200", card)
         self.assertNotIn("source_loc 3", card,
                          "the justification must not still quote the installed scanner's LOC")
+
+
+class TestD4ReadCapTruncation(unittest.TestCase):
+    """The agent-read-cap check: the one of three defects that is NOT a mechanical edit.
+
+    The literal reading — put `.md` into `SOURCE_EXTS` so the existing "Large files detected" risk
+    can see it — regresses the large-file check, whose ratified `test_large_file_ext_filter` (below, untouched)
+    asserts a 2,500-line chapter must NOT trip it, and whose narrowing was earned by measurement.
+    A SECOND risk is used instead, because the two share only the adjective:
+
+      code-smell question   "is this MODULE unwieldy?"   — structure; false for a chapter
+      read-cap question     "does a file a session must read IN FULL still fit in one read?"
+                                                        — harness behaviour; true or false
+                                                          whatever the file is for
+
+    That separation is ADDED POLICY, labelled as such here and in the ledger entry. What the design
+    requires is only that a 2,090-line `.md` be able to trip *a* large-file risk.
+
+    RED-FIRST, and watched: every assertion below was run against the unpatched scanner and
+    observed to fail (the metrics key is absent -> KeyError; the risk string appears nowhere).
+    """
+
+    def _repo(self, files_map, runner=True):
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        p = Path(td.name)
+        subprocess.run(["git", "init", "-q", str(p)], check=True)
+        if runner:
+            (p / "SESSION_RUNNER.md").write_text("# Session Runner\n" + "step\n" * 40)
+        for name, content in files_map.items():
+            fp = p / name
+            fp.parent.mkdir(parents=True, exist_ok=True)
+            fp.write_text(content)
+        subprocess.run(["git", "-C", str(p), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(p), "-c", "user.email=t@t", "-c", "user.name=t",
+                        "commit", "-q", "-m", "init"], check=True)
+        return p
+
+    @staticmethod
+    def _lines(n):
+        return "x\n" * n
+
+    @staticmethod
+    def _bytes(n):
+        """EXACTLY n bytes, and still line-structured so `loc` stays meaningful. Phase B moved the
+        verdict onto bytes, so a fixture built by LINE count no longer controls the variable under
+        test: `_lines(2500)` is 5,000 B, an order of magnitude under the cap, and every assertion
+        built on it would go quietly green for the wrong reason."""
+        assert n >= 2, "a line-structured fixture needs at least one 'x\\n'"
+        full, rest = divmod(n, 2)
+        body = "x\n" * full
+        if rest:                       # pad the last line by one byte, keeping the trailing \n
+            body = "xx\n" + "x\n" * (full - 1)
+        assert len(body.encode()) == n, (len(body.encode()), n)
+        return body
+
+    # --- the constant -------------------------------------------------------------------------
+
+    def test_cap_agrees_with_the_trimmer(self):
+        """The reporter and the remedy must not disagree about where the cliff is. Independent
+        operands: one side is read out of THIS module, the other parsed out of the OTHER tool's
+        source text.
+
+        Phase B pins BOTH INPUTS, not the product. Pinning only the product would let the two
+        tools agree on 56,750 B while disagreeing about what it means -- and the whole point of
+        deriving it is that the inputs, not the boundary, are what a future session re-measures.
+        Note what this still does NOT buy, unchanged from before and worth restating: it keeps the
+        two copies CONSISTENT, and it kept them consistent throughout the period both were WRONG.
+        Only Appendix A can say whether they are right."""
+        trim_src = (Path(STARTER_PY).parent / "methodology_trim.py").read_text(encoding="utf-8")
+        mt = re.search(r"^READ_CAP_TOKENS\s*=\s*([0-9_]+)", trim_src, re.MULTILINE)
+        self.assertIsNotNone(mt, "methodology_trim.py must declare READ_CAP_TOKENS")
+        self.assertEqual(md.READ_CAP_TOKENS, int(mt.group(1).replace("_", "")))
+        mb = re.search(r"^MIN_BYTES_PER_TOKEN\s*=\s*([0-9.]+)", trim_src, re.MULTILINE)
+        self.assertIsNotNone(mb, "methodology_trim.py must declare MIN_BYTES_PER_TOKEN")
+        self.assertEqual(md.MIN_BYTES_PER_TOKEN, float(mb.group(1)))
+        mr = re.search(r"^READ_REFUSE_BYTES\s*=\s*(\d+)\s*\*\s*(\d+)", trim_src, re.MULTILINE)
+        self.assertIsNotNone(mr, "methodology_trim.py must declare READ_REFUSE_BYTES")
+        self.assertEqual(md.READ_REFUSE_BYTES, int(mr.group(1)) * int(mr.group(2)))
+        self.assertEqual(md.READ_CAP_BYTES,
+                         int(md.READ_CAP_TOKENS * md.MIN_BYTES_PER_TOKEN),
+                         "the cap must stay DERIVED; a hardcoded literal is the defect Phase B "
+                         "removed, one level over")
+        self.assertLess(md.READ_CAP_BYTES, md.READ_REFUSE_BYTES,
+                        "the soft cap must sit below the hard refusal, or the refusal branch is "
+                        "unreachable and its row is dead code")
+        # The Class A pair is pinned the same way, by parsing the OTHER tool's source. Same
+        # discipline, same limit: this keeps the two copies CONSISTENT and says nothing about
+        # whether the pair is right, which only a fresh measurement can answer.
+        mf = re.search(r"^CLASS_A_FIRE_BYTES\s*=\s*(\d+)\s*\*\s*(\d+)", trim_src, re.MULTILINE)
+        self.assertIsNotNone(mf, "methodology_trim.py must declare CLASS_A_FIRE_BYTES")
+        self.assertEqual(md.CLASS_A_FIRE_BYTES, int(mf.group(1)) * int(mf.group(2)))
+        ms = re.search(r"^CLASS_A_STOP_BYTES\s*=\s*(\d+)\s*\*\s*(\d+)", trim_src, re.MULTILINE)
+        self.assertIsNotNone(ms, "methodology_trim.py must declare CLASS_A_STOP_BYTES")
+        self.assertEqual(md.CLASS_A_STOP_BYTES, int(ms.group(1)) * int(ms.group(2)))
+        # AND THE BUDGET, which is the half the later change moved. It is written `192 * 1024`, so a
+        # digits-only regex would miss it -- the same trap _parse_trim_budget exists for. Reusing
+        # that parser here would make this an identity against the module under test, so the
+        # arithmetic is redone independently.
+        mdb = re.search(r"^DEFAULT_BUDGET_BYTES\s*=\s*(\d+)\s*\*\s*(\d+)", trim_src, re.MULTILINE)
+        self.assertIsNotNone(mdb, "methodology_trim.py must declare DEFAULT_BUDGET_BYTES")
+        self.assertEqual(int(mdb.group(1)) * int(mdb.group(2)), md.CLASS_A_FIRE_BYTES,
+                         "the budget change raised the byte budget to MEET the Class A arm; if they have "
+                         "drifted apart, one of the two arms is pre-empting the other again and "
+                         "that is the inertness to guard against")
+        self.assertLess(md.CLASS_A_STOP_BYTES, md.CLASS_A_FIRE_BYTES,
+                        "hysteresis: the stop must be below the fire, or a trim re-fires on the "
+                        "next record")
+
+    def test_the_line_denominated_cap_is_gone_from_both_tools(self):
+        """Phase B DELETED it rather than re-tuning it, and a deletion is only durable if
+        something notices it coming back. A future session re-adding `READ_CAP_LINES` here would
+        otherwise silently restore a second, contradictory axis beside the byte one."""
+        trim_src = (Path(STARTER_PY).parent / "methodology_trim.py").read_text(encoding="utf-8")
+        self.assertFalse(hasattr(md, "READ_CAP_LINES"))
+        self.assertFalse(hasattr(md, "TRIM_LINE_FIRE_BELOW"))
+        self.assertIsNone(re.search(r"^READ_CAP_LINES\s*=", trim_src, re.MULTILINE))
+        self.assertIsNone(re.search(r"^LINE_FIRE_BELOW\s*=", trim_src, re.MULTILINE))
+        self.assertIsNone(re.search(r"^LINE_STOP_ABOVE\s*=", trim_src, re.MULTILINE))
+        self.assertIsNotNone(re.search(r"^SEED_PLAUSIBLE_MAX_LINES\s*=\s*2000", trim_src,
+                                       re.MULTILINE),
+                             "J3's line ceiling was RENAMED, not deleted -- it answers a "
+                             "different question (is this plausibly a fresh seed?) and its value "
+                             "is deliberately unchanged")
+
+    def test_watched_set_never_names_a_tracked_dest(self):
+        """THE LOAD-BEARING INVARIANT, and the reason the population is a literal rather than the
+        methodology checklist. `SESSION_RUNNER.md` and `SAFEGUARDS.md` are TRACKED dests: we
+        install them and keep them current. Flagging one would re-earn Layer 7's narrowing at
+        fleet scale — a single canonical breach lighting up every adopter at once over a file they
+        cannot edit. Asserted against `bin/_manifest.py` itself, so the two sides are genuinely
+        independent rather than two spellings of one comprehension."""
+        manifest_src = (Path(STARTER_PY).parent.parent / "bin" / "_manifest.py").read_text(
+            encoding="utf-8")
+        tracked = set(re.findall(r'\(\s*"[^"]+"\s*,\s*"([^"]+)"\s*,\s*TRACKED\s*\)', manifest_src))
+        self.assertIn("SESSION_RUNNER.md", tracked, "fixture check: the manifest must still mark "
+                                                    "SESSION_RUNNER.md TRACKED, or this test is "
+                                                    "asserting nothing")
+        self.assertEqual(md.READ_CAP_WATCHED & tracked, set())
+
+    # --- the collector ------------------------------------------------------------------------
+
+    def test_collector_reports_watched_file_lines(self):
+        p = self._repo({"CHANGELOG.md": self._lines(2500)})
+        m = md.collect_file_metrics(p)
+        watch = {w["path"]: w["lines"] for w in m["read_cap_watch"]}
+        self.assertEqual(watch.get("CHANGELOG.md"), 2500)
+
+    def test_collector_ignores_unwatched_names(self):
+        p = self._repo({"chapter07.md": self._lines(2500)})
+        m = md.collect_file_metrics(p)
+        self.assertEqual([w["path"] for w in m["read_cap_watch"]], [])
+
+    def test_watch_list_is_not_capped_by_the_top_ten(self):
+        """Keyed by NAME, never by size rank. `largest_files` is `all_files[:10]`, so a ledger
+        pushed past rank 10 leaves the window and no threshold on that list could see it at ANY
+        size — D4(b)'s own defect class, re-created by the fix for it. (An earlier draft of this
+        docstring quoted how many source files it would take; a reviewer re-derived the number and
+        it was wrong. The claim needs no distance, and a distance would rot.)"""
+        big = {f"src{i}.py": self._lines(9000 + i) for i in range(12)}
+        p = self._repo({**big, "HANDOFFS.md": self._lines(2400)})
+        m = md.collect_file_metrics(p)
+        self.assertNotIn("HANDOFFS.md", [f["path"] for f in m["largest_files"]],
+                         "fixture check: HANDOFFS.md must be pushed OUT of the top ten, or this "
+                         "test proves nothing")
+        self.assertEqual({w["path"] for w in m["read_cap_watch"]}, {"HANDOFFS.md"})
+
+    # --- the risk -----------------------------------------------------------------------------
+
+    def test_risk_fires_past_the_cap(self):
+        n = md.READ_CAP_BYTES + 2
+        m = md.collect_all(self._repo({"CHANGELOG.md": self._bytes(n)}))
+        descs = [r["description"] for r in m["scores"]["risks"]]
+        self.assertTrue(any(f"CHANGELOG.md is {n:,} B" in d and "read cap" in d for d in descs),
+                        f"expected a read-cap row, got {descs}")
+        self.assertFalse(any("hard limit" in d for d in descs),
+                         "between the two boundaries the row must describe TRUNCATION, not the "
+                         "zero-content refusal -- they are different failures")
+
+    def test_risk_silent_under_the_cap(self):
+        """GUARD-THE-GUARD, labelled per this file's docstring rule: asserting the ABSENCE of a
+        string is trivially true before that string exists, so this was one of the two tests in
+        this class that were GREEN against the unpatched scanner. It is not RED-first coverage
+        and must not be counted as such. It earns its place by mutation instead — see
+        test_boundary_is_exactly_the_cap, which pins the comparison the mutant moves."""
+        m = md.collect_all(self._repo({"CHANGELOG.md": self._bytes(md.READ_CAP_BYTES - 2)}))
+        self.assertFalse(any("read cap" in r["description"] for r in m["scores"]["risks"]))
+
+    def test_boundary_is_exactly_the_cap(self):
+        """Pins the comparison itself, both sides. Without this the `>` -> `>=` producer mutant
+        survived the entire suite: nothing exercised a file of exactly the cap, so the boundary
+        was free to move by one in either direction undetected. The same lesson one level
+        down — the predicate was covered, its EDGE was not.
+
+        Phase B moved the axis, and BOTH boundaries now need this treatment: the soft cap and the
+        256 KiB hard refusal are separate comparisons in separate branches, and an edge test on
+        one says nothing about the other."""
+        exact = md.collect_all(self._repo({"CHANGELOG.md": self._bytes(md.READ_CAP_BYTES)}))
+        self.assertFalse(any("read cap" in r["description"] for r in exact["scores"]["risks"]),
+                         "a file of exactly READ_CAP_BYTES still fits in one read")
+        over = md.collect_all(self._repo({"CHANGELOG.md": self._bytes(md.READ_CAP_BYTES + 2)}))
+        self.assertTrue(any("read cap" in r["description"] for r in over["scores"]["risks"]),
+                        "past the cap must fire")
+
+    def test_the_hard_refusal_boundary_is_its_own_edge_and_its_own_row(self):
+        """The second comparison, pinned the same way. Exactly at READ_REFUSE_BYTES a default read
+        still returns a truncated prefix, so the TRUNCATION row is correct; past it there is no
+        prefix at all and the row must say so instead. Without both sides, `>` -> `>=` on the
+        refusal branch is invisible, and so is a change that merges the two rows into one."""
+        at = md.collect_all(self._repo({"CHANGELOG.md": self._bytes(md.READ_REFUSE_BYTES)}))
+        at_d = [r["description"] for r in at["scores"]["risks"]]
+        self.assertTrue(any("one-read budget" in d for d in at_d),
+                        "exactly at the refusal it truncates")
+        self.assertFalse(any("hard limit" in d for d in at_d),
+                         "exactly at the refusal is not yet refused")
+        past = md.collect_all(self._repo({"CHANGELOG.md": self._bytes(md.READ_REFUSE_BYTES + 2)}))
+        past_d = [r["description"] for r in past["scores"]["risks"]]
+        self.assertTrue(any("hard limit" in d and "NO CONTENT AT ALL" in d for d in past_d),
+                        f"past the refusal must say nothing is delivered, got {past_d}")
+        # NOT `"read cap" not in d`: the refusal row names the read cap too, in order to say it
+        # is a DIFFERENT and harder boundary. The exclusive thing is the truncation VERDICT, so
+        # the phrase that only the truncation branch emits is what this asserts on.
+        self.assertFalse(any("one-read budget" in d for d in past_d),
+                         "the two rows are exclusive: a refused file is not a truncated one, and "
+                         "emitting both would give one file two contradictory remedies")
+        self.assertTrue(all(r["severity"] == "high" for r in past["scores"]["risks"]
+                            if "hard limit" in r["description"]))
+
+    def test_empty_watched_file_still_reports_zero(self):
+        """The collector deliberately appends OUTSIDE the `loc > 0` branch, so a watched file that
+        is empty still appears with 0 rather than vanishing. Nothing tested that: the mutant
+        `if loc > 0 and rel_posix in READ_CAP_WATCHED` survived the whole suite, which made the
+        comment stating the intent unfalsifiable — a comment shaped like a design decision."""
+        p = self._repo({"CHANGELOG.md": "", "HANDOFFS.md": self._lines(3)})
+        m = md.collect_file_metrics(p)
+        watch = {w["path"]: w["lines"] for w in m["read_cap_watch"]}
+        self.assertEqual(watch.get("CHANGELOG.md"), 0,
+                         "an empty watched file must be reported as 0, not omitted")
+
+    def test_risk_is_gated_on_owing_a_ledger(self):
+        """GUARD-THE-GUARD by construction (see test_risk_silent_under_the_cap): also green
+        against the unpatched scanner, because pre-change no risk description contained the
+        string at all. Its real proof is the producer mutant — replacing `if owes_ledger:` with
+        `if True:` turns this red, which was run and observed.
+
+        The claim it locks: a repo that never adopted the methodology is not told its CHANGELOG.md
+        is too long. The scanner's own Layer 8 comment records a MEASURED regression from exactly
+        that assumption."""
+        m = md.collect_all(self._repo({"CHANGELOG.md": self._bytes(md.READ_CAP_BYTES + 2)},
+                                      runner=False))
+        self.assertFalse(any("read cap" in r["description"] for r in m["scores"]["risks"]))
+
+    def test_one_row_per_breaching_file(self):
+        """THE SEVERITY WAS SPLIT, NOT THE POPULATION. Still one row per file — that half is
+        untouched and is what this test was written for. What changed is the blanket
+        `all(... == "high")`, which stopped being true the moment the rows became per-class: a
+        Class A ledger over the one-read cap is the adjudicated case and reports `low`.
+
+        The per-file count is asserted first and separately, so a future change that collapsed the
+        rows would still fail here even if every surviving row had the right severity."""
+        m = md.collect_all(self._repo({"CHANGELOG.md": self._bytes(md.READ_CAP_BYTES + 2),
+                                       "HANDOFFS.md": self._bytes(md.READ_CAP_BYTES + 4),
+                                       "SESSION_NOTES.md": self._bytes(md.READ_CAP_BYTES + 6)}))
+        rows = [r for r in m["scores"]["risks"] if "read cap" in r["description"]]
+        self.assertEqual(len(rows), 3, "each file is separately actionable; an aggregate row "
+                                       "naming only the worst hides the others")
+        by_file = {n: r["severity"] for n in ("CHANGELOG.md", "HANDOFFS.md", "SESSION_NOTES.md")
+                   for r in rows if r["description"].startswith(n)}
+        self.assertEqual(by_file, {"CHANGELOG.md": "low", "HANDOFFS.md": "low",
+                                   "SESSION_NOTES.md": "high"},
+                         "Class A drops to low at this size, Class B stays high — same bytes, "
+                         "different class, different severity")
+
+    def test_backlog_is_watched_at_every_documented_location(self):
+        n = md.READ_CAP_BYTES + 2
+        for loc in md._BACKLOG_LOCATIONS:
+            with self.subTest(loc=loc):
+                m = md.collect_all(self._repo({loc: self._bytes(n)}))
+                self.assertTrue(any(f"{loc} is {n:,} B" in r["description"]
+                                    for r in m["scores"]["risks"]))
+
+    def test_bl5_code_smell_row_is_untouched_and_independent(self):
+        """Guard-the-guard, from the NEW signal's side. The two risks must coexist without either
+        suppressing the other, and their strings must share no substring, so the diagnostic trail
+        that produced the large-file check's narrowings survives in `dashboard_history.jsonl`."""
+        m = md.collect_all(self._repo({"CHANGELOG.md": self._bytes(md.READ_CAP_BYTES + 2),
+                                       "app.py": "x = 1\n" * 2500}))
+        descs = [r["description"] for r in m["scores"]["risks"]]
+        self.assertTrue(any("Large files detected" in d and "app.py" in d for d in descs))
+        self.assertTrue(any("read cap" in d and "CHANGELOG.md" in d for d in descs))
+        self.assertFalse(any("Large files detected" in d and "CHANGELOG.md" in d for d in descs),
+                         "the code-smell risk must still never name a markdown file")
+
+    def test_the_real_historical_blob_fires(self):
+        """The strongest fixture available: not a synthetic file, but the actual artifact that
+        actually breached the cap in this repository and was found by accident rather than by any
+        check. Coverage does not depend on it — test_risk_fires_past_the_cap carries the same
+        assertion synthetically — so a shallow clone skips rather than fails."""
+        blob = subprocess.run(["git", "show", "3aee4e3^:CHANGELOG.md"],
+                              capture_output=True, text=True,
+                              cwd=str(Path(STARTER_PY).parent.parent))
+        if blob.returncode != 0:
+            self.skipTest("object 3aee4e3^ not present (shallow clone)")
+        self.assertEqual(blob.stdout.count("\n"), 2090,
+                         "fixture check: the historical blob must still be 2,090 lines")
+        size = len(blob.stdout.encode("utf-8"))
+        # WHICH BRANCH this artifact belongs in is a fact about it, not a choice, so it is
+        # asserted rather than assumed. Re-measured at Phase B: 186,704 B -- about 2.97x the token
+        # cap, and UNDER the 256 KiB refusal. So it TRUNCATED; it was not refused. A draft of this
+        # test asserted the opposite and this control is what caught it.
+        self.assertGreater(size, md.READ_CAP_BYTES,
+                           "fixture check: the artifact must be past the one-read cap")
+        self.assertLess(size, md.READ_REFUSE_BYTES,
+                        "fixture check: and UNDER the hard refusal, or the assertion below is "
+                        "testing the wrong branch")
+        m = md.collect_all(self._repo({"CHANGELOG.md": blob.stdout}))
+        self.assertTrue(any(f"CHANGELOG.md is {size:,} B" in r["description"]
+                            and "one-read budget" in r["description"]
+                            for r in m["scores"]["risks"]),
+                        "the artifact that motivated this whole guard must trip the branch that "
+                        "matches what actually happened to it")
+
+
+class TestD4RootCommitDate(unittest.TestCase):
+    """The root-commit-date fix.
+
+    `git log --reverse --format=%ai -1` looks like "the oldest commit" and is not: git applies
+    `-n1` while walking, BEFORE `--reverse` re-orders what survived, so it returns the NEWEST
+    commit. `first_commit_date` therefore tracked HEAD, `project_age_days` sat near 0 for every
+    repo ever scanned, and the `commits < 10 and age > 30` risk could never fire.
+
+    RED-FIRST, and watched: run against the unpatched scanner these assertions FAIL with
+    first_commit_date == the newest date (2026-08-01), not the root's 2020-01-02.
+    """
+
+    def _dated_repo(self, dates):
+        """A repo with one commit per date, in the order given. Dates are pinned through the
+        environment, so the fixture's own history is a REAL git history and the assertion reads
+        it back through the scanner rather than being handed it."""
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        p = Path(td.name)
+        subprocess.run(["git", "init", "-q", str(p)], check=True)
+        for i, d in enumerate(dates):
+            (p / f"f{i}.md").write_text(f"# commit {i}\n")
+            stamp = f"{d}T12:00:00 +0000"
+            env = {**os.environ, "GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp}
+            subprocess.run(["git", "-C", str(p), "add", "-A"], check=True)
+            subprocess.run(["git", "-C", str(p), "-c", "user.email=t@t", "-c", "user.name=t",
+                            "commit", "-q", "-m", f"c{i}"], check=True, env=env)
+        return p
+
+    def test_first_commit_date_is_the_root_not_head(self):
+        p = self._dated_repo(["2020-01-02", "2023-06-15", "2026-08-01"])
+        g = md.collect_git_metrics(p)
+        self.assertEqual(g["first_commit_date"], "2020-01-02")
+        self.assertNotEqual(g["first_commit_date"], g["last_commit_date"],
+                            "a 3-commit repo spanning 6 years must not report one date for both "
+                            "ends of its history")
+
+    def test_project_age_is_measured_from_the_root(self):
+        p = self._dated_repo(["2020-01-02", "2026-08-01"])
+        g = md.collect_git_metrics(p)
+        # Whatever 'now' is, the age must be at least the span of the fixture's own history.
+        span = (datetime(2026, 8, 1) - datetime(2020, 1, 2)).days
+        self.assertGreaterEqual(g["project_age_days"], span)
+
+    def test_low_velocity_risk_can_fire_at_all(self):
+        """The consequence, asserted at the risk surface rather than at the metric: with age
+        pinned to ~0 this risk was unreachable for every repo, at any commit count.
+
+        THE FIXTURE HAS TO DISCRIMINATE, and the first version of it did not. Written with two
+        commits in 2020 it passed against the UNPATCHED scanner — the buggy query returned the
+        *newest* commit, which in that fixture was still six years old, so `age > 30` held for the
+        wrong reason and the test was green against the bug it was written to catch. That is this
+        file's own docstring rule ("a test that passes against the bug is not coverage"), and it
+        took catching. The discriminating shape is an OLD root with a RECENT tip: the bug reads
+        the tip and computes age ~0 (risk cannot fire); the fix reads the root (risk fires).
+        """
+        recent = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        p = self._dated_repo(["2020-01-02", recent])
+        m = md.collect_all(p)
+        self.assertTrue(any("Very low commit velocity" in r["description"]
+                            for r in m["scores"]["risks"]),
+                        "2 commits in a repo rooted in 2020 must trip the low-velocity risk, "
+                        "however recently it was last touched")
+
+    def test_single_commit_repo_still_reports_its_one_date(self):
+        """Guard-the-guard: the fix must not regress the degenerate case, where the root IS head."""
+        p = self._dated_repo(["2024-03-04"])
+        g = md.collect_git_metrics(p)
+        self.assertEqual(g["first_commit_date"], "2024-03-04")
+        self.assertEqual(g["last_commit_date"], "2024-03-04")
+
+    def test_root_date_survives_a_merge_of_two_unrelated_histories(self):
+        """A repo can have MORE THAN ONE root. Whatever query replaces `--reverse -1` has to pick
+        the OLDEST root, not just any root, or the fix trades one wrong answer for another."""
+        p = self._dated_repo(["2021-05-06"])
+        other = tempfile.TemporaryDirectory()
+        self.addCleanup(other.cleanup)
+        q = Path(other.name)
+        subprocess.run(["git", "init", "-q", str(q)], check=True)
+        (q / "z.md").write_text("# other\n")
+        stamp = "2018-02-03T12:00:00 +0000"
+        env = {**os.environ, "GIT_AUTHOR_DATE": stamp, "GIT_COMMITTER_DATE": stamp}
+        subprocess.run(["git", "-C", str(q), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(q), "-c", "user.email=t@t", "-c", "user.name=t",
+                        "commit", "-q", "-m", "other-root"], check=True, env=env)
+        subprocess.run(["git", "-C", str(p), "remote", "add", "other", str(q)], check=True)
+        subprocess.run(["git", "-C", str(p), "fetch", "-q", "other"], check=True)
+        # Resolve the fetched head by ASKING git, not by guessing between "master" and "main":
+        # the first draft hard-coded those two and would error out under any other
+        # `init.defaultBranch`, which is a machine-configuration dependency, not a property of
+        # the code under test.
+        other_head = subprocess.run(
+            ["git", "-C", str(p), "rev-parse", "--verify", "-q", "refs/remotes/other/HEAD"],
+            capture_output=True, text=True).stdout.strip()
+        if not other_head:
+            refs = subprocess.run(["git", "-C", str(p), "for-each-ref", "--format=%(refname)",
+                                   "refs/remotes/other/"], capture_output=True, text=True)
+            candidates = [r for r in refs.stdout.split() if not r.endswith("/HEAD")]
+            self.assertTrue(candidates, "fixture check: fetch produced no remote-tracking ref")
+            other_head = candidates[0]
+        merge_stamp = "2021-05-07T12:00:00 +0000"
+        menv = {**os.environ, "GIT_AUTHOR_DATE": merge_stamp, "GIT_COMMITTER_DATE": merge_stamp}
+        subprocess.run(["git", "-C", str(p), "-c", "user.email=t@t", "-c", "user.name=t",
+                        "merge", "-q", "--allow-unrelated-histories", "--no-edit", other_head],
+                       check=True, env=menv)
+        g = md.collect_git_metrics(p)
+        self.assertEqual(g["first_commit_date"], "2018-02-03",
+                         "with two roots the older one is the project's true start")
+
+
+
+class TestD4SelfExclusion(unittest.TestCase):
+    """`EXCLUDE_DIRS` contained the literal `"methodology"`, so in portfolio mode the
+    instrument was structurally blind to its own home — the one repo whose methodology signals it
+    is best placed to check, and the subject of upstream issue #59.
+
+    RED-FIRST, and watched: against the unpatched scanner `discover_projects` returns [] for a
+    portfolio root whose only project is named `methodology/`.
+    """
+
+    def _portfolio(self, names):
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        root = Path(td.name)
+        for n in names:
+            d = root / n
+            d.mkdir(parents=True)
+            (d / "README.md").write_text(f"# {n}\n")
+            subprocess.run(["git", "init", "-q", str(d)], check=True)
+            subprocess.run(["git", "-C", str(d), "add", "-A"], check=True)
+            subprocess.run(["git", "-C", str(d), "-c", "user.email=t@t", "-c", "user.name=t",
+                            "commit", "-q", "-m", "init"], check=True)
+        return root
+
+    def test_a_project_named_methodology_is_discovered(self):
+        root = self._portfolio(["methodology"])
+        found = [p.name for p in md.discover_projects(root)]
+        self.assertEqual(found, ["methodology"])
+
+    def test_methodology_is_not_in_the_exclusion_set(self):
+        self.assertNotIn("methodology", md.EXCLUDE_DIRS)
+
+    def test_the_real_exclusions_still_exclude(self):
+        """Narrowed, not deleted (Learning #12's sibling): removing one member must not empty the
+        set. A guard proven only by deletion is proven only to run."""
+        root = self._portfolio(["realproject", "node_modules", "venv", "__pycache__"])
+        found = sorted(p.name for p in md.discover_projects(root))
+        self.assertEqual(found, ["realproject"])
+
+    def test_sync_does_not_target_the_authoring_repo(self):
+        """`discover_projects()` has TWO consumers, and D4(c) widened both. The scan wanted it;
+        `sync_dashboards()` did not — with `methodology` discoverable, --sync gained a target at
+        the canonical repo's OWN root, creating a third, unignored copy of the file beside the
+        two that repo already authors. The `t == canonical` skip does not catch it (canonical is
+        .../starter-kit/<name>; the new target is .../<name>).
+
+        This was missed entirely by the author and found in adversarial review. It is asserted on
+        the DRY-RUN output rather than by writing anything, and the fixture is a real directory
+        layout, not a stubbed discover_projects."""
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        root = Path(td.name)
+        canon = root / "methodology" / "starter-kit"
+        canon.mkdir(parents=True)
+        (canon / "methodology_dashboard.py").write_text(
+            Path(TOOLS_PY).read_text(encoding="utf-8"), encoding="utf-8")
+        subprocess.run(["git", "init", "-q", str(root / "methodology")], check=True)
+        other = root / "adopter"
+        other.mkdir()
+        (other / "README.md").write_text("# adopter\n")
+        subprocess.run(["git", "init", "-q", str(other)], check=True)
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            md.sync_dashboards(canon / "methodology_dashboard.py", dry_run=True)
+        out = buf.getvalue()
+        self.assertNotIn("methodology/methodology_dashboard.py", out.replace(str(root) + "/", ""),
+                         "--sync must not target the repo that AUTHORS the dashboard")
+        self.assertIn("adopter", out, "fixture check: a real adopter target must still be found, "
+                                      "or this test would pass on an empty target list")
+
+
+class TestBL29SelfScanRoot(unittest.TestCase):
+    """The PORTFOLIO-mode self-scan was fixed (TestD4SelfExclusion above) but left a
+    different self-scan gap open. `ROOT = Path(__file__).parent` is the script's own directory --
+    correct for every adopter-installed copy and the portfolio-root copy, which all sit exactly
+    where `bin/_manifest.py` / `sync_dashboards()` place them, at the root of what they scan. The
+    methodology repo's own two checked-in copies are the one exception: `tools/` and
+    `starter-kit/` both file this script one level BELOW the repo it belongs to, so
+    `(ROOT / ".git").exists()` reads false there even though `main()`'s own `single_project`
+    title-text branch already assumes that case can happen. RED-FIRST: `resolve_single_project_root`
+    does not exist on unpatched code, so every test below fails with AttributeError.
+    """
+
+    def _framework_repo(self, in_repo_dir):
+        """A tempdir shaped like the methodology repo itself: a git root carrying
+        `bin/_manifest.py` (the structural marker `detect_repo_role()` already trusts), with this
+        script filed `in_repo_dir` levels below that root -- e.g. "tools" or "starter-kit"."""
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        root = Path(td.name)
+        subprocess.run(["git", "init", "-q", str(root)], check=True)
+        (root / "bin").mkdir()
+        (root / "bin" / "_manifest.py").write_text("DISTRIBUTION = []\n")
+        script_dir = root / in_repo_dir
+        script_dir.mkdir(parents=True)
+        return root, script_dir
+
+    def test_bridges_the_canonical_tools_copy_to_its_repo_root(self):
+        root, script_dir = self._framework_repo("tools")
+        self.assertEqual(md.resolve_single_project_root(script_dir), root)
+
+    def test_bridges_the_canonical_starter_kit_copy_to_its_repo_root(self):
+        root, script_dir = self._framework_repo("starter-kit")
+        self.assertEqual(md.resolve_single_project_root(script_dir), root)
+
+    def test_a_normally_placed_copy_is_unchanged(self):
+        """The documented, common case -- an adopter or portfolio-root copy sitting exactly where
+        it is meant to scan -- must not be redirected anywhere."""
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        root = Path(td.name)
+        subprocess.run(["git", "init", "-q", str(root)], check=True)
+        self.assertEqual(md.resolve_single_project_root(root), root)
+
+    def test_a_tools_dir_with_no_manifest_marker_is_not_bridged(self):
+        """An adopter repo that happens to have its own `tools/` directory, with no
+        `bin/_manifest.py` at its root, must fall through to the pre-existing (portfolio-mode)
+        behavior -- the bridge is scoped to the framework's own home, not any repo with a
+        similarly-named subdirectory."""
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        root = Path(td.name)
+        subprocess.run(["git", "init", "-q", str(root)], check=True)
+        script_dir = root / "tools"
+        script_dir.mkdir()
+        self.assertEqual(md.resolve_single_project_root(script_dir), script_dir,
+                         "no bin/_manifest.py at the grandparent -- must not bridge")
+
+    def test_a_differently_named_nested_dir_is_not_bridged(self):
+        """Only the two directories this file is actually checked into (bin/_manifest.py) are
+        bridged -- not a generic upward walk that would let ANY nested placement claim its
+        ancestor as "the project"."""
+        root, script_dir = self._framework_repo("scripts")
+        self.assertEqual(md.resolve_single_project_root(script_dir), script_dir)
+
+    def test_end_to_end_self_scan_no_longer_reports_no_projects_found(self):
+        """Integration-level reproduction of the reported bug: `python3 tools/methodology_dashboard.py
+        --no-open`, run from a fixture shaped like this repo, must scan the repo itself instead of
+        printing "No projects found"."""
+        root, script_dir = self._framework_repo("tools")
+        # A minimal but real repo -- collect_all() needs at least a commit to read git metrics from.
+        (root / "README.md").write_text("# framework\n")
+        subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(root), "-c", "user.email=t@t", "-c", "user.name=t",
+                        "commit", "-q", "-m", "init"], check=True)
+        script = script_dir / "methodology_dashboard.py"
+        script.write_text(Path(TOOLS_PY).read_text(encoding="utf-8"), encoding="utf-8")
+        result = subprocess.run(["python3", str(script), "--no-open"], cwd=str(script_dir),
+                                capture_output=True, text=True, timeout=30)
+        self.assertNotIn("No projects found", result.stdout)
+        self.assertIn(root.name.upper(), result.stdout,
+                      "single-project title must name the repo, proving it was actually scanned")
+
+
+class TestIssue67ScopedSync(unittest.TestCase):
+    """Upstream issue #67: `check_stale_version()`'s only remedy was a portfolio-wide `--sync` for a one-file
+    problem, `sync_dashboards()` had no target scope and no confirm-before-overwrite gate, and a
+    bare `--dry-run` silently fell through to a full scan-and-write. RED-FIRST throughout
+    (Learning #12): every assertion below was run against the unpatched functions and watched to
+    fail for the reason named in its own docstring, matching the design's own test table by row
+    number. Fixture idiom matches the existing TestD4SelfExclusion precedent
+    (test_sync_does_not_target_the_authoring_repo): a real temp directory tree + real `git init`,
+    never a stubbed discover_projects."""
+
+    def _canon_and_portfolio(self):
+        """A canonical repo (methodology/starter-kit/methodology_dashboard.py) plus an empty
+        portfolio root to hang targets off of. Mirrors the existing precedent fixture exactly."""
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        root = Path(td.name)
+        canon_dir = root / "methodology" / "starter-kit"
+        canon_dir.mkdir(parents=True)
+        canon = canon_dir / "methodology_dashboard.py"
+        canon.write_text(Path(TOOLS_PY).read_text(encoding="utf-8"), encoding="utf-8")
+        subprocess.run(["git", "init", "-q", str(root / "methodology")], check=True)
+        return root, canon
+
+    def _git_init(self, path):
+        path.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["git", "init", "-q", str(path)], check=True)
+        return path
+
+    def _git_commit_all(self, path):
+        subprocess.run(["git", "-C", str(path), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(path), "-c", "user.email=t@t", "-c", "user.name=t",
+                         "commit", "-q", "-m", "init"], check=True)
+
+    def _run_sync(self, canon, **kwargs):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            written = md.sync_dashboards(canon, **kwargs)
+        return written, out.getvalue(), err.getvalue()
+
+    def _run_cli(self, script, args, cwd):
+        return subprocess.run(["python3", str(script)] + list(args), cwd=str(cwd),
+                               capture_output=True, text=True, timeout=30)
+
+    # --- Row 1 -------------------------------------------------------------------------------
+
+    def test_check_stale_version_recommends_scoped_target(self):
+        """Row 1: today's message has exactly one remedy (portfolio --sync) for a one-file
+        problem. RED against unpatched code because no scoped remedy string exists at all."""
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        root = Path(td.name)
+        canon_dir = root / "methodology" / "starter-kit"
+        canon_dir.mkdir(parents=True)
+        canon = canon_dir / "methodology_dashboard.py"
+        real_src = Path(TOOLS_PY).read_text(encoding="utf-8")
+        canon_src, n = re.subn(r'DASHBOARD_VERSION = "[^"]+"',
+                                'DASHBOARD_VERSION = "9.9.9"', real_src)
+        self.assertEqual(n, 1, "fixture check: the version-bump substitution must actually apply "
+                               "exactly once")
+        canon.write_text(canon_src, encoding="utf-8")
+
+        adopter = root / "adopter"
+        adopter.mkdir()
+        adopter_copy = adopter / "methodology_dashboard.py"
+        adopter_copy.write_text(Path(TOOLS_PY).read_text(encoding="utf-8"), encoding="utf-8")
+
+        driver = ("import importlib.util, sys\n"
+                   "spec = importlib.util.spec_from_file_location('m', sys.argv[1])\n"
+                   "m = importlib.util.module_from_spec(spec)\n"
+                   "spec.loader.exec_module(m)\n"
+                   "m.check_stale_version()\n")
+        result = subprocess.run(["python3", "-c", driver, str(adopter_copy)],
+                                 capture_output=True, text=True, timeout=30)
+        self.assertIn(str(adopter), result.stderr,
+                      "the warning must name a remedy scoped to THIS copy's own directory")
+        self.assertIn("--sync", result.stderr)
+
+    # --- Row 2 -------------------------------------------------------------------------------
+
+    def test_extract_sync_target_is_order_independent(self):
+        """Row 2: `_extract_sync_target` doesn't exist yet -- RED with AttributeError."""
+        self.assertEqual(md._extract_sync_target(["--sync", "/some/dir"]), "/some/dir")
+        self.assertEqual(md._extract_sync_target(["--sync", "--force", "/some/dir"]), "/some/dir",
+                         "a flag between --sync and the target must not shift the parse")
+        self.assertEqual(md._extract_sync_target(["/some/dir", "--sync"]), "/some/dir",
+                         "the target token may precede --sync on the command line")
+        self.assertIsNone(md._extract_sync_target(["--sync", "--dry-run"]),
+                          "no bare-word token present => whole-portfolio mode, not a crash")
+
+    # --- Rows 3-6 ------------------------------------------------------------------------------
+
+    def test_sync_accepts_a_single_target_directory(self):
+        """Row 3: scoped mode must not fall through to full portfolio discovery -- a distractor
+        project would only appear in the output if discover_projects() still ran. RED with
+        TypeError against unpatched code (no `target` kwarg)."""
+        root, canon = self._canon_and_portfolio()
+        target = self._git_init(root / "solo")
+        (target / ".gitignore").write_text("methodology_dashboard.py\n")
+        self._git_init(root / "adopter")
+        written, out, err = self._run_sync(canon, target=str(target))
+        self.assertNotIn("adopter", out,
+                         "a scoped sync must not even inspect other portfolio members")
+        self.assertIn("1 target", out)
+        self.assertEqual(written, 1)
+
+    def test_sync_target_writes_only_that_target(self):
+        """Row 4: filesystem-level scope check -- only the named target gets a new file. RED
+        with TypeError against unpatched code."""
+        root, canon = self._canon_and_portfolio()
+        target = self._git_init(root / "solo")
+        (target / ".gitignore").write_text("methodology_dashboard.py\n")
+        other = self._git_init(root / "adopter")
+        self._run_sync(canon, target=str(target))
+        self.assertTrue((target / "methodology_dashboard.py").exists())
+        self.assertFalse((other / "methodology_dashboard.py").exists())
+        self.assertFalse((root / "methodology_dashboard.py").exists(),
+                         "the portfolio-root copy must not be touched by a scoped sync either")
+
+    def test_sync_target_nonexistent_directory_errors_without_writing(self):
+        """Row 5: RED with TypeError against unpatched code; no such guard exists today."""
+        root, canon = self._canon_and_portfolio()
+        ghost = root / "does-not-exist"
+        written, out, err = self._run_sync(canon, target=str(ghost))
+        self.assertEqual(written, 0)
+        self.assertFalse(ghost.exists())
+        self.assertIn("does not exist", err)
+
+    def test_sync_target_refuses_canonical_authoring_repo(self):
+        """Row 6: scoped mode's own analogue of test_sync_does_not_target_the_authoring_repo.
+        RED with TypeError against unpatched code; no such guard exists in scoped mode today."""
+        root, canon = self._canon_and_portfolio()
+        written, out, err = self._run_sync(canon, target=str(root / "methodology"))
+        self.assertEqual(written, 0)
+        self.assertIn("authoring repo", err)
+
+    # --- Rows 7-11: the --force gate ------------------------------------------------------------
+
+    def _tracked_target(self, root, canon):
+        target = self._git_init(root / "tracked")
+        (target / "methodology_dashboard.py").write_text("# stale content, not canonical\n")
+        self._git_commit_all(target)
+        return target
+
+    def test_sync_skips_git_tracked_target_without_force(self):
+        """Row 7: today's code writes a git-tracked target unconditionally -- RED because the
+        file ends up equal to canonical text instead of staying stale."""
+        root, canon = self._canon_and_portfolio()
+        target = self._tracked_target(root, canon)
+        written, out, err = self._run_sync(canon, target=str(target))
+        self.assertEqual(written, 0)
+        self.assertEqual((target / "methodology_dashboard.py").read_text(),
+                         "# stale content, not canonical\n")
+        self.assertIn("[SKIPPED — git-tracked; pass --force, then Phase 3 untrack]", out)
+
+    def test_sync_writes_git_tracked_target_with_force(self):
+        """Row 8: `force` kwarg doesn't exist yet -- RED with TypeError. Also asserts the
+        written note is EXACTLY the tracked-and-written note, with no residual "needs --force"
+        text once --force has already been satisfied (SS6 item 3)."""
+        root, canon = self._canon_and_portfolio()
+        target = self._tracked_target(root, canon)
+        written, out, err = self._run_sync(canon, target=str(target), force=True)
+        self.assertEqual(written, 1)
+        self.assertEqual((target / "methodology_dashboard.py").read_text(),
+                         canon.read_text(encoding="utf-8"))
+        self.assertIn("[git-tracked — needs Phase 3 untrack]", out)
+        self.assertNotIn("SKIPPED", out)
+        self.assertNotIn("needs --force", out)
+
+    def test_sync_skips_new_ungitignored_target_without_force(self):
+        """Row 9: today's code creates a brand-new target unconditionally -- RED because the
+        file would exist afterward."""
+        root, canon = self._canon_and_portfolio()
+        target = self._git_init(root / "brand-new")
+        written, out, err = self._run_sync(canon, target=str(target))
+        self.assertEqual(written, 0)
+        self.assertFalse((target / "methodology_dashboard.py").exists())
+        self.assertIn("[SKIPPED — new, ungitignored file; pass --force to create]", out)
+
+    def test_sync_creates_new_gitignored_target_without_force(self):
+        """Row 10, CONTROL: proves the gate does not over-fire on an already-.gitignore'd new
+        file. Must use the new target=/force= kwargs to be genuinely RED (TypeError against the
+        old two-positional-argument signature) -- calling with only a plain start/dry_run
+        wouldn't touch the new code path at all and would pass vacuously today."""
+        root, canon = self._canon_and_portfolio()
+        target = self._git_init(root / "brand-new")
+        (target / ".gitignore").write_text("methodology_dashboard.py\n")
+        written, out, err = self._run_sync(canon, target=str(target), force=False)
+        self.assertEqual(written, 1)
+        self.assertEqual((target / "methodology_dashboard.py").read_text(),
+                         canon.read_text(encoding="utf-8"))
+        self.assertNotIn("SKIPPED", out)
+
+    def test_sync_updates_existing_untracked_target_without_force(self):
+        """Row 11, CONTROL: the tool's routine self-heal case -- an ordinary update of an
+        already-existing, already-untracked target -- must keep working without --force. Same
+        new-kwarg RED reasoning as row 10: guards against an over-broad gate regressing routine
+        use."""
+        root, canon = self._canon_and_portfolio()
+        target = self._git_init(root / "existing")
+        (target / "methodology_dashboard.py").write_text("# old, untracked copy\n")
+        written, out, err = self._run_sync(canon, target=str(target), force=False)
+        self.assertEqual(written, 1)
+        self.assertEqual((target / "methodology_dashboard.py").read_text(),
+                         canon.read_text(encoding="utf-8"))
+        self.assertNotIn("SKIPPED", out)
+
+    # --- Row 12: dry-run must preview the gate honestly --------------------------------------
+
+    def test_sync_dry_run_previews_skips_accurately(self):
+        """Row 12: the fix. Every design candidate's own dry-run computed the gate INSIDE the
+        dry_run branch, so a preview never showed [SKIPPED] and a later real run without --force
+        wrote less than the preview promised. RED with TypeError against unpatched code (no
+        `target`/`force` kwargs to exercise the gate through in the first place)."""
+        root, canon = self._canon_and_portfolio()
+        target = self._tracked_target(root, canon)
+
+        written, out, err = self._run_sync(canon, target=str(target), dry_run=True)
+        self.assertEqual(written, 0)
+        self.assertIn("[SKIPPED", out)
+        self.assertIn("Would change 0 of 1", out)
+        self.assertEqual((target / "methodology_dashboard.py").read_text(),
+                         "# stale content, not canonical\n", "dry-run must never write")
+
+        written, out, err = self._run_sync(canon, target=str(target), dry_run=True, force=True)
+        self.assertEqual(written, 0, "a dry run always returns 0, even with --force")
+        self.assertNotIn("SKIPPED", out)
+        self.assertIn("Would change 1 of 1", out)
+        self.assertEqual((target / "methodology_dashboard.py").read_text(),
+                         "# stale content, not canonical\n",
+                         "--dry-run --force previews the real action; it still writes nothing")
+
+    # --- Row 13 --------------------------------------------------------------------------------
+
+    def test_bare_dry_run_without_sync_errors_and_writes_nothing(self):
+        """Row 13: direct reproduction of issue #67 point 4. RED because today's bare --dry-run
+        exits 0 and writes dashboard.html + appends history. Real subprocess against a
+        temp-copied script -- ROOT is `Path(__file__).parent`, so the copy's own directory
+        becomes the (single-project) scan root, exactly the self-referential case this fix
+        exists to guard."""
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        root = self._git_init(Path(td.name))
+        script = root / "methodology_dashboard.py"
+        script.write_text(Path(TOOLS_PY).read_text(encoding="utf-8"), encoding="utf-8")
+
+        result = self._run_cli(script, ["--dry-run"], cwd=root)
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("only means something together with --sync", result.stderr)
+        self.assertFalse((root / "dashboard.html").exists())
+        self.assertFalse((root / "dashboard_history.jsonl").exists())
+
+    # --- Row 14 ----------------------------------------------------------------------------------
+
+    def test_sync_dry_run_with_target_still_works(self):
+        """Row 14, CONTROL: a scoped dry-run's preview text must be scoped to exactly the given
+        directory, excluding other portfolio members -- "unaffected by the guard" alone would
+        pass vacuously today (RED FOR A DIFFERENT REASON: today's `main()` never even calls
+        `_extract_sync_target`, so a directory token on argv is silently ignored and a scoped
+        `--sync DIR --dry-run` previews the WHOLE portfolio; this test drives sync_dashboards()
+        directly with the new target= kwarg, so it goes RED with TypeError, same as rows 3-6, but
+        exists specifically to catch a future `main()` that extracts the target and forgets to
+        pass it through)."""
+        root, canon = self._canon_and_portfolio()
+        target = self._git_init(root / "solo")
+        self._git_init(root / "adopter")
+        written, out, err = self._run_sync(canon, target=str(target), dry_run=True)
+        self.assertIn(f"1 target ({target.resolve()})", out,
+                     "resolved, since sync_dashboards() resolves the target directory itself")
+        self.assertNotIn("adopter", out)
+
+    # --- Row 15 --------------------------------------------------------------------------------
+
+    def test_usage_documents_sync_target_and_force(self):
+        """Row 15: neither string exists in print_usage() today -- RED by absence."""
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            md.print_usage()
+        out = buf.getvalue()
+        self.assertIn("--sync [DIR]", out)
+        self.assertIn("--force", out)
+
+    # --- Row 16 --------------------------------------------------------------------------------
+
+    def test_sync_end_to_end_via_main_writes_only_the_target(self):
+        """Row 16: genuine CLI-level integration test through the real main()/argv path, unlike
+        rows 3-11 which call sync_dashboards() directly and so cannot catch main() extracting the
+        target but forgetting to pass it through. RED because today's main() has no
+        _extract_sync_target call at all and unconditionally full-portfolio-syncs on --sync."""
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        root = Path(td.name)
+        canon_dir = self._git_init(root / "methodology" / "starter-kit").parent
+        script = canon_dir / "starter-kit" / "methodology_dashboard.py"
+        script.write_text(Path(TOOLS_PY).read_text(encoding="utf-8"), encoding="utf-8")
+        target = self._git_init(root / "solo")
+        (target / ".gitignore").write_text("methodology_dashboard.py\n")
+        self._git_init(root / "adopter")
+
+        result = self._run_cli(script, ["--sync", str(target)], cwd=root)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue((target / "methodology_dashboard.py").exists())
+        self.assertFalse((root / "adopter" / "methodology_dashboard.py").exists())
+        self.assertFalse((root / "methodology_dashboard.py").exists())
+
+
+TRIM_PY = os.path.join(os.path.dirname(HERE), "starter-kit", "methodology_trim.py")
+
+
+def _load_trimmer():
+    """The trimmer as a module, for use as an INDEPENDENT operand only.
+
+    The dashboard never imports it -- that is the whole architecture (interrogate by
+    regex, without importing). These tests do, precisely so that the value the dashboard parsed
+    out of the tool's SOURCE TEXT can be compared against the value the tool itself defines.
+    Two spellings of one comprehension would assert nothing."""
+    spec = importlib.util.spec_from_file_location("methodology_trim_under_test", TRIM_PY)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class TestS38TrimTriggerRow(unittest.TestCase):
+    """The conditional trim-trigger row.
+
+    RED-FIRST, and watched: every assertion below was run against the pre-change scanner
+    (`git show HEAD:tools/methodology_dashboard.py`) and observed to fail -- the collector,
+    the constants and the metrics key do not exist there, so each fails with AttributeError or
+    KeyError rather than passing vacuously.
+
+    The design says that the dashboard "reads the number rather than re-deriving it" and
+    in the same paragraph owes an AGREEMENT TEST against `--check`. Those two
+    cannot both be honoured: a number obtained BY parsing `--check` makes the agreement test an
+    identity that cannot fail. The dashboard therefore computes independently, and
+    test_headroom_agrees_with_a_real_check_run is a test that can actually go red.
+    """
+
+    REPO = Path(HERE).parent          # the canonical repo, used as a live fixture
+
+    # --- fixtures -------------------------------------------------------------------------------
+
+    def _repo(self, files_map, runner=True, archive=None, ledger="CHANGELOG.md"):
+        """A repo whose archive shard, if any, is a REAL archive event.
+
+        An earlier version of this helper wrote the shard in the same commit that created the
+        ledger, and every fixture built on it was unrepresentative: the trimmer counts a shard as
+        an archive event only when the LEDGER ACTUALLY SHRANK in that commit, so those repos had
+        no baseline at all as far as `--check` was concerned. The tests passed anyway because the
+        dashboard was, at that point, equally permissive -- two implementations agreeing on a
+        state neither would ever meet in the wild. The shard is now committed the way a real trim
+        commits one: an inflated ledger first, then the shrunk ledger and the shard together."""
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        p = Path(td.name)
+        subprocess.run(["git", "init", "-q", str(p)], check=True)
+        if runner:
+            (p / "SESSION_RUNNER.md").write_text("# Session Runner\n" + "step\n" * 40)
+
+        if archive is not None:
+            # commit 1 -- the pre-archive ledger, deliberately larger than what follows.
+            pre = p / ledger
+            pre.parent.mkdir(parents=True, exist_ok=True)
+            pre.write_text((files_map.get(ledger, "# ledger\n")) + ("padding\n" * 400))
+            self._commit(p, "pre-archive ledger")
+            ap = p / "docs" / "archive" / archive
+            ap.parent.mkdir(parents=True, exist_ok=True)
+            ap.write_text("# archived shard\n")
+
+        for name, content in files_map.items():
+            fp = p / name
+            fp.parent.mkdir(parents=True, exist_ok=True)
+            fp.write_text(content)
+        self._commit(p, "archive event" if archive is not None else "init")
+
+        if archive is not None:
+            # Fixture control: the shard commit must really be an archive event, or every
+            # headroom this repo produces is measured against a baseline the trimmer rejects.
+            self.assertIsNotNone(
+                md._newest_archive_sha(p, Path(ledger).name),
+                "fixture is not a real archive event: the ledger did not shrink in the shard "
+                "commit, so the trimmer would find no baseline here")
+        return p
+
+    @staticmethod
+    def _commit(p, msg):
+        subprocess.run(["git", "-C", str(p), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(p), "-c", "user.email=t@t", "-c", "user.name=t",
+                        "commit", "-q", "-m", msg], check=True)
+
+    @staticmethod
+    def _entries(n, start=0, body=30):
+        return "".join("### 2026-01-%02d %s [ad hoc] entry %d\n\n%s\n"
+                       % (i % 28 + 1, md._MIDDLE_DOT, i, "x\n" * body)
+                       for i in range(start, start + n))
+
+    def _sized(self, name, n_bytes, **kw):
+        """A repo whose `name` is EXACTLY n_bytes, still line-structured.
+
+        Phase B moved this row's first half onto bytes, so a fixture sized by entry COUNT no
+        longer controls the variable under test -- `_entries(6)` is a couple of hundred bytes
+        against a 56,750 B cap, and every assertion built on it would go green for the wrong
+        reason."""
+        head = "# Changelog\n\n"
+        pad = n_bytes - len(head.encode())
+        assert pad >= 2, "fixture too small to be line-structured"
+        full, rest = divmod(pad, 2)
+        body = ("xx\n" + "x\n" * (full - 1)) if rest else ("x\n" * full)
+        text = head + body
+        assert len(text.encode()) == n_bytes, (len(text.encode()), n_bytes)
+        return self._repo({name: text}, **kw)
+
+    def _descs(self, path, expect_role=None):
+        """Signals plus the collector's own dict.
+
+        The `role` parameter this helper used to take was DEAD: collect_all detects the role
+        itself, so passing role="framework" controlled nothing and two tests looked like they
+        were exercising a branch they were not selecting. It is now an ASSERTION about the role
+        collect_all actually detected, which is the thing those tests meant to establish."""
+        m = md.collect_all(path)
+        if expect_role is not None:
+            self.assertEqual(m["methodology"].get("role"), expect_role,
+                             "fixture: this test depends on the detected repo role")
+        return [d for _s, d in m["trim"]["signals"]], m["trim"]
+
+    # --- the constants, each pinned to an INDEPENDENT operand -----------------------------------
+
+    def test_grammars_agree_with_the_trimmer_config_table(self):
+        """THE POPULATION, and the defect it prevents. `READ_CAP_WATCHED` is deliberately wider
+        than the set of ledgers the trimmer can act on -- it names SESSION_NOTES.md and three
+        BACKLOG.md locations, and the trimmer answers NO_CONFIG on every one of them by design.
+        A row naming the trimmer for one of those would point an adopter at a refusal. Asserted
+        against the trimmer's own LEDGERS table, not against a restatement of it."""
+        trim = _load_trimmer()
+        self.assertEqual(sorted(md.TRIM_GRAMMARS), sorted(trim.LEDGERS))
+        # ...and prove the wider set really is wider, or the assertion above is vacuous.
+        self.assertTrue(set(md.READ_CAP_WATCHED) - set(md.TRIM_GRAMMARS),
+                        "fixture check: READ_CAP_WATCHED must hold names the trimmer refuses, "
+                        "or this test is guarding nothing")
+
+    def test_no_rate_threshold_survives_in_either_tool(self):
+        """WHAT THIS REPLACED, and why the replacement is an absence. This used to pin
+        `md.TRIM_LINE_FIRE_BELOW` against the trimmer's `LINE_FIRE_BELOW` -- a SECOND distributed
+        copy of the design's rate rule. The rule was deleted from both tools rather than
+        re-tuning it, so the agreement to assert is that neither has re-grown one: a reporter
+        advertising a threshold the remedy no longer has is exactly the drift the original pin
+        existed to catch, one level up."""
+        trim_src = Path(TRIM_PY).read_text(encoding="utf-8")
+        self.assertFalse(hasattr(md, "TRIM_LINE_FIRE_BELOW"))
+        for gone in ("LINE_FIRE_BELOW", "LINE_STOP_ABOVE"):
+            self.assertIsNone(re.search(r"(?m)^%s\s*=" % gone, trim_src),
+                              "%s came back; if the rate rule is being restored it needs a "
+                              "feasibility argument, because a one-read HANDOFFS.md holds ~4 "
+                              "records and the old rule demanded 30 of headroom" % gone)
+        self.assertEqual(md.READ_CAP_BYTES, int(md.READ_CAP_TOKENS * md.MIN_BYTES_PER_TOKEN))
+
+    def test_budget_is_parsed_from_the_product_form(self):
+        """THE TRAP THIS TEST EXISTS FOR: the trimmer writes `DEFAULT_BUDGET_BYTES = 64 * 1024`,
+        not a plain integer. A digits-only regex matches nothing, returns None, and the byte
+        half of the trigger silently reports "unavailable" on a repo where the tool is sitting
+        right there. Compared against the tool's own module constant, which is an operand this
+        module never sees."""
+        trim = _load_trimmer()
+        parsed = md._parse_trim_budget(Path(TRIM_PY).read_text(encoding="utf-8"))
+        self.assertEqual(parsed, trim.DEFAULT_BUDGET_BYTES)
+        self.assertIsNotNone(parsed)
+        # The form really is a product, or the test above proves nothing about the parser.
+        self.assertRegex(Path(TRIM_PY).read_text(encoding="utf-8"),
+                         r"(?m)^DEFAULT_BUDGET_BYTES\s*=\s*\d+\s*\*\s*\d+")
+
+    def test_unparseable_budget_abstains_rather_than_guessing(self):
+        self.assertIsNone(md._parse_trim_budget("DEFAULT_BUDGET_BYTES = compute_it()\n"))
+        self.assertIsNone(md._parse_trim_budget("nothing here\n"))
+        self.assertEqual(md._parse_trim_budget("DEFAULT_BUDGET_BYTES = 64 * 1024\n"), 65536)
+        self.assertEqual(md._parse_trim_budget("DEFAULT_BUDGET_BYTES = 65_536\n"), 65536)
+
+    # --- A4, branch 1: the present branch names a command the trimmer really accepts ------------
+
+    def test_named_command_uses_flags_the_trimmer_accepts(self):
+        """A4's present-branch risk: this module carries a copy of ANOTHER tool's interface and
+        goes stale when that interface moves. The flags are not compared against a hardcoded
+        literal -- the command is lifted out of the emitted advisory and actually RUN, and the
+        assertion is that the trimmer did not reject its arguments.
+
+        Asserted on argparse's own rejection text and on the finding CODES, never on the exit
+        code: `--check` exits 1 BY DESIGN when the trigger fires, so an exit-code assertion here
+        would read a working tool as a broken one."""
+        descs, trim_metrics = self._descs(self.REPO, expect_role="framework")
+        self.assertTrue(trim_metrics["tool_present"],
+                        "fixture check: the canonical repo must locate its own trimmer, or the "
+                        "present branch is not under test at all")
+        if not descs:
+            self.skipTest("this repo's own trim trigger is not currently firing on either "
+                          "ledger (one was cleared; the other was already clear) "
+                          "-- this test's fixture precondition needs a live over-budget ledger "
+                          "and will run again once one exists")
+        cmds = [c for d in descs for c in re.findall(r"`([^`]+)`", d)]
+        self.assertTrue(cmds, "the present branch must name at least one runnable command")
+        for cmd in cmds:
+            parts = cmd.split()
+            self.assertEqual(parts[:1], ["python3"], cmd)
+            proc = subprocess.run(parts, cwd=str(self.REPO), capture_output=True, text=True,
+                                  timeout=120)
+            self.assertNotIn("unrecognized arguments", proc.stderr, cmd)
+            self.assertNotIn("invalid choice", proc.stderr, cmd)
+            self.assertNotIn("expected one argument", proc.stderr, cmd)
+            self.assertIn("[CHECK]", proc.stdout,
+                          "the named command must actually reach the trigger report: " + cmd)
+
+    def test_present_branch_never_promises_a_write(self):
+        """A trigger firing is not a trim being correct, and the tool knows the difference: on
+        this repo `--write` refuses (undocumented set non-empty, and SRF past RED). An advisory
+        ending "--write to archive" would name a command that declines."""
+        descs, _ = self._descs(self.REPO, expect_role="framework")
+        if not descs:
+            self.skipTest("this repo's own trim trigger is not currently firing on either "
+                          "ledger (one was cleared; the other was already clear) "
+                          "-- this test's fixture precondition needs a live over-budget ledger "
+                          "and will run again once one exists")
+        for d in descs:
+            self.assertNotIn("--write", d)
+
+    # --- A4, branch 2: the absent branch, which no developer machine runs by accident -----------
+
+    def test_absent_branch_names_the_file_and_never_a_command(self):
+        """A4's absent-branch risk: this branch never runs where the tool is installed, so
+        nothing checks that it says anything useful. It must name the FILE it was computed
+        against (a generic noun in this position once misdirected an adopter) and must not name
+        a command the adopter does not have."""
+        # Sized off CLASS_A_FIRE_BYTES, not READ_CAP_BYTES. This is a Class A ledger and
+        # that is now the arm that fires it; at the old size the branch stays silent and the
+        # "must still speak" assertion below fails on a fixture precondition rather than on the
+        # behaviour it is guarding.
+        p = self._sized("CHANGELOG.md", md.CLASS_A_FIRE_BYTES + 2)
+
+        descs, trim_metrics = self._descs(p)
+        self.assertFalse(trim_metrics["tool_present"],
+                         "fixture check: the trimmer must be absent, or this is the other branch")
+        self.assertTrue(descs, "the absent branch must still speak when the read metric fires")
+        joined = "\n".join(descs)
+        self.assertIn("CHANGELOG.md", joined, "the advisory must name the file it measured")
+        self.assertNotIn("python3", joined,
+                         "the absent branch must not name a command the adopter cannot run")
+        self.assertNotIn("`", joined)
+
+    def test_the_silent_watched_ledger_state_can_no_longer_OCCUR(self):
+        """WHAT THIS REPLACED. Two tests used to guard a `low` advisory -- "watched but
+        unmeasured" -- that fired where NEITHER half spoke: no archive, so the RATE had no
+        baseline, and no trimmer, so no budget. The design forbids reporting a 0 from an unread
+        source as a clean state, and that was the state which met the description.
+
+        Phase B removed the STATE, not just the row, so the honest assertion is that the
+        conjunction cannot arise: the read half is a LEVEL and answers from the file's own size,
+        with no git history and no trimmer installed. This fixture is the exact repo the old
+        advisory fired on -- day-one adopter, no archive, no tool -- and the scanner now has a
+        verdict for it.
+
+        THE DELETED ROW MUST ALSO STAY DELETED. Narrowing it to the byte half alone (fire whenever
+        the budget is unknown) would put a permanent unactionable row on every repo in the fleet
+        over a budget no distributed file has ever named -- an early draft did exactly that, and
+        the conjunction was the fix for it. Asserted, because restoring "half" of a deleted guard
+        is the likeliest way this comes back."""
+        p = self._repo({"CHANGELOG.md": "# Changelog\n\n" + self._entries(6)})
+        descs, trim_metrics = self._descs(p)
+        self.assertFalse(trim_metrics["tool_present"], "fixture: no trimmer")
+        self.assertIsNone(md._newest_archive_sha(p, "CHANGELOG.md"), "fixture: no archive")
+        led = [l for l in trim_metrics["ledgers"] if l["path"] == "CHANGELOG.md"][0]
+        self.assertIsNone(led["byte_fires"], "fixture: the budget really is unknown here")
+        self.assertIn("read_fires", led, "the read half must still have spoken")
+        self.assertIs(led["read_fires"], False)
+        self.assertFalse([d for d in descs if "watched but unmeasured" in d],
+                         "the advisory guarded a state that can no longer occur: %r" % descs)
+        self.assertFalse([d for d in descs if "unmeasured" in d or "abstain" in d], descs)
+
+    def test_a_measurable_ledger_under_both_thresholds_says_nothing(self):
+        """The control for the test above, and the fleet-noise property it protects. A ledger the
+        scanner CAN measure and which is under both thresholds must produce no row at all -- not a
+        reassuring one. Without this, deleting the advisory could be "passed" by a scanner that
+        had simply stopped emitting anything."""
+        p = self._sized("CHANGELOG.md", md.READ_CAP_BYTES - 2)
+        descs, trim_metrics = self._descs(p)
+        led = [l for l in trim_metrics["ledgers"] if l["path"] == "CHANGELOG.md"][0]
+        self.assertFalse(led["fires"])
+        self.assertEqual(descs, [], "a quiet ledger gets no row: %r" % descs)
+
+    def test_unreadable_budget_is_not_reported_as_an_absent_tool(self):
+        """An installed trimmer whose budget constant cannot be parsed is a DIFFERENT finding
+        from a missing trimmer. An earlier draft reported the second for both, which would have
+        told an operator looking straight at an installed tool that it was not installed."""
+        p = self._repo({
+            "CHANGELOG.md": "# Changelog\n\n" + self._entries(6),
+            "methodology_trim.py": 'TRIM_VERSION = "9.9.9"\nDEFAULT_BUDGET_BYTES = later()\n',
+        }, archive="CHANGELOG-through-2025-12-31.md")
+        descs, trim_metrics = self._descs(p)
+        # The DISTINCTION is what this test is for, and Phase B moved where it is observable: the
+        # advisory that used to carry it guarded a state that can no longer occur and was deleted,
+        # so the assertion is now on the metrics dict, which is what the HTML card and
+        # dashboard_history.jsonl both read. `tool_present` True with `budget_bytes` None is a
+        # different finding from `tool_present` False, and conflating them once told an operator
+        # looking straight at an installed tool that it was not there.
+        self.assertTrue(trim_metrics["tool_present"], "an installed tool must read as installed")
+        self.assertIsNone(trim_metrics["budget_bytes"], "and its unparseable budget as unknown")
+        self.assertEqual(trim_metrics["tool_version"], "9.9.9",
+                         "the version parsed, so 'absent' would be plainly wrong here")
+        absent = self._repo({"CHANGELOG.md": "# Changelog\n\n" + self._entries(6)})
+        _d, absent_metrics = self._descs(absent)
+        self.assertFalse(absent_metrics["tool_present"],
+                         "control: the OTHER finding must be distinguishable, or the pair above "
+                         "asserts nothing")
+        self.assertNotIn("is not installed", "\n".join(descs))
+
+    # --- The owed agreement test -------------------------------------------------------------
+
+    def test_read_verdict_agrees_with_a_real_check_run(self):
+        """The owed agreement test, re-pointed onto the metric that replaced the
+        rate. The two operands stay genuinely independent -- the left is computed by this module
+        from `stat()`, the right is parsed out of a real subprocess run of the OTHER tool, which
+        measures `len(text.encode())` -- so this can fail, and it fails under any drift in either
+        the measurement or the threshold.
+
+        BOTH halves are compared on purpose. Agreeing on the SIZE while disagreeing about the CAP
+        would leave the reporter and the remedy pointing at different cliffs, which is the exact
+        failure the original pin was written against."""
+        trim_metrics = md.collect_trim_metrics(
+            self.REPO, md.collect_file_metrics(self.REPO), role="framework")
+        measured = {l["path"]: l for l in trim_metrics["ledgers"]}
+        self.assertTrue(measured, "fixture check: the canonical repo must expose trimmable "
+                                  "ledgers, or nothing is compared")
+        # VACUITY GUARD, kept from the version this replaced. A loop that silently compares
+        # nothing passes; the comparisons are counted rather than hoped for.
+        compared = 0
+        for rel, led in measured.items():
+            proc = subprocess.run(
+                ["python3", TRIM_PY, "--file", rel, "--check"],
+                cwd=str(self.REPO), capture_output=True, text=True, timeout=120)
+            # THE REGEX WAS RE-POINTED, and the reason is the whole point of the test.
+            # The row now names the threshold ACTUALLY IN FORCE, which for a root Class A ledger
+            # is the archive threshold and not the one-read cap. Matching only the old wording
+            # would have made this test fail loudly (it did) rather than quietly agree about a
+            # number the trimmer no longer keys on -- so the alternation below is written to
+            # accept EITHER row and then assert WHICH one it got, never to accept both silently.
+            m = re.search(r"\[TRIGGER_READ\] ([\d,]+) B against (?:a|the) ([\d,]+) B "
+                          r"(one-read cap|Class A archive threshold)", proc.stdout)
+            self.assertIsNotNone(
+                m, "unexpected --check output for %s: %s" % (rel, proc.stdout))
+            self.assertEqual(led["bytes"], int(m.group(1).replace(",", "")),
+                             "displayed size for %s must equal --check's" % rel)
+            expected_arm = (md.CLASS_A_FIRE_BYTES if m.group(3) == "Class A archive threshold"
+                            else md.READ_CAP_BYTES)
+            self.assertEqual(expected_arm, int(m.group(2).replace(",", "")),
+                             "the reporter and the remedy must agree where the cliff is")
+            # Every entry in collect_trim_metrics["ledgers"] is class A by the collector's own
+            # filter AND is repo-root-relative, so the trimmer -- which decides root-ness by an
+            # independent relative_to check -- must reach the same conclusion. If these two ever
+            # drift, this is where it shows.
+            self.assertEqual(m.group(3), "Class A archive threshold",
+                             "%s is in the collector's Class A ledger list, so the trimmer must "
+                             "also have classified it as a ROOT Class A ledger; a 'one-read cap' "
+                             "row here means the two tools disagree about scoping" % rel)
+            self.assertEqual(led["read_fires"],
+                             led["bytes"] > int(m.group(2).replace(",", "")),
+                             "the displayed verdict for %s must follow from the two numbers "
+                             "it displays" % rel)
+            compared += 1
+        self.assertGreaterEqual(compared, 1,
+                                "no agreement was actually asserted (%d ledgers)" % len(measured))
+
+    # --- the record counter, at the two points the live repo does NOT discriminate --------------
+
+    def test_fenced_records_are_not_counted(self):
+        """The live ledgers cannot prove this: every dated heading in the root CHANGELOG.md is a
+        real entry, so a fence-blind counter scores identically there. The SEED ledgers are the
+        discriminating fixture and they are real artifacts, not synthetic ones -- every dated
+        heading in the `CHANGELOG.md` seed as shipped before ledger-format 2 and the one
+        ```handoff block in `starter-kit/HANDOFFS.md` sit inside documentation fences. A
+        fence-blind counter reads 3 and 1 where the truth is 0, and would print a confident slope
+        for a freshly seeded ledger that holds no records at all. Since ledger-format 2 the live
+        `CHANGELOG.md` seed is a pointer with no fenced examples, so that half reads the frozen
+        copy in tools/fixtures/ (its blob id asserted, as tools/test_methodology_trim.py does)."""
+        fixture = self.REPO / "tools" / "fixtures" / "seed-CHANGELOG-ledger-format-1.md"
+        raw = fixture.read_bytes()
+        self.assertEqual(hashlib.sha1(b"blob %d\0" % len(raw) + raw).hexdigest(),
+                         "47bc848591fb4ee6906dde885c28f53348af0f26",
+                         "the frozen format-1 seed changed; it must stay the seed as shipped")
+        seed_cl = raw.decode("utf-8")
+        seed_ho = (self.REPO / "starter-kit" / "HANDOFFS.md").read_text(encoding="utf-8")
+        # Fixture control: the naive counts really are non-zero, or "0" proves nothing.
+        self.assertGreater(len(re.findall(r"(?m)^### \d{4}-\d{2}-\d{2}", seed_cl)), 0)
+        self.assertGreater(len(re.findall(r"(?m)^```handoff", seed_ho)), 0)
+        self.assertEqual(md._trim_record_count(seed_cl, "CHANGELOG.md"), 0)
+        self.assertEqual(md._trim_record_count(seed_ho, "HANDOFFS.md"), 0)
+        # The live thin seed is still a fresh ledger: no records.
+        live_cl = (self.REPO / "starter-kit" / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertEqual(md._trim_record_count(live_cl, "CHANGELOG.md"), 0)
+
+    def test_record_counter_matches_the_trimmers_zoning_on_every_real_ledger(self):
+        """Seven real files, including both archives and both seeds. The dashboard's counter and
+        the trimmer's fence-aware classify_zones are separate implementations; this is what
+        makes the headroom agreement above more than a coincidence on two files."""
+        trim = _load_trimmer()
+        targets = ["CHANGELOG.md", "HANDOFFS.md",
+                   "starter-kit/CHANGELOG.md", "starter-kit/HANDOFFS.md"]
+        targets += [str(q.relative_to(self.REPO).as_posix())
+                    for q in sorted((self.REPO / "docs" / "archive").glob("*.md"))]
+        existing = [rel for rel in targets if (self.REPO / rel).is_file()]
+        self.assertGreaterEqual(len(existing), 4,
+                                "fixture check: the four named ledgers must exist")
+        checked = 0
+        for rel in targets:
+            fp = self.REPO / rel
+            if not fp.is_file():
+                continue
+            base = "CHANGELOG.md" if "CHANGELOG" in fp.name else "HANDOFFS.md"
+            text = fp.read_text(encoding="utf-8")
+            zones = trim.classify_zones(text, trim.LEDGERS[base], trim.Result(fp))
+            if zones is None:
+                continue
+            self.assertEqual(md._trim_record_count(text, base), len(zones.starts), rel)
+            checked += 1
+        # Every ledger that exists must have been compared, up to six: the floor is the population,
+        # so a tree with fewer archives is not failed for lacking them, and a loop that compared
+        # nothing still is.
+        self.assertGreaterEqual(checked, min(6, len(existing)),
+                                "fixture check: too few real ledgers compared (%d of %d)"
+                                % (checked, len(existing)))
+
+    # --- the review fixes, each held by the fixture that exposed it ------------------------------
+    #
+    # Every test in this block was written AFTER a producer mutant reverting the corresponding
+    # fix survived the suite. A fix with no test is a fix that gets undone.
+
+    def test_a_shard_commit_that_did_not_shrink_the_ledger_is_not_a_baseline(self):
+        """The trimmer counts an archive EVENT, not a shard file: `if pre is None or post is None
+        or pre <= post: continue`. Without the same filter the dashboard picks a baseline the
+        trimmer rejects, and the two gauges disagree -- measured at headroom 248 against
+        `--check`'s 35 on one review fixture, and at a firing trigger the dashboard missed on
+        another. It does not bite on this repo, because every shard here really did shrink its
+        ledger, so the live agreement test passed on luck of history until this fixture existed."""
+        cl = "# Changelog\n\n" + self._entries(6)
+        p = self._repo({"CHANGELOG.md": cl + "padding\n" * 400}, archive=None)
+        # A real event: shard `a`, committed with a shrink.
+        (p / "docs" / "archive").mkdir(parents=True, exist_ok=True)
+        (p / "docs" / "archive" / "CHANGELOG-through-a.md").write_text("# real\n")
+        (p / "CHANGELOG.md").write_text(cl)
+        self._commit(p, "shard a + shrink")
+        real = subprocess.run(["git", "-C", str(p), "rev-parse", "HEAD"],
+                              capture_output=True, text=True, check=True).stdout.strip()
+        # A stray shard dropped in later, with the ledger GROWING in the same commit.
+        (p / "docs" / "archive" / "CHANGELOG-through-z.md").write_text("# stray\n")
+        (p / "CHANGELOG.md").write_text(cl + self._entries(3, start=6))
+        self._commit(p, "stray shard, ledger grew")
+
+        self.assertEqual(md._newest_archive_sha(p, "CHANGELOG.md"), real,
+                         "the stray shard's commit is not an archive event and must not become "
+                         "the baseline")
+
+    def test_a_shard_commit_where_the_ledger_is_unchanged_is_not_a_baseline(self):
+        """The EDGE of the filter, not just its interior: `pre <= post`, so pre == post is
+        excluded too. `<=` -> `<` survived the suite until this fixture pinned equality -- the
+        two-step manual archive (commit the shard, then commit the trimmed ledger) produces
+        exactly this shape."""
+        cl = "# Changelog\n\n" + self._entries(6)
+        p = self._repo({"CHANGELOG.md": cl + "padding\n" * 400}, archive=None)
+        (p / "docs" / "archive").mkdir(parents=True, exist_ok=True)
+        (p / "docs" / "archive" / "CHANGELOG-through-a.md").write_text("# real\n")
+        (p / "CHANGELOG.md").write_text(cl)
+        self._commit(p, "shard a + shrink")
+        real = subprocess.run(["git", "-C", str(p), "rev-parse", "HEAD"],
+                              capture_output=True, text=True, check=True).stdout.strip()
+        # Shard committed alone: the ledger is byte-identical across this commit.
+        before = (p / "CHANGELOG.md").read_bytes()
+        (p / "docs" / "archive" / "CHANGELOG-through-z.md").write_text("# shard only\n")
+        self._commit(p, "shard z alone, ledger untouched")
+        self.assertEqual((p / "CHANGELOG.md").read_bytes(), before,
+                         "fixture: the ledger must be unchanged across the shard commit")
+
+        self.assertEqual(md._newest_archive_sha(p, "CHANGELOG.md"), real)
+
+    def test_an_unrankable_shard_abstains_rather_than_falling_back_to_filename_order(self):
+        """git_cmd returns "" on timeout, indistinguishable from success. An empty walk collapses
+        every rank to one sentinel and the stable sort leaves FILENAME order, which for a
+        date-stamped naming scheme silently selects the OLDEST -- the exact ordering this
+        function's contract forbids, reached with no error and no marker.
+
+        The timeout is injected at `git_cmd` rather than simulated by stalling git: the failure
+        being tested is "the walk came back empty", and that is what git_cmd hands back on
+        timeout. Two GENUINE archive events are built first, so the function really is in the
+        branch that has to choose between candidates."""
+        cl = "# Changelog\n\n" + self._entries(6)
+        p = self._repo({"CHANGELOG.md": cl + "padding\n" * 400}, archive=None)
+        (p / "docs" / "archive").mkdir(parents=True, exist_ok=True)
+        (p / "docs" / "archive" / "CHANGELOG-through-a.md").write_text("# older\n")
+        (p / "CHANGELOG.md").write_text(cl)
+        self._commit(p, "shard a + shrink")
+        (p / "CHANGELOG.md").write_text(cl + "padding\n" * 400)
+        self._commit(p, "grow")
+        (p / "docs" / "archive" / "CHANGELOG-through-z.md").write_text("# newer\n")
+        (p / "CHANGELOG.md").write_text(cl)
+        self._commit(p, "shard z + shrink")
+
+        # Control: with a working walk it answers, and answers with the graph-newest.
+        newest = md._newest_archive_sha(p, "CHANGELOG.md")
+        self.assertIsNotNone(newest, "fixture: two real archive events must be present")
+
+        real_git_cmd = md.git_cmd
+
+        def flaky(path, *args, **kw):
+            if args[:1] == ("rev-list",):
+                return ""              # exactly what git_cmd returns on timeout
+            return real_git_cmd(path, *args, **kw)
+
+        md.git_cmd = flaky
+        try:
+            self.assertIsNone(md._newest_archive_sha(p, "CHANGELOG.md"),
+                              "an unrankable candidate set must abstain, never silently degrade "
+                              "to filename order")
+        finally:
+            md.git_cmd = real_git_cmd
+        # And the injection was real: the working call still answers afterwards.
+        self.assertEqual(md._newest_archive_sha(p, "CHANGELOG.md"), newest)
+
+    def test_a_nested_fence_with_an_info_string_is_not_a_closer(self):
+        """The trimmer closes a fence only on a marker with an EMPTY info string. Dropping that
+        conjunct flips the fence state on a nested ```python, and every record after it is
+        counted by one side and not the other. Compared against the trimmer's own zoning, so the
+        two operands stay independent."""
+        trim = _load_trimmer()
+        text = ("# Handoffs\n\n"
+                "```handoff\nsession: S1\n"
+                "```python\nstill inside the S1 record\n```\n\n"
+                "```handoff\nsession: S2\n```\n")
+        zones = trim.classify_zones(text, trim.LEDGERS["HANDOFFS.md"],
+                                    trim.Result(Path("HANDOFFS.md")))
+        self.assertIsNotNone(zones)
+        self.assertEqual(len(zones.starts), 2, "fixture check: the trimmer must see two records")
+        self.assertEqual(md._trim_record_count(text, "HANDOFFS.md"), 2)
+
+    def test_a_ledger_the_trimmer_refuses_to_zone_abstains_here_too(self):
+        """`LEDGERS['HANDOFFS.md']` declares footer_mode='none' and classify_zones ASSERTS the
+        declaration: a standalone '---' after the last record with content under it returns None
+        (ZONE_UNCLASSIFIED). The trimmer treats that as a reason to abstain and says why -- "that
+        is not a count of zero" -- so a counter that always answers prints a confident headroom
+        exactly where `--check` prints none."""
+        trim = _load_trimmer()
+        refused = ("# Handoffs\n\n```handoff\nsession: S1\n```\n\n"
+                   "---\n\nTrailing prose the config cannot classify.\n")
+        self.assertIsNone(
+            trim.classify_zones(refused, trim.LEDGERS["HANDOFFS.md"],
+                                trim.Result(Path("HANDOFFS.md"))),
+            "fixture check: the trimmer must refuse this shape")
+        self.assertIsNone(md._trim_record_count(refused, "HANDOFFS.md"))
+
+        # Control: the same file without the trailing content classifies, and both agree.
+        ok = "# Handoffs\n\n```handoff\nsession: S1\n```\n\n---\n"
+        z = trim.classify_zones(ok, trim.LEDGERS["HANDOFFS.md"], trim.Result(Path("HANDOFFS.md")))
+        self.assertIsNotNone(z)
+        self.assertEqual(md._trim_record_count(ok, "HANDOFFS.md"), len(z.starts))
+
+    def test_the_trim_fence_regex_does_not_rebind_the_pre_existing_one(self):
+        """A REGRESSION I CAUSED AND THE REVIEW CAUGHT. The first draft named this module's new
+        fence regex `_FENCE_RE`, which already existed at module scope as the sole detector for
+        `_strip_fenced_blocks()`. The later binding won, and the two differ on INDENTED fences --
+        the old pattern allows leading whitespace, the new one anchors at column 0 -- so an
+        indented documentation example stopped being stripped and its `- [x]` lines became
+        phantom unmigrated done-marks in the backlog signal. Measured at 0 before, 2 after.
+
+        Asserted on BEHAVIOUR, not on the names: renaming the constant back would satisfy a
+        name-based check while re-creating the defect."""
+        backlog = ("# Backlog\n\nExample of a done-mark:\n\n"
+                   "    ```markdown\n"
+                   "    - [x] a DOCUMENTATION EXAMPLE, not a real done-mark\n"
+                   "    - [x] and another\n"
+                   "    ```\n\n"
+                   "- [ ] a real open item\n")
+        self.assertEqual(md._strip_fenced_blocks(backlog).count("- [x]"), 0,
+                         "an indented fenced example must still be stripped")
+        # Fixture control: the marks really are there before stripping.
+        self.assertEqual(backlog.count("- [x]"), 2)
+        # And the two regexes must remain distinct objects with distinct patterns.
+        self.assertNotEqual(md._FENCE_RE.pattern, md._TRIM_FENCE_RE.pattern)
+
+    def test_unknown_basename_abstains_instead_of_counting_zero(self):
+        self.assertIsNone(md._trim_record_count("### 2026-01-01 x\n", "BACKLOG.md"))
+
+    def test_a_dated_heading_without_a_source_tag_is_not_a_record(self):
+        """Closes a survivor: loosening the grammar to `^### <date>` changes nothing on any real
+        ledger here, because every dated heading in them happens to be source-tagged. The
+        distinguishing input has to be built, and it is checked against the trimmer's own zoning
+        rather than against my expectation of it."""
+        trim = _load_trimmer()
+        text = ("# Changelog\n\n"
+                "### 2026-01-01 %s [ad hoc] a real entry\n\nbody\n\n"
+                "### 2026-01-02 a heading that is dated but not an entry\n\nbody\n"
+                % md._MIDDLE_DOT)
+        zones = trim.classify_zones(text, trim.LEDGERS["CHANGELOG.md"],
+                                    trim.Result(Path("CHANGELOG.md")))
+        self.assertIsNotNone(zones)
+        self.assertEqual(len(zones.starts), 1,
+                         "fixture check: the trimmer must see exactly one record here")
+        self.assertEqual(md._trim_record_count(text, "CHANGELOG.md"), 1)
+
+    def test_shard_added_before_the_ledger_existed_is_not_an_archive_event(self):
+        """A shard committed before the ledger exists cannot be an archive event -- there is no
+        pre-image to have shrunk from -- so the rate has no baseline and must say so.
+
+        This test previously asserted the "baseline unreadable" reason and passed for the wrong
+        reason: the shard was accepted as an event, `git show` then failed on the missing blob,
+        and the abstention arrived one step too late. With the shrink filter the candidate is
+        rejected up front, which is what the trimmer does. `git_show`'s own None-on-failure
+        contract is pinned directly below rather than through this path."""
+        # Built inline: _repo's archive= path now ASSERTS that the shard commit is a real event,
+        # and this test's whole point is a shard commit that is not one.
+        p = self._repo({"README.md": "# r\n"})
+        ap = p / "docs" / "archive" / "CHANGELOG-through-2025-12-31.md"
+        ap.parent.mkdir(parents=True, exist_ok=True)
+        ap.write_text("# archived shard\n")
+        self._commit(p, "shard, with no ledger in the tree at all")
+        (p / "CHANGELOG.md").write_text("# Changelog\n\n" + self._entries(8))
+        self._commit(p, "add the ledger after the shard")
+
+        # Asserted on the DETECTOR directly. Phase B removed this function's production consumer
+        # (see its comment in the scanner), so routing the assertion through collect_all would now
+        # prove nothing about it -- the very shape of vacuity this suite keeps catching.
+        self.assertIsNone(md._newest_archive_sha(p, "CHANGELOG.md"))
+        led = [l for l in md.collect_all(p)["trim"]["ledgers"]
+               if l["path"] == "CHANGELOG.md"][0]
+        self.assertFalse(led["read_fires"], "and the read half answers regardless, as it must")
+
+    def test_git_show_returns_none_for_a_missing_blob(self):
+        """Pinned directly, because the shrink filter now rejects most ways of reaching it
+        through trim_line_headroom. "" would make a missing blob look like an empty file and the
+        slope would be computed against a fabricated zero-line baseline."""
+        p = self._repo({"CHANGELOG.md": "# Changelog\n"})
+        self.assertIsNone(md.git_show(p, "HEAD:does-not-exist.md"))
+        self.assertIsNone(md.git_show(p, "no-such-ref:CHANGELOG.md"))
+        self.assertEqual(md.git_show(p, "HEAD:CHANGELOG.md"), "# Changelog\n")
+
+    def test_git_show_decodes_utf8_regardless_of_locale(self):
+        """The record grammar turns on U+00B7. `text=True` alone decodes with the LOCALE, so under
+        a non-UTF-8 environment the middle dot's bytes stop being a middle dot, the heading regex
+        stops matching, the baseline record count collapses and the reported headroom inflates --
+        measured by the review at 34 against `--check`'s 20 on this very repo. The trimmer's
+        baseline read is always UTF-8; this asserts the same.
+
+        `LC_ALL=C` ALONE IS NOT ENOUGH and a test that used it would pass vacuously: Python's
+        UTF-8 mode coerces the C locale back to UTF-8, so the unpinned code still works. PYTHONUTF8=0
+        is what actually makes the child prefer US-ASCII. The child is asked what it will use, and
+        the test SKIPS rather than passes if the platform refuses to move off UTF-8 -- a green
+        result here has to mean the hostile case was really exercised."""
+        env = dict(os.environ, LC_ALL="C", LANG="C", PYTHONUTF8="0", PYTHONCOERCECLOCALE="0")
+        probe = subprocess.run(
+            [sys.executable, "-c", "import locale;print(locale.getpreferredencoding(False))"],
+            capture_output=True, text=True, env=env, check=True).stdout.strip()
+        if probe.lower().replace("-", "") in ("utf8",):
+            self.skipTest("platform will not leave UTF-8 (child reports %r)" % probe)
+
+        p = self._repo({"CHANGELOG.md": "### 2026-01-01 %s [ad hoc] x\n" % md._MIDDLE_DOT})
+        # The child's own stdout is ASCII under this locale, so it must NOT try to print the
+        # character -- doing so raises UnicodeEncodeError on correct code and the test would fail
+        # for a reason that has nothing to do with git_show. It reports a verdict instead.
+        child = (
+            "import sys;sys.path.insert(0,%r);import methodology_dashboard as m;"
+            "from pathlib import Path;"
+            "t=m.git_show(Path(%r), 'HEAD:CHANGELOG.md');"
+            "print('VERDICT', 'DOT' if '\\u00b7' in t else 'NODOT',"
+            " t.encode('unicode_escape').decode('ascii')[:60])" % (HERE, str(p))
+        )
+        out = subprocess.run([sys.executable, "-c", child],
+                             capture_output=True, text=True, env=env)
+        self.assertEqual(out.returncode, 0,
+                         "git_show must not raise under a non-UTF-8 locale: %s" % out.stderr)
+        self.assertIn("VERDICT DOT", out.stdout,
+                      "git_show must decode UTF-8 under %s; got %s" % (probe, out.stdout))
+
+    def test_newest_archive_is_chosen_by_graph_order_not_by_filename(self):
+        """Closes a survivor: on this repo the shards' alphabetical order happens to match their
+        commit order, so dropping the graph sort changes nothing. The fixture inverts the two --
+        shard `a` is committed FIRST and shard `z` second -- so filename order names the oldest
+        and only graph order names the newest. (The trimmer records the same mutant as
+        undecidable for ITS fixtures; this one decides it.)"""
+        cl = "# Changelog\n\n" + self._entries(4)
+        p = self._repo({"CHANGELOG.md": cl + "padding\n" * 400}, archive=None)
+
+        # Archive event 1: shard `a`, committed WITH a shrink. Both shards must be real events
+        # now that the shrink filter is in place, or neither is a candidate to choose between.
+        (p / "docs" / "archive").mkdir(parents=True, exist_ok=True)
+        (p / "docs" / "archive" / "CHANGELOG-through-a.md").write_text("# older shard\n")
+        (p / "CHANGELOG.md").write_text(cl)
+        self._commit(p, "shard a (older) + shrink")
+        older_sha = subprocess.run(["git", "-C", str(p), "rev-parse", "HEAD"],
+                                   capture_output=True, text=True, check=True).stdout.strip()
+
+        # Grow again, then archive event 2: shard `z`, also with a shrink.
+        (p / "CHANGELOG.md").write_text(cl + "padding\n" * 400)
+        self._commit(p, "grow")
+        (p / "docs" / "archive" / "CHANGELOG-through-z.md").write_text("# newer shard\n")
+        (p / "CHANGELOG.md").write_text(cl)
+        self._commit(p, "shard z (newer) + shrink")
+        newer_sha = subprocess.run(["git", "-C", str(p), "rev-parse", "HEAD"],
+                                   capture_output=True, text=True, check=True).stdout.strip()
+
+        self.assertNotEqual(older_sha, newer_sha)
+        self.assertEqual(md._newest_archive_sha(p, "CHANGELOG.md"), newer_sha,
+                         "the baseline must be the most recent shard by COMMIT GRAPH position, "
+                         "not the first one the glob happened to return")
+
+    # --- abstention and gating ------------------------------------------------------------------
+
+    def test_no_prior_archive_still_yields_a_verdict(self):
+        """Every adopter on day one is in this state, and it is the case Phase B most changes.
+        A RATE with no baseline had no value and had to abstain out loud -- which meant the half
+        guarding truncation said nothing at all on a brand-new repo. A LEVEL reads the file's own
+        size, so day one is answerable like any other day."""
+        p = self._repo({"CHANGELOG.md": "# Changelog\n\n" + self._entries(6)})
+        trim_metrics = md.collect_all(p)["trim"]
+        led = [l for l in trim_metrics["ledgers"] if l["path"] == "CHANGELOG.md"]
+        self.assertEqual(len(led), 1)
+        self.assertIsNone(md._newest_archive_sha(p, "CHANGELOG.md"),
+                          "fixture: there must be no archive baseline, or this proves nothing")
+        self.assertIsNotNone(led[0]["read_fires"], "the read half must answer without a baseline")
+        self.assertFalse(led[0]["read_fires"], "and this small fixture is under the cap")
+        self.assertNotIn("abstains", led[0],
+                         "abstention was the rate's machinery and went with it")
+
+    def test_non_adopter_is_never_told_about_its_changelog(self):
+        """The same gate the D4(b) risk uses. A project that never adopted the methodology keeps
+        whatever changelog it likes; ungated, this row fires on any repo with a long one -- the
+        assumption whose measured cost is already recorded in FRAMEWORK_INSTALLED_SOURCE."""
+        p = self._repo({"CHANGELOG.md": "# Changelog\n\n" + self._entries(60, body=60)},
+                       runner=False, archive="CHANGELOG-through-2025-12-31.md")
+        trim_metrics = md.collect_all(p)["trim"]
+        self.assertEqual(trim_metrics["signals"], [])
+        self.assertEqual(trim_metrics["ledgers"], [])
+
+    # --- the EDGES, not only the predicates ------------------------------------
+
+    def _exact(self, base_lines, base_records, live_lines, live_records, trimmer=None):
+        """A repo whose line metric lands on an arithmetic point I choose.
+
+        headroom = (2000 - live_lines) * de // dl, so the fixture pins de and dl directly rather
+        than hoping a plausible-looking ledger happens to land near a threshold. The archive
+        shard is added in the SAME commit as the baseline, because the split is the commit that
+        added the shard and the baseline blob is the ledger as of that commit."""
+        def ledger(n_lines, n_records):
+            out = []
+            for i in range(n_records):
+                out.append("### 2026-01-%02d %s [ad hoc] entry %d" % (i % 28 + 1, md._MIDDLE_DOT, i))
+                out.append("")
+                out.append("body")
+            pad = n_lines - len(out)
+            self.assertGreaterEqual(pad, 0, "fixture arithmetic: asked for too few lines")
+            out.extend(["filler"] * pad)
+            text = "\n".join(out) + "\n"
+            self.assertEqual(text.count("\n"), n_lines)
+            return text
+
+        files_map = {"CHANGELOG.md": ledger(base_lines, base_records)}
+        if trimmer is not None:
+            files_map["methodology_trim.py"] = trimmer
+        p = self._repo(files_map, archive="CHANGELOG-through-2025-12-31.md")
+        (p / "CHANGELOG.md").write_text(ledger(live_lines, live_records))
+        self._commit(p, "grow")
+        # Fixture control: the baseline the dashboard will measure against must be the shard
+        # commit, and the arithmetic above is stated in terms of that blob.
+        split = md._newest_archive_sha(p, "CHANGELOG.md")
+        self.assertIsNotNone(split)
+        base = md.git_show(p, "%s:CHANGELOG.md" % split)
+        self.assertEqual(base.count("\n"), base_lines, "fixture: baseline blob line count")
+        self.assertEqual(md._trim_record_count(base, "CHANGELOG.md"), base_records,
+                         "fixture: baseline blob record count")
+        return p
+
+    def test_read_level_exactly_at_the_class_a_threshold_does_not_fire(self):
+        """`size > threshold` fires; the threshold itself does not. `>` -> `>=` is precisely the
+        mutant that survived the whole suite one session ago on this very signal, so the exact
+        boundary is exercised deliberately.
+
+        THE THRESHOLD CHANGE MOVED THE BOUNDARY THIS PAIR GUARDS, and the rename is part of the change: these
+        ledgers are Class A, and the arm that decides for them is CLASS_A_FIRE_BYTES. Testing the
+        old constant here would have kept a green pair guarding a boundary the collector no longer
+        keys on -- true arithmetic about a dead threshold."""
+        p = self._sized("CHANGELOG.md", md.CLASS_A_FIRE_BYTES)
+        led = [l for l in md.collect_all(p)["trim"]["ledgers"] if l["path"] == "CHANGELOG.md"][0]
+        self.assertEqual(led["bytes"], md.CLASS_A_FIRE_BYTES, "fixture: exactly the threshold")
+        self.assertFalse(led["read_fires"], "a file of exactly the threshold does not fire")
+        self.assertFalse(led["refused"])
+
+    def test_read_level_just_past_the_class_a_threshold_fires(self):
+        """The control for the test above: same fixture shape, two bytes larger."""
+        p = self._sized("CHANGELOG.md", md.CLASS_A_FIRE_BYTES + 2)
+        led = [l for l in md.collect_all(p)["trim"]["ledgers"] if l["path"] == "CHANGELOG.md"][0]
+        self.assertTrue(led["read_fires"])
+        self.assertFalse(led["refused"], "past the threshold is not yet the hard refusal")
+        self.assertTrue(led["fires"])
+
+    def test_a_class_a_ledger_BETWEEN_the_cap_and_the_threshold_stays_QUIET(self):
+        """THE BAND THE THRESHOLD CHANGE CREATED, and the assertion that proves the move actually happened.
+
+        Before the change this size fired. It is now the adjudicated band: past the one-read cap, so a
+        whole-file read truncates, but nowhere near the point where archiving is worth doing.
+        Without this test the pair above would pass equally well against an implementation that
+        simply never fires."""
+        p = self._sized("CHANGELOG.md", md.READ_CAP_BYTES + 2)
+        led = [l for l in md.collect_all(p)["trim"]["ledgers"] if l["path"] == "CHANGELOG.md"][0]
+        self.assertGreater(led["bytes"], md.READ_CAP_BYTES, "fixture: over the one-read cap")
+        self.assertLess(led["bytes"], md.CLASS_A_FIRE_BYTES, "fixture: under the Class A arm")
+        self.assertFalse(led["read_fires"],
+                         "a Class A ledger in this band must NOT fire -- if it does, the "
+                         "collector is still keying on READ_CAP_BYTES")
+        self.assertFalse(led["fires"], "and the byte arm must not fire here either, or the budget change "
+                                       "was not applied and the trigger is inert")
+
+    def test_size_exactly_at_the_budget_does_not_fire(self):
+        """`size > budget` fires; equality does not. Same edge, the other metric. The fixture
+        carries its own trimmer with a small budget so the boundary is reachable without
+        writing a 64 KB file."""
+        stub = 'TRIM_VERSION = "0.0.1"\nDEFAULT_BUDGET_BYTES = 900\n'
+        p = self._exact(base_lines=40, base_records=4, live_lines=60, live_records=6,
+                        trimmer=stub)
+        cl = p / "CHANGELOG.md"
+        text = cl.read_text()
+        # Pad to EXACTLY the budget, keeping the trailing newline so the line metric is unmoved.
+        pad = 900 - len(text.encode("utf-8"))
+        self.assertGreater(pad, 0, "fixture arithmetic: ledger already exceeds the stub budget")
+        cl.write_text(text[:-1] + ("p" * pad) + "\n")
+        self.assertEqual(cl.stat().st_size, 900)
+        self._commit(p, "pad to exactly the budget")
+
+        trim_metrics = md.collect_all(p)["trim"]
+        self.assertEqual(trim_metrics["budget_bytes"], 900)
+        led = [l for l in trim_metrics["ledgers"] if l["path"] == "CHANGELOG.md"][0]
+        self.assertEqual(led["bytes"], 900)
+        self.assertFalse(led["byte_fires"], "a ledger of exactly the budget must not fire")
+
+        # Control: one byte more, and it does.
+        cl.write_text(cl.read_text()[:-1] + "q\n")
+        self.assertEqual(cl.stat().st_size, 901)
+        led2 = [l for l in md.collect_all(p)["trim"]["ledgers"]
+                if l["path"] == "CHANGELOG.md"][0]
+        self.assertTrue(led2["byte_fires"])
+
+    # --- what the operator actually READS: the severities and the numbers ----------------------
+    #
+    # Written after a review pointed out that every one of these survived the full module: the
+    # tests asserted that a row EXISTED and what it said in prose, never what severity it carried
+    # or whether its figures were the figures that were measured. A row is a severity plus a
+    # number; asserting the sentence around them is asserting the packaging.
+
+    def test_the_authored_severities_are_pinned(self):
+        """`medium` -> `critical` and `low` -> `high` both survived the suite. Severity is not
+        decoration here: worst_risk() drives the portfolio row, the terminal colour and the
+        High+ Risk count, so a wrong tier is a wrong dashboard for every project."""
+        # THE SYNTHETIC HALF RUNS FIRST, AND THAT ORDER IS THE POINT. This half depends
+        # on no live file at all, but it used to sit BELOW the `skipTest` that guards the live
+        # half, so whenever this repo's own trigger fell quiet the skip aborted the method and
+        # took the synthetic pin with it. That is not hypothetical: it is exactly how this test
+        # hid a dead fixture for three days: a change re-denominated the Class A read
+        # arm and re-sized this same `READ_CAP_BYTES + 2` fixture in two sibling tests, missed
+        # this one, and its own run could not see the miss -- the change silenced the live rows,
+        # so this method skipped and never reached the stale line. It surfaced only later,
+        # when HANDOFFS.md crossed 196,608 B and un-muted it. A skip that covers assertions it
+        # has no bearing on is a mute button, so the guard now covers only what it is about.
+        #
+        # The `low` tier went with the "watched but unmeasured" advisory that was deleted, so the
+        # only severity this row can now author is `medium`. Pinned from the other side: a
+        # firing ledger with no trimmer must still be advisory, never escalated. At
+        # READ_CAP_BYTES + 2 that ledger fires NEITHER arm (the byte arm is None here --
+        # no trimmer, no budget), so the signal set came back EMPTY and the severity assertion
+        # went vacuous in the only direction that matters: a set with nothing in it can never
+        # contain the wrong tier. Both fixture preconditions are therefore asserted separately
+        # and BEFORE it, so a future re-denomination fails as a fixture defect and names itself.
+        p = self._sized("CHANGELOG.md", md.CLASS_A_FIRE_BYTES + 2)
+        _d2, tm2 = self._descs(p)
+        self.assertTrue(tm2["signals"],
+                        "fixture: a ledger past the Class A arm must emit a row, or the severity "
+                        "assertion below passes on an empty set")
+        self.assertFalse(tm2["tool_present"],
+                         "fixture: this half is the NO-TRIMMER path -- if the tool is present "
+                         "here it is exercising the other branch")
+        self.assertEqual({sev for sev, _d in tm2["signals"]}, {"medium"},
+                         "a firing archive trigger is advisory even with no tool to run")
+
+        # ...and now the live half, which is the only part with a live precondition.
+        _descs, tm = self._descs(self.REPO, expect_role="framework")
+        if not tm["signals"]:
+            self.skipTest("this repo's own trim trigger is not currently firing on either "
+                          "ledger -- only the LIVE half below needs that precondition; the "
+                          "synthetic pin above has already run")
+        sevs = {s for s, _d in tm["signals"]}
+        self.assertEqual(sevs, {"medium"},
+                         "a firing archive trigger is advisory, not a high+ finding: %r" % sevs)
+
+    def test_the_advisory_carries_the_numbers_that_were_measured(self):
+        """Swapping the byte figures between two ledgers, or printing any other headroom, left
+        all 310 tests green. The row is checked against the collector's own measurements here,
+        each figure tied to the ledger it belongs to -- and the operands are independent: one
+        side is the rendered sentence, the other is `Path.stat()` / the collected dict."""
+        descs, tm = self._descs(self.REPO, expect_role="framework")
+        by_path = {l["path"]: l for l in tm["ledgers"]}
+        self.assertGreaterEqual(len(by_path), 2, "fixture: at least two ledgers must be measured")
+        checked = 0
+        for d in descs:
+            rel = d.split(":")[0]
+            if rel not in by_path:
+                continue
+            led = by_path[rel]
+            on_disk = (self.REPO / rel).stat().st_size
+            self.assertEqual(led["bytes"], on_disk, rel)
+            self.assertIn("{:,} B".format(on_disk), d,
+                          "the row must quote the size it measured, for %s" % rel)
+            # ONE ARM AT A TIME. Before Phase B the first half was a records-per-line RATE, so a
+            # firing row ALWAYS carried the byte reason too and this could assert it
+            # unconditionally. Both halves are byte LEVELS now, so assert the reason for each arm
+            # that actually fired and the absence of the one that did not, or the row could quote
+            # a threshold nothing tested against.
+            #
+            # THE PARAGRAPH THAT STOOD HERE DESCRIBED A STATE THAT NO LONGER EXISTS, and it is
+            # recorded rather than merely deleted because it is what made the stale assertion
+            # below look reasonable. It said the two arms had "DIFFERENT thresholds -- the
+            # one-read cap is the lower -- so a ledger can fire on the read arm alone, and this
+            # repo's own CHANGELOG.md is in exactly that state." The threshold change falsified both halves:
+            # the read arm is CLASS_A_FIRE_BYTES, which on this repo is BYTE-EQUAL to the
+            # trimmer's default budget (196,608 == 196,608), so the arms move together and
+            # CHANGELOG.md fires BOTH. The `else` branch just below is therefore unreachable on
+            # self.REPO while those two constants remain equal -- it is kept because the
+            # constants are independent by design and may diverge again, but it is NOT currently
+            # a live guard, and the synthetic siblings are what cover that state today.
+            if led["byte_fires"]:
+                self.assertIn("{:,} B budget".format(tm["budget_bytes"]), d,
+                              "a byte-arm breach must quote the budget, for %s" % rel)
+            else:
+                self.assertNotIn("B budget", d,
+                                 "%s is under the byte budget; the row must not imply it is "
+                                 "over one" % rel)
+            if led["refused"]:
+                # NOTE THE WORDING: the trim ADVISORY says "HARD REFUSAL"; the D4(b) RISK row says
+                # "hard limit". Two different sentences in two different places, deliberately, and
+                # asserting the risk row's phrasing here would have made this branch unfalsifiable.
+                # No ledger in this repo is past 262,144 B today, so nothing would have caught it
+                # -- test_the_refusal_advisory_says_nothing_is_delivered exercises it synthetically.
+                self.assertIn("{:,} B HARD REFUSAL".format(md.READ_REFUSE_BYTES), d, rel)
+                # THE THRESHOLD CHANGE EMPTIED THIS GUARD AND IT STAYED GREEN THAT WAY. It read
+                # `assertNotIn("one-read budget", ...)`, which was the read arm's own wording
+                # until the rewording; `collect_trim_metrics` has not emitted that substring
+                # since (the only two sites are the D4(b) risk row, a different function), so the
+                # guard could no longer fail for any producer. The PROPERTY it was defending is
+                # live and still worth defending -- `refused` and `read_fires` are exclusive
+                # branches, and a file getting both sentences gets two contradictory remedies --
+                # so it is restated against the wording the branch actually emits now. This is
+                # the same assertion test_the_refusal_advisory_says_nothing_is_delivered makes
+                # synthetically; kept here too because that one cannot see the live population.
+                self.assertNotIn("Class A archive threshold", d,
+                                 "%s is past the hard refusal; it is not a merely-oversized "
+                                 "file and must not also be described as one" % rel)
+            elif led["read_fires"]:
+                self.assertIn("{:,} B Class A archive threshold".format(md.CLASS_A_FIRE_BYTES),
+                              d, rel)
+                # THE HEADROOM IS PER-LEDGER, AND THAT IS THE POINT. The string this replaces was
+                # a bare constant -- identical for every ledger, so it survived exactly the figure
+                # swap this method's docstring says it exists to catch. `READ_REFUSE_BYTES -
+                # on_disk` is a function of THIS ledger's own size, computed here from Path.stat()
+                # rather than from the collector, so the two operands stay independent and a row
+                # quoting another ledger's distance fails.
+                # THE WHOLE CLAUSE, NOT THE HEADROOM ALONE. Stopping after the distance left the
+                # DENOMINATOR it is a distance *to* asserted by nothing: a producer printing the
+                # right headroom against the wrong stated boundary passed green (mutant M10).
+                # Both figures are matched in one span so the pair has to agree.
+                self.assertIn("within {:,} B of the {:,} B hard refusal".format(
+                    md.READ_REFUSE_BYTES - on_disk, md.READ_REFUSE_BYTES), d, rel)
+            self.assertTrue(led["read_fires"] or led["byte_fires"],
+                            "a row was emitted for %s with neither arm firing" % rel)
+            self.assertNotIn("{:,} B".format(
+                next(v["bytes"] for k, v in by_path.items() if k != rel)), d,
+                "the row must not quote the OTHER ledger's size")
+            checked += 1
+        self.assertEqual(checked, len(descs),
+                         "every emitted row must have been checked, not just the first")
+
+    def test_the_refusal_advisory_says_nothing_is_delivered(self):
+        """The branch the live repo cannot reach: no ledger here is past 262,144 B, so the
+        conditional in test_the_advisory_carries_the_numbers_that_were_measured would sit
+        unfalsifiable without this. Exercised synthetically, and paired with the truncation case so
+        it cannot pass by both branches emitting the same sentence."""
+        p = self._sized("CHANGELOG.md", md.READ_REFUSE_BYTES + 2)
+        descs, tm = self._descs(p)
+        led = [l for l in tm["ledgers"] if l["path"] == "CHANGELOG.md"][0]
+        self.assertTrue(led["refused"], "fixture: must be past the hard refusal")
+        d = "\n".join(descs)
+        self.assertIn("{:,} B HARD REFUSAL".format(md.READ_REFUSE_BYTES), d)
+        self.assertIn("NO CONTENT AT ALL", d,
+                      "the whole point of this branch is that the delivered prefix is empty")
+        self.assertNotIn("Class A archive threshold", d,
+                         "a refused file is not a merely-oversized one; emitting both gives one "
+                         "file two contradictory remedies")
+        # THIS CONTROL WAS RE-SIZED AND RE-WORDED. It used to sit at READ_CAP_BYTES + 2 and
+        # grep for "one-read budget"; at the new arm that size emits NOTHING, so the control went
+        # empty and the assertion failed -- correctly, because an empty control cannot show the two
+        # branches are distinct. It now sits just past the Class A arm, where the non-refusal
+        # branch does speak, and greps that branch's own new wording.
+        under = self._sized("CHANGELOG.md", md.CLASS_A_FIRE_BYTES + 2)
+        d2 = "\n".join(self._descs(under)[0])
+        self.assertTrue(d2, "control: the non-refusal branch must actually emit something")
+        self.assertIn("Class A archive threshold", d2,
+                      "control: the truncation branch must be distinct")
+        self.assertNotIn("HARD REFUSAL", d2)
+
+    def test_the_named_tool_must_content_verify_not_merely_exist(self):
+        """The detection contract is `.is_file()` AND a content check by regex, and dropping
+        the second half survived the suite. A bare existence probe accepts an adopter's unrelated
+        same-named script and then prints a command against it."""
+        p = self._repo({
+            "CHANGELOG.md": "# Changelog\n\n" + self._entries(6),
+            "methodology_trim.py": "# an adopter's own script, nothing to do with ours\n",
+        })
+        self.assertTrue((p / "methodology_trim.py").is_file(), "fixture: the file must exist")
+        self.assertIsNone(md.find_trim_tool(p),
+                          "a same-named file with no TRIM_VERSION is not our tool")
+        # Control: add the constant and it is found, so the None above is about CONTENT.
+        (p / "methodology_trim.py").write_text('TRIM_VERSION = "1.2.3"\n')
+        found = md.find_trim_tool(p)
+        self.assertIsNotNone(found)
+        self.assertEqual(found["version"], "1.2.3")
+
+    def test_the_collected_tool_version_is_the_tools_own(self):
+        """`tool_version` was collected and read by nothing -- falsifying it survived the suite.
+        It is the field a future staleness check will key on, so it is pinned to the trimmer's
+        real constant rather than left as decoration."""
+        trim = _load_trimmer()
+        _descs, tm = self._descs(self.REPO, expect_role="framework")
+        self.assertEqual(tm["tool_version"], trim.TRIM_VERSION)
+        self.assertEqual(tm["tool_path"], md.TRIM_TOOL_FRAMEWORK_REL)
+
+    def test_risks_reemit_the_collector_verbatim(self):
+        """assess_risks re-emits and does not re-decide, so there is one place to read to know
+        what an operator was told."""
+        m = md.collect_all(self.REPO)
+        descs = {r["description"] for r in m["scores"]["risks"]}
+        if not m["trim"]["signals"]:
+            self.skipTest("this repo's own trim trigger is not currently firing on either "
+                          "ledger (one was cleared; the other was already clear) "
+                          "-- this test's fixture precondition needs a live over-budget ledger "
+                          "and will run again once one exists")
+        for _sev, d in m["trim"]["signals"]:
+            self.assertIn(d, descs)
+
+    def test_score_is_untouched_by_the_new_rows(self):
+        """The row is advisory. Risks feed the displayed worst-severity, never the 0-100 score.
+
+        GUARD-THE-GUARD, and labelled: this is the ONE test in this class that also passes
+        against the pre-change scanner, because score_health never read `trim` there either. A
+        green absence-assertion is not coverage, so it earns its place by
+        producer mutation instead -- adding `- 2 * len(metrics["trim"]["signals"])` to
+        score_health's total was applied and observed to fail this test (72 != 68). It is a
+        forward tripwire against a later edit quietly turning an advisory into a penalty."""
+        m = md.collect_all(self.REPO)
+        before = m["scores"]["health"]["total"]
+        stripped = dict(m)
+        stripped["trim"] = {"signals": [], "ledgers": [], "tool_present": False,
+                            "tool_path": None, "tool_version": None, "budget_bytes": None}
+        self.assertEqual(md.score_health(stripped)["total"], before)
+
+
+class TestPhaseC1ReadCapClasses(unittest.TestCase):
+    """The partition change -- the watched population
+    becomes TWO CLASSES, and each guard finally claims something true of the files it watches.
+
+    WHAT THIS CHANGE DELIBERATELY DOES NOT DO: move a threshold. The design says option A1
+    "changes no threshold and cannot degenerate anything" and its first criterion names
+    none; a summary table that reads as if two thresholds move is the summary
+    that drifted. The threshold move is the next change, which must be bundled with the budget change
+    (`DEFAULT_BUDGET_BYTES`) or it is inert. So the population assertion below is not a
+    formality -- it is the phase's central claim, and it is asserted against a FROZEN literal
+    rather than against the module's own union, which would be an identity.
+
+    NOT RED-FIRST, and labelled as such per this file's docstring rule: `READ_CAP_CLASS_A`,
+    `READ_CAP_CLASS_B` and `read_cap_class` do not exist before this phase, so every assertion
+    here fails with AttributeError against the pre-change scanner -- which proves the names are
+    new, not that the behaviour they pin was wrong. What earns these tests their place is
+    MUTATION: each one below states, in its own docstring, the producer mutant it kills.
+    """
+
+    REPO = Path(HERE).parent
+
+    # The six names as they stood before this change, copied here as a FROZEN literal and
+    # deliberately never derived from the module. Comparing the module's union against the
+    # module's own parts would be an identity that cannot fail.
+    POPULATION_AT_PHASE_B = frozenset((
+        "SESSION_NOTES.md", "CHANGELOG.md", "HANDOFFS.md",
+        "BACKLOG.md", "docs/BACKLOG.md", "docs/planning/BACKLOG.md",
+    ))
+
+    # --- the partition --------------------------------------------------------------------------
+
+    def test_every_watched_name_resolves_to_exactly_one_class(self):
+        """The first DONE criterion, asserted three ways because a partition can fail
+        in three directions: overlap, gap, and a classifier that disagrees with the sets it reads.
+
+        ⚠ THE COVERAGE HALF IS ASSERTED AGAINST THE FROZEN POPULATION, NEVER AGAINST
+        `READ_CAP_WATCHED`, AND THAT IS NOT A STYLE CHOICE. The union is DERIVED from the two
+        classes, so `assertEqual(A | B, READ_CAP_WATCHED)` expands to `A | B == A | B` — an
+        identity that cannot fail. The first draft of this test asserted exactly
+        that, and the mutation round is what caught it: narrowing a class (M1, M8) shrinks the
+        union in lockstep, so the tautological form stayed green on both while claiming to be
+        the assertion that covers them. Compare to a literal that does not move.
+
+        KILLS: `read_cap_class` returning a constant or forgetting a branch (M5, M6); a name
+        listed in both classes (M10); a name dropped from a class, which under a derived union
+        leaves it in NEITHER (M1, M8)."""
+        self.assertEqual(md.READ_CAP_CLASS_A & md.READ_CAP_CLASS_B, frozenset(),
+                         "the classes must be DISJOINT: a name in both gets two verdicts")
+        self.assertEqual(set(md.READ_CAP_CLASS_A | md.READ_CAP_CLASS_B),
+                         set(self.POPULATION_AT_PHASE_B),
+                         "the classes must COVER the population: a name that fell out of both is "
+                         "no longer watched at all, and under a derived union nothing else says so")
+        self.assertTrue(md.READ_CAP_CLASS_A, "fixture check: Class A must be non-empty")
+        self.assertTrue(md.READ_CAP_CLASS_B, "fixture check: Class B must be non-empty")
+        for name in sorted(self.POPULATION_AT_PHASE_B):
+            with self.subTest(name=name):
+                self.assertIn(md.read_cap_class(name), ("A", "B"))
+                self.assertEqual(md.read_cap_class(name) == "A", name in md.READ_CAP_CLASS_A)
+                self.assertEqual(md.read_cap_class(name) == "B", name in md.READ_CAP_CLASS_B)
+        self.assertIsNone(md.read_cap_class("chap07.md"),
+                          "an unwatched name must classify as None, not fall into a default class")
+        self.assertIsNone(md.read_cap_class("SESSION_RUNNER.md"),
+                          "a TRACKED dest is not watched at all, and must not acquire a class by "
+                          "the classifier being permissive")
+
+    def test_the_split_repartitioned_the_population_without_changing_it(self):
+        """PHASE C1'S CENTRAL CLAIM. Against a frozen literal of the six names as Phase B left
+        them -- not against the module's own union, which cannot disagree with itself.
+
+        KILLS: any add or drop, including the two `docs/**` locations this phase was required to
+        disposition. Dropping one is a defensible decision; doing it SILENTLY, inside a phase
+        whose plan says it cannot degenerate anything, is not."""
+        self.assertEqual(set(md.READ_CAP_WATCHED), set(self.POPULATION_AT_PHASE_B))
+
+    def test_the_union_is_derived_rather_than_a_third_spelling_of_the_six_names(self):
+        """The claim above is only PROVABLE while `READ_CAP_WATCHED` is computed from the classes.
+        Re-listing the names as a literal would leave the population correct and the guarantee
+        gone -- the two could then drift apart and only this assertion would notice.
+
+        Read out of the SOURCE TEXT, because there is no runtime difference between a derived
+        frozenset and an identical literal one -- which is exactly why it needs asserting.
+
+        KILLS: `READ_CAP_WATCHED = frozenset((...six names...))` restored beside the classes."""
+        src = Path(STARTER_PY).read_text(encoding="utf-8")
+        m = re.search(r"(?m)^READ_CAP_WATCHED\s*=\s*(.+)$", src)
+        self.assertIsNotNone(m, "the module must still declare READ_CAP_WATCHED at module scope")
+        self.assertRegex(m.group(1).strip(), r"^READ_CAP_CLASS_A\s*\|\s*READ_CAP_CLASS_B$",
+                         "READ_CAP_WATCHED must stay DERIVED from the two classes; a literal "
+                         "re-listing makes 'the population did not change' unprovable")
+
+    # --- the pin: class membership is asserted against the trimmer, never restated ---------------
+
+    def test_class_a_is_pinned_to_the_trimmers_ledgers_table(self):
+        """The second DONE criterion: a canonical test must FAIL if a name is added
+        to `LEDGERS` without moving class. This is that test.
+
+        The direction matters. Class A is DECLARED,
+        not derived from `LEDGERS` -- derivation would make widening the trimmer silently
+        reassign a file's class, which is the failure the dragon names. Declaring it and pinning
+        it here means the widening turns this red and a human moves the name deliberately.
+
+        Operands are independent: one side is this module's constant, the other is the trimmer's
+        own executed module. This is the pattern
+        test_grammars_agree_with_the_trimmer_config_table established, applied to the class.
+
+        KILLS: moving CHANGELOG.md or HANDOFFS.md to Class B; adding a third name to Class A."""
+        trim = _load_trimmer()
+        self.assertEqual(sorted(n.rsplit("/", 1)[-1] for n in md.READ_CAP_CLASS_A),
+                         sorted(trim.LEDGERS),
+                         "Class A IS the set of watched names the trimmer can act on. If LEDGERS "
+                         "gained or lost a key, move the name between the classes here "
+                         "deliberately -- and re-read the design first")
+
+    def test_class_b_is_exactly_the_set_the_trimmer_refuses(self):
+        """The other half of the pin, and it fails independently. Without it, a name added to BOTH
+        `LEDGERS` and Class B would be caught only by the A-side assertion above -- and a future
+        edit that relaxes that one would leave nothing watching this.
+
+        The trimmer's refusal is asserted by CALLING it, not by reading its table twice: for each
+        Class B basename the config lookup must come back empty, which is the `NO_CONFIG` answer
+        the plan and the module comment both cite as the reason these files get no trim row.
+
+        ⚠ THE NON-EMPTY GUARD BELOW IS LOAD-BEARING, not decoration: this is a subTest loop over
+        `READ_CAP_CLASS_B`, and a loop over an empty sequence runs its body ZERO times and passes.
+        Emptying Class B would otherwise be caught only by a SIBLING test, and a test that depends
+        on its neighbour for its own non-vacuity is one edit away from asserting nothing.
+
+        KILLS: a Class B name that also acquires a `LEDGERS` entry — the case where the trimmer is
+        widened and this file is not. It does NOT independently kill a name PROMOTED to Class A;
+        that one is the A-side pin's, and an earlier draft of this docstring claimed it here."""
+        trim = _load_trimmer()
+        self.assertTrue(md.READ_CAP_CLASS_B,
+                        "fixture check: Class B must be non-empty, or the loop below runs zero "
+                        "times and this test passes without asserting anything")
+        for name in sorted(md.READ_CAP_CLASS_B):
+            with self.subTest(name=name):
+                self.assertIsNone(trim.LEDGERS.get(name.rsplit("/", 1)[-1]),
+                                  "a Class B name must be one the trimmer has NO config for; "
+                                  "naming the trimmer as its remedy would point an adopter at a "
+                                  "refusal")
+
+    # --- the class is what the trim row is now selected by ---------------------------------------
+
+    def test_the_trim_row_population_is_class_a_at_the_constants_and_at_the_output(self):
+        """The class and the old basename filter select the same two names today. That is the
+        precondition for the partition changing no behaviour, so it is asserted rather than assumed --
+        and asserted at BOTH ends, because agreeing at the constants says nothing about what the
+        collector actually emitted.
+
+        GUARD-THE-GUARD on the output half: it also passes against the pre-change collector, since
+        the two filters coincide. Its companion below is the one that can tell them apart."""
+        for name in sorted(md.READ_CAP_WATCHED):
+            with self.subTest(name=name):
+                self.assertEqual(md.read_cap_class(name) == "A",
+                                 name.rsplit("/", 1)[-1] in md.TRIM_GRAMMARS,
+                                 "class membership and grammar membership must still coincide; "
+                                 "if they have diverged, the trim row's population changed and "
+                                 "Phase C1's no-behaviour-change claim no longer holds")
+        rows = {l["path"] for l in md.collect_all(self.REPO)["trim"]["ledgers"]}
+        self.assertTrue(rows, "fixture check: this repo must produce at least one trim row, or "
+                              "the assertion below is vacuous")
+        self.assertTrue(rows <= set(md.READ_CAP_CLASS_A),
+                        "every emitted trim row must be a Class A file: %r" % sorted(rows))
+
+    def test_a_watched_name_in_no_class_gets_no_trim_row_even_when_its_basename_matches(self):
+        """THE ONE ASSERTION THAT CAN TELL THE TWO FILTERS APART — and it does so at the FUNCTION'S
+        contract, not in production. Said plainly, because an earlier draft of this docstring did
+        not: `collect_file_metrics` only ever admits exact members of `READ_CAP_WATCHED` into
+        `read_cap_watch`, so through `collect_all` the old and new filters are equivalent on every
+        input that can exist, and the partition changed no production behaviour. What this test proves
+        is that `collect_trim_metrics` honours its own contract — it takes `files` as a PARAMETER,
+        so a caller can hand it a name `collect_all` never would, and the function should answer NO
+        rather than guess from the filename. Read the kill of the revert-to-basename mutant that
+        way, and not as evidence of a live bug.
+
+        `docs/CHANGELOG.md` has a basename the trimmer knows a grammar for, and no class. Under
+        the old `basename in TRIM_GRAMMARS` filter it would be handed a trim row -- naming
+        `--check` against a path this scanner never decided to watch. Under class membership it is
+        skipped, because `read_cap_class` returns None and an unclassified file has no verdict to
+        emit. The class system forces the decision instead of guessing it from the filename.
+
+        No monkeypatching: `collect_trim_metrics` takes its population from the `files` dict it is
+        handed, so the case is constructed directly.
+
+        KILLS: reverting the filter to `basename in TRIM_GRAMMARS`."""
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        p = Path(td.name)
+        (p / "SESSION_RUNNER.md").write_text("# Session Runner\n" + "step\n" * 40)
+        big = "x\n" * ((md.READ_CAP_BYTES + 100) // 2)
+        (p / "docs").mkdir()
+        (p / "docs" / "CHANGELOG.md").write_text(big)
+        (p / "CHANGELOG.md").write_text(big)
+
+        self.assertIsNone(md.read_cap_class("docs/CHANGELOG.md"),
+                          "fixture check: docs/CHANGELOG.md must be unclassified, or this test is "
+                          "not exercising the case it was written for")
+        self.assertIn("CHANGELOG.md", md.TRIM_GRAMMARS,
+                      "fixture check: the basename must be one the trimmer knows, or the old "
+                      "filter would have skipped it too and the two agree vacuously")
+
+        unclassified = md.collect_trim_metrics(
+            p, {"read_cap_watch": [{"path": "docs/CHANGELOG.md", "lines": 9, "bytes": None}]})
+        self.assertEqual([l["path"] for l in unclassified["ledgers"]], [],
+                         "an unclassified watched name must get NO trim row")
+        self.assertEqual(unclassified["signals"], [])
+
+        # Positive control: the same harness, one directory up, does produce the row -- so the
+        # empty result above is the filter working, not the fixture failing to reach the code.
+        #
+        # ⚠ THE THRESHOLD CHANGE HAD TO GROW THIS CONTROL'S FILE. It used to inherit whatever size the fixture
+        # happened to have, which fired the old 65,536 B arm; at 196,608 it went silent and this
+        # assertion failed -- correctly. A control that does not fire proves nothing about the
+        # branch it is controlling for, so the size is now set EXPLICITLY from the constant rather
+        # than left to the fixture, and it moves with any future retune.
+        (p / "CHANGELOG.md").write_bytes(b"x" * (md.CLASS_A_FIRE_BYTES + 1))
+        classified = md.collect_trim_metrics(
+            p, {"read_cap_watch": [{"path": "CHANGELOG.md", "lines": 9, "bytes": None}]})
+        self.assertEqual([l["path"] for l in classified["ledgers"]], ["CHANGELOG.md"])
+        self.assertTrue(classified["signals"], "the control must actually fire")
+
+    # --- the disposition, and the evidence it rests on --------------------------------------------
+
+    def test_the_two_docs_backlog_locations_have_no_protocol_basis(self):
+        """The third DONE criterion is a DECISION -- keep or drop, but decide it. The
+        decision was KEEP, and this pins the evidence the decision rests on so that the reasoning
+        recorded beside the classes cannot quietly become false.
+
+        The claim: neither `docs/BACKLOG.md` nor `docs/planning/BACKLOG.md` is named as a file to
+        read anywhere in the protocol, so both are watched by analogy to the root basename -- a
+        weaker warrant than the other four names have, and one worth saying out loud rather than
+        letting a reader assume parity.
+
+        The net is the WHOLE distributed .md corpus taken off bin/_manifest.py's SOURCE column,
+        not just the two protocol files: a claim about "no distributed file" cannot be settled by
+        a net that misses most of them. The net once had one hit, a learning row
+        citing this repo's own backlog as a WORKED EXAMPLE (evidence ABOUT the file, not an
+        instruction to open it), allowed for by name. That row has left the distributed corpus,
+        so both locations now read [] -- which a net that read nothing
+        would also return, so the root basename's own hits are asserted non-empty first.
+
+        THIS TEST IS SUPPOSED TO GO RED IF THE PROTOCOL CHANGES. That is its job: the day a runner
+        edit gives one of these locations a real basis, the KEEP decision has a stronger warrant
+        than "by analogy" and the comment beside the classes must be rewritten to say so."""
+        root = Path(HERE).parent
+        sys.path.insert(0, str(root / "bin"))
+        try:
+            import _manifest
+            distributed_md = [r[0] for r in _manifest.DISTRIBUTION if r[0].endswith(".md")]
+        finally:
+            sys.path.remove(str(root / "bin"))
+        self.assertGreater(len(distributed_md), 15,
+                           "fixture check: the distributed .md corpus must be the wide net, not a "
+                           "handful of files")
+
+        for protocol_file in ("starter-kit/SESSION_RUNNER.md", "starter-kit/SAFEGUARDS.md"):
+            text = (root / protocol_file).read_text(encoding="utf-8")
+            self.assertIn("BACKLOG.md", text,
+                          "fixture check: %s must still name the ROOT backlog, or the absence "
+                          "assertions below are trivially true" % protocol_file)
+            for loc in ("docs/BACKLOG.md", "docs/planning/BACKLOG.md"):
+                with self.subTest(file=protocol_file, loc=loc):
+                    self.assertNotIn(loc, text)
+
+        hits = {loc: sorted(f for f in distributed_md
+                            if loc in (root / f).read_text(encoding="utf-8"))
+                for loc in ("BACKLOG.md", "docs/BACKLOG.md", "docs/planning/BACKLOG.md")}
+        self.assertIn("starter-kit/SESSION_RUNNER.md", hits["BACKLOG.md"],
+                      "fixture check: the net must read the corpus -- the runner names the ROOT "
+                      "backlog, so an empty hit list here means nothing below was read")
+        self.assertEqual(hits["docs/BACKLOG.md"], [],
+                         "docs/BACKLOG.md is named nowhere in the distributed corpus; if that has "
+                         "changed, its disposition is no longer 'by analogy'")
+        self.assertEqual(hits["docs/planning/BACKLOG.md"], [],
+                         "docs/planning/BACKLOG.md is named nowhere in the distributed corpus since "
+                         "the learning left it; if that has changed, revisit the comment "
+                         "beside READ_CAP_CLASS_A")
+
+    # --- the phase's own boundary -----------------------------------------------------------------
+
+    def test_phase_c2_moved_exactly_the_ratified_thresholds_and_nothing_else(self):
+        """SUCCESSOR TO THE TEST THAT ASSERTED THE CLASSES HAD NO THRESHOLDS, converted deliberately.
+
+        The earlier version asserted the classes had acquired NO thresholds, because attaching one was
+        a later step's job and would be inert before the budget was settled (`DEFAULT_BUDGET_BYTES`). The later step did both
+        in one change, so the guard flips from "none exist" to "exactly these exist".
+
+        ⚠ AND THE EARLIER VERSION HAD A HOLE THAT THE LATER CHANGE WALKED STRAIGHT THROUGH — recorded rather than
+        quietly fixed, because it is the failure this class already ships two learnings about.
+        Its docstring claimed a namespace check "which no per-class threshold can slip past
+        WHATEVER IT IS CALLED". It was implemented as
+        `[n for n in dir(md) if n.startswith("READ_CAP_CLASS")]` — one prefix. The later constants are
+        named `CLASS_A_FIRE_BYTES` / `CLASS_A_STOP_BYTES`, chosen for what they guard rather than
+        to evade anything, and the guard stayed GREEN through the very change it was written to
+        gate. A guard you can walk around by picking a name has coverage that is a property of the
+        change, not of the codebase. The check below is a SUBSTRING sweep over the whole namespace
+        asserting the EXACT expected set, which is what the earlier docstring already claimed.
+
+        KILLS: any of the six pinned literals moving; any further per-class constant landing under
+        any spelling without a session deciding to add it here."""
+        # FROZEN LITERALS on both sides. `READ_CAP_BYTES` is defined in this module as
+        # `int(READ_CAP_TOKENS * MIN_BYTES_PER_TOKEN)`, so asserting that identity would assert
+        # nothing.
+        self.assertEqual(md.READ_CAP_BYTES, 56_750,
+                         "the threshold change did NOT move the one-read budget. It is a measured harness fact, not "
+                         "a policy knob; the Class A arm is a separate constant beside it")
+        self.assertEqual(md.READ_REFUSE_BYTES, 262_144, "the hard refusal did not move either")
+        self.assertEqual(md.READ_CAP_TOKENS, 25_000)
+        self.assertEqual(md.MIN_BYTES_PER_TOKEN, 2.27)
+        self.assertEqual(md.CLASS_A_FIRE_BYTES, 196_608, "192 KiB, ratified at Phase C2")
+        self.assertEqual(md.CLASS_A_STOP_BYTES, 98_304, "96 KiB, ratified at Phase C2")
+        self.assertLess(md.CLASS_A_FIRE_BYTES, md.READ_REFUSE_BYTES,
+                        "the Class A arm fires BELOW the hard refusal, never at "
+                        "it — a trigger set at the refusal parks the file on the cliff edge")
+        self.assertGreater(md.CLASS_A_FIRE_BYTES, md.READ_CAP_BYTES,
+                           "control: the Class A arm must be LOOSER than the one-read cap, or the "
+                           "phase changed nothing")
+
+        # The population is still two frozen sets and still carries no threshold of its own.
+        class_names = sorted(n for n in dir(md) if n.startswith("READ_CAP_CLASS"))
+        self.assertEqual(class_names, ["READ_CAP_CLASS_A", "READ_CAP_CLASS_B"])
+        for name in class_names:
+            self.assertIsInstance(getattr(md, name), frozenset,
+                                  "%s must stay a set of names; a threshold smuggled in as a dict "
+                                  "value would pass the name check above" % name)
+
+        # THE WIDENED GUARD — substring, not prefix, over every public module-level name. The
+        # expected set is exhaustive and sorted, so an addition fails rather than being absorbed.
+        per_class = sorted(n for n in dir(md)
+                           if not n.startswith("_") and ("CLASS_A" in n or "CLASS_B" in n))
+        self.assertEqual(per_class,
+                         ["CLASS_A_FIRE_BYTES", "CLASS_A_STOP_BYTES",
+                          "READ_CAP_CLASS_A", "READ_CAP_CLASS_B"],
+                         "a per-class name landed that no phase ratified, or one was renamed. "
+                         "Update this list in the session that adds it, and say why: %r"
+                         % per_class)
+
+class TestPhaseC2PerClassRiskRows(unittest.TestCase):
+    """The DASHBOARD half of the threshold change — the two threshold sites an earlier inventory left owned by
+    no one, and which were fenced rather than resolved.
+
+    WHY THIS IS IN THE CHANGE AT ALL, since its criterion names only trimmer-side things. Because the threshold change
+    is the change that CREATES the disagreement: move the trimmer's trigger and leave this file,
+    and `collect_trim_metrics` keeps emitting "the archive trigger fires; run `--check`" beside a
+    `--check` that reports it does not. The row would name a command whose output contradicts it —
+    which the comment above that remedy says the wording exists to avoid. The change was widened
+    to cover both sites; this class is that half.
+
+    ⚠ CLASS B CANNOT BE EXERCISED BY THIS REPOSITORY. Its only Class B file within the watched set
+    is `docs/planning/BACKLOG.md`, which is comfortably under the cap, so the Class B branch of the
+    risk row is unreachable through `collect_all` here. Every Class B assertion below therefore
+    drives `assess_risks` with a CONSTRUCTED metrics dict. That is a real limitation, not a
+    workaround: it means the Class B row is covered by unit test only and has never been observed
+    on a live tree in this repo.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        """A REAL scan supplies the metrics shape; only `read_cap_watch` is substituted.
+
+        The first draft hand-built the dict and it raised KeyError on `tests.test_file_count` --
+        assess_risks reads far more of the structure than the D4(b) rows do. Hand-shaping it would
+        have coupled this class to every future key assess_risks learns to read, and the failure
+        mode is an ERROR that looks like a product bug rather than a fixture one."""
+        cls._td = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls._td.cleanup)
+        p = Path(cls._td.name)
+        subprocess.run(["git", "init", "-q", str(p)], check=True)
+        (p / "SESSION_RUNNER.md").write_text("# r\n")
+        (p / "README.md").write_text("# fx\n")
+        subprocess.run(["git", "-C", str(p), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(p), "-c", "user.email=t@t", "-c", "user.name=t",
+                        "commit", "-q", "-m", "init"], check=True)
+        cls._base = md.collect_all(p)
+        cls._base["trim"] = {"signals": []}      # the trim row is asserted separately, below
+
+    @classmethod
+    def _metrics(cls, path, size, lines=100):
+        m = copy.deepcopy(cls._base)
+        m["files"]["read_cap_watch"] = [{"path": path, "bytes": size, "lines": lines}]
+        return m
+
+    def test_FIXTURE_the_base_scan_emits_no_read_cap_row_of_its_own(self):
+        """Control. If the borrowed scan already carried a read-cap row, every assertion below
+        would be reading someone else's row and would pass for the wrong reason."""
+        rows = [r for r in md.assess_risks(copy.deepcopy(self._base))
+                if "read cap" in r["description"]]
+        self.assertEqual(rows, [], "the fixture repo must be clean of read-cap rows: %r" % rows)
+
+    def _rows_for(self, path, size):
+        rows = md.assess_risks(self._metrics(path, size))
+        return [r for r in rows if path in r["description"] and "read cap" in r["description"]]
+
+    def test_a_class_A_ledger_over_the_cap_is_LOW_and_says_no_action_is_expected(self):
+        """The fleet-visible half of this change. A Class A ledger between the one-read cap and the
+        archive threshold is the ADJUDICATED case: truncation is ordered and
+        the file is newest-on-top, so what drops is the oldest records. Reporting that as HIGH
+        taught a reader to ignore the row."""
+        rows = self._rows_for("HANDOFFS.md", md.READ_CAP_BYTES + 1)
+        self.assertEqual(len(rows), 1, "exactly one read-cap row per watched file: %r" % rows)
+        self.assertEqual(rows[0]["severity"], "low",
+                         "a Class A ledger over the cap but under the archive threshold is "
+                         "expected, not a fault")
+        self.assertIn("CLASS A", rows[0]["description"])
+        self.assertIn("NO ACTION IS EXPECTED", rows[0]["description"])
+        self.assertIn("{:,}".format(md.CLASS_A_FIRE_BYTES), rows[0]["description"],
+                      "the row must name the threshold that WOULD matter, so the reader can see "
+                      "how far away it is")
+
+    def test_a_class_B_file_over_the_cap_is_still_HIGH_and_says_why(self):
+        """Class B rows STAY, and still say why. This is the design's "make the rows DIFFERENT, not
+        delete one" — the severity and the row's existence are what this test is for.
+
+        ⚠ THE "WHY" IT PINS CHANGED, DELIBERATELY, AND THE ASSERTION WAS REPLACED RATHER
+        THAN REMOVED. It used to assert `"NO_CONFIG"` was present — i.e. that the row told the
+        reader the trimmer had no config for this file. That claim was never evaluated by this
+        module and is false in a tree that widened `LEDGERS`, so the row stopped making it; see
+        `test_the_class_B_row_makes_NO_CLAIM_about_any_trimmer_config` below, which now forbids it.
+        What survives unchanged is everything this test was really protecting: the row exists, it
+        is HIGH, and it names the class. Deleting the assertion would have left the "says why" in
+        the test's own name unbacked, so it is re-pointed at the access-path reason instead."""
+        rows = self._rows_for("SESSION_NOTES.md", md.READ_CAP_BYTES + 1)
+        self.assertEqual(len(rows), 1, "%r" % rows)
+        self.assertEqual(rows[0]["severity"], "high")
+        self.assertIn("CLASS B", rows[0]["description"])
+        self.assertIn("the instructed access path IS the file", rows[0]["description"],
+                      "the row must still say WHY being over the cap matters for this class — "
+                      "that the protocol sends the reader at the file itself")
+
+    def test_the_class_B_row_makes_NO_CLAIM_about_any_trimmer_config(self):
+        """The row may assert only what the emitter EVALUATED, and it evaluates no trimmer.
+
+        It used to print *"the trimmer answers NO_CONFIG for it"* — a fact about a NEIGHBOURING
+        TOOL's configuration, read from nothing, in a module whose class sets are frozen literals.
+        That sentence is true here only because `LEDGERS` and the declared classes happen to
+        coincide, and a canonical test pins that coincidence. **It is not true in a tree that
+        widened `LEDGERS`**, and this module is DISTRIBUTED to exactly such trees, where no test
+        pins anything (`tools/test_methodology_dashboard.py` is absent from `bin/_manifest.py`).
+
+        This does NOT relax the declared/derived split — see the two class pins above, unchanged.
+        The class stays declared; the PROSE stops claiming the trimmer's answer.
+
+        KILLS: re-introducing any mention of the trimmer or its config into this row on a tree
+        where nothing was read -- this fixture carries no trimmer. The probe appends a remedy ONLY
+        where the scanned project's own trimmer SOURCE declares the file;
+        `TestBL88P2TrimmerSourceProbe` pins that arm, and pins this one byte-identical to the unprobed row."""
+        for name in sorted(md.READ_CAP_CLASS_B):
+            with self.subTest(name=name):
+                rows = self._rows_for(name, md.READ_CAP_BYTES + 1)
+                self.assertEqual(len(rows), 1, "%r" % rows)
+                d = rows[0]["description"]
+                self.assertNotIn("NO_CONFIG", d,
+                                 "the row asserts a fact about the trimmer's config that this "
+                                 "module never reads")
+                self.assertNotIn("the trimmer", d,
+                                 "no claim about the trimmer belongs in a row that never asks it")
+
+    def test_the_backlog_justification_is_printed_ONLY_for_the_backlogs(self):
+        """*"A backlog's bottom items are as live as its top ones"* is a reason about BACKLOGS.
+
+        The module comment above `READ_CAP_CLASS_B` already records that carrying it to every
+        Class B name is false of `SESSION_NOTES.md` — whose instructed read target is the ACTIVE
+        TASK section at the TOP — and states the true weaker form: nothing ENFORCES it. That
+        correction reached the comment and never reached the row. This is that, closed.
+
+        Measured across 12 fleet repos: every `SESSION_NOTES.md` carrying an
+        `## ACTIVE TASK` heading has it at byte 132-9,490, inside READ_CAP_BYTES in all of them;
+        one project has no such heading at all, which is the case the weaker form is for.
+
+        KILLS: printing the backlog clause for SESSION_NOTES.md; dropping it from the backlogs."""
+        clause = "bottom items are as live as its top ones"
+        for name in sorted(md.READ_CAP_CLASS_B):
+            with self.subTest(name=name):
+                d = self._rows_for(name, md.READ_CAP_BYTES + 1)[0]["description"]
+                if name in md._BACKLOG_LOCATIONS:
+                    self.assertIn(clause, d, "a backlog's row loses the reason that IS true of it")
+                else:
+                    self.assertNotIn(clause, d,
+                                     "%s is not a backlog; its bottom is its OLDEST record" % name)
+                    self.assertIn("ENFORCES", d,
+                                  "the weaker form the module comment settled must reach the row")
+
+    def test_THE_DISCRIMINATOR_same_size_opposite_severity(self):
+        """The pair above proves little separately — a rule that returned `low` for everything
+        would pass the first, and one that returned `high` for everything would pass the second.
+        Identical bytes, different class, opposite severity is what proves the branch is live."""
+        size = md.READ_CAP_BYTES + 1
+        a = self._rows_for("HANDOFFS.md", size)
+        b = self._rows_for("SESSION_NOTES.md", size)
+        self.assertEqual(len(a), 1); self.assertEqual(len(b), 1)
+        self.assertNotEqual(a[0]["severity"], b[0]["severity"],
+                            "same size, different class, and the severity did not move — the "
+                            "per-class branch is not wired")
+        self.assertEqual((a[0]["severity"], b[0]["severity"]), ("low", "high"))
+
+    def test_the_hard_refusal_row_is_UNCHANGED_and_still_HIGH_for_BOTH_classes(self):
+        """The change relaxed nothing past READ_REFUSE_BYTES. There the prefix stops existing, the
+        consolation that makes truncation survivable is FALSE, and ordering buys neither class
+        anything — so this row must not have acquired a class."""
+        for path in ("HANDOFFS.md", "SESSION_NOTES.md"):
+            rows = md.assess_risks(self._metrics(path, md.READ_REFUSE_BYTES + 1))
+            hits = [r for r in rows if path in r["description"] and "hard limit" in r["description"]]
+            self.assertEqual(len(hits), 1, "%s: %r" % (path, rows))
+            self.assertEqual(hits[0]["severity"], "high",
+                             "%s past the hard refusal must stay HIGH whatever its class" % path)
+            self.assertIn("NO CONTENT AT ALL", hits[0]["description"])
+
+    def test_a_class_A_ledger_UNDER_the_cap_emits_no_read_cap_row_at_all(self):
+        """Control against the severity drop becoming a row that is simply always present."""
+        self.assertEqual(self._rows_for("HANDOFFS.md", md.READ_CAP_BYTES - 1), [])
+
+    def test_collect_trim_metrics_keys_on_the_class_A_arm_not_the_one_read_cap(self):
+        """The SECOND unowned site. This collector re-implements the trimmer's trigger — it must,
+        because it reports on repos where the tool is not installed — so a threshold that moved in
+        the trimmer alone leaves it contradicting `--check`.
+
+        Driven at three sizes across both thresholds rather than at one, because a single sample
+        cannot distinguish "keys on the new arm" from "always False"."""
+        files = {"read_cap_watch": [{"path": "CHANGELOG.md", "bytes": 0, "lines": 1}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            (repo / "SESSION_RUNNER.md").write_text("# r\n")
+            for size, expected in ((md.READ_CAP_BYTES + 1, False),
+                                   (md.CLASS_A_FIRE_BYTES, False),
+                                   (md.CLASS_A_FIRE_BYTES + 1, True)):
+                (repo / "CHANGELOG.md").write_bytes(b"x" * size)
+                out = md.collect_trim_metrics(repo, files, role="framework")
+                led = [l for l in out["ledgers"] if l["path"] == "CHANGELOG.md"]
+                self.assertEqual(len(led), 1, "%d: %r" % (size, out["ledgers"]))
+                self.assertEqual(led[0]["read_fires"], expected,
+                                 "at %s B the read arm must be %s — it keys on "
+                                 "CLASS_A_FIRE_BYTES (%s), not READ_CAP_BYTES (%s)"
+                                 % ("{:,}".format(size), expected,
+                                    "{:,}".format(md.CLASS_A_FIRE_BYTES),
+                                    "{:,}".format(md.READ_CAP_BYTES)))
+
+
+# The Class B over-cap row before the trimmer-source probe, FROZEN. Captured from the module before
+# the probe existed, for a watched file of READ_CAP_BYTES + 1 bytes and 100 lines, with nothing evaluated
+# about any trimmer. A LITERAL on purpose: the criterion -- "a probe that finds nothing or
+# fails must leave the row byte-identical to the unprobed row" -- is a claim about that OUTPUT, and a reference
+# computed by the code under test would only compare the new code with itself.
+# If a ratified constant these rows print moves (READ_CAP_BYTES, READ_CAP_TOKENS,
+# MIN_BYTES_PER_TOKEN), regenerate them from the module as it stood before that change.
+_P1_CLASS_B_ROWS = {
+    'BACKLOG.md': (
+        'BACKLOG.md is 56,751 B (100 lines) — past the 56,750 B one-read budget for the agent'
+        ' read cap, which is denominated in tokens (25,000) and converted here at the densest'
+        ' content measured (2.27 B/token). A session reading it whole gets a PARTIAL view — '
+        'truncated to the prefix that fits the token cap, and it SAYS SO in a banner naming '
+        'the true length, so the failure is loud rather than silent; an explicit line range '
+        'spanning the excess errors outright, returning nothing. This is a CLASS B file and '
+        "the instructed access path IS the file: a backlog's bottom items are as live as its "
+        'top ones, so what truncates may be open work, and you are told THAT something was '
+        'cut, never WHAT'
+    ),
+    'SESSION_NOTES.md': (
+        'SESSION_NOTES.md is 56,751 B (100 lines) — past the 56,750 B one-read budget for the'
+        ' agent read cap, which is denominated in tokens (25,000) and converted here at the '
+        'densest content measured (2.27 B/token). A session reading it whole gets a PARTIAL '
+        'view — truncated to the prefix that fits the token cap, and it SAYS SO in a banner '
+        'naming the true length, so the failure is loud rather than silent; an explicit line '
+        'range spanning the excess errors outright, returning nothing. This is a CLASS B file'
+        ' and the instructed access path IS the file: nothing ENFORCES that the part you need'
+        ' is inside that prefix — the protocol says to focus on the ACTIVE TASK section at '
+        'the top and the seed puts it there, but no check holds it there, and a file carrying'
+        ' no such heading has no ordering to rely on, and you are told THAT something was '
+        'cut, never WHAT'
+    ),
+    'docs/BACKLOG.md': (
+        'docs/BACKLOG.md is 56,751 B (100 lines) — past the 56,750 B one-read budget for the '
+        'agent read cap, which is denominated in tokens (25,000) and converted here at the '
+        'densest content measured (2.27 B/token). A session reading it whole gets a PARTIAL '
+        'view — truncated to the prefix that fits the token cap, and it SAYS SO in a banner '
+        'naming the true length, so the failure is loud rather than silent; an explicit line '
+        'range spanning the excess errors outright, returning nothing. This is a CLASS B file'
+        " and the instructed access path IS the file: a backlog's bottom items are as live as"
+        ' its top ones, so what truncates may be open work, and you are told THAT something '
+        'was cut, never WHAT'
+    ),
+    'docs/planning/BACKLOG.md': (
+        'docs/planning/BACKLOG.md is 56,751 B (100 lines) — past the 56,750 B one-read budget'
+        ' for the agent read cap, which is denominated in tokens (25,000) and converted here '
+        'at the densest content measured (2.27 B/token). A session reading it whole gets a '
+        'PARTIAL view — truncated to the prefix that fits the token cap, and it SAYS SO in a '
+        'banner naming the true length, so the failure is loud rather than silent; an '
+        'explicit line range spanning the excess errors outright, returning nothing. This is '
+        "a CLASS B file and the instructed access path IS the file: a backlog's bottom items "
+        'are as live as its top ones, so what truncates may be open work, and you are told '
+        'THAT something was cut, never WHAT'
+    ),
+}
+
+# The sentence the probe appends when -- and only when -- the scanned project's own trimmer SOURCE declares
+# a LEDGERS entry for the file's basename. Spelled here independently of the module's own format
+# string, for the same reason as the literal above.
+_P2_REMEDY = (". BUT THIS PROJECT HAS A REMEDY: its own `{tool}` declares a `LEDGERS` entry for "
+              "`{base}` (read from its source, never run), so run `python3 {tool} --file {path} "
+              "--check` for the full report and whether a trim is the right move")
+
+
+class TestBL88P2TrimmerSourceProbe(unittest.TestCase):
+    """The Class B row may name a remedy it has CHECKED, and only then lower itself.
+
+    The probe is a SOURCE-TEXT read of the scanned project's own
+    `methodology_trim.py`, never an execution -- no adopter code runs inside the scanner, which is
+    the precedent `find_trim_tool` already follows for the version and the budget.
+
+    THE FAILURE PATH IS THE CRITERION. Four trees are scanned through `collect_all` -- the surface
+    an adopter's copy actually runs -- one per outcome: the trimmer declares the file (CONFIG), it
+    does not (NO CONFIG), it cannot be read (LOAD FAILURE, a deliberately broken fixture trimmer,
+    never a wait for a real one), and there is none (ABSENT). Only CONFIG may differ from the unprobed row, and
+    the other three are compared to that row as a FROZEN LITERAL rather than to each other.
+
+    THE DECLARED/DERIVED SPLIT IS NOT ENGAGED, AND ONE TEST SAYS SO. The probe changes prose and severity only: the
+    file's CLASS stays declared, and the trim row's population stays Class A even in a tree whose
+    trimmer declares a Class B name."""
+
+    NOTES = "SESSION_NOTES.md"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.trim = _load_trimmer()
+        cls.canonical = Path(TRIM_PY).read_text(encoding="utf-8")
+        cls.patched = cls._splice(cls.canonical)
+        cls.broken = cls.canonical + "\n\ndef deliberately_broken(:\n    pass\n"
+        cls.scans = {
+            "config": cls._scan(cls.patched),
+            "no config": cls._scan(cls.canonical),
+            "load failure": cls._scan(cls.broken),
+            "absent": cls._scan(None),
+        }
+
+    @staticmethod
+    def _splice(text):
+        """The canonical trimmer widened the way an adopter widened its own: one more entry
+        in the LEDGERS literal, keyed by basename. Importable, so it can also serve as the
+        independent operand for what such a file DEFINES."""
+        anchor = "LEDGERS = {\n"
+        assert text.count(anchor) == 1, "the canonical LEDGERS literal moved: %d" % text.count(anchor)
+        entry = ('    "SESSION_NOTES.md": LedgerSpec(\n'
+                 '        basename="SESSION_NOTES.md",\n'
+                 '        record_kind="heading",\n'
+                 '        footer_mode="none",\n'
+                 '        date_of_record=_handoff_date,\n'
+                 '        record_start=re.compile(r"^### What Session \\d+ Did\\b"),\n'
+                 '    ),\n')
+        return text.replace(anchor, anchor + entry, 1)
+
+    @staticmethod
+    def _notes_text():
+        """Exactly READ_CAP_BYTES + 1 bytes over exactly 100 lines -- the shape of the literal."""
+        size = md.READ_CAP_BYTES + 1
+        width = size // 100
+        lines = ["x" * (width - 1) + "\n"] * 99
+        last = size - sum(len(l) for l in lines)
+        return "".join(lines) + "y" * (last - 1) + "\n"
+
+    @classmethod
+    def _scan(cls, trimmer_text):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp)
+            subprocess.run(["git", "init", "-q", str(p)], check=True)
+            (p / "SESSION_RUNNER.md").write_text("# r\n")
+            (p / "README.md").write_text("# fx\n")
+            (p / cls.NOTES).write_text(cls._notes_text())
+            if trimmer_text is not None:
+                (p / md.TRIM_TOOL_NAME).write_text(trimmer_text, encoding="utf-8")
+            subprocess.run(["git", "-C", str(p), "add", "-A"], check=True)
+            subprocess.run(["git", "-C", str(p), "-c", "user.email=t@t", "-c", "user.name=t",
+                            "commit", "-q", "-m", "init"], check=True)
+            return md.collect_all(p)
+
+    @staticmethod
+    def _rows(metrics, path):
+        return [r for r in metrics["scores"]["risks"]
+                if path in r["description"] and "read cap" in r["description"]]
+
+    @staticmethod
+    def _defines(text):
+        """What a trimmer source DEFINES, by executing it -- in the TEST, as the independent
+        operand the scanner must never become."""
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "trim_fixture.py"
+            f.write_text(text, encoding="utf-8")
+            spec = importlib.util.spec_from_file_location("trim_fixture_under_test", f)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return sorted(mod.LEDGERS)
+
+    # --- the fixtures prove themselves first ----------------------------------------------------
+
+    def test_FIXTURE_every_scan_holds_the_literals_file_and_finds_its_trimmer(self):
+        """Without this, a wrong byte count or a trimmer `find_trim_tool` skipped would make every
+        comparison below pass or fail for the wrong reason -- the LOAD FAILURE arm in particular is
+        only exercised if the broken file is FOUND and then fails to parse."""
+        for label, m in self.scans.items():
+            with self.subTest(scan=label):
+                w = [w for w in m["files"]["read_cap_watch"] if w["path"] == self.NOTES]
+                self.assertEqual(w, [{"path": self.NOTES, "lines": 100,
+                                      "bytes": md.READ_CAP_BYTES + 1}])
+                self.assertEqual(m["trim"]["tool_present"], label != "absent")
+        with self.assertRaises(SyntaxError):
+            compile(self.broken, "broken_fixture", "exec")
+        self.assertEqual(self._defines(self.patched),
+                         sorted(list(self.trim.LEDGERS) + [self.NOTES]),
+                         "the widened fixture must DEFINE exactly one more entry than canonical")
+
+    # --- the reading ------------------------------------------------------------------------------
+
+    def test_the_source_reading_matches_what_the_trimmer_DEFINES(self):
+        """Independent operands, as `_parse_trim_budget`'s pin already does: the scanner's reading
+        of the source against the keys the module defines when it IS executed -- here, in a test."""
+        self.assertEqual(md._parse_trim_ledgers(self.canonical), sorted(self.trim.LEDGERS))
+        self.assertEqual(md._parse_trim_ledgers(self.patched), self._defines(self.patched))
+        self.assertIn(self.NOTES, md._parse_trim_ledgers(self.patched))
+
+    def test_a_name_the_source_only_MENTIONS_is_not_a_config(self):
+        """Why the reading is a PARSE and not a grep. An adopter's widened trimmer spells
+        SESSION_NOTES.md on three lines -- a comment, the key, and a `basename=` argument -- and a
+        grep counts all three. A false positive is the harmful direction: it names a remedy that
+        does not work."""
+        mention = '    "SESSION_NOTES.md": LedgerSpec(\n'
+        text = (self.canonical
+                + "\n# " + mention
+                + '\n_EXAMPLE = """\n' + mention + '"""\n')
+        self.assertIn('"SESSION_NOTES.md": LedgerSpec(', text,
+                      "control: a grep for the entry's own spelling WOULD match this source")
+        self.assertEqual(md._parse_trim_ledgers(text), sorted(self.trim.LEDGERS))
+
+    def test_the_reading_ABSTAINS_rather_than_guesses(self):
+        """None -- not an empty list, and not a best effort -- whenever the source alone cannot
+        say what LEDGERS holds. An abstention costs nothing (the row stays P1's); a guess could
+        name a remedy that does not work."""
+        cases = {
+            "syntax error": 'LEDGERS = {"SESSION_NOTES.md": None}\ndef f(:\n',
+            "null byte": 'LEDGERS = {"SESSION_NOTES.md": None}\x00\n',
+            "no LEDGERS": "X = 1\n",
+            "not a dict display": 'LEDGERS = dict(SESSION_NOTES=None)\n',
+            "computed key": 'K = "SESSION_NOTES.md"\nLEDGERS = {K: None}\n',
+            "a non-string key": 'LEDGERS = {"SESSION_NOTES.md": None, 1: None}\n',
+            "dict unpacking": 'LEDGERS = {"SESSION_NOTES.md": None, **OTHER}\n',
+            "only inside a function": 'def f():\n    LEDGERS = {"SESSION_NOTES.md": None}\n',
+            "subscript store after": ('LEDGERS = {"CHANGELOG.md": None}\n'
+                                      'LEDGERS["SESSION_NOTES.md"] = None\n'),
+            "subscript delete after": ('LEDGERS = {"SESSION_NOTES.md": None}\n'
+                                       'del LEDGERS["SESSION_NOTES.md"]\n'),
+            "mutating method": ('LEDGERS = {"SESSION_NOTES.md": None}\n'
+                                'LEDGERS.pop("SESSION_NOTES.md")\n'),
+            "rebound": 'LEDGERS = {"SESSION_NOTES.md": None}\nLEDGERS = {}\n',
+            "rebound in a function": ('LEDGERS = {"SESSION_NOTES.md": None}\n'
+                                      'def f():\n    global LEDGERS\n    LEDGERS = {}\n'),
+            "imported": 'from elsewhere import LEDGERS\n',
+            "imported after": 'LEDGERS = {"SESSION_NOTES.md": None}\nfrom elsewhere import LEDGERS\n',
+            "imported under the name": ('LEDGERS = {"SESSION_NOTES.md": None}\n'
+                                        'from elsewhere import OTHER as LEDGERS\n'),
+            "imported as a package": 'LEDGERS = {"SESSION_NOTES.md": None}\nimport LEDGERS.sub\n',
+            "a def of the name": 'LEDGERS = {"SESSION_NOTES.md": None}\ndef LEDGERS():\n    pass\n',
+            "a class of the name": 'LEDGERS = {"SESSION_NOTES.md": None}\nclass LEDGERS:\n    pass\n',
+            "except-as the name": ('LEDGERS = {"SESSION_NOTES.md": None}\ntry:\n    pass\n'
+                                   'except Exception as LEDGERS:\n    pass\n'),
+            "an alias by chained assignment": ('LEDGERS = ALIAS = {"SESSION_NOTES.md": None}\n'
+                                               'ALIAS.pop("SESSION_NOTES.md")\n'),
+            "pathologically deep": 'LEDGERS = {"SESSION_NOTES.md": None}\nX = ' + "not " * 100000 + "1\n",
+        }
+        for label, text in cases.items():
+            with self.subTest(case=label):
+                self.assertIsNone(md._parse_trim_ledgers(text))
+        # CONTROLS: the same shapes read when nothing disturbs them, including the read-only use
+        # the trimmer itself makes of the table -- so the abstentions above are not "always None".
+        self.assertEqual(md._parse_trim_ledgers('LEDGERS = {"SESSION_NOTES.md": None}\n'),
+                         ["SESSION_NOTES.md"])
+        self.assertEqual(md._parse_trim_ledgers('X, Y = 1, 2\nLEDGERS = {"B.md": 1, "A.md": 2}\n'
+                                                'spec = LEDGERS.get("A.md")\n'
+                                                'other = LEDGERS["B.md"]\n'
+                                                'for k, v in LEDGERS.items():\n    pass\n'
+                                                'n = (LEDGERS.keys(), LEDGERS.values(), LEDGERS.copy())\n'),
+                         ["A.md", "B.md"])
+        self.assertEqual(md._parse_trim_ledgers("LEDGERS = {}\n"), [])
+
+    def test_the_reading_NEVER_RUNS_the_source(self):
+        """The operator's decision, pinned: a source whose top level would write a file and exit
+        is read, and neither happens."""
+        with tempfile.TemporaryDirectory() as tmp:
+            sentinel = Path(tmp) / "ran"
+            text = ("open(%r, 'w').write('ran')\n"
+                    'LEDGERS = {"SESSION_NOTES.md": None}\n'
+                    "raise SystemExit(3)\n" % str(sentinel))
+            self.assertEqual(md._parse_trim_ledgers(text), ["SESSION_NOTES.md"])
+            self.assertFalse(sentinel.exists(), "the scanner executed the trimmer it was reading")
+
+    def test_the_scan_carries_the_reading_for_each_outcome(self):
+        expected = {"config": sorted(list(self.trim.LEDGERS) + [self.NOTES]),
+                    "no config": sorted(self.trim.LEDGERS),
+                    "load failure": None,
+                    "absent": None}
+        for label, m in self.scans.items():
+            with self.subTest(scan=label):
+                self.assertEqual(m["trim"]["tool_ledgers"], expected[label])
+
+    # --- the row ----------------------------------------------------------------------------------
+
+    def test_CONFIG_the_row_gains_the_remedy_and_takes_class_A_severity(self):
+        rows = self._rows(self.scans["config"], self.NOTES)
+        self.assertEqual(len(rows), 1, "%r" % rows)
+        self.assertEqual(rows[0]["severity"], "low",
+                         "a Class B file whose project CAN act on it drops to the Class A "
+                         "severity")
+        self.assertEqual(rows[0]["description"],
+                         _P1_CLASS_B_ROWS[self.NOTES]
+                         + _P2_REMEDY.format(tool="methodology_trim.py", base=self.NOTES,
+                                             path=self.NOTES),
+                         "the probe APPENDS a sentence to the unprobed row; it rewrites nothing that row said")
+
+    def test_NO_CONFIG_LOAD_FAILURE_and_ABSENT_leave_the_row_byte_identical_to_P1(self):
+        """THE CRITERION. Compared to the frozen literal, never to each other: three arms that
+        drifted together would agree with one another and all be wrong."""
+        for label in ("no config", "load failure", "absent"):
+            with self.subTest(scan=label):
+                rows = self._rows(self.scans[label], self.NOTES)
+                self.assertEqual(len(rows), 1, "%r" % rows)
+                self.assertEqual(rows[0]["severity"], "high")
+                self.assertEqual(rows[0]["description"], _P1_CLASS_B_ROWS[self.NOTES])
+
+    def test_the_probe_selects_NO_CLASS(self):
+        """Dragon 6. In the one tree whose trimmer declares SESSION_NOTES.md, the file is still
+        Class B and the trim row's population is still Class A only -- the probe reached the
+        prose and nothing else."""
+        m = self.scans["config"]
+        self.assertEqual(md.read_cap_class(self.NOTES), "B")
+        self.assertEqual([l["path"] for l in m["trim"]["ledgers"]], [],
+                         "the trim-row population admitted a Class B file because its trimmer "
+                         "declares it -- that is class membership following LEDGERS")
+        self.assertFalse([s for s in m["trim"]["signals"] if self.NOTES in s[1]])
+
+    def test_every_class_B_name_resolves_by_BASENAME_as_the_trimmer_does(self):
+        """The trimmer looks a file up by `LEDGERS.get(path.name)` at any depth, so a nested
+        `docs/planning/BACKLOG.md` is answered by a `BACKLOG.md` entry -- and the remedy must
+        still name the path the reader has, not the basename."""
+        base = copy.deepcopy(self.scans["absent"])
+        for name in sorted(md.READ_CAP_CLASS_B):
+            with self.subTest(name=name):
+                m = copy.deepcopy(base)
+                m["files"]["read_cap_watch"] = [{"path": name, "bytes": md.READ_CAP_BYTES + 1,
+                                                 "lines": 100}]
+                m["trim"] = {"signals": [], "tool_present": True,
+                             "tool_path": "methodology_trim.py",
+                             "tool_ledgers": ["BACKLOG.md", "CHANGELOG.md", "HANDOFFS.md",
+                                              "SESSION_NOTES.md"]}
+                rows = self._rows({"scores": {"risks": md.assess_risks(m)}}, name)
+                self.assertEqual(len(rows), 1, "%r" % rows)
+                self.assertEqual(rows[0]["severity"], "low")
+                self.assertEqual(rows[0]["description"],
+                                 _P1_CLASS_B_ROWS[name]
+                                 + _P2_REMEDY.format(tool="methodology_trim.py",
+                                                     base=name.rsplit("/", 1)[-1], path=name))
+
+    def test_a_reading_the_scan_cannot_vouch_for_is_not_trusted(self):
+        """The remedy needs all three: a tool that was FOUND, a path to name, and a reading that
+        lists the basename. Each missing one leaves P1's row."""
+        base = copy.deepcopy(self.scans["absent"])
+        bad = {
+            "tool not present": {"tool_present": False, "tool_path": "methodology_trim.py",
+                                 "tool_ledgers": ["SESSION_NOTES.md"]},
+            "no tool path": {"tool_present": True, "tool_path": None,
+                             "tool_ledgers": ["SESSION_NOTES.md"]},
+            "reading abstained": {"tool_present": True, "tool_path": "methodology_trim.py",
+                                  "tool_ledgers": None},
+            "name not declared": {"tool_present": True, "tool_path": "methodology_trim.py",
+                                  "tool_ledgers": ["CHANGELOG.md", "HANDOFFS.md"]},
+            "an older metrics dict": {},
+        }
+        for label, trim in bad.items():
+            with self.subTest(case=label):
+                m = copy.deepcopy(base)
+                m["trim"] = dict(trim, signals=[])
+                rows = [r for r in md.assess_risks(m)
+                        if self.NOTES in r["description"] and "read cap" in r["description"]]
+                self.assertEqual([(r["severity"], r["description"]) for r in rows],
+                                 [("high", _P1_CLASS_B_ROWS[self.NOTES])])
+
+    def test_the_probe_touches_neither_the_class_A_row_nor_the_hard_refusal_row(self):
+        """The probe is confined to the Class B arm between the cap and the refusal. A Class A ledger is
+        already LOW and already remedied by the trim row; past the refusal nothing arrives at all,
+        and a remedy sentence must not soften that row's severity."""
+        base = copy.deepcopy(self.scans["absent"])
+        declared = {"signals": [], "tool_present": True, "tool_path": "methodology_trim.py",
+                    "tool_ledgers": ["CHANGELOG.md", "HANDOFFS.md", "SESSION_NOTES.md"]}
+        for path, size in (("HANDOFFS.md", md.READ_CAP_BYTES + 1),
+                           (self.NOTES, md.READ_REFUSE_BYTES + 1)):
+            with self.subTest(path=path):
+                rows_by = {}
+                for label, trim in (("declared", declared), ("none", {"signals": []})):
+                    m = copy.deepcopy(base)
+                    m["files"]["read_cap_watch"] = [{"path": path, "bytes": size, "lines": 100}]
+                    m["trim"] = copy.deepcopy(trim)
+                    rows_by[label] = [(r["severity"], r["description"])
+                                      for r in md.assess_risks(m) if path in r["description"]]
+                self.assertTrue(rows_by["none"], "control: the row exists at this size")
+                self.assertEqual(rows_by["declared"], rows_by["none"])
+                self.assertFalse(any("HAS A REMEDY" in d for _, d in rows_by["declared"]))
+
+
+# === The dashboard understands both layouts ===========
+#
+# A project keeps its methodology files at its root (legacy) or one level down in methodology/ (new);
+# tools/layout_resolver.py answers which. Every test below builds a real tree with tools/layout_fixtures.py,
+# in every shape the layout has (legacy, new, tier1, half, empty), puts a real git history under it, and
+# asserts a VALUE the dashboard computed: a score, a path, a risk row. Written RED-first (each class was
+# run against the unpatched dashboard before any change to it, and the layers below name what failed).
+
+_LF_SPEC = importlib.util.spec_from_file_location("layout_fixtures_under_test", os.path.join(HERE, "layout_fixtures.py"))
+lf = importlib.util.module_from_spec(_LF_SPEC)
+_LF_SPEC.loader.exec_module(lf)
+
+
+def layout_project(case, layout, *, contents=None, extra_commits=0, remove=(), extra=None, backlog=True,
+                   name="proj", archive=False, generated=False):
+    """A git repository holding the ``layout`` shape of the methodology's files (plus the project's own
+    BACKLOG.md, which the manifest does not distribute and the checklist scores). ``remove`` deletes
+    files from the tree before the first commit, ``extra`` adds {relative path: text}."""
+    td = tempfile.TemporaryDirectory()
+    case.addCleanup(td.cleanup)
+    p = Path(td.name) / name
+    lf.build_tree(p, layout, contents=contents, archive=archive, generated=generated)
+    if backlog:
+        (p / "BACKLOG.md").write_text("# Backlog\n", encoding="utf-8")
+    for rel in remove:
+        (p / rel).unlink()
+    for rel, text in (extra or {}).items():
+        (p / rel).parent.mkdir(parents=True, exist_ok=True)
+        (p / rel).write_text(text, encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(p)], check=True)
+    git = ["git", "-C", str(p), "-c", "user.email=t@t", "-c", "user.name=t"]
+    subprocess.run(git + ["add", "-A"], check=True)
+    subprocess.run(git + ["commit", "-q", "-m", "init"], check=True)
+    for i in range(extra_commits):
+        subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", "filler %d" % i], check=True)
+    return p
+
+
+def risk_texts(project):
+    return [(r["severity"], r["description"]) for r in md.collect_all(project)["scores"]["risks"]]
+
+
+class TestBL101P5Checklist(unittest.TestCase):
+    """The compliance checklist, the adoption test and the role test read the project through the
+    resolver, so a project that moved its files scores what it scored before it moved."""
+
+    def test_a_complete_adopter_scores_the_full_checklist_in_every_layout(self):
+        for layout in ("legacy", "new", "tier1"):
+            with self.subTest(layout=layout):
+                m = md.collect_methodology_metrics(layout_project(self, layout))
+                self.assertEqual(m["compliance_score"], md.METHODOLOGY_MAX)
+                self.assertEqual(m["missing_files"], [])
+                self.assertEqual(m["compliance_pct"], 100)
+
+    def test_the_item_labels_are_the_same_names_in_every_layout(self):
+        # Portfolio aggregation, the JSON export and the card's glyph row all key on these names.
+        want = [item for item, _w, _k in md.METHODOLOGY_ITEMS]
+        for layout in ("legacy", "new", "tier1"):
+            with self.subTest(layout=layout):
+                m = md.collect_methodology_metrics(layout_project(self, layout))
+                self.assertEqual(list(m["items"]), want)
+
+    def test_a_missing_file_is_missing_in_the_layout_it_would_have_lived_in(self):
+        # The probe must not be satisfied by a file of the same name in the OTHER place's namesake path.
+        for layout, gone in (("legacy", "SAFEGUARDS.md"), ("new", "methodology/SAFEGUARDS.md"),
+                             ("tier1", "methodology/SAFEGUARDS.md")):
+            with self.subTest(layout=layout):
+                m = md.collect_methodology_metrics(layout_project(self, layout, remove=(gone,)))
+                self.assertEqual(m["missing_files"], ["SAFEGUARDS.md"])
+                self.assertEqual(m["compliance_score"], md.METHODOLOGY_MAX - 20)
+
+    def test_the_metrics_name_the_layout_they_read(self):
+        want = {"legacy": ("legacy", "."), "new": ("new", "methodology"), "tier1": ("new", "methodology"),
+                "empty": ("none", None)}
+        for layout, (kind, directory) in want.items():
+            with self.subTest(layout=layout):
+                lay = md.collect_methodology_metrics(layout_project(self, layout))["layout"]
+                self.assertEqual((lay["kind"], lay["directory"]), (kind, directory))
+
+    def test_a_half_migrated_tree_is_a_high_risk_naming_both_runners(self):
+        p = layout_project(self, "half")
+        lay = md.collect_methodology_metrics(p)["layout"]
+        self.assertEqual(lay["kind"], "half")
+        self.assertEqual(sorted(lay["found"]), ["SESSION_RUNNER.md", "methodology/SESSION_RUNNER.md"])
+        rows = [(s, d) for s, d in risk_texts(p) if "half-migrated" in d.lower()]
+        self.assertEqual(len(rows), 1, rows)
+        severity, text = rows[0]
+        self.assertEqual(severity, "high")
+        self.assertIn("methodology/SESSION_RUNNER.md", text)
+        self.assertIn(" SESSION_RUNNER.md", text.replace("methodology/SESSION_RUNNER.md", ""))
+
+    def test_a_half_migrated_tree_is_scored_for_what_is_there_not_zeroed(self):
+        # Never guess which copy is live: a file present at either place counts, and the risk row carries the defect.
+        m = md.collect_methodology_metrics(layout_project(self, "half"))
+        self.assertEqual(m["compliance_score"], md.METHODOLOGY_MAX)
+
+    def test_a_half_migrated_tree_counts_a_file_held_only_under_methodology(self):
+        # The union cuts both ways: the half fixture holds everything at the root, so this one moves a single
+        # file to the OTHER place and removes it from the root. A mutant that dropped the methodology copy
+        # from the half answer survived every other test (found by a mutation pass).
+        p = layout_project(self, "half", remove=("SAFEGUARDS.md",), extra={"methodology/SAFEGUARDS.md": "# safeguards\n"})
+        m = md.collect_methodology_metrics(p)
+        self.assertEqual(m["layout"]["kind"], "half")
+        self.assertTrue(m["items"]["SAFEGUARDS.md"])
+        self.assertEqual(m["compliance_score"], md.METHODOLOGY_MAX)
+
+    def test_no_other_shape_raises_the_half_migrated_row(self):
+        for layout in ("legacy", "new", "tier1", "empty"):
+            with self.subTest(layout=layout):
+                rows = [d for _s, d in risk_texts(layout_project(self, layout)) if "half-migrated" in d.lower()]
+                self.assertEqual(rows, [])
+
+    def test_a_ledger_held_in_both_places_with_the_runner_at_the_root_is_half_migrated(self):
+        # The runner cannot decide a tie about a state file when the runner itself is at the root.
+        p = layout_project(self, "legacy", extra={"methodology/CHANGELOG.md": "# a second ledger\n"})
+        lay = md.collect_methodology_metrics(p)["layout"]
+        self.assertEqual(lay["kind"], "half")
+        self.assertIn("methodology/CHANGELOG.md", lay["found"])
+
+    def test_an_adopter_that_moved_is_still_owed_a_ledger(self):
+        # The gate that notices a missing action ledger keyed on the root runner: in the new layout it went quiet.
+        for layout, gone in (("legacy", "CHANGELOG.md"), ("new", "methodology/CHANGELOG.md")):
+            with self.subTest(layout=layout):
+                p = layout_project(self, layout, remove=(gone,), extra_commits=md.LEDGER_REAL_HISTORY_MIN + 2)
+                rows = [d for _s, d in risk_texts(p) if "action ledger" in d]
+                self.assertEqual(len(rows), 1, rows)
+
+    def test_a_vendored_framework_is_still_an_adopter_when_its_runner_is_under_methodology(self):
+        # bin/_manifest.py + starter-kit/SESSION_RUNNER.md and NO root runner is how the PUBLISHER is recognised;
+        # a project that vendors those and installs its own runner under methodology/ is not the publisher.
+        vendored = {"bin/_manifest.py": "DISTRIBUTION = []\n", "starter-kit/SESSION_RUNNER.md": "# runner\n"}
+        for layout, role in (("legacy", "adopter"), ("new", "adopter")):
+            with self.subTest(layout=layout):
+                p = layout_project(self, layout, extra=vendored)
+                self.assertEqual(md.detect_repo_role(p)["role"], role)
+        publisher = layout_project(self, "empty", extra=vendored)
+        self.assertEqual(md.detect_repo_role(publisher)["role"], "framework")
+
+
+QUARTO_BOOK = {
+    "_quarto.yml": "project:\n  type: book\n",
+    "ch1.qmd": "# Ch1\n" + "prose\n" * 200,
+    "ch2.qmd": "# Ch2\n" + "prose\n" * 200,
+    "README.md": "# Monograph\n\nA Quarto book.\n" * 4,
+}
+
+
+def installed_tool_contents():
+    """What `bin/sync` writes for the four executables: each carries the constant its own predicate reads."""
+    body = "".join("def gen_%d():\n    return %d\n" % (i, i) for i in range(800))
+    return {"methodology_dashboard.py": installed_scanner(), "methodology_trim.py": installed_trimmer(),
+            "context_budget.py": 'VERSION = "1.0.0"\n' + body, "quality_ratchet.py": 'VERSION = "1.0.0"\n' + body}
+
+
+def card_projection(project):
+    """What the scores and the file inventory say about a project, with every layout-dependent PATH removed:
+    two projects that differ only in where their methodology files live must project identically."""
+    m = md.collect_all(project)
+    cat = {k: v for k, v in m["files"]["by_category"].items()}
+    return {
+        "health": m["scores"]["health"],
+        "doc_only": m["doc_only"]["is_doc_only"],
+        "categories": cat,
+        "framework_docs": m["files"]["framework_docs"],
+        "total_files": m["files"]["total_files"],
+        "compliance": (m["methodology"]["compliance_score"], m["methodology"]["compliance_pct"]),
+        "risks": sorted((r["severity"], r["description"].replace("methodology/", "")) for r in m["scores"]["risks"]),
+        "ledger": (m["changelog"]["present"], m["changelog"]["ledger_present"], m["changelog"]["unlogged_commits"]),
+        "trim_tool": m["trim"]["tool_present"],
+    }
+
+
+class TestBL101P5Walk(unittest.TestCase):
+    """The installed-source fingerprint and the read-cap watch: a methodology file is recognised by
+    the name the tables hold, wherever the layout put it, and a file of the same name that is the
+    PROJECT's own (a root CHANGELOG.md beside the framework's under methodology/) is never read as ours."""
+
+    def test_installing_the_methodology_leaves_a_doc_repo_doc_only_in_every_layout(self):
+        for layout in ("legacy", "new", "tier1"):
+            with self.subTest(layout=layout):
+                p = layout_project(self, layout, contents=installed_tool_contents(), extra=QUARTO_BOOK)
+                m = md.collect_all(p)
+                self.assertTrue(m["doc_only"]["is_doc_only"])
+                self.assertEqual(m["tests"]["source_loc"], 0, "the adopter wrote no source; the four tools are ours")
+                self.assertGreater(m["files"]["by_category"]["vendor"]["loc"], 5000)
+
+    def test_the_card_projects_the_same_in_every_layout(self):
+        # Both trees get a docs/ of their own: see the next test for why that is part of the comparison.
+        own = dict(QUARTO_BOOK, **{"docs/index.md": "# Docs\n\nThe project's own documentation.\n"})
+        projections = {layout: card_projection(layout_project(self, layout, contents=installed_tool_contents(),
+                                                              extra=own, extra_commits=12))
+                       for layout in ("legacy", "new", "tier1")}
+        self.assertEqual(projections["new"], projections["legacy"])
+        self.assertEqual(projections["tier1"], projections["legacy"])
+
+    def test_the_docs_directory_point_belongs_to_the_projects_own_docs_not_to_the_methodologys(self):
+        # PINNED ON PURPOSE, not an accident. `has_docs_dir` is a bare presence check, and a legacy adopter
+        # satisfies it with docs/methodology/ alone, so every synced project has earned 4 documentation points
+        # for a directory the methodology put there. In the new layout nothing of ours is under docs/, so a
+        # project with no docs/ of its own loses them when it migrates. Recorded as a known consequence:
+        # parity would mean rewarding methodology/ as documentation, or changing every legacy score.
+        want = {"legacy": True, "new": False, "tier1": False}
+        for layout, has in want.items():
+            with self.subTest(layout=layout):
+                self.assertIs(md.collect_all(layout_project(self, layout))["docs"]["has_docs_dir"], has)
+        own = layout_project(self, "new", extra={"docs/index.md": "# Docs\n"})
+        self.assertIs(md.collect_all(own)["docs"]["has_docs_dir"], True)
+
+    def test_a_projects_own_root_changelog_is_not_the_frameworks_ledger(self):
+        product = "# Release notes\n\n" + "- shipped a thing\n" * 300
+        p = layout_project(self, "new", extra={"CHANGELOG.md": product})
+        m = md.collect_all(p)
+        watched = sorted(w["path"] for w in m["files"]["read_cap_watch"])
+        self.assertEqual(watched, ["BACKLOG.md", "methodology/CHANGELOG.md", "methodology/HANDOFFS.md",
+                                   "methodology/SESSION_NOTES.md"])
+        self.assertEqual(md._find_action_ledger(p), p / "methodology" / "CHANGELOG.md")
+        control = layout_project(self, "new")
+        self.assertEqual(m["files"]["framework_docs"]["loc"], md.collect_all(control)["files"]["framework_docs"]["loc"],
+                         "the project's own 300-line changelog must not be discounted as ours")
+
+    def test_a_generated_proof_under_methodology_archive_is_not_the_adopters_source(self):
+        proof = "#!/bin/sh\n# generated by methodology_trim.py\n" + "echo step\n" * 220
+        for layout, shard_dir in (("legacy", "docs/archive"), ("new", "methodology/archive")):
+            with self.subTest(layout=layout):
+                p = layout_project(self, layout, contents=installed_tool_contents(),
+                                   extra={shard_dir + "/CHANGELOG-through-2026-01-01.md.verify.sh": proof})
+                files = md.collect_all(p)["files"]["by_category"]
+                self.assertEqual(files["source"]["loc"], 0)
+                self.assertGreaterEqual(files["vendor"]["loc"], 220 + 5000)
+
+    def test_a_script_that_only_sits_in_an_archive_directory_is_still_source(self):
+        # Anti-laundering: all three conditions stay required (the directory, the suffix, the banner).
+        banner = "#!/bin/sh\n# generated by methodology_trim.py\n" + "echo step\n" * 220
+        plain = "#!/bin/sh\n" + "echo step\n" * 220
+        for rel, text in (("methodology/archive/x.md.verify.sh", plain),      # no banner
+                          ("methodology/archive/x.sh", banner),               # no suffix
+                          ("elsewhere/archive/x.md.verify.sh", banner)):      # not an archive directory of the layout
+            with self.subTest(rel=rel):
+                p = layout_project(self, "new", contents=installed_tool_contents(), extra={rel: text})
+                self.assertGreaterEqual(md.collect_all(p)["files"]["by_category"]["source"]["loc"], 220)
+
+    def test_the_ledger_is_measured_where_it_lives(self):
+        for layout, rel in (("legacy", "CHANGELOG.md"), ("new", "methodology/CHANGELOG.md"), ("tier1", "CHANGELOG.md")):
+            with self.subTest(layout=layout):
+                p = layout_project(self, layout, extra_commits=12)
+                cl = md.collect_all(p)["changelog"]
+                self.assertTrue(cl["present"])
+                self.assertTrue(cl["ledger_present"])
+                self.assertEqual(cl["unlogged_commits"], 12)
+                self.assertTrue(any(d.startswith(rel + ": 12 commits since it was last updated") for _s, d in cl["signals"]),
+                                cl["signals"])
+
+    def test_the_trim_row_finds_the_trimmer_and_the_ledger_where_they_live(self):
+        big = "# Handoffs\n\n" + "x" * (md.CLASS_A_FIRE_BYTES + 1000)
+        want = {"legacy": ("methodology_trim.py", "HANDOFFS.md"),
+                "new": ("methodology/methodology_trim.py", "methodology/HANDOFFS.md"),
+                "tier1": ("methodology/methodology_trim.py", "HANDOFFS.md")}
+        for layout, (tool, ledger) in want.items():
+            with self.subTest(layout=layout):
+                p = layout_project(self, layout, contents={"HANDOFFS.md": big, "methodology_trim.py": installed_trimmer()})
+                trim = md.collect_all(p)["trim"]
+                self.assertTrue(trim["tool_present"])
+                self.assertEqual(trim["tool_path"], tool)
+                self.assertEqual([e["path"] for e in trim["ledgers"] if e["fires"]], [ledger])
+                self.assertTrue(any("python3 %s --file %s --check" % (tool, ledger) in d for _s, d in trim["signals"]),
+                                trim["signals"])
+
+    def test_the_read_cap_rows_classify_a_file_by_its_name_not_its_directory(self):
+        # 100 kB: past the one-read budget, short of the Class A archive threshold; the row says which class.
+        ledger = "# Handoffs\n\n" + "x" * 100000
+        notes = "# Notes\n\n" + "x" * 60000
+        for layout, prefix in (("legacy", ""), ("new", "methodology/")):
+            with self.subTest(layout=layout):
+                p = layout_project(self, layout, contents={"HANDOFFS.md": ledger, "SESSION_NOTES.md": notes})
+                rows = {d.split(" is ")[0]: (s, d) for s, d in risk_texts(p) if " one-read budget " in d}
+                self.assertEqual(sorted(rows), [prefix + "HANDOFFS.md", prefix + "SESSION_NOTES.md"])
+                self.assertIn("CLASS A", rows[prefix + "HANDOFFS.md"][1])
+                self.assertIn("CLASS B", rows[prefix + "SESSION_NOTES.md"][1])
+
+
+class TestBL101P5Sync(unittest.TestCase):
+    """C15: `--sync` is a second sync channel, outside the manifest. Each target's layout is resolved, so a
+    migrated project gets `methodology/methodology_dashboard.py` and never a second copy at its root, and a
+    copy that lives in methodology/ finds its project, writes beside itself and warns with the project's path."""
+
+    CANON_TEXT = None
+
+    def _portfolio(self, projects):
+        """A portfolio root holding the canonical authoring repo and one git project per {name: layout}.
+        Every project ignores methodology_dashboard.py, so a create is not gated by the --force rule."""
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        root = Path(td.name)
+        canon = root / "methodology" / "starter-kit" / "methodology_dashboard.py"
+        canon.parent.mkdir(parents=True)
+        canon.write_text(Path(TOOLS_PY).read_text(encoding="utf-8"), encoding="utf-8")
+        subprocess.run(["git", "init", "-q", str(root / "methodology")], check=True)
+        made = {}
+        for name, layout in projects.items():
+            p = root / name
+            lf.build_tree(p, layout, generated=False)
+            for rel in ("methodology_dashboard.py", "methodology/methodology_dashboard.py"):
+                if (p / rel).exists():
+                    (p / rel).write_text("# a stale copy\n", encoding="utf-8")
+            (p / ".gitignore").write_text("methodology_dashboard.py\n", encoding="utf-8")
+            subprocess.run(["git", "init", "-q", str(p)], check=True)
+            made[name] = p
+        return root, canon, made
+
+    def _run_sync(self, canon, **kw):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            written = md.sync_dashboards(canon, **kw)
+        return written, out.getvalue(), err.getvalue()
+
+    def test_a_portfolio_sync_writes_each_project_in_the_layout_it_is_in(self):
+        root, canon, p = self._portfolio({"legacy": "legacy", "migrated": "new", "half": "half", "empty": "empty"})
+        text = canon.read_text(encoding="utf-8")
+        written, out, err = self._run_sync(canon)
+        self.assertEqual((p["legacy"] / "methodology_dashboard.py").read_text(encoding="utf-8"), text)
+        self.assertEqual((p["migrated"] / "methodology" / "methodology_dashboard.py").read_text(encoding="utf-8"), text)
+        self.assertFalse((p["migrated"] / "methodology_dashboard.py").exists(),
+                         "a migrated project must never get a second dashboard at its root")
+        self.assertEqual((p["empty"] / "methodology_dashboard.py").read_text(encoding="utf-8"), text,
+                         "an empty project gets the default layout's place (the legacy root, until the contract stage)")
+        # The portfolio root is not a git repository, so a new copy there is gated without --force (issue #67):
+        # three writes, the half-migrated project refused, and nothing created at the portfolio root.
+        self.assertFalse((root / "methodology_dashboard.py").exists())
+        self.assertEqual(written, 3, out)       # legacy, migrated, empty
+
+    def test_a_half_migrated_project_is_refused_by_name_and_left_untouched(self):
+        root, canon, p = self._portfolio({"half": "half"})
+        written, out, err = self._run_sync(canon)
+        self.assertEqual((p["half"] / "methodology_dashboard.py").read_text(encoding="utf-8"), "# a stale copy\n")
+        self.assertFalse((p["half"] / "methodology" / "methodology_dashboard.py").exists())
+        self.assertTrue(any("half-migrated" in l for l in out.splitlines()), out)
+        self.assertIn("methodology/SESSION_RUNNER.md", out)
+
+    def test_a_dry_run_names_the_resolved_path_and_writes_nothing(self):
+        root, canon, p = self._portfolio({"migrated": "new"})
+        before = (p["migrated"] / "methodology" / "methodology_dashboard.py").read_text(encoding="utf-8")
+        written, out, err = self._run_sync(canon, dry_run=True)
+        self.assertEqual(written, 0)
+        self.assertEqual((p["migrated"] / "methodology" / "methodology_dashboard.py").read_text(encoding="utf-8"), before)
+        lines = [l for l in out.splitlines() if "migrated" in l]
+        self.assertEqual(len(lines), 1, out)
+        self.assertIn("migrated/methodology/methodology_dashboard.py", lines[0])
+
+    def test_a_single_target_resolves_its_layout_too(self):
+        root, canon, p = self._portfolio({"migrated": "new", "legacy": "legacy"})
+        written, out, err = self._run_sync(canon, target=str(p["migrated"]))
+        self.assertEqual(written, 1)
+        self.assertEqual((p["migrated"] / "methodology" / "methodology_dashboard.py").read_text(encoding="utf-8"),
+                         canon.read_text(encoding="utf-8"))
+        self.assertFalse((p["migrated"] / "methodology_dashboard.py").exists())
+        self.assertEqual((p["legacy"] / "methodology_dashboard.py").read_text(encoding="utf-8"), "# a stale copy\n")
+
+    def test_a_single_half_migrated_target_is_refused_without_writing(self):
+        root, canon, p = self._portfolio({"half": "half"})
+        written, out, err = self._run_sync(canon, target=str(p["half"]))
+        self.assertEqual(written, 0)
+        self.assertIn("half-migrated", err)
+        self.assertEqual((p["half"] / "methodology_dashboard.py").read_text(encoding="utf-8"), "# a stale copy\n")
+
+
+class TestBL101P5CopyInsideMethodology(unittest.TestCase):
+    """A dashboard that sits in <project>/methodology/ is one level below the project it scans. The two
+    names tried are an ordinary project and a project literally NAMED methodology (this repository is one:
+    check-overhead and check-ledger --all each took such a directory for a subdirectory)."""
+
+    NAMES = ("proj", "methodology")
+
+    def _project(self, name, layout="new", **kw):
+        text = Path(TOOLS_PY).read_text(encoding="utf-8")
+        return layout_project(self, layout, name=name, contents={"methodology_dashboard.py": text}, **kw)
+
+    def test_the_project_root_is_found_from_the_copy_in_methodology(self):
+        for name in self.NAMES:
+            with self.subTest(name=name):
+                p = self._project(name)
+                self.assertEqual(md.resolve_single_project_root(p / "methodology"), p)
+
+    def test_it_is_not_found_when_nothing_beside_the_copy_says_it_is_a_methodology_directory(self):
+        p = self._project("proj")
+        (p / "methodology" / "SESSION_RUNNER.md").unlink()
+        self.assertEqual(md.resolve_single_project_root(p / "methodology"), p / "methodology")
+        loose = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, loose, True)
+        (loose / "methodology").mkdir()
+        (loose / "methodology" / "SESSION_RUNNER.md").write_text("# runner\n", encoding="utf-8")
+        self.assertEqual(md.resolve_single_project_root(loose / "methodology"), loose / "methodology",
+                         "no .git above it: a directory named methodology is not a project's subdirectory")
+
+    def test_a_copy_at_the_project_root_is_unchanged(self):
+        for name in self.NAMES:
+            with self.subTest(name=name):
+                p = self._project(name, "legacy")
+                self.assertEqual(md.resolve_single_project_root(p), p)
+
+    def _run(self, p):
+        return subprocess.run([sys.executable, "-B", str(p / "methodology" / "methodology_dashboard.py"), "--no-open"],
+                              cwd=str(p.parent), capture_output=True, text=True, timeout=60)
+
+    def test_the_copy_scans_its_project_and_writes_beside_itself(self):
+        for name in self.NAMES:
+            with self.subTest(name=name):
+                p = self._project(name, extra_commits=3)
+                r = self._run(p)
+                self.assertNotIn("No projects found", r.stdout + r.stderr)
+                self.assertIn("1 projects", r.stdout)
+                self.assertTrue((p / "methodology" / "dashboard.html").is_file())
+                self.assertTrue((p / "methodology" / "dashboard_history.jsonl").is_file())
+                self.assertFalse((p / "dashboard.html").exists(), "the project root stays clean")
+                self.assertFalse((p / "dashboard_history.jsonl").exists())
+                again = self._run(p)
+                self.assertRegex(re.sub(r"\x1b\[[0-9;]*m", "", again.stdout), r"History: 2 snapshots")
+
+    def test_the_stale_copy_warning_names_the_project_not_its_methodology_directory(self):
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        root = Path(td.name)
+        canon = root / "methodology" / "starter-kit" / "methodology_dashboard.py"
+        canon.parent.mkdir(parents=True)
+        canon.write_text(re.sub(r'DASHBOARD_VERSION = "[^"]+"', 'DASHBOARD_VERSION = "9.9.9"',
+                                Path(TOOLS_PY).read_text(encoding="utf-8"), count=1), encoding="utf-8")
+        adopter = root / "adopter"
+        lf.build_tree(adopter, "new", generated=False, contents={"methodology_dashboard.py": Path(TOOLS_PY).read_text(encoding="utf-8")})
+        subprocess.run(["git", "init", "-q", str(adopter)], check=True)
+        driver = ("import importlib.util, sys\n"
+                  "spec = importlib.util.spec_from_file_location('m', sys.argv[1])\n"
+                  "m = importlib.util.module_from_spec(spec)\n"
+                  "spec.loader.exec_module(m)\n"
+                  "m.check_stale_version()\n")
+        r = subprocess.run([sys.executable, "-B", "-c", driver, str(adopter / "methodology" / "methodology_dashboard.py")],
+                           capture_output=True, text=True, timeout=30)
+        shown = adopter.resolve()      # the copy reports its own real path (macOS: /var is /private/var)
+        self.assertIn("--sync %s\n" % shown, r.stderr)
+        self.assertNotIn("--sync %s" % (shown / "methodology"), r.stderr)
+
+
+class TestBL101P5Gates(unittest.TestCase):
+    """The quality-gate read (collect_gate_metrics) finds the manifest where it lives and follows its history
+    across the move that took it there. Without that a migrated project silently loses its gate signals, and a
+    floor lowered INSIDE the move commit is invisible: the same class as 'a gate fails open when
+    its file moves'."""
+
+    G = TestQualityGateSignals
+
+    def _repo(self):
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        p = Path(td.name)
+        subprocess.run(["git", "init", "-q", str(p)], check=True)
+        return p
+
+    def _commit(self, p, msg):
+        subprocess.run(["git", "-C", str(p), "add", "-A"], check=True)
+        subprocess.run(["git", "-C", str(p), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "-m", msg], check=True)
+
+    def _manifest(self, floor, name="suite"):
+        return self.G._manifest(self.G._gate(name, "min", floor))
+
+    def _moved(self, before, after, then_delete=False):
+        """Commit 1 holds the manifest at the root, commit 2 moves it under methodology/ (and may change it)."""
+        p = self._repo()
+        (p / ".quality-gates.json").write_text(self._manifest(before), encoding="utf-8")
+        self._commit(p, "init")
+        (p / "methodology").mkdir()
+        subprocess.run(["git", "-C", str(p), "mv", ".quality-gates.json", "methodology/.quality-gates.json"], check=True)
+        (p / "methodology" / ".quality-gates.json").write_text(self._manifest(after), encoding="utf-8")
+        self._commit(p, "move")
+        if then_delete:
+            subprocess.run(["git", "-C", str(p), "rm", "-q", "methodology/.quality-gates.json"], check=True)
+            self._commit(p, "delete")
+        return p
+
+    def test_the_manifest_is_read_where_it_lives(self):
+        for rel in (".quality-gates.json", "methodology/.quality-gates.json"):
+            with self.subTest(rel=rel):
+                p = self._repo()
+                (p / rel).parent.mkdir(exist_ok=True)
+                (p / rel).write_text(self._manifest(5), encoding="utf-8")
+                self._commit(p, "init")
+                m = md.collect_gate_metrics(p)
+                self.assertTrue(m["manifest_present"])
+                self.assertEqual(m["declared"], 1)
+
+    def test_the_results_file_beside_the_manifest_is_read(self):
+        p = self._repo()
+        cfg = json.loads(self._manifest(5))
+        digest = hashlib.sha256(json.dumps(cfg["gates"], sort_keys=True).encode()).hexdigest()[:12]
+        (p / "methodology").mkdir()
+        (p / "methodology" / ".quality-gates.json").write_text(json.dumps(cfg), encoding="utf-8")
+        (p / "methodology" / ".quality-gates-results.json").write_text(
+            json.dumps({"ran_at": "2026-10-07T00:00:00", "manifest": digest,
+                        "gates": [{"name": "suite", "status": "pass"}]}), encoding="utf-8")
+        self._commit(p, "init")
+        m = md.collect_gate_metrics(p)
+        self.assertTrue(m["results_present"])
+        self.assertFalse(m["results_stale"])
+        self.assertEqual(m["summary"]["pass"], 1)
+
+    def test_a_floor_lowered_in_place_is_a_loosening_control(self):
+        p = self._repo()
+        (p / ".quality-gates.json").write_text(self._manifest(100), encoding="utf-8")
+        self._commit(p, "init")
+        (p / ".quality-gates.json").write_text(self._manifest(90), encoding="utf-8")
+        self._commit(p, "lower")
+        self.assertEqual([(l["kind"], l["from"], l["to"]) for l in md.collect_gate_metrics(p)["loosened"]],
+                         [("floor lowered", 100.0, 90.0)])
+
+    def test_a_floor_lowered_in_the_move_commit_is_still_seen(self):
+        m = md.collect_gate_metrics(self._moved(100, 90))
+        self.assertEqual([(l["name"], l["kind"], l["from"], l["to"]) for l in m["loosened"]],
+                         [("suite", "floor lowered", 100.0, 90.0)])
+
+    def test_a_pure_move_loosens_nothing(self):
+        m = md.collect_gate_metrics(self._moved(100, 100))
+        self.assertEqual((m["loosened"], m["commands_changed"]), ([], []))
+
+    def test_a_manifest_deleted_after_the_move_is_still_a_removal(self):
+        m = md.collect_gate_metrics(self._moved(100, 100, then_delete=True))
+        self.assertTrue(m["manifest_deleted"])
+        self.assertEqual([(l["name"], l["kind"]) for l in m["loosened"]], [("suite", "removed")])
+
+
+class TestBL101P5TheFrameworkRepoItself(unittest.TestCase):
+    """The PUBLISHER's checklist asks whether the repo OPERATES what it publishes: its own CHANGELOG.md and
+    HANDOFFS.md. When this repository's own instance files move, those two
+    are under methodology/ while its sources (ITERATIVE_METHODOLOGY.md, workstreams/, bin/, starter-kit/)
+    stay where they are; the framework checklist must follow the first and not the second."""
+
+    def _framework(self, moved):
+        td = tempfile.TemporaryDirectory()
+        self.addCleanup(td.cleanup)
+        p = Path(td.name) / "framework"
+        full_framework_tree(p)
+        if moved:
+            (p / "methodology").mkdir()
+            for name in ("CHANGELOG.md", "HANDOFFS.md"):
+                (p / name).rename(p / "methodology" / name)
+        subprocess.run(["git", "init", "-q", str(p)], check=True)
+        git = ["git", "-C", str(p), "-c", "user.email=t@t", "-c", "user.name=t"]
+        subprocess.run(git + ["add", "-A"], check=True)
+        subprocess.run(git + ["commit", "-q", "-m", "init"], check=True)
+        for i in range(md.LEDGER_REAL_HISTORY_MIN + 2):
+            subprocess.run(git + ["commit", "-q", "--allow-empty", "-m", "filler %d" % i], check=True)
+        return p
+
+    def test_the_framework_checklist_scores_the_same_with_its_ledgers_moved(self):
+        for moved in (False, True):
+            with self.subTest(moved=moved):
+                m = md.collect_methodology_metrics(self._framework(moved), role="framework")
+                self.assertEqual(m["compliance_score"], md.FRAMEWORK_MAX)
+                self.assertEqual(m["missing_files"], [])
+
+    def test_a_moved_framework_ledger_is_not_reported_missing_and_the_card_agrees(self):
+        for moved in (False, True):
+            with self.subTest(moved=moved):
+                p = self._framework(moved)
+                m = md.collect_all(p)
+                self.assertEqual(m["methodology"]["role"], "framework")
+                self.assertTrue(m["changelog"]["ledger_present"])
+                self.assertEqual([d for _s, d in risk_texts(p) if "action ledger" in d], [])
+
+
+class TestBL101P5NameTables(unittest.TestCase):
+    """The dashboard is one distributed file and cannot import the manifest, so it carries its own tables of the
+    names the layout moves. This is the canonical-only test that holds them to bin/_manifest.py, which
+    LAYOUT_MOVED's own comment names as its guard."""
+
+    def test_the_names_the_layout_moves_are_the_manifests_destinations_and_the_two_directories(self):
+        m = lf._manifest()
+        dests = {dest for _s, dest, _d in m.DISTRIBUTION}
+        self.assertEqual(len(dests), 30)
+        self.assertEqual(md.LAYOUT_MOVED - {"docs/methodology", "docs/methodology/workstreams"}, dests)
+
+    def test_the_state_files_are_exactly_the_manifests_seeds(self):
+        m = lf._manifest()
+        seeds = {dest for _s, dest, disp in m.DISTRIBUTION if disp == m.SEED}
+        self.assertEqual(set(md.LAYOUT_STATE_NAMES), seeds)
+
+    def test_a_destination_lands_where_the_manifests_table_puts_it(self):
+        m = lf._manifest()
+        for src, dest, _d in m.DISTRIBUTION:
+            with self.subTest(dest=dest):
+                self.assertEqual(md.new_layout_rel(dest), m.NEW_LAYOUT[src])
 
 
 if __name__ == "__main__":

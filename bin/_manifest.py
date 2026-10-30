@@ -26,10 +26,15 @@ NOT listed: the template ships under a different name (CONTEXT_TEMPLATE.md →
 TRACKED), and the instance simply never appears as a dest, so it can never be a
 sync target — no special-case guard needed (B1 plan Decision 2).
 
+A project keeps its methodology files either where ``dest`` puts them (the legacy layout above) or one
+level down in ``methodology/`` (the new layout). NEW_LAYOUT is the second table: for each ``src`` the
+``dest`` it takes in the new layout, flat under ``methodology/`` with ``workstreams/`` the one subdirectory.
+It is a table of literals, not a function, for the reason below.
+
 Python 3 stdlib only; data-only module (no imports, no side effects).
 
 Keep it that way: --source=github reads THIS file from a clone with bin/_manifest_reader.py, as
-data, never by running it. So rows stay literals, and every name it binds (DISTRIBUTION,
+data, never by running it. So rows stay literals, and every name it binds (DISTRIBUTION, NEW_LAYOUT,
 SEED_FORMAT_MARKERS, TRACKED, SEED) gets one plain assignment that nothing changes afterwards --
 no +=, no .append(...), no second assignment. A checkout syncing from a manifest that does any of
 those refuses it (bin/tests.sh Test 34 builds its source from this file, so it fails first).
@@ -83,6 +88,43 @@ DISTRIBUTION = [
     ("workstreams/TEMPLATE_CAMPAIGN.md",
      "docs/methodology/workstreams/TEMPLATE_CAMPAIGN.md", TRACKED),
 ]
+
+# The new layout: where each file above lands in a project that keeps its methodology files under
+# methodology/. Keyed by ``src``, which is unique. Every distributed file has exactly one entry, no two share a
+# destination, and every destination is under methodology/ (bin/_manifest_reader.py refuses a table that breaks
+# any of that, and a source with no table at all is read as one that predates the new layout).
+NEW_LAYOUT = {
+    "starter-kit/SESSION_RUNNER.md": "methodology/SESSION_RUNNER.md",
+    "starter-kit/FRAMEWORK_LEARNINGS.md": "methodology/FRAMEWORK_LEARNINGS.md",
+    "starter-kit/SAFEGUARDS.md": "methodology/SAFEGUARDS.md",
+    "starter-kit/RECOMMENDED_SKILLS.md": "methodology/RECOMMENDED_SKILLS.md",
+    "starter-kit/CONTEXT_TEMPLATE.md": "methodology/CONTEXT_TEMPLATE.md",
+    "starter-kit/CLAUDE_TEMPLATE.md": "methodology/CLAUDE_TEMPLATE.md",
+    "starter-kit/BOOTSTRAP.md": "methodology/BOOTSTRAP.md",
+    "starter-kit/methodology_dashboard.py": "methodology/methodology_dashboard.py",
+    "starter-kit/methodology_trim.py": "methodology/methodology_trim.py",
+    "starter-kit/context_budget.py": "methodology/context_budget.py",
+    "starter-kit/quality_ratchet.py": "methodology/quality_ratchet.py",
+    "starter-kit/SESSION_NOTES.md": "methodology/SESSION_NOTES.md",
+    "starter-kit/CHANGELOG.md": "methodology/CHANGELOG.md",
+    "starter-kit/HANDOFFS.md": "methodology/HANDOFFS.md",
+    "starter-kit/ROADMAP.md": "methodology/ROADMAP.md",
+    "starter-kit/context-budget.json": "methodology/.context-budget.json",
+    "starter-kit/quality-gates.json": "methodology/.quality-gates.json",
+    "starter-kit/gitattributes": "methodology/.gitattributes",
+    "ITERATIVE_METHODOLOGY.md": "methodology/ITERATIVE_METHODOLOGY.md",
+    "HOW_TO_USE.md": "methodology/HOW_TO_USE.md",
+    "FRAMEWORK_APPARATUS.md": "methodology/FRAMEWORK_APPARATUS.md",
+    "workstreams/DESIGN_WORKSTREAM.md": "methodology/workstreams/DESIGN_WORKSTREAM.md",
+    "workstreams/ARCHITECTURE_WORKSTREAM.md": "methodology/workstreams/ARCHITECTURE_WORKSTREAM.md",
+    "workstreams/DEVELOPMENT_WORKSTREAM.md": "methodology/workstreams/DEVELOPMENT_WORKSTREAM.md",
+    "workstreams/AUDIT_WORKSTREAM.md": "methodology/workstreams/AUDIT_WORKSTREAM.md",
+    "workstreams/RESEARCH_DOCUMENTATION_WORKSTREAM.md": "methodology/workstreams/RESEARCH_DOCUMENTATION_WORKSTREAM.md",
+    "workstreams/TEMPLATE_WORKSTREAM.md": "methodology/workstreams/TEMPLATE_WORKSTREAM.md",
+    "workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md": "methodology/workstreams/RESEARCH_EXHAUSTIVE_VERIFICATION_CAMPAIGN.md",
+    "workstreams/INHERITED_CODEBASE_FAMILIARIZATION_CAMPAIGN.md": "methodology/workstreams/INHERITED_CODEBASE_FAMILIARIZATION_CAMPAIGN.md",
+    "workstreams/TEMPLATE_CAMPAIGN.md": "methodology/workstreams/TEMPLATE_CAMPAIGN.md",
+}
 
 # Optional "current-format" markers for SEED dests, keyed by adopter-relative dest path.
 #

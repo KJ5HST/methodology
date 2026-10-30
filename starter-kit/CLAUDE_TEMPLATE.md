@@ -7,6 +7,7 @@
 ## SESSION PROTOCOL — FOLLOW BEFORE DOING ANYTHING
 
 Read and follow `SESSION_RUNNER.md` step by step. It is your operating procedure for every session. It tells you what to read, when to stop, and how to close out.
+<!-- If your project keeps its methodology files in methodology/, write methodology/SESSION_RUNNER.md above (BOOTSTRAP.md, section Two layouts). -->
 
 **Three rules you will be tempted to violate:**
 1. **Orient first** — Read SAFEGUARDS.md → SESSION_NOTES.md → run `methodology_dashboard.py` → git status → report findings → WAIT FOR THE USER TO SPEAK
@@ -79,8 +80,8 @@ This is the `<project-name>` project. It does `<what>`. The primary deliverable 
 -->
 
 <!-- This table is loaded every session and grows with no cap. When CLAUDE.md nears its
-     size budget, extract these rows to a committed PROJECT_LEARNINGS.md at the project
-     root and replace them with a one-line pointer (read on demand). See BOOTSTRAP.md Step 5. -->
+     size budget, extract these rows to a committed PROJECT_LEARNINGS.md beside FRAMEWORK_LEARNINGS.md
+     (in methodology/ if your methodology files are there) and replace them with a one-line pointer (read on demand). See BOOTSTRAP.md Step 5. -->
 
 (none)
 

@@ -743,7 +743,7 @@ Workstream prompts          ← Mission procedures (EXECUTE these)
 
 | Layer | Document | Read it to... | Length |
 |-------|----------|---------------|--------|
-| **Operating procedure** | `SESSION_RUNNER.md` (project root) | Know what to do RIGHT NOW, step by step | ~400 lines |
+| **Operating procedure** | `SESSION_RUNNER.md` (project root, or `methodology/`) | Know what to do RIGHT NOW, step by step | ~400 lines |
 | **Master framework** | `ITERATIVE_METHODOLOGY.md` | Understand WHY the steps exist | ~580 lines |
 | **Reference apparatus** | `FRAMEWORK_APPARATUS.md` | Fill in a session document, validate a scope, score a claim, write a ledger entry | ~535 lines |
 | **Workstream prompts** | e.g., `DEVELOPMENT_WORKSTREAM.md` | Know HOW to execute for a specific domain | Varies |
@@ -763,7 +763,7 @@ The session runner is deliberately short. It fits in a single read. Every line i
 - **3B: Self-assess** — Compare work to previous sessions' quality bar
 - **3C: Document learnings** — Update the workstream document; record project learnings in CLAUDE.md → Adaptations → Project-specific Learnings (adopters), or append to the `FRAMEWORK_LEARNINGS.md` table (canonical repo dogfooding). A learning that is a *mechanical invariant* becomes a gate — a `.quality-gates.json` entry or a test — and the row is a one-line pointer to it: a row is read, a gate refuses
 - **3D: Write handoff notes** — Update SESSION_NOTES.md for the next session, and write the same handoff as a durable ` ```handoff ` receipt in `HANDOFFS.md` — the six minimum requirements plus both 1–10 scores, machine-checkable by the canonical-only `bin/check-handoff`. SESSION_NOTES.md is the transient scratchpad (overwritten next session); the receipt is the durable proof the handoff exists, so a *skipped* close-out report is caught at the next Orient by Phase 0 reconcile — not left silent. **The agent knows the next session will score these notes**, which changes the quality of what gets written.
-- **3E: Runtime smoke test** — If the deliverable changes runtime behavior (startup, service registration, config resolution, dispatch, plugin loading), launch the app and confirm the change is active *and not silently overridden* before committing — "build clean" is necessary but not sufficient. If you cannot runtime-verify (needs hardware, an external service, or CI), say so in the handoff *and treat it as a defect* — disclosing the gap is not the same as discharging it (Failure Mode #24). Where `.quality-gates.json` declares gates, `quality_ratchet.py --run` is the mechanical half of this step; its summary line goes into the receipt.
+- **3E: Runtime smoke test** — If the deliverable changes runtime behavior (startup, service registration, config resolution, dispatch, plugin loading), launch the app and confirm the change is active *and not silently overridden* before committing — "build clean" is necessary but not sufficient. If you cannot runtime-verify (needs hardware, an external service, or CI), say so in the handoff *and treat it as a defect* — disclosing the gap is not the same as discharging it (Failure Mode #24). Where `.quality-gates.json` declares gates, `quality_ratchet.py --run` is the mechanical half of this step; its summary line goes into the receipt. If it reads unmeasured gates, repair them and run again, or name each one in the receipt (`unmeasured: <gate>, …`).
 - **3F: Commit** — All changes committed. **Record the action ledger:** prepend one dated, source-tagged entry per action to `CHANGELOG.md` and co-stage it with the commit (Failure Mode #27) — the durable answer to "what was done here, ever?", distinct from the session-overwritten handoff notes.
 - **3G: Report and STOP** — Summary to user including previous session's handoff score, then session is over
 
@@ -823,19 +823,20 @@ This mirrors a well-known finding in aviation safety: pilots who understand aero
 
 To use the session runner in your own project:
 
-1. **Place `SESSION_RUNNER.md` at the project root** (alongside your CLAUDE.md or equivalent agent instructions file).
+1. **Place `SESSION_RUNNER.md` at the project root** (alongside your CLAUDE.md or equivalent agent instructions file), or in a `methodology/` directory with the rest of the methodology files (`BOOTSTRAP.md` §Two layouts).
 
 2. **Reference it at the top of your agent instructions:**
    ```
    ## SESSION PROTOCOL — FOLLOW BEFORE DOING ANYTHING
    Read and follow SESSION_RUNNER.md step by step.
    ```
+   (In a `methodology/` project, write `methodology/SESSION_RUNNER.md`.)
 
 3. **Update the task-to-workstream mapping table** (Phase 1) to match your project's workstream prompts.
 
 4. **Update the failure modes table** with any tendencies specific to your project. The 27 documented modes are common to most AI agent work, but your project may surface additional ones.
 
-5. **Put the methodology framework in a known location** (e.g., `docs/methodology/`) so the session runner can reference it.
+5. **Put the methodology framework in a known location** (e.g., `docs/methodology/`, or `methodology/` beside the runner) so the session runner can reference it.
 
 The session runner is project-independent. The 4 phases and the failure modes table apply to any project using the iterative methodology. What changes per project is the task-to-workstream mapping and any project-specific failure modes.
 

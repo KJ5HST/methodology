@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Sync methodology starter-kit files into a project.
 
-Contract: methodology v2.2 plan §4D.
+Contract: methodology v2.2 plan §4D. A project keeps its methodology files either at its root (the legacy
+layout, bin/_manifest.py's `dest` column) or one level down in methodology/ (the new layout, its NEW_LAYOUT
+table). `--layout auto` (the
+default) keeps a project in the layout it has and gives an empty directory the legacy default, which flips
+only at the contract release. A request that would put a second copy of the files beside the first is
+refused before anything is written, and so is a tree that holds the runner in both places.
 """
 import argparse
 import hashlib
@@ -12,18 +17,61 @@ import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _manifest import DISTRIBUTION, TRACKED, SEED  # noqa: E402  (bin/ on sys.path)
-from _manifest_reader import ManifestError, read_manifest  # noqa: E402
+from _manifest import DISTRIBUTION, TRACKED, SEED, NEW_LAYOUT  # noqa: E402  (bin/ on sys.path)
+from _manifest_reader import ManifestError, read_manifest, read_new_layout  # noqa: E402
+
+# A project keeps its methodology files at its root (legacy) or under methodology/ (new).
+# This block is the resolver, embedded byte for byte; the canonical suite asserts that.
+
+# --- layout resolver: BEGIN ---
+import os as _os
+from pathlib import Path as _Path
+
+
+def resolve_layout(root, anchor="SESSION_RUNNER.md"):
+    """Return (kind, directory, found): kind is new|legacy|half|none, directory a Path or None,
+    found the anchor paths that exist. A half-migrated tree has no directory, by design.
+    A file found in both places is the framework's under methodology/ when the runner is under
+    methodology/ and not at the root: the root copy is the project's own and is left alone, kind new,
+    and found still names both. Any other tie stays half, and the runner cannot decide a tie about itself."""
+    root = _Path(root)
+    new, old = root / "methodology" / anchor, root / anchor
+    found = tuple(p for p in (new, old) if _os.path.isfile(p))
+    if len(found) == 2:
+        if _os.path.isfile(root / "methodology" / "SESSION_RUNNER.md") and not _os.path.isfile(root / "SESSION_RUNNER.md"):
+            return "new", new.parent, found
+        return "half", None, found
+    if not found:
+        return "none", None, ()
+    return ("new", new.parent, found) if found[0] == new else ("legacy", root, found)
+# --- layout resolver: END ---
+
 
 REPO = "KJ5HST/methodology"
 # --source=github clones this URL; the variable overrides it (a private mirror, or a local bare
 # repository in bin/tests.sh). Anything `git clone` accepts: a URL or a path.
 SOURCE_URL_ENV = "METHODOLOGY_SOURCE_URL"
+LAYOUTS = ("auto", "legacy", "new")
+# The tool that moves a project from the legacy layout to the new one: a dry run unless --apply.
+MIGRATE_TOOL = "bin/migrate-layout"
+
+
+def rows_for(layout: str) -> list:
+    """Every distributed file as (src, dest, disposition), with dest where `layout` puts it."""
+    if layout == "legacy":
+        return list(DISTRIBUTION)
+    return [(src, NEW_LAYOUT[src], disp) for src, _dest, disp in DISTRIBUTION]
+
+
 # Only TRACKED dests are gitignored (ignore mode) and checked for accidental git
 # tracking. SEED files become adopter-owned after first creation and are meant to
 # be committed, so they are deliberately excluded from both.
-TRACKED_DESTS = tuple(dest for _src, dest, disp in DISTRIBUTION if disp == TRACKED)
-IGNORE_ENTRIES = tuple(f"/{dest}" for dest in TRACKED_DESTS)
+def tracked_dests(layout: str) -> tuple:
+    return tuple(dest for _src, dest, disp in rows_for(layout) if disp == TRACKED)
+
+
+def ignore_entries(layout: str) -> tuple:
+    return tuple(f"/{dest}" for dest in tracked_dests(layout))
 
 
 def script_methodology_root() -> Path:
@@ -36,7 +84,9 @@ def detect_mode(project: Path) -> str:
     if not gitignore.exists():
         return "commit"
     existing = set(line.strip() for line in gitignore.read_text().splitlines())
-    if any(entry in existing for entry in IGNORE_ENTRIES):
+    # an ignored project is recognised by either layout's entries: it may have been synced before it moved
+    entries = ignore_entries("legacy") + (ignore_entries("new") if NEW_LAYOUT else ())
+    if any(entry in existing for entry in entries):
         return "ignore"
     return "commit"
 
@@ -113,7 +163,7 @@ def clone_source(url: str, parent: Path) -> Path:
     return clone
 
 
-def source_distribution(methodology_root: Path, url: str) -> list:
+def source_distribution(methodology_root: Path, url: str) -> tuple:
     """The distribution manifest AT THE SOURCE: the clone's own bin/_manifest.py, so the file
     list and the file contents come from one ref (parallel-sessions plan, D8). Iterating THIS
     checkout's manifest against a clone of `main` made every branch that adds a distributed file
@@ -122,26 +172,28 @@ def source_distribution(methodology_root: Path, url: str) -> list:
 
     Read as data, never run (_manifest_reader), and every row checked before anything is written:
     a disposition other than this checkout's TRACKED and SEED -- which sync_from tests -- or a path
-    that leaves the source or the project refuses the run, naming the rows."""
+    that leaves the source or the project refuses the run, naming the rows. Returns (rows, table): the
+    table is the source's NEW_LAYOUT, or None for a source that predates the new layout, which can
+    serve a legacy project and nothing else."""
     path = methodology_root / "bin" / "_manifest.py"
     if not path.is_file():
-        return DISTRIBUTION
+        return DISTRIBUTION, NEW_LAYOUT
     try:
         rows, _markers = read_manifest(path, (TRACKED, SEED))
+        table = read_new_layout(path, rows)
     except ManifestError as e:
         sys.exit(f"error: the bin/_manifest.py in {url} {e}\n"
                  f"hint: nothing was written. A source newer than this checkout may use a format this "
                  f"bin/sync predates: update this checkout,\n"
                  f"      or sync from a full local checkout instead — `--source=local`.")
-    return rows
+    return rows, table
 
 
-def use_distribution(dist: list) -> None:
-    """Rebind this script's manifest-derived globals to `dist` for the rest of the run."""
-    global DISTRIBUTION, TRACKED_DESTS, IGNORE_ENTRIES
+def use_distribution(dist: list, table) -> None:
+    """Rebind this script's manifest-derived globals to the source's rows and layout table for the rest of the run."""
+    global DISTRIBUTION, NEW_LAYOUT
     DISTRIBUTION = dist
-    TRACKED_DESTS = tuple(dest for _src, dest, disp in DISTRIBUTION if disp == TRACKED)
-    IGNORE_ENTRIES = tuple(f"/{dest}" for dest in TRACKED_DESTS)
+    NEW_LAYOUT = table
 
 
 def note_local_only(local: list, url: str) -> None:
@@ -220,11 +272,11 @@ def history_gap(methodology_root: Path, source: str) -> list:
     return lines + ["  Sync from a full clone of it instead, with --source=local."]
 
 
-def ensure_gitignore_entries(project: Path, dry_run: bool) -> list:
+def ensure_gitignore_entries(project: Path, dry_run: bool, layout: str) -> list:
     gitignore = project / ".gitignore"
     current = gitignore.read_text().splitlines() if gitignore.exists() else []
     existing = set(line.strip() for line in current)
-    to_add = [e for e in IGNORE_ENTRIES if e not in existing]
+    to_add = [e for e in ignore_entries(layout) if e not in existing]
     if not to_add:
         return []
     if dry_run:
@@ -238,10 +290,10 @@ def ensure_gitignore_entries(project: Path, dry_run: bool) -> list:
     return to_add
 
 
-def currently_tracked(project: Path) -> list:
+def currently_tracked(project: Path, layout: str) -> list:
     try:
         out = subprocess.run(
-            ["git", "-C", str(project), "ls-files", "--error-unmatch", "--", *TRACKED_DESTS],
+            ["git", "-C", str(project), "ls-files", "--error-unmatch", "--", *tracked_dests(layout)],
             capture_output=True, text=True, check=False,
         )
     except FileNotFoundError:
@@ -275,12 +327,18 @@ def sync_file(project: Path, dest: str, content: bytes, dry_run: bool) -> str:
     return action
 
 
-def seed_file(project: Path, dest: str, content: bytes, dry_run: bool) -> str:
+def seed_file(project: Path, dest: str, content: bytes, dry_run: bool, beside: str = None) -> str:
     """SEED disposition: write only when the dest is absent; never overwrite an
-    existing file, even with --force (Decision 2a; SEED-ONCE-clobber dragon)."""
+    existing file, even with --force (Decision 2a; SEED-ONCE-clobber dragon).
+
+    `beside` is the legacy place of this seed when the project is in the new layout: a seed that is there
+    and not at its new place is the project's own (a tier-1 ledger, or a product changelog), and a blank
+    one created beside it would be a second, blank copy of a file the project already keeps. It is reported, not created."""
     target = project / dest
     if target.exists():
         return "present (seed; left as-is)"
+    if beside is not None and (project / beside).exists():
+        return f"not created: {beside} is at the root (seed; left as-is)"
     action = "would create" if dry_run else "created"
     if not dry_run:
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -291,6 +349,39 @@ def seed_file(project: Path, dest: str, content: bytes, dry_run: bool) -> str:
     return action
 
 
+def choose_layout(project: Path, requested: str) -> tuple:
+    """(layout, how, refusal) for a sync of `project`: layout is "legacy" or "new" and `how` says why, or
+    layout is None and `refusal` is the lines to print. Nothing here writes.
+
+    The project's layout is read, never guessed (resolve_layout). `auto` keeps it; a project with no
+    methodology files gets the legacy default. A request that disagrees with what is there would put a
+    second runner beside the first, and a tree that holds the runner in both places has no layout."""
+    kind, _directory, found = resolve_layout(project)
+    if kind == "half":
+        return None, "", ([f"  ERROR: this project holds {found[0].name} in both places, so sync cannot tell which layout it is in:"]
+                          + [f"    {p}" for p in found]
+                          + ["",
+                             "  Nothing was written. Remove or merge one of them by hand, then run sync again."])
+    have = {"new": "new", "legacy": "legacy", "none": None}[kind]
+    where = found[0].relative_to(project).as_posix() if found else ""
+    if requested == "auto":
+        if have:
+            return have, f"found {where}", None
+        return "legacy", "default: the project has no methodology files yet", None
+    if have and have != requested:
+        if have == "legacy":
+            return None, "", [f"  ERROR: this project keeps its methodology files at its root (found {where}); --layout new would write",
+                              "  a second set under methodology/, with a second runner beside the one an agent reads.",
+                              "",
+                              f"  Nothing was written. Move the project with {MIGRATE_TOOL} (a dry run until --apply),",
+                              "  or sync without --layout, which keeps a project in the layout it has."]
+        return None, "", [f"  ERROR: this project keeps its methodology files under methodology/ (found {where}); --layout legacy would",
+                          "  write a second set at its root, with a second runner beside the one an agent reads.",
+                          "",
+                          "  Nothing was written. Sync without --layout, which keeps a project in the layout it has."]
+    return requested, "requested", None
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description="Sync methodology starter-kit files into a project.")
     p.add_argument("project_path", help="Target project directory")
@@ -298,6 +389,9 @@ def main() -> int:
     p.add_argument("--source", choices=("local", "github"), help="local (default if sibling methodology/ exists), or github, "
                                                                  "which clones the repository for this run "
                                                                  "(needs git and network)")
+    p.add_argument("--layout", choices=LAYOUTS, default="auto",
+                   help="auto (default): keep the layout the project has, legacy for an empty one; legacy: files at the "
+                        "project root; new: files under methodology/. A request that disagrees with the project is refused.")
     p.add_argument("--dry-run", action="store_true", help="Print intent without writing")
     p.add_argument("--force", action="store_true",
                    help="Overwrite files that show local modifications (not matching canonical or any historical version)")
@@ -320,7 +414,7 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="methodology-sync-") as parent:
         clone = clone_source(url, Path(parent))
         local = DISTRIBUTION
-        use_distribution(source_distribution(clone, url))
+        use_distribution(*source_distribution(clone, url))
         note_local_only(local, url)
         absent_sources(clone, url)
         return sync_from(project, clone, source, url, args)
@@ -332,28 +426,47 @@ def sync_from(project: Path, methodology_root: Path, source: str, origin: str, a
     names where it came from, for the report: the checkout's path, or the URL cloned."""
     mode = args.mode or detect_mode(project)
     version = methodology_version(methodology_root)
+    layout, how, refusal = choose_layout(project, args.layout)
+    if layout == "new" and NEW_LAYOUT is None:
+        sys.exit(f"error: the new layout needs a NEW_LAYOUT table in the source's bin/_manifest.py, and the one in {origin} "
+                 f"has none: it predates the layout.\n"
+                 f"hint: nothing was written. Sync from a checkout whose manifest has the table, or from a full "
+                 f"local checkout with `--source=local`.")
 
     print(f"sync: {project}")
     print(f"  source:  {source} ({origin})")
     print(f"  mode:    {mode}")
     print(f"  version: {version}")
+    if refusal:
+        print("")
+        print("\n".join(refusal))
+        return 2
+    print(f"  layout:  {layout} ({how})")
     if args.dry_run:
         print("  (dry-run: no changes will be written)")
 
-    entries = []  # (src, dest, disposition, content, classification)
-    for src, dest, disp in DISTRIBUTION:
+    entries = []  # (src, dest, disposition, content, classification, beside)
+    for src, legacy_dest, disp in DISTRIBUTION:
+        dest = legacy_dest if layout == "legacy" else NEW_LAYOUT[src]
         content = read_local(methodology_root, src)
         target = project / dest
+        beside = None
         if disp == SEED:
-            # SEED files are adopter-owned; classification is only present/missing.
-            cls = "present" if target.exists() else "missing"
+            # SEED files are adopter-owned; classification is only present/missing. In the new layout a seed
+            # that sits at its legacy place and not at its new one is the project's own: not created beside.
+            if target.exists():
+                cls = "present"
+            elif layout == "new" and (project / legacy_dest).exists():
+                cls, beside = "present at root", legacy_dest
+            else:
+                cls = "missing"
         else:  # TRACKED
             cls = classify_target(target, content, local_history_blobs(methodology_root, src))
-        entries.append((src, dest, disp, content, cls))
+        entries.append((src, dest, disp, content, cls, beside))
 
     # Only TRACKED files can block: SEED files are never overwritten, so they
     # cannot be "modified" in the drift sense.
-    blocked = [(src, dest) for src, dest, disp, _content, cls in entries
+    blocked = [(src, dest) for src, dest, disp, _content, cls, _beside in entries
                if disp == TRACKED and cls == "modified"]
     if blocked and not args.force:
         # "Local modifications" is earned only by a source with its whole history; otherwise
@@ -393,9 +506,9 @@ def sync_from(project: Path, methodology_root: Path, source: str, origin: str, a
         return 2
 
     file_results = []
-    for src, dest, disp, content, _cls in entries:
+    for src, dest, disp, content, _cls, beside in entries:
         if disp == SEED:
-            result = seed_file(project, dest, content, args.dry_run)
+            result = seed_file(project, dest, content, args.dry_run, beside)
         else:
             result = sync_file(project, dest, content, args.dry_run)
         file_results.append((dest, result))
@@ -405,7 +518,7 @@ def sync_from(project: Path, methodology_root: Path, source: str, origin: str, a
         print(f"    {dest}: {result}")
 
     if mode == "ignore":
-        added = ensure_gitignore_entries(project, args.dry_run)
+        added = ensure_gitignore_entries(project, args.dry_run, layout)
         if added:
             verb = "would add" if args.dry_run else "added"
             print(f"  .gitignore: {verb} {', '.join(added)}")
@@ -413,7 +526,7 @@ def sync_from(project: Path, methodology_root: Path, source: str, origin: str, a
             print("  .gitignore: entries already present")
 
         if (project / ".git").exists():
-            tracked = currently_tracked(project)
+            tracked = currently_tracked(project, layout)
             if tracked:
                 print("")
                 print("  WARNING: the following files are currently tracked by git:")

@@ -7,7 +7,7 @@
     {
       "name": "tests-sh-passed",
       "direction": "min",
-      "threshold": 261,
+      "threshold": 302,
       "command": "bash bin/tests.sh",
       "extract": "== Summary: (\\d+) passed",
       "why": "the framework's build equivalent; the passed count is a ratchet — every suite it wires in (dashboard, trim, budget, ratchet units) reports through it"
@@ -23,7 +23,7 @@
     {
       "name": "dashboard-unit-tests",
       "direction": "min",
-      "threshold": 229,
+      "threshold": 397,
       "command": "python3 tools/test_methodology_dashboard.py",
       "extract": "Ran (\\d+) tests",
       "why": "test count never drops; green/red is carried by tests-sh-passed"
@@ -31,23 +31,71 @@
     {
       "name": "context-budget-unit-tests",
       "direction": "min",
-      "threshold": 148,
+      "threshold": 163,
       "command": "python3 tools/test_context_budget.py",
       "extract": "Ran (\\d+) tests"
     },
     {
       "name": "trimmer-unit-tests",
       "direction": "min",
-      "threshold": 227,
+      "threshold": 265,
       "command": "python3 tools/test_methodology_trim.py",
       "extract": "Ran (\\d+) tests"
     },
     {
       "name": "ratchet-unit-tests",
       "direction": "min",
-      "threshold": 45,
+      "threshold": 120,
       "command": "python3 tools/test_quality_ratchet.py",
       "extract": "Ran (\\d+) tests"
+    },
+    {
+      "name": "layout-unit-tests",
+      "direction": "min",
+      "threshold": 76,
+      "command": "python3 tools/test_layout_resolver.py",
+      "extract": "Ran (\\d+) tests",
+      "why": "the layout resolver, the fixture trees in both layouts and the literal scanner's own behaviour on scratch trees. Count never drops; green/red is carried by tests-sh-passed. 76 is measured (Ran 76 tests, OK)."
+    },
+    {
+      "name": "checker-layout-unit-tests",
+      "direction": "min",
+      "threshold": 11,
+      "command": "python3 tools/test_checker_layouts.py",
+      "extract": "Ran (\\d+) tests",
+      "why": "The canonical checkers (check-ledger and check-handoff) run as commands in both layouts, in a tie the runner decides and in a half-migrated tree. Count never drops; green/red is carried by tests-sh-passed. 11 is measured (Ran 11 tests, OK)."
+    },
+    {
+      "name": "sync-layout-unit-tests",
+      "direction": "min",
+      "threshold": 82,
+      "command": "python3 tools/test_sync_layouts.py",
+      "extract": "Ran (\\d+) tests",
+      "why": "the manifest's second table (NEW_LAYOUT) and its reader, bin/sync --layout auto|legacy|new (a legacy project is never given the new layout, seeds are not shadowed, ignore mode, --source=github), bin/status and bin/check-links in both layouts, each driven as a command in scratch projects, and the literal scanner over this repository. Count never drops; green/red is carried by tests-sh-passed. 82 is measured (Ran 82 tests, OK)."
+    },
+    {
+      "name": "migrate-layout-unit-tests",
+      "direction": "min",
+      "threshold": 280,
+      "command": "python3 tools/test_migrate_layout.py",
+      "extract": "Ran (\\d+) tests",
+      "timeout_seconds": 3600,
+      "why": "bin/migrate-layout run as a command in scratch git projects the real bin/sync wrote (the plan, the refusals, the one commit and its rollback, the rewrites of CLAUDE.md, .gitignore and the two configs, the one ledger entry, the hits it leaves, the shard rehearsal, the checks before and after) and its rules as functions. Count never drops. bin/tests.sh runs only the two fast classes, so this gate's colour is migrate-layout-unit-tests-failed, not tests-sh-failed. 280 is measured (Ran 280 tests, OK)."
+    },
+    {
+      "name": "migrate-layout-unit-tests-failed",
+      "direction": "max",
+      "threshold": 0,
+      "command": "python3 tools/test_migrate_layout.py",
+      "timeout_seconds": 3600,
+      "why": "the colour of the suite the gate above counts: a count gate passes over a red test (it still ran), and bin/tests.sh wires in only the fast classes of this suite, so nothing else would turn red. The same command as the count gate, no extract, so the exit code is the measurement and the ratchet runs the command once for both."
+    },
+    {
+      "name": "layout-literals",
+      "direction": "max",
+      "threshold": 0,
+      "command": "bin/check-layout-literals",
+      "why": "exit code: no shipped tool names a methodology file by a root path (a string constant in a bin/ script, a starter-kit/ tool or a hook), so the methodology/ move cannot be passed silently by a gate that reads the wrong place. A site is acknowledged only by a same-line marker with a reason. The scan covers starter-kit/*.py, bin/* and .githooks/*, so the canonical-only bin/check-handoff and bin/check-ledger are scanned like the rest; it skips bin/_manifest.py and bin/tests.sh by name."
     },
     {
       "name": "check-links",

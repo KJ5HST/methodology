@@ -141,7 +141,7 @@ An archive is a **shard**: a new frozen file, same format, same newest-on-top or
 
 The reasoning this file shares with `CHANGELOG.md` — how a ledger is read, why the tool is the only
 statement of its trigger, and what a split must conserve — is in the *Reading and archiving*
-subsection of [§The Action Ledger](docs/methodology/FRAMEWORK_APPARATUS.md#the-action-ledger).
+subsection of `FRAMEWORK_APPARATUS.md` §The Action Ledger.
 That subsection makes archiving optional for `CHANGELOG.md`; this file keeps its own rule, above —
 archive it when the trimmer's trigger fires. Everything needed to *act* is here.
 
@@ -181,7 +181,10 @@ session need this block to continue the work without re-reading the whole repo?*
 Where the project declares quality gates (`.quality-gates.json` with at least one gate), a
 `status: complete` receipt cites the session's own gate run: paste the summary line
 `quality_ratchet.py --run` prints (`quality_ratchet: N/M pass · F fail · U unmeasured · results
-<sha12> · manifest <sha12>`) into `runtime_smoke` (or `what_was_done`). The canonical-only
+<sha12> · manifest <sha12>`) into `runtime_smoke` (or `what_was_done`). A run that reads `U unmeasured`
+with `U` above 0 is not a clean one: repair the gate (its command, or `timeout_seconds` if it is only
+slow) and run again, or name each unmeasured gate in the same field as `unmeasured: <gate>, <gate> — by
+hand: <result>`, at least `U` names. The canonical-only
 `bin/check-handoff` lints the **newest** receipt for that token when a manifest with gates is present;
 the next session's Phase 0 reconcile compares the cited `results` hash and counts against the current
 `.quality-gates-results.json` (or re-runs `--run`) and treats a contradiction — a receipt claiming

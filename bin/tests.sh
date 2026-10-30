@@ -9,9 +9,15 @@ METHODOLOGY="$(dirname "$BIN")"
 STARTER="$METHODOLOGY/starter-kit"
 PASS=0
 FAIL=0
+SKIP=0
 
 pass() { echo "  PASS: $*"; PASS=$((PASS+1)); }
 fail() { echo "  FAIL: $*"; FAIL=$((FAIL+1)); }
+# An assertion that could not be BUILT, as distinct from one that ran and held. It is counted
+# and named in the summary, never folded into PASS: routing an unbuildable assertion to pass()
+# converts a real check into a green no-op, which is the failure this primitive exists to
+# prevent. A skip does not fail the suite -- it states what was not exercised.
+skip() { echo "  SKIP: $*"; SKIP=$((SKIP+1)); }
 
 mktemp_project() {
     local dir
@@ -26,7 +32,18 @@ P="$(mktemp_project)"
 diff -q "$P/SESSION_RUNNER.md" "$STARTER/SESSION_RUNNER.md" >/dev/null && pass "SESSION_RUNNER matches canonical" || fail "SESSION_RUNNER drift"
 diff -q "$P/SAFEGUARDS.md" "$STARTER/SAFEGUARDS.md" >/dev/null && pass "SAFEGUARDS matches canonical" || fail "SAFEGUARDS drift"
 diff -q "$P/methodology_dashboard.py" "$STARTER/methodology_dashboard.py" >/dev/null && pass "dashboard matches canonical" || fail "dashboard drift"
-[ -x "$P/methodology_dashboard.py" ] && pass "dashboard is executable" || fail "dashboard not executable"
+# Exec bit, DERIVED from the manifest rather than named. This assertion was hardcoded to
+# methodology_dashboard.py and was the only exec-bit check over a synced file in the suite, so
+# the trimmer would have shipped with zero coverage. Proven by mutation: narrowing
+# bin/sync's `if dest.endswith(".py")` to `if dest == "methodology_dashboard.py"` leaves the old
+# single-name assertion PASSING while the trimmer lands 0644. Derived, so a third executable is
+# covered with no edit.
+PY_DESTS="$(python3 -c "import sys; sys.path.insert(0, '$BIN'); import _manifest; \
+print('\n'.join(d for _s, d, _x in _manifest.DISTRIBUTION if d.endswith('.py')))")"
+[ -n "$PY_DESTS" ] && pass "manifest declares at least one executable dest" || fail "no .py dests in manifest"
+for dest in $PY_DESTS; do
+    [ -x "$P/$dest" ] && pass "$dest is executable" || fail "$dest not executable"
+done
 [ ! -f "$P/.gitignore" ] && pass "commit mode leaves .gitignore alone" || fail "commit mode created .gitignore"
 rm -rf "$P"
 
@@ -125,7 +142,7 @@ if python3 -c 'import subprocess, sys; sys.exit(subprocess.run(["git", "ls-remot
     "$BIN/sync" "$P" --source=github --dry-run >/dev/null && pass "github source dry-run works" || fail "github source dry-run failed"
     rm -rf "$P"
 else
-    echo "  SKIP: $URL unreachable"
+    skip "$URL unreachable"
 fi
 
 echo "== Test 10: distributed-file links resolve in the simulated adopter tree =="
@@ -134,6 +151,14 @@ if "$BIN/check-links" >/dev/null 2>&1; then
 else
     "$BIN/check-links" 2>&1 | sed 's/^/    /'
     fail "check-links: dangling link(s) in adopter layout (see above)"
+fi
+# The documents resolve in BOTH layouts. A reference that cannot be a relative link in both is a bare name in a
+# code span, so one new docs/methodology/ link turns this red.
+if "$BIN/check-links" --layout both >/dev/null 2>&1; then
+    pass "check-links --layout both: the distributed documents resolve in the legacy and the methodology/ layout"
+else
+    "$BIN/check-links" --layout both 2>&1 | sed 's/^/    /'
+    fail "check-links --layout both: dangling link(s) in one of the layouts (see above)"
 fi
 
 echo "== Test 11: sync produces the full manifest tree (faithful, per-file) =="
@@ -205,11 +230,13 @@ echo "$OUT" | grep -q "tracked" && pass "status: tracked disposition shown" || f
 echo "$OUT" | grep -q "seed" && pass "status: seed disposition shown" || fail "status: no seed rows"
 # One data row per manifest entry (full Option-B corpus, not a fixed three)
 EXPECTED="$(python3 -c "import sys; sys.path.insert(0, '$BIN'); import _manifest; print(len(_manifest.DISTRIBUTION))")"
-GOT="$(echo "$OUT" | grep -c "$(basename "$P")")"
+# A table row STARTS with the project's name; the `layout: <name>  <kind>` line added before the table names it too,
+# and is not a row (counting every line that mentions the name read 31 for 30 files).
+GOT="$(echo "$OUT" | grep -c "^$(basename "$P") ")"
 [ "$GOT" = "$EXPECTED" ] && pass "status: one row per manifest file ($GOT == $EXPECTED)" || fail "status: row count $GOT != manifest $EXPECTED"
 # Freshly-synced tree: every tracked file current, nothing flagged as drift
 echo "$OUT" | grep -q "current" && pass "status: fresh tree shows current" || fail "status: fresh tree missing current"
-if echo "$OUT" | grep -Eq "locally modified|versions? behind"; then fail "status: fresh tree shows spurious drift"; else pass "status: fresh tree shows no drift"; fi
+if grep -Eq "locally modified|versions? behind" <<< "$OUT"; then fail "status: fresh tree shows spurious drift"; else pass "status: fresh tree shows no drift"; fi
 rm -rf "$P"
 
 echo "== Test 16: an absent seed file is reported, never flagged as drift (Phase 4 DONE) =="
@@ -219,7 +246,7 @@ rm -f "$P/CHANGELOG.md"   # CHANGELOG.md is a SEED file (adopter-owned)
 SEEDLINE="$("$BIN/status" "$P" | grep "CHANGELOG.md")"
 echo "$SEEDLINE" | grep -q "seed" && pass "status: CHANGELOG shown with seed disposition" || fail "status: CHANGELOG not marked seed"
 echo "$SEEDLINE" | grep -q "absent" && pass "status: absent seed shown as 'absent'" || fail "status: absent seed not 'absent'"
-if echo "$SEEDLINE" | grep -q "missing"; then fail "status: absent seed mislabeled as drift (missing)"; else pass "status: absent seed NOT flagged as drift"; fi
+if grep -q "missing" <<< "$SEEDLINE"; then fail "status: absent seed mislabeled as drift (missing)"; else pass "status: absent seed NOT flagged as drift"; fi
 rm -rf "$P"
 
 echo "== Test 17: a partially-stale tree flags only the stale file (Phase 4) =="
@@ -262,6 +289,45 @@ if python3 "$METHODOLOGY/tools/test_quality_ratchet.py" >/dev/null 2>&1; then
 else
     fail "quality ratchet unit tests failed"
 fi
+# The methodology/ directory move: the layout resolver, the fixture trees in both layouts and the literal
+# scanner's own behaviour, on scratch trees. Canonical-only. It tests the scanner; it does NOT run the
+# scanner over this repository.
+if python3 "$METHODOLOGY/tools/test_layout_resolver.py" >/dev/null 2>&1; then
+    pass "layout resolver, fixture trees and literal scanner unit tests green"
+else
+    fail "layout resolver, fixture trees and literal scanner unit tests failed"
+fi
+
+# The canonical checkers in both layouts: check-ledger and check-handoff,
+# each run as a command in a scratch project with its file at the root, under methodology/, in a
+# tie the runner decides and in a half-migrated tree. Canonical-only, like the checkers. It drives the tools;
+# it does not run them over this repository (the real-tree check is a separate run).
+if python3 "$METHODOLOGY/tools/test_checker_layouts.py" >/dev/null 2>&1; then
+    pass "canonical checkers (ledger, receipts) in both layouts unit tests green"
+else
+    fail "canonical checkers in both layouts unit tests failed"
+fi
+
+# The sync layer in both layouts: the manifest's second table and its reader, bin/sync, bin/status and
+# bin/check-links, each run as a command in scratch projects (a legacy tree, a migrated one, an empty one, a
+# half-migrated one, and --source=github against sources with and without the table), and the literal scanner over
+# this repository at zero. Canonical-only. Test 34 still holds the reader's refusals of a source's manifest.
+if python3 "$METHODOLOGY/tools/test_sync_layouts.py" >/dev/null 2>&1; then
+    pass "sync layer (manifest table, bin/sync, bin/status, bin/check-links) in both layouts unit tests green"
+else
+    fail "sync layer in both layouts unit tests failed"
+fi
+
+# The migration tool: only its FAST classes run here, the rules as functions and the usage shapes (about a second).
+# The command-level suite (bin/migrate-layout run in scratch git projects the real bin/sync wrote: 365 s measured on this tree) is the
+# gate migrate-layout-unit-tests and is NOT wired in: run here it would roughly double this suite's time and push it
+# toward the 600 s a gate is given, and a gate that times out reads "unmeasured", so tests-sh-passed and
+# tests-sh-failed would then measure nothing. That suite's colour is the gate migrate-layout-unit-tests-failed.
+if python3 "$METHODOLOGY/tools/test_migrate_layout.py" TestThePureRules TestUsageAndNothingToDo >/dev/null 2>&1; then
+    pass "migration tool (bin/migrate-layout) rules and usage unit tests green (the command-level suite is the gate migrate-layout-unit-tests)"
+else
+    fail "migration tool (bin/migrate-layout) rules and usage unit tests failed"
+fi
 
 echo "== Test 19: dashboard twins byte-identical + same DASHBOARD_VERSION =="
 diff -q "$METHODOLOGY/tools/methodology_dashboard.py" "$STARTER/methodology_dashboard.py" >/dev/null \
@@ -278,8 +344,8 @@ P="$(mktemp_project)"
 # or it is vacuous — it would pass on the prose note regardless of the table row (adversarial-review fix).
 # (a) Freshly-seeded CHANGELOG carries the current action-ledger format → plain 'present', no note.
 OUT="$("$BIN/status" "$P")"
-echo "$OUT" | grep "CHANGELOG.md" | grep -v '^note:' | grep -q "stale format" && fail "status: current-format (fresh) seed mis-flagged stale" || pass "status: current-format (fresh) seed not flagged"
-echo "$OUT" | grep -q "^note:" && fail "status: spurious stale-format note on fresh tree" || pass "status: no stale-format note on fresh tree"
+grep "CHANGELOG.md" <<< "$OUT" | grep -v '^note:' | grep "stale format" >/dev/null && fail "status: current-format (fresh) seed mis-flagged stale" || pass "status: current-format (fresh) seed not flagged"
+grep -q "^note:" <<< "$OUT" && fail "status: spurious stale-format note on fresh tree" || pass "status: no stale-format note on fresh tree"
 # (b) In-use current-format ledger: the METHODOLOGY-SEED-SENTINEL is deleted (as the adopter does on its
 # first real entry) and a dated entry appended, but the seed's marker line is retained. This is the exact
 # case the marker choice is engineered around (key on a lifetime-stable line the seed tells adopters to
@@ -288,8 +354,8 @@ echo "$OUT" | grep -q "^note:" && fail "status: spurious stale-format note on fr
 printf '# Changelog — Authoritative Action Ledger\n\nThe action ledger. ledger-format: 2 — keep this marker.\n\n---\n\n### 2026-01-01 · [ad hoc] a real entry\n- Change: something real.\n' > "$P/CHANGELOG.md"
 grep -q "METHODOLOGY-SEED-SENTINEL" "$P/CHANGELOG.md" && fail "test-bug: in-use fixture still carries the sentinel" || pass "test: in-use fixture is current-format with the sentinel deleted"
 OUT="$("$BIN/status" "$P")"
-echo "$OUT" | grep "CHANGELOG.md" | grep -v '^note:' | grep -q "stale format" && fail "status: in-use current-format ledger mis-flagged stale (constraint #2)" || pass "status: in-use current-format ledger not flagged"
-echo "$OUT" | grep -q "^note:" && fail "status: spurious note on in-use current-format ledger" || pass "status: no note on in-use current-format ledger"
+grep "CHANGELOG.md" <<< "$OUT" | grep -v '^note:' | grep "stale format" >/dev/null && fail "status: in-use current-format ledger mis-flagged stale (constraint #2)" || pass "status: in-use current-format ledger not flagged"
+grep -q "^note:" <<< "$OUT" && fail "status: spurious note on in-use current-format ledger" || pass "status: no note on in-use current-format ledger"
 # (b2) The seed as shipped before ledger-format 2, frozen in tools/fixtures/: it carries the current TITLE
 # and the full rules text, and must still read stale. BOOTSTRAP.md ("Updating an existing project…") promises status "flags any seed
 # whose format predates the current methodology"; a marker present in any earlier format can never keep
@@ -306,11 +372,11 @@ ROW="$(echo "$OUT" | grep "CHANGELOG.md" | grep -v '^note:')"   # table row only
 echo "$ROW" | grep -q "seed" && pass "status: stale seed keeps its seed disposition" || fail "status: stale seed lost seed disposition"
 echo "$ROW" | grep -q "stale format" && pass "status: pre-v3.1 seed flagged 'present (stale format)'" || fail "status: stale seed not flagged"
 # Advisory only — never reclassified as drift.
-if echo "$ROW" | grep -Eq "missing|locally modified|versions? behind"; then fail "status: stale seed mislabeled as drift"; else pass "status: stale seed NOT treated as drift"; fi
+if grep -Eq "missing|locally modified|versions? behind" <<< "$ROW"; then fail "status: stale seed mislabeled as drift"; else pass "status: stale seed NOT treated as drift"; fi
 echo "$OUT" | grep -q "^note:" && pass "status: emits the migration note beneath the table" || fail "status: no migration note for stale seed"
 # (d) A seed without a format marker (SESSION_NOTES.md) is never format-checked → never stale.
 echo "arbitrary adopter content" > "$P/SESSION_NOTES.md"
-"$BIN/status" "$P" | grep "SESSION_NOTES.md" | grep -v '^note:' | grep -q "stale format" && fail "status: markerless seed mis-flagged" || pass "status: markerless seed never flagged stale"
+grep "SESSION_NOTES.md" <<< "$("$BIN/status" "$P")" | grep -v '^note:' | grep "stale format" >/dev/null && fail "status: markerless seed mis-flagged" || pass "status: markerless seed never flagged stale"
 # (e) The flag never triggers an overwrite: sync leaves the adopter-owned stale seed untouched.
 "$BIN/sync" "$P" >/dev/null
 grep -q "\[Unreleased\]" "$P/CHANGELOG.md" && pass "sync: stale seed left untouched (still adopter-owned)" || fail "sync: stale seed was overwritten"
@@ -333,7 +399,7 @@ echo "$NOTE" | grep -q "for CHANGELOG.md, replace the rules text or old header a
 # The trimmer writes an archive-pointer block and a month heading above the first entry; a route that
 # replaced everything there would delete them (an adopter's migration hit exactly this).
 echo "$NOTE" | grep -q "keeping any archive-pointer block and month heading" && pass "status: the CHANGELOG.md route keeps what the trimmer wrote" || fail "status: the CHANGELOG.md route would delete the trimmer's pointer block"
-echo "$NOTE" | grep -q "Size, and when to archive" && fail "status: the note gives HANDOFFS.md's route when only CHANGELOG.md is stale" || pass "status: no HANDOFFS.md route when only CHANGELOG.md is stale"
+grep -q "Size, and when to archive" <<< "$NOTE" && fail "status: the note gives HANDOFFS.md's route when only CHANGELOG.md is stale" || pass "status: no HANDOFFS.md route when only CHANGELOG.md is stale"
 cp "$STARTER/CHANGELOG.md" "$P2/CHANGELOG.md"   # P2's CHANGELOG.md was stale from (f): current seed again
 printf '# Handoff Receipts\n\nNewest on top; prepend-only.\n\n```handoff\nsession: S1\ndate: 2026-01-01\nstatus: complete\n```\n' > "$P2/HANDOFFS.md"
 OUT="$("$BIN/status" "$P2")"
@@ -341,7 +407,7 @@ echo "$OUT" | grep "HANDOFFS.md" | grep -v '^note:' | grep -q "stale format" && 
 NOTE="$(echo "$OUT" | grep '^note:')"
 echo "$NOTE" | grep -q "1 seed predates the current format (HANDOFFS.md," && pass "test: HANDOFFS.md is the only stale seed in P2" || fail "test-bug: P2 is not stale in HANDOFFS.md alone"
 echo "$NOTE" | grep -q "for HANDOFFS.md, bring across the current starter-kit seed's '## Size, and when to archive' section" && pass "status: a stale HANDOFFS.md gets the bring-across-the-section route" || fail "status: the note lacks HANDOFFS.md's own route"
-echo "$NOTE" | grep -qi "replace" && fail "status: the note tells a stale HANDOFFS.md to replace its front matter" || pass "status: no replace route for a stale HANDOFFS.md"
+grep -qi "replace" <<< "$NOTE" && fail "status: the note tells a stale HANDOFFS.md to replace its front matter" || pass "status: no replace route for a stale HANDOFFS.md"
 # The HANDOFFS.md seed as shipped before handoffs-format 2 already had the size section's heading, but
 # with the old premise in it (a 65,536 B byte row priced as a "context tax"). Keyed on that heading, it read
 # current in two of six real adopters that carry exactly that text. Keyed on the versioned marker, it is stale.
@@ -918,9 +984,16 @@ qr = importlib.util.module_from_spec(spec); spec.loader.exec_module(qr)
 cfg = json.load(open(root + "/.quality-gates.json"))
 sys.exit(0 if cfg["gates"] and not qr.config_defects(cfg) else 1)
 PY
-grep -q 'quality_ratchet.py" --precommit' "$METHODOLOGY/.githooks/pre-commit" \
+# The chain names the tool through variables (it is found under starter-kit/, under
+# methodology/ or at the root), so the old one-line grep for the literal path no longer matches. What
+# the assertion means is: the hook runs the ratchet, names the tool, and does it BEFORE the ledger gate
+# (the order the label always claimed and the grep never checked). Test 37 runs the chain for real.
+HK37="$METHODOLOGY/.githooks/pre-commit"
+CHAIN37="$(grep -nF 'python3 "$top/$ratchet" --precommit' "$HK37" | head -1 | cut -d: -f1)"
+GATE37="$(grep -n '^staged=\$(git diff --cached' "$HK37" | head -1 | cut -d: -f1)"
+[ -n "$CHAIN37" ] && [ -n "$GATE37" ] && [ "$CHAIN37" -lt "$GATE37" ] && grep -q '^rtool=quality_ratchet.py' "$HK37" \
     && pass ".githooks/pre-commit chains the quality ratchet before the ledger gate" \
-    || fail ".githooks/pre-commit does not run quality_ratchet.py --precommit"
+    || fail ".githooks/pre-commit does not run the ratchet before the ledger gate (chain line [$CHAIN37], gate line [$GATE37])"
 
 # D9: check-handoff's gate-run citation lint, observed silent / failing / passing.
 P="$(mktemp -d)"
@@ -1419,5 +1492,400 @@ SEED_FORMAT_MARKERS = {" "DISTRIBUTION"
 rm -rf "$T34"
 
 echo ""
-echo "== Summary: $PASS passed, $FAIL failed =="
+echo "== Test 35: BOOTSTRAP's never-overwrite list is pinned to the manifest (RED-first, Learning #12) =="
+# The agent-facing update path ("Update methodology using <url>") is PROSE, and until 2026-08-04 it
+# said only "fetch the latest starter-kit files and overlay them" -- naming no exception. An agent
+# following that overwrites CHANGELOG.md and HANDOFFS.md with empty templates and destroys the
+# adopter's history, which is precisely what SEED disposition exists to prevent. bin/sync refuses
+# structurally; prose has nothing but this assertion. So the list is pinned to _manifest, not trusted.
+BS="$STARTER/BOOTSTRAP.md"
+# Anchor on the TABLE ROW, not on the phrase. 'never overwrite' also appears in the surrounding
+# prose, and an earlier draft of this test grepped the first match -- so it read the prose line,
+# found no filenames in it, and reported all four seeds missing from a row that was in fact fine.
+# An assertion that cannot see its own artifact fails for the wrong reason.
+NOOVERWRITE="$(grep -n '^| \*\*Adopter-owned\*\*' "$BS" | head -1 | cut -d: -f1)"
+[ -n "$NOOVERWRITE" ] && pass "bootstrap: a 'never overwrite' rule exists in the update path" \
+    || fail "bootstrap: no 'never overwrite' rule found — the URL update path can destroy history"
+if [ -n "$NOOVERWRITE" ]; then
+    ROWTEXT="$(sed -n "${NOOVERWRITE}p" "$BS")"
+    MISSING=""
+    while IFS= read -r seed; do
+        # A here-string, not a pipe: the producer is a row of the real BOOTSTRAP.md.
+        grep -qF "$seed" <<< "$ROWTEXT" || MISSING="$MISSING $seed"
+    done < <(python3 -c "import sys; sys.path.insert(0, '$BIN'); import _manifest; \
+        print('\n'.join(d for _s, d, x in _manifest.DISTRIBUTION if x == _manifest.SEED))")
+    [ -z "$MISSING" ] && pass "bootstrap: every adopter-owned seed is named in the never-overwrite row" \
+        || fail "bootstrap: adopter-owned seed(s) absent from the never-overwrite row:$MISSING"
+    # The converse matters just as much: a TRACKED file listed as never-overwrite would freeze it at
+    # the adopter's old version forever, and no sync would ever correct it.
+    WRONG=""
+    while IFS= read -r t; do
+        # A here-string, not a pipe, and this arm is the SILENT direction: a pipeline
+        # scored failed on a match drops a real finding instead of raising it.
+        grep -qF "$t" <<< "$ROWTEXT" && WRONG="$WRONG $t"
+    done < <(python3 -c "import sys; sys.path.insert(0, '$BIN'); import _manifest; \
+        print('\n'.join(d for _s, d, x in _manifest.DISTRIBUTION if x == _manifest.TRACKED and '/' not in d))")
+    [ -z "$WRONG" ] && pass "bootstrap: no tracked file is mislabelled adopter-owned" \
+        || fail "bootstrap: tracked file(s) wrongly listed as never-overwrite:$WRONG"
+fi
+
+echo "== Test 36: no early-exiting consumer decides a fail arm, so a flake cannot read a defect as a pass (RED-first) =="
+# `:5` sets `pipefail`. A consumer that exits at its first match (`grep -q`, `grep -m`, `head`,
+# `sed q`) can leave its producer with bytes still to write; the producer takes SIGPIPE and the
+# MATCHED pipeline is scored FAILED. Measured at 1.5 KB: `echo "$(cat f)" | grep -q PAT` failed
+# 10 of 3,000 runs, `grep -q PAT <<< "$(cat f)"` 0 of 3,000. Which way the flake points is
+# decided by the ARM the pipeline guards: on `&& pass || fail` it is a loud false red, but on
+# `&& fail || pass` (or an `if` whose THEN arm fails) it turns "pattern found, so fail" into
+# "pipeline failed, so pass" -- a real defect reads green and nothing anywhere goes red. A sibling lint (not carried here)
+# derives only the producers read from the real repo; this derives the ARM, whatever the
+# producer. Rule A: an early-exiting consumer ahead of `&& fail`. Rule B: one in the condition of
+# an `if` whose then-arm calls `fail`.
+#
+# A SECOND, DETERMINISTIC form of the same hole needs no flake: when the producer is a COMMAND
+# that exits non-zero exactly when its output names the pattern (`check-handoff ... | grep -q
+# S13`), `pipefail` makes the pipeline's status the producer's, the `if` reads false, and the
+# then-arm is unreachable. N3 and N6 above were both that. The cure is to CAPTURE the output and
+# read the capture (`OUT="$(cmd 2>&1)"; grep -q PAT <<< "$OUT"`), which is also what a producer
+# at the head of a pipeline wants. A longer chain (`... | grep -v X | grep -q Y`) is not cured
+# by a here-string, because the middle stage can still be signalled: its consumer must stop
+# exiting early (`grep Y >/dev/null`). Not covered, and none exists today (measured): a NEGATED
+# pipeline (`! ... | grep -q P && pass || fail`), whose flake also reads as a pass.
+#
+# The scanner reads whole logical lines (backslash continuations joined), skips comments and
+# heredoc bodies (so its own fixtures and this very source are not scanned), and ignores a
+# pipe inside quotes or `$( )` -- a capture uses stdout, which SIGPIPE cannot corrupt.
+SCAN45="$(mktemp)"
+cat > "$SCAN45" <<'PY45'
+import re, sys
+EARLY = re.compile(r'(?<!\|)\|\s*(?:grep\b[^|]*?-[A-Za-z]*q[A-Za-z]*(?=\s|$)|grep\b[^|]*?-m\s*\d|head\b|sed\b[^|]*\bq\b)')
+HEREDOC = re.compile(r"(?<!<)<<(?!<)-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+FAILCALL = re.compile(r'(?:^|[\s;{(&|])fail\s+["\']')
+def outside(s):
+    mask, stack, i, n = [False] * len(s), ['top'], 0, len(s)
+    while i < n:
+        c, ctx = s[i], stack[-1]
+        if ctx == 'sq':
+            if c == "'": stack.pop()
+        elif c == '\\' and i + 1 < n:
+            i += 2; continue
+        elif c == "'" and ctx != 'dq': stack.append('sq')
+        elif c == '"':
+            if ctx == 'dq': stack.pop()
+            else: stack.append('dq')
+        elif c == '$' and s.startswith('$(', i):
+            stack.append('subst'); i += 2; continue
+        elif c == ')' and ctx == 'subst': stack.pop()
+        elif ctx == 'top': mask[i] = True
+        i += 1
+    return mask
+def early_before(s, mask, end):
+    return any(mask[m.start()] for m in EARLY.finditer(s, 0, end))
+lines = open(sys.argv[1], encoding="utf-8").read().split("\n")
+logical, i = [], 0
+while i < len(lines):
+    start, buf = i + 1, lines[i]
+    while buf.endswith("\\") and i + 1 < len(lines):
+        i += 1; buf = buf[:-1] + " " + lines[i].lstrip()
+    logical.append((start, buf)); i += 1
+    m = HEREDOC.search(buf)
+    if m:
+        while i < len(lines) and lines[i].strip() != m.group(2): i += 1
+        i += 1
+found = []
+for k, (n, s) in enumerate(logical):
+    st = s.strip()
+    if st.startswith("#") or re.match(r'(elif|while|until)\b', st): continue
+    mask = outside(s)
+    if re.match(r'if\b', st):
+        t = next((m for m in re.finditer(r';\s*then\b', s) if mask[m.start()]), None)
+        if t is None: t = re.search(r'\bthen\b', s)
+        cond_end = t.start() if t else len(s)
+        if not early_before(s, mask, cond_end): continue
+        first = s[t.end():] if t else ""
+        block, depth = [first], 1
+        if re.search(r';\s*fi\b', first): depth = 0
+        for _, nxt in (logical[k + 1:] if depth else []):
+            ns = nxt.strip()
+            if re.match(r'if\b', ns): depth += 1
+            if re.search(r'(^|;\s*)fi\b', ns):
+                depth -= 1
+                if depth == 0: break
+            block.append(nxt)
+        arms = "\n".join(block)
+        e = re.search(r'(?:^|[;\s])else\b', arms)
+        then_arm = arms[:e.start()] if e else arms
+        if FAILCALL.search(then_arm): found.append((n, "if-then-fail"))
+        continue
+    for m in re.finditer(r'&&\s*fail\b', s):
+        if mask[m.start()] and early_before(s, mask, m.start()):
+            found.append((n, "and-fail")); break
+for n, why in found: print("BL97-SITE %d %s" % (n, why))
+print("BL97-TOTAL %d" % len(found))
+PY45
+
+# (1) the live suite: the derived population must be EMPTY.
+SITES45="$(python3 "$SCAN45" "$BIN/tests.sh")"
+TOTAL45="$(grep -oE 'BL97-TOTAL [0-9]+' <<< "$SITES45" | awk '{print $2}')"
+[ "$TOTAL45" = "0" ] && pass "no early-exiting consumer decides a fail arm in bin/tests.sh" \
+    || fail "early-exiting-consumer site(s) present: $SITES45"
+
+# (2) THE SCANNER, PROVEN TO FIRE AND TO HOLD ITS FIRE. A detector no input can trip is a comment,
+# and one that trips on everything is noise. Each fixture line that must be flagged ends in the
+# marker HIDDEN; the scanner must name exactly those lines, the visible forms, the converted
+# forms, a capture, a quoted pipe and a comment all passing unflagged.
+FIX45="$(mktemp)"
+cat > "$FIX45" <<'FIX45'
+echo "$A" | grep -q "x" && fail "m" || pass "m"                    # HIDDEN
+printf '%s\n' "$A" | grep -qiE 'x|y' && fail "m" || pass "m"       # HIDDEN
+"$B" "$P" | grep "a" | grep -v '^n' | grep -q "b" && fail "m"      # HIDDEN
+echo "$A" | head -1 | grep -qx "x" && fail "m" || pass "m"          # HIDDEN
+echo "$A" | sed '/x/q' >/dev/null && fail "m" || pass "m"           # HIDDEN
+if echo "$A" | grep -q "x"; then fail "m"; else pass "m"; fi        # HIDDEN
+if "$B" --file "$F" 2>&1 | grep -q 'S13'; then                      # HIDDEN
+    fail "m"
+else
+    pass "m"
+fi
+grep -q "x" <<< "$A" && fail "m" || pass "m"
+OUTC="$("$B" --file "$F" 2>&1)"; grep -q "x" <<< "$OUTC" && fail "m" || pass "m"
+echo "$A" | grep "x" >/dev/null && fail "m" || pass "m"
+echo "$A" | grep -q "x" && pass "m" || fail "m"
+if echo "$A" | grep -q "x"; then pass "m"; else fail "m"; fi
+if grep -q "x" <<< "$A"; then fail "m"; else pass "m"; fi
+[ "$(echo "$A" | head -1)" = "x" ] && fail "m" || pass "m"
+echo "grep -q x | grep -q y && fail" >/dev/null
+# echo "$A" | grep -q "x" && fail "m" || pass "m"
+FIX45
+EXP45="$(grep -n 'HIDDEN$' "$FIX45" | cut -d: -f1 | tr '\n' ' ')"
+GOT45="$(python3 "$SCAN45" "$FIX45" | grep -oE 'BL97-SITE [0-9]+' | awk '{print $2}' | tr '\n' ' ')"
+[ -n "$EXP45" ] && [ "$GOT45" = "$EXP45" ] \
+    && pass "the scanner flags exactly the marked hidden-form lines ($EXP45)" \
+    || fail "scanner fixture: expected lines '$EXP45', got '$GOT45'"
+
+# (3) THE SAME ON THE REAL FILE. Revert one converted site on a COPY -- never the live file -- and
+# the scanner must name that line and no other. The reverting script lives in a heredoc so that
+# its replacement text is not itself a line of this file the scanner reads.
+M45="$(mktemp)"
+LINE45="$(python3 - "$BIN/tests.sh" "$M45" <<'PYM45'
+import re, sys
+src, dst = sys.argv[1], sys.argv[2]
+lines = open(src, encoding="utf-8").read().split("\n")
+pat = re.compile(r'^(?P<ind>\s*)grep (?P<fl>-[A-Za-z]+) (?P<pat>"[^"]*"|\'[^\']*\') <<< "(?P<var>\$[A-Za-z_][A-Za-z0-9_]*)"(?P<tail> && fail .*)$')
+hit = "NONE"
+for i, ln in enumerate(lines):
+    m = pat.match(ln)
+    if m:
+        lines[i] = '%secho "%s" | grep %s %s%s' % (m["ind"], m["var"], m["fl"], m["pat"], m["tail"])
+        hit = str(i + 1)
+        break
+open(dst, "w", encoding="utf-8").write("\n".join(lines))
+print(hit)
+PYM45
+)"
+if [ "$LINE45" != "NONE" ] && [ -n "$LINE45" ]; then
+    MUT45="$(python3 "$SCAN45" "$M45")"
+    MUTTOTAL45="$(grep -oE 'BL97-TOTAL [0-9]+' <<< "$MUT45" | awk '{print $2}')"
+    MUTLINE45="$(grep -oE 'BL97-SITE [0-9]+' <<< "$MUT45" | awk '{print $2}' | tr '\n' ' ')"
+    [ "$MUTTOTAL45" = "1" ] && [ "$MUTLINE45" = "$LINE45 " ] \
+        && pass "the scanner fires on a reverted site in the real file, and names it ($LINE45)" \
+        || fail "scanner control: expected 1 site at line $LINE45, got: $MUT45"
+else
+    fail "scanner control mutation DID NOT APPLY -- no converted \`grep -q PAT <<< \"\$VAR\" && fail\` site left to revert"
+fi
+rm -f "$SCAN45" "$FIX45" "$M45"
+
+echo "== Test 37: the ledger hook and the ratchet chain follow the files under methodology/ (RED-first) =="
+# It was measured: once the ledger moved under methodology/, a LATER commit that left the ledger
+# out PASSED, because the hook found no tracked CHANGELOG.md and took its "no ledger, never block"
+# branch -- the gate that enforces failure mode #27 failing open, silently. The same fail-open sat in
+# the ratchet chain: its guard named the root manifest only, so a moved manifest was never ratcheted.
+# The ledger case is kept here as a permanent test, through the real hook and real git, in both layouts, with the
+# controls that prove each assertion can fail.
+t37_repo() { # $1 legacy|new, $2 the hook file to install, $3 the ratchet to install (default: the shipped one) -- setup commits bypass it
+    local u pre=""; u="$(mktemp -d)"; [ "$1" = new ] && pre="methodology/"
+    git -C "$u" init -q -b main; git -C "$u" config user.email t@t; git -C "$u" config user.name t
+    mkdir -p "$u/.githooks" "$u/${pre}"
+    cp "$2" "$u/.githooks/pre-commit"; chmod +x "$u/.githooks/pre-commit"
+    cp "${3:-$STARTER/quality_ratchet.py}" "$u/${pre}quality_ratchet.py"
+    printf '{"version": 1, "gates": [{"name": "cov", "direction": "min", "threshold": 80}]}\n' > "$u/${pre}.quality-gates.json"
+    printf '# Changelog\n\n### 2026-01-01 · [ad hoc] base\n\n- body\n\n' > "$u/${pre}CHANGELOG.md"
+    printf 'one\n' > "$u/tracked.txt"
+    git -C "$u" add -A; git -C "$u" commit -q --no-verify -m base
+    git -C "$u" config core.hooksPath .githooks
+    echo "$u"
+}
+t37_try() { git -C "$1" add -A; OUT37="$(git -C "$1" commit -q -m t 2>&1)"; RC37=$?; }
+t37_entry() { # $1 ledger file: prepend one entry
+    printf '# Changelog\n\n### 2026-02-01 · [ad hoc] new\n\n- body\n\n### 2026-01-01 · [ad hoc] base\n\n- body\n\n' > "$1"
+}
+t37_floor() { printf '{"version": 1, "gates": [{"name": "cov", "direction": "min", "threshold": %s}]}\n' "$2" > "$1"; }
+HOOK37="$METHODOLOGY/.githooks/pre-commit"
+
+for L37 in legacy new; do
+    PRE37=""; [ "$L37" = new ] && PRE37="methodology/"
+    U="$(t37_repo "$L37" "$HOOK37")"
+    printf 'two\n' > "$U/tracked.txt"; t37_try "$U"
+    [ "$RC37" = 1 ] && grep -qF "${PRE37}CHANGELOG.md not staged" <<< "$OUT37" \
+        && pass "$L37 layout: a later commit that leaves the ledger out is refused, naming ${PRE37}CHANGELOG.md" \
+        || fail "$L37 layout: exit $RC37, wanted 1 naming ${PRE37}CHANGELOG.md; got: $OUT37"
+    rm -rf "$U"
+    U="$(t37_repo "$L37" "$HOOK37")"
+    printf 'two\n' > "$U/tracked.txt"; t37_entry "$U/${PRE37}CHANGELOG.md"; t37_try "$U"
+    [ "$RC37" = 0 ] && pass "$L37 layout: the same commit with a ledger entry passes" \
+        || fail "$L37 layout: a commit with its ledger entry was refused (exit $RC37): $OUT37"
+    rm -rf "$U"
+    U="$(t37_repo "$L37" "$HOOK37")"
+    t37_floor "$U/${PRE37}.quality-gates.json" 70; t37_entry "$U/${PRE37}CHANGELOG.md"; t37_try "$U"
+    [ "$RC37" != 0 ] && grep -qF "floor lowered 80 -> 70" <<< "$OUT37" \
+        && pass "$L37 layout: the ratchet chain refuses a loosened floor even with the ledger co-staged" \
+        || fail "$L37 layout: a loosened floor was not refused (exit $RC37): $OUT37"
+    rm -rf "$U"
+done
+
+# The MOVE commit, through the real hook: ledger, manifest and tool renamed under methodology/.
+U="$(t37_repo legacy "$HOOK37")"
+mkdir "$U/methodology"; git -C "$U" mv CHANGELOG.md .quality-gates.json quality_ratchet.py methodology/
+t37_try "$U"
+[ "$RC37" = 0 ] && pass "the move commit (a pure rename of ledger, manifest and tool) passes the hook" \
+    || fail "the move commit was refused (exit $RC37): $OUT37"
+rm -rf "$U"
+U="$(t37_repo legacy "$HOOK37")"
+mkdir "$U/methodology"; git -C "$U" mv CHANGELOG.md .quality-gates.json quality_ratchet.py methodology/
+t37_floor "$U/methodology/.quality-gates.json" 70; t37_try "$U"
+[ "$RC37" != 0 ] && grep -qF "floor lowered 80 -> 70" <<< "$OUT37" \
+    && pass "a move that lowers a floor is refused, for the lowering and not as 'manifest removed'" \
+    || fail "a move that lowers a floor was not refused as such (exit $RC37): $OUT37"
+rm -rf "$U"
+U="$(t37_repo legacy "$HOOK37")"
+mkdir "$U/methodology"; git -C "$U" mv CHANGELOG.md .quality-gates.json quality_ratchet.py methodology/
+printf '# Changelog\n\n### 2026-01-01 · [ad hoc] base\n\n- body, reworded in the move\n\n' > "$U/methodology/CHANGELOG.md"; t37_try "$U"
+[ "$RC37" != 0 ] && grep -qF "a committed entry was changed" <<< "$OUT37" \
+    && pass "a move that rewrites a committed ledger entry is refused (the never-edit gate crosses the move)" \
+    || fail "a move that rewrote a ledger entry was not refused (exit $RC37): $OUT37"
+rm -rf "$U"
+
+# Two ledgers tracked: a half-migrated tree. Refused, naming both.
+U="$(t37_repo new "$HOOK37")"
+printf '# Changelog\n' > "$U/CHANGELOG.md"; printf 'x\n' > "$U/tracked.txt"; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+[ "$RC37" = 1 ] && grep -qF "Two ledgers are tracked" <<< "$OUT37" && grep -qF "methodology/CHANGELOG.md" <<< "$OUT37" \
+    && pass "two tracked ledgers (half-migrated) are refused, naming both" \
+    || fail "half-migrated tree: exit $RC37, wanted 1 naming both: $OUT37"
+rm -rf "$U"
+
+# A tie the framework anchor decides: the project's own
+# product changelog sits at the root beside a ledger that moved, and the runner is tracked under
+# methodology/. The gate follows the ledger there and leaves the root file alone; a tie the anchor
+# does not decide (the runner at the root, or at both) is still refused naming both.
+t37_tie() { # $1 where the runner is tracked: methodology | both
+    local u; u="$(t37_repo new "$HOOK37")"
+    printf '# Product changelog\n\n## 1.0\n\n- shipped\n' > "$u/CHANGELOG.md"
+    printf 'runner\n' > "$u/methodology/SESSION_RUNNER.md"
+    [ "$1" = both ] && printf 'runner\n' > "$u/SESSION_RUNNER.md"
+    git -C "$u" add -A; git -C "$u" commit -q --no-verify -m tie
+    echo "$u"
+}
+U="$(t37_tie methodology)"
+printf 'two\n' > "$U/tracked.txt"; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+[ "$RC37" = 0 ] && pass "a tie the framework anchor decides (runner under methodology/): the ledger entry passes, the root product changelog is left alone" \
+    || fail "tie decided by the anchor: a commit with its ledger entry was refused (exit $RC37): $OUT37"
+rm -rf "$U"
+U="$(t37_tie methodology)"
+printf 'two\n' > "$U/tracked.txt"; printf '# Product changelog\n\n## 1.1\n\n- shipped again\n' > "$U/CHANGELOG.md"; t37_try "$U"
+[ "$RC37" = 1 ] && grep -qF "methodology/CHANGELOG.md not staged" <<< "$OUT37" \
+    && pass "a tie the anchor decides: a commit that touches only the root product changelog is refused, naming methodology/CHANGELOG.md" \
+    || fail "tie decided by the anchor: exit $RC37, wanted 1 naming methodology/CHANGELOG.md; got: $OUT37"
+rm -rf "$U"
+U="$(t37_tie both)"
+printf 'two\n' > "$U/tracked.txt"; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+[ "$RC37" = 1 ] && grep -qF "Two ledgers are tracked" <<< "$OUT37" \
+    && pass "a tie the anchor cannot decide (runner at the root and under methodology/) is refused, naming both" \
+    || fail "tie with two runners: exit $RC37, wanted 1 naming both: $OUT37"
+rm -rf "$U"
+
+# A manifest tie: the tie rule is not
+# opt-in. A project whose runner is tracked under methodology/ keeps its ratchet manifest there; a
+# .quality-gates.json at the root is the project's own and the chain leaves it alone. A tie the runner
+# cannot decide (the runner at the root, or at both) is still refused by the ratchet, naming both.
+t37_mtie() { # $1 where the runner is tracked: methodology | root | both; $2 the ratchet to install; a root manifest of someone else's
+    local u; u="$(t37_repo new "$HOOK37" "${2:-}")"
+    # The suite runs under set -u: an unset "$2" aborts the substitution and leaves u empty, and then
+    # git -C "" acts on the CURRENT directory, which is this repository. A fixture that did not build stops here.
+    [ -n "$u" ] && [ -d "$u/.git" ] || { echo "t37_mtie: the fixture did not build" >&2; return 1; }
+    t37_floor "$u/.quality-gates.json" 10
+    case "$1" in methodology|both) printf 'runner\n' > "$u/methodology/SESSION_RUNNER.md" ;; esac
+    case "$1" in root|both) printf 'runner\n' > "$u/SESSION_RUNNER.md" ;; esac
+    git -C "$u" add -A; git -C "$u" commit -q --no-verify -m mtie
+    echo "$u"
+}
+U="$(t37_mtie methodology)"
+t37_floor "$U/methodology/.quality-gates.json" 70; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+[ "$RC37" != 0 ] && grep -qF "floor lowered 80 -> 70" <<< "$OUT37" && ! grep -qF "half-migrated" <<< "$OUT37" \
+    && pass "a manifest tie the framework anchor decides: a loosened methodology/ floor is refused for the loosening, not as half-migrated" \
+    || fail "manifest tie decided by the anchor: exit $RC37, wanted a refusal naming 'floor lowered 80 -> 70' and not half-migrated; got: $OUT37"
+rm -rf "$U"
+U="$(t37_mtie methodology)"
+t37_floor "$U/.quality-gates.json" 5; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+[ "$RC37" = 0 ] && pass "a manifest tie the framework anchor decides: a change to the root manifest, which is someone else's, passes" \
+    || fail "manifest tie decided by the anchor: a root manifest edit was refused (exit $RC37): $OUT37"
+rm -rf "$U"
+for W37 in root both; do
+    U="$(t37_mtie "$W37")"
+    t37_floor "$U/methodology/.quality-gates.json" 85; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+    [ "$RC37" != 0 ] && grep -qF "half-migrated" <<< "$OUT37" && grep -qF "methodology/.quality-gates.json" <<< "$OUT37" \
+        && pass "a manifest tie the anchor cannot decide (runner tracked: $W37) is refused, naming both" \
+        || fail "manifest tie, runner tracked $W37: exit $RC37, wanted a half-migrated refusal naming both; got: $OUT37"
+    rm -rf "$U"
+done
+
+# CONTROLS: each assertion above must be able to fail. Mutate a COPY of the hook, never the live one.
+M37="$(mktemp)"; chmod +x "$M37"
+t37_mutant() { # $1 what, $2 python expression, $3 the selftest probe that must go red ('' = none, a git scenario instead)
+    local OUTM RCM
+    if mutate "$HOOK37" "$M37" "$2"; then
+        chmod +x "$M37"
+        if [ -n "$3" ]; then
+            OUTM="$("$M37" --selftest 2>&1)"; RCM=$?
+            [ "$RCM" != 0 ] && grep -qF "FAIL: $3" <<< "$OUTM" \
+                && pass "control: $1 turns the selftest red on '$3'" \
+                || fail "control: $1 -- selftest rc=$RCM, expected FAIL: $3"
+        fi
+    else
+        fail "control mutation DID NOT APPLY: $1"
+    fi
+}
+t37_mutant "the new-layout ledger branch disabled" 's.replace("if indexed \"$new_ledger\"; then", "if false; then", 1)' "new layout: ledger not co-staged -> REFUSED (the gate"
+t37_mutant "the half-migrated refusal disabled"    's.replace("\tif indexed \"$legacy_ledger\" && ! { indexed \"$new_runner\" && ! indexed \"$legacy_runner\"; }; then", "\tif false; then", 1)' "a ledger in both places"
+t37_mutant "the framework anchor never decides a tie" 's.replace("\tif indexed \"$legacy_ledger\" && ! { indexed \"$new_runner\" && ! indexed \"$legacy_runner\"; }; then", "\tif indexed \"$legacy_ledger\"; then", 1)' "a tie, the runner under methodology/: the methodology ledger co-staged with a new entry -> pass"
+t37_mutant "a root runner beside the methodology one still decides the tie" 's.replace("indexed \"$new_runner\" && ! indexed \"$legacy_runner\"", "indexed \"$new_runner\"", 1)' "a tie, runner tracked: both -> REFUSED"
+t37_mutant "the framework anchor read from the worktree" 's.replace("indexed \"$new_runner\" && ! indexed \"$legacy_runner\"", "[ -f \"$new_runner\" ] && [ ! -f \"$legacy_runner\" ]", 1)' "a tie, a runner under methodology/ that is on disk but NOT tracked"
+t37_mutant "HEAD read from the new path only (no crossing the move)" 's.replace("for p in \"$ledger\" \"$legacy_ledger\" \"$new_ledger\"; do", "for p in \"$ledger\"; do", 1)' "the move commit that drops an entry"
+t37_mutant "the archive under methodology/ not recognised" 's.replace("^($legacy_archive|$new_archive)/", "^($legacy_archive)/", 1)' "new layout, ledger: entries dropped with a shard under methodology/ staged"
+# The ratchet chain guard, as a git scenario (the selftest's repos carry no ratchet).
+if mutate "$HOOK37" "$M37" 's.replace("[ -f \"$top/methodology/$mfile\" ]", "false", 1).replace("\"HEAD:methodology/$mfile\"", "\"HEAD:$mfile\"", 1)'; then
+    chmod +x "$M37"
+    U="$(t37_repo new "$M37")"
+    t37_floor "$U/methodology/.quality-gates.json" 70; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+    [ "$RC37" = 0 ] \
+        && pass "control: a chain guard that names the root manifest only PASSES a loosened floor in the new layout (the fail-open the real hook refuses)" \
+        || fail "control: the legacy-only chain guard still refused the loosening (exit $RC37): $OUT37"
+    rm -rf "$U"
+else
+    fail "control mutation DID NOT APPLY: the chain guard"
+fi
+# The manifest tie, as a git scenario: a ratchet that never lets the runner decide refuses the root-manifest
+# edit the shipped tool passes, so the assertion above can fail.
+MR37="$(mktemp)"
+if mutate "$STARTER/quality_ratchet.py" "$MR37" 's.replace("if len(out) == 2 and framework_under_methodology(root, ref):", "if False:", 1)'; then
+    U="$(t37_mtie methodology "$MR37")"
+    t37_floor "$U/.quality-gates.json" 5; t37_entry "$U/methodology/CHANGELOG.md"; t37_try "$U"
+    [ "$RC37" != 0 ] && grep -qF "half-migrated" <<< "$OUT37" \
+        && pass "control: a ratchet that never lets the runner decide refuses the root-manifest edit the shipped tool passes" \
+        || fail "control: the tie-blind ratchet still passed the root-manifest edit (exit $RC37): $OUT37"
+    rm -rf "$U"
+else
+    fail "control mutation DID NOT APPLY: the manifest tie"
+fi
+rm -f "$M37" "$MR37"
+
+echo "== Summary: $PASS passed, $FAIL failed, $SKIP skipped =="
 [ "$FAIL" = "0" ]

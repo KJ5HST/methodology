@@ -186,7 +186,7 @@ Before presenting the architecture:
 
 ## Refactor Heuristics
 
-Two structural questions to apply when an existing module looks wrong but the right move is not obvious. Both come from John Ousterhout's *A Philosophy of Software Design* (2nd ed., chapters 4 and 6); the framing here matches Pocock's adaptation in `/improve-codebase-architecture` (cited in [`RECOMMENDED_SKILLS.md`](../../../RECOMMENDED_SKILLS.md)).
+Two structural questions to apply when an existing module looks wrong but the right move is not obvious. Both come from John Ousterhout's *A Philosophy of Software Design* (2nd ed., chapters 4 and 6); the framing here matches Pocock's adaptation in `/improve-codebase-architecture` (cited in `RECOMMENDED_SKILLS.md`).
 
 ### Deepening: prefer deep modules to shallow ones
 
@@ -215,7 +215,7 @@ The deletion test is a thought experiment, not a recommendation to actually dele
 
 - During Phase 2 (Research) when inventorying the existing architecture — flag shallow modules for the design.
 - During refactor planning — the deletion test produces the rationale that goes in the architecture document's "why" section.
-- **Not** during feature implementation. Spotting a shallow module mid-feature is a Mode-Switch trigger (see [`SAFEGUARDS.md`](../../../SAFEGUARDS.md) §The Two-Mode Problem). Commit the feature, note the heuristic finding for a future architecture session, do not refactor inline.
+- **Not** during feature implementation. Spotting a shallow module mid-feature is a Mode-Switch trigger (see `SAFEGUARDS.md` §The Two-Mode Problem). Commit the feature, note the heuristic finding for a future architecture session, do not refactor inline.
 - Run these heuristics — and the refactor they motivate — at your agent's deepest available reasoning setting. Refactoring an existing module is high blast-radius (changes ripple across call sites) and often hard to reverse once committed; the cost of a shallow analysis compounds across every later session that navigates the result (`ITERATIVE_METHODOLOGY.md` §Matching Reasoning Effort to Stakes).
 
 For applying these heuristics as a worked session, run `/improve-codebase-architecture`. The methodology owns *the heuristics and when to apply them*; the skill owns *the survey workflow*.

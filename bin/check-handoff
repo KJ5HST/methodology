@@ -58,6 +58,44 @@ import subprocess
 import sys
 from pathlib import Path
 
+# === LAYOUT ===
+# A project keeps its methodology files at its root (legacy) or under methodology/ (new).
+# This block is the resolver, embedded byte for byte; the canonical suite asserts that.
+
+# --- layout resolver: BEGIN ---
+import os as _os
+from pathlib import Path as _Path
+
+
+def resolve_layout(root, anchor="SESSION_RUNNER.md"):
+    """Return (kind, directory, found): kind is new|legacy|half|none, directory a Path or None,
+    found the anchor paths that exist. A half-migrated tree has no directory, by design.
+    A file found in both places is the framework's under methodology/ when the runner is under
+    methodology/ and not at the root: the root copy is the project's own and is left alone, kind new,
+    and found still names both. Any other tie stays half, and the runner cannot decide a tie about itself."""
+    root = _Path(root)
+    new, old = root / "methodology" / anchor, root / anchor
+    found = tuple(p for p in (new, old) if _os.path.isfile(p))
+    if len(found) == 2:
+        if _os.path.isfile(root / "methodology" / "SESSION_RUNNER.md") and not _os.path.isfile(root / "SESSION_RUNNER.md"):
+            return "new", new.parent, found
+        return "half", None, found
+    if not found:
+        return "none", None, ()
+    return ("new", new.parent, found) if found[0] == new else ("legacy", root, found)
+# --- layout resolver: END ---
+
+LEDGER_NAME = "HANDOFFS.md"  # layout: ok -- the receipt ledger's own file name: the resolver's anchor
+NEW_DIR = "methodology"
+
+
+class HalfMigrated(Exception):
+    """The ledger exists at the root AND under methodology/ and no runner under methodology/ decides."""
+
+    def __init__(self, found):
+        super().__init__(found)
+        self.found = found
+
 SEED_SENTINEL = "METHODOLOGY-SEED-SENTINEL"
 
 REQUIRED_KEYS = (
@@ -101,7 +139,7 @@ BARE_PLACEHOLDERS = {"todo", "tbd", "done.", "fixed stuff", "..."}
 # for structure only (the token and its N/M shape), never for truth: whether the counts match the
 # results file is the next Phase 0 reconcile's comparison, not this lint's. Newest-only on purpose:
 # receipts written before the manifest existed are not re-judged, so --all stays green on history.
-GATES_MANIFEST = ".quality-gates.json"
+GATES_MANIFEST = ".quality-gates.json"  # layout: ok -- the file's own name, never a path: where it lives is resolved above
 GATE_CITATION_RE = re.compile(r"quality_ratchet:\s*\d+/\d+\s+pass")
 
 
@@ -306,7 +344,7 @@ def validate(fields: dict, allow_pending: bool) -> list:
     findings = []
     for key in fields.get("__repeated__", ()):
         findings.append("key %s appears more than once in one block: two receipts fused into one "
-                        "(a union merge of HANDOFFS.md does this; resolve keep-both with "
+                        "(a union merge of HANDOFFS.md does this; resolve keep-both with "  # layout: ok -- message text: the file is named by its conventional name; the tool finds the project's own copy through the resolver above
                         "git merge-file --union --diff3)" % key)
     session = fields.get("session", "").strip()
     is_s1 = session == "S1"
@@ -397,7 +435,7 @@ def validate_gate_citation(fields: dict, declared: int) -> list:
     if GATE_CITATION_RE.search(haystack):
         return []
     return ["%d quality gate(s) are declared in %s but the receipt cites no gate run — paste the "
-            "`quality_ratchet: N/M pass …` summary line of `quality_ratchet.py --run` into "
+            "`quality_ratchet: N/M pass …` summary line of `quality_ratchet.py --run` into "  # layout: ok -- message text: the file is named by its conventional name; the tool finds the project's own copy through the resolver above
             "runtime_smoke" % (declared, GATES_MANIFEST)]
 
 
@@ -413,21 +451,24 @@ def repo_root() -> Path:
 
 
 def default_path() -> Path:
-    """The repo's own HANDOFFS.md if present, else the starter-kit seed template
-    (the only place HANDOFFS.md lives inside the canonical methodology repo, which
-    has no root-level receipt ledger of its own)."""
+    """The repo's own receipt ledger, at its root or under methodology/ (the resolver's table, the
+    runner deciding a tie), else the starter-kit seed template (the only place HANDOFFS.md lives inside
+    the canonical methodology repo, which has no root-level receipt ledger of its own). A tree holding the
+    ledger in both places with nothing to decide between them raises HalfMigrated: never guessed."""
     root = repo_root()
-    root_file = root / "HANDOFFS.md"
-    if root_file.exists():
-        return root_file
-    return root / "starter-kit" / "HANDOFFS.md"
+    kind, directory, found = resolve_layout(root, LEDGER_NAME)
+    if kind == "half":
+        raise HalfMigrated(found)
+    if directory is not None:
+        return directory / LEDGER_NAME
+    return root / "starter-kit" / LEDGER_NAME
 
 
 def main() -> int:
     p = argparse.ArgumentParser(
-        description="Validate the newest `handoff` receipt block in a HANDOFFS.md ledger."
+        description="Validate the newest `handoff` receipt block in a HANDOFFS.md ledger."  # layout: ok -- message text: the file is named by its conventional name; the tool finds the project's own copy through the resolver above
     )
-    p.add_argument("--file", help="explicit HANDOFFS.md path to check (what bin/tests.sh uses)")
+    p.add_argument("--file", help="explicit HANDOFFS.md path to check (what bin/tests.sh uses)")  # layout: ok -- message text: the file is named by its conventional name; the tool finds the project's own copy through the resolver above
     p.add_argument("--allow-none", action="store_true",
                     help="treat 'no receipt blocks found' as success (empty-diff / no-action session)")
     p.add_argument("--allow-pending", action="store_true",
@@ -437,7 +478,13 @@ def main() -> int:
                          "(issue #65); default stays newest-only for the close-out fast path")
     args = p.parse_args()
 
-    path = Path(args.file) if args.file else default_path()
+    try:
+        path = Path(args.file) if args.file else default_path()
+    except HalfMigrated as half:
+        print("error: %s exists at the root AND under %s/ and no runner under %s/ decides between them "
+              "(a half-migrated tree): %s. Finish or revert the move, or name the file with --file."
+              % (LEDGER_NAME, NEW_DIR, NEW_DIR, " and ".join(str(f) for f in half.found)))
+        return 1
     if not path.exists():
         print("error: handoff file not found: %s" % path)
         return 1
