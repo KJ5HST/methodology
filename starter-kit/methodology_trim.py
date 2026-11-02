@@ -2158,12 +2158,64 @@ def atomic_write(path, text, executable=False):
 # commit that was never recorded — permanently hiding it. Reproduced end to end (design §8.1).
 # =============================================================================================
 
+def _git_status(repo, *args):
+    """A git command's exit status, or None when git cannot be run."""
+    try:
+        return subprocess.run(["git", "-C", str(repo)] + list(args), capture_output=True,
+                              check=False).returncode
+    except OSError:
+        return None
+
+
+def ledger_outside_git(repo, rel):
+    """How the ledger `rel` is out of git: ("ignored" | "never" | "gone", the newest commit that
+    touched it or None). None when it is tracked or absent, or when git cannot say."""
+    if not (repo / rel).is_file() or _git_status(repo, "ls-files", "--error-unmatch", "--", rel) != 1:
+        return None
+    sha = git(repo, "log", "-1", "--format=%H", "--", rel) or None
+    ignored = _git_status(repo, "check-ignore", "-q", "--", rel)
+    if ignored == 0:
+        return "ignored", sha
+    if ignored != 1:
+        return None
+    return ("gone", sha) if sha else ("never", None)
+
+
+def note_ledgers_outside_git(repo, path, result):
+    """Name the cause when the ledger being trimmed, or CHANGELOG.md (which P1 reads), is outside
+    git. A warning only: no exit status."""
+    try:
+        own = path.resolve().relative_to(repo).as_posix()
+    except (ValueError, OSError):
+        own = path.name
+    for rel in dict.fromkeys((own, ledger_rel_for(repo))):
+        out = ledger_outside_git(repo, rel)
+        if out is None:
+            continue
+        kind, sha = out
+        cause = ("is listed in .gitignore and is not tracked" if kind == "ignored" else
+                 "is not tracked and no commit has ever recorded it" if kind == "never" else
+                 "is no longer tracked (the last commit that touched it is %s)" % sha[:7])
+        effect = ("The generated proof reads it as of HEAD, so it exits 1 ('absent from HEAD'), and "
+                  "the size-ratio check (SRF) cannot weigh an archive made while it was outside git."
+                  if rel == own else
+                  "The P1 check takes the reconcile frontier from its newest commit and has no "
+                  "history to read.")
+        result.add("LEDGER_NOT_IN_GIT",
+                   "%s %s. %s This note changes no exit status. To give the trimmer history to "
+                   "read, track it (git add -f %s) and commit it." % (rel, cause, effect, rel))
+
+
 def check_P1(repo, ledger_rel, result):
     frontier = git(repo, "log", "-1", "--format=%H", "--", ledger_rel)
     if not frontier:
-        result.add("P1_NO_LEDGER",
-                   "no commit has ever recorded %s — self-provision and reconcile before trimming"
-                   % ledger_rel, exit_code=2)
+        advice = "self-provision and reconcile before trimming"
+        out = ledger_outside_git(repo, ledger_rel)
+        if out and out[0] == "ignored":
+            advice = ("it is listed in .gitignore, so track it (git add -f %s) and commit it, "
+                      "then reconcile before trimming" % ledger_rel)
+        result.add("P1_NO_LEDGER", "no commit has ever recorded %s — %s" % (ledger_rel, advice),
+                   exit_code=2)
         return False
     count = git(repo, "rev-list", "--count", "--no-merges", "%s..HEAD" % frontier)
     n = int(count) if count and count.isdigit() else 0
@@ -2467,6 +2519,9 @@ def evaluate(path, opts, result):
                     "reading" % (v / lv))
         result.add("SRF", "SRF %.4f vs the most recent archive %s; %.4f vs H3's largest-drop "
                           "boundary %s — %s" % (v, sha[:7], lv, lsha[:7], note))
+
+    if trigger.fires or opts.cut is not None:
+        note_ledgers_outside_git(repo, path, result)
 
     if opts.check:
         result.exit = 1 if trigger.fires else 0

@@ -1014,6 +1014,222 @@ class TestAtomicWriteKeepsAFilesMode(unittest.TestCase):
             self.assertEqual(self._mode(Path(str(shard[0]) + ".verify.sh")), 0o755, "the proof is executable")
 
 
+# =============================================================================================
+# A ledger kept out of git must be named as the cause (issue #100, finding 6).
+#
+# The trimmer reads git for three things about a ledger: the newest commit that recorded
+# CHANGELOG.md (the P1 check), the ledger's size at each earlier archive (the SRF check) and, in the
+# generated .verify.sh, the ledger as of HEAD. A project that keeps its ledgers out of git (listed
+# in .gitignore, or taken out of the index) gets none of them, and the tool said nothing about git:
+# `[CHECK] trigger FIRES`, then `[P1_NO_LEDGER] ... self-provision and reconcile`; or, for a ledger
+# committed once and untracked since, no message at all and a proof that exits 1 with `absent from
+# HEAD`.
+#
+# The fix WARNS and nothing more: the note is a finding with no exit status of its own, so every
+# exit code in these tests is the one the tool already gave.
+# =============================================================================================
+
+class TestALedgerOutsideGitIsNamed(unittest.TestCase):
+
+    def _leave_git(self, p, name, ignore=False, ever_committed=True):
+        """Take `name` out of git the way a project does: out of the index, optionally into
+        .gitignore. With `ever_committed` the commit that does it also touches CHANGELOG.md (while
+        that is tracked), so P1 has nothing undocumented to refuse over; without it the only commit
+        is rewritten so that no commit ever recorded `name`."""
+        sh(p, "git", "rm", "-q", "--cached", name)
+        if ignore:
+            ig = p / ".gitignore"
+            ig.write_text((ig.read_text(encoding="utf-8") if ig.exists() else "") + name + "\n",
+                          encoding="utf-8")
+            sh(p, "git", "add", ".gitignore")
+        if ever_committed:
+            if name != "CHANGELOG.md":
+                cl = p / "CHANGELOG.md"
+                cl.write_text(cl.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+                sh(p, "git", "add", "CHANGELOG.md")
+            r = sh(p, "git", "commit", "-qm", "stop tracking " + name)
+        else:
+            r = sh(p, "git", "commit", "-q", "--allow-empty", "--amend", "-m", "seed")
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    @staticmethod
+    def _notes(out):
+        return [ln for ln in out.splitlines() if ln.startswith("  [LEDGER_NOT_IN_GIT]")]
+
+    def test_a_tracked_ledger_gets_no_note(self):                       # control
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            c = run_trim(p, "--file", "CHANGELOG.md", "--check")
+            self.assertIn("trigger FIRES", c.stdout, "control: the note is not absent merely because "
+                          "the trigger is quiet\n" + c.stdout)
+            d = run_trim(p, "--file", "CHANGELOG.md")
+            self.assertIn("[DRY_RUN]", d.stdout, d.stdout)
+            for out in (c.stdout, d.stdout):
+                self.assertEqual(self._notes(out), [], out)
+
+    def test_a_ledger_no_commit_ever_recorded_is_named_and_its_refusal_is_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            self._leave_git(p, "CHANGELOG.md", ever_committed=False)
+            c = run_trim(p, "--file", "CHANGELOG.md", "--check")
+            self.assertEqual(c.returncode, 1, "--check keeps its exit status\n" + c.stdout)
+            notes = self._notes(c.stdout)
+            self.assertEqual(len(notes), 1, c.stdout)
+            self.assertIn("CHANGELOG.md is not tracked and no commit has ever recorded it", notes[0])
+            self.assertNotIn(".gitignore", notes[0])
+            w = run_trim(p, "--file", "CHANGELOG.md")
+            self.assertEqual(w.returncode, 2, w.stdout)
+            self.assertIn("[P1_NO_LEDGER]", w.stdout)
+            self.assertIn("self-provision and reconcile before trimming", w.stdout,
+                          "control: for a ledger that is merely uncommitted the old advice is right")
+            self.assertEqual(len(self._notes(w.stdout)), 1, "the refusal comes with the cause\n" + w.stdout)
+
+    def test_an_ignored_ledger_names_gitignore_and_the_refusal_stops_advising_self_provision(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            self._leave_git(p, "CHANGELOG.md", ignore=True, ever_committed=False)
+            c = run_trim(p, "--file", "CHANGELOG.md", "--check")
+            self.assertEqual(c.returncode, 1, c.stdout)
+            notes = self._notes(c.stdout)
+            self.assertEqual(len(notes), 1, c.stdout)
+            self.assertIn("CHANGELOG.md is listed in .gitignore and is not tracked", notes[0])
+            w = run_trim(p, "--file", "CHANGELOG.md")
+            self.assertEqual(w.returncode, 2, w.stdout)
+            refusal = [ln for ln in w.stdout.splitlines() if ln.startswith("  [P1_NO_LEDGER]")]
+            self.assertEqual(len(refusal), 1, w.stdout)
+            self.assertIn(".gitignore", refusal[0])
+            self.assertIn("git add -f CHANGELOG.md", refusal[0])
+            self.assertNotIn("self-provision", refusal[0])
+
+    def test_a_ledger_committed_once_and_untracked_since_is_named_and_not_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            self._leave_git(p, "CHANGELOG.md")
+            sha = sh(p, "git", "log", "-1", "--format=%H", "--", "CHANGELOG.md").stdout.strip()
+            c = run_trim(p, "--file", "CHANGELOG.md", "--check")
+            self.assertEqual(c.returncode, 1, c.stdout)
+            notes = self._notes(c.stdout)
+            self.assertEqual(len(notes), 1, c.stdout)
+            self.assertIn("CHANGELOG.md is no longer tracked", notes[0])
+            self.assertIn(sha[:7], notes[0], "it names the last commit that touched the ledger")
+            self.assertNotIn(".gitignore", notes[0])
+            d = run_trim(p, "--file", "CHANGELOG.md")
+            self.assertEqual(d.returncode, 0, "warn only: the exit status is what it was\n" + d.stdout)
+            self.assertIn("[DRY_RUN]", d.stdout)
+            self.assertEqual(len(self._notes(d.stdout)), 1, d.stdout)
+
+    def test_a_ledger_committed_once_and_then_ignored_names_gitignore(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            self._leave_git(p, "CHANGELOG.md", ignore=True)
+            c = run_trim(p, "--file", "CHANGELOG.md", "--check")
+            self.assertEqual(c.returncode, 1, c.stdout)
+            notes = self._notes(c.stdout)
+            self.assertEqual(len(notes), 1, c.stdout)
+            self.assertIn("CHANGELOG.md is listed in .gitignore and is not tracked", notes[0])
+            d = run_trim(p, "--file", "CHANGELOG.md")
+            self.assertEqual(d.returncode, 0, d.stdout)
+            self.assertIn("[DRY_RUN]", d.stdout)
+
+    def test_the_trimmed_file_alone_is_named_when_changelog_is_tracked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._leave_git(p, "HANDOFFS.md", ignore=True)
+            c = run_trim(p, "--file", "HANDOFFS.md", "--check")
+            self.assertEqual(c.returncode, 1, c.stdout)
+            notes = self._notes(c.stdout)
+            self.assertEqual(len(notes), 1, c.stdout)
+            self.assertTrue(notes[0].startswith("  [LEDGER_NOT_IN_GIT] HANDOFFS.md is listed in .gitignore"),
+                            notes[0])
+            d = run_trim(p, "--file", "HANDOFFS.md")
+            self.assertEqual(d.returncode, 0, d.stdout)
+            self.assertIn("[DRY_RUN]", d.stdout)
+
+    def test_both_the_trimmed_file_and_changelog_are_named_when_both_are_out_of_git(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._leave_git(p, "HANDOFFS.md", ignore=True)
+            self._leave_git(p, "CHANGELOG.md", ignore=True)
+            c = run_trim(p, "--file", "HANDOFFS.md", "--check")
+            notes = self._notes(c.stdout)
+            self.assertEqual(len(notes), 2, c.stdout)
+            self.assertIn("HANDOFFS.md", notes[0])
+            self.assertIn("CHANGELOG.md", notes[1])
+            self.assertIn("absent from HEAD", notes[0], "the trimmed file's note speaks of the proof")
+            self.assertNotIn("absent from HEAD", notes[1], "CHANGELOG.md is not what the proof reads here")
+            self.assertIn("P1 check", notes[1], "CHANGELOG.md's note speaks of the P1 check")
+
+    def test_an_absent_changelog_is_not_called_untracked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            sh(p, "git", "rm", "-q", "CHANGELOG.md")
+            self.assertEqual(sh(p, "git", "commit", "-qm", "remove the ledger").returncode, 0)
+            self.assertFalse((p / "CHANGELOG.md").exists(), "control: there is no CHANGELOG.md")
+            c = run_trim(p, "--file", "HANDOFFS.md", "--check")
+            self.assertEqual(c.returncode, 1, c.stdout)
+            self.assertEqual(self._notes(c.stdout), [], c.stdout)
+
+    def test_no_note_when_no_trim_could_happen_and_one_when_a_cut_is_asked_for(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp, n_records=3, body=200)
+            self._leave_git(p, "CHANGELOG.md")
+            c = run_trim(p, "--file", "CHANGELOG.md", "--check")
+            self.assertEqual(c.returncode, 0, c.stdout)
+            self.assertIn("does not fire", c.stdout)
+            d = run_trim(p, "--file", "CHANGELOG.md")
+            self.assertIn("[NOTHING_TO_DO]", d.stdout, d.stdout)
+            for out in (c.stdout, d.stdout):
+                self.assertEqual(self._notes(out), [], out)
+            e = run_trim(p, "--file", "CHANGELOG.md", "--cut", "1")
+            self.assertEqual(len(self._notes(e.stdout)), 1, "a cut was asked for\n" + e.stdout)
+
+    def test_the_write_is_not_refused_for_a_ledger_that_was_committed_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            self._leave_git(p, "CHANGELOG.md", ignore=True)
+            w = run_trim(p, "--file", "CHANGELOG.md", "--write", "--today", "2026-02-01")
+            self.assertEqual(w.returncode, 0, w.stdout)
+            self.assertIn("[WROTE]", w.stdout)
+            self.assertEqual(len(self._notes(w.stdout)), 1, w.stdout)
+
+    def _trim_and_commit(self, p):
+        w = run_trim(p, "--file", "CHANGELOG.md", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", w.stdout, w.stdout)
+        sh(p, "git", "add", "-A")
+        self.assertEqual(sh(p, "git", "commit", "-qm", "trim").returncode, 0)
+        return sorted((p / "docs" / "archive").glob("CHANGELOG-through-*.verify.sh"))
+
+    def test_the_proof_the_note_warns_about_does_fail(self):
+        for in_git in (True, False):
+            with self.subTest(in_git=in_git), tempfile.TemporaryDirectory() as tmp:
+                p = make_repo(tmp)
+                if not in_git:
+                    self._leave_git(p, "CHANGELOG.md", ignore=True)
+                proofs = self._trim_and_commit(p)
+                self.assertEqual(len(proofs), 1, "control: one proof was written")
+                r = subprocess.run(["bash", str(proofs[0])], cwd=str(p), stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT, text=True)
+                if in_git:
+                    self.assertEqual(r.returncode, 0, "control: the same trim in git proves out\n" + r.stdout)
+                else:
+                    self.assertNotEqual(r.returncode, 0, r.stdout)
+                    self.assertIn("absent from", r.stdout)
+
+    def test_the_size_ratio_check_cannot_weigh_an_archive_made_outside_git(self):
+        for in_git in (True, False):
+            with self.subTest(in_git=in_git), tempfile.TemporaryDirectory() as tmp:
+                p = make_repo(tmp)
+                if not in_git:
+                    self._leave_git(p, "CHANGELOG.md", ignore=True)
+                self._trim_and_commit(p)
+                c = run_trim(p, "--file", "CHANGELOG.md", "--check")
+                if in_git:
+                    self.assertIn("[SRF] SRF", c.stdout, "control: the archive counts\n" + c.stdout)
+                    self.assertNotIn("SRF_UNDEFINED", c.stdout)
+                else:
+                    self.assertIn("[SRF_UNDEFINED]", c.stdout, c.stdout)
+
+
 class TestEndToEnd(unittest.TestCase):
 
     def test_dry_run_is_the_default_and_writes_nothing(self):
