@@ -49,7 +49,6 @@ import os
 import re
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 TRIM_VERSION = "1.8.2"   # 1.8.2: issue #93, the maintainer's review of the pull request -- correctness
@@ -2099,15 +2098,49 @@ def read_text(path):
 
 
 def atomic_write(path, text, executable=False):
+    """Write `path` through a temp file and a rename, leaving its permissions as they were.
+
+    An existing file keeps its permission bits and, best effort, its group; a new file gets what any
+    ordinary creation gets (0666 & ~umask), so the process's umask decides; `executable` forces 0755.
+    `tempfile.mkstemp` is not used because it creates 0600 whatever the umask, and the rename then
+    made every trim return a group-shared ledger at 0600 (issue #100). `os.O_EXCL` keeps the
+    exclusive create that mkstemp gave; `os.O_BINARY` (Windows only) keeps the bytes unchanged.
+    mkstemp's other guarantee is kept too: the temp file is never readable by more than could read
+    the file it replaces. It is created with that file's bits (the umask can only narrow them) and
+    given that file's group before any text is written; the exact bits are set after the write.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".mtrim-", suffix=".tmp")
     try:
+        old = os.stat(str(path))
+    except OSError:
+        old = None
+    for _ in range(100):
+        tmp = str(path.parent / (".mtrim-%s.tmp" % os.urandom(6).hex()))
+        try:
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0),
+                         old.st_mode & 0o777 if old is not None else 0o666)
+            break
+        except FileExistsError:
+            pass
+    else:
+        raise FileExistsError("no unused temp name beside %s" % path)
+    try:
+        if old is not None and hasattr(os, "chown"):
+            try:
+                # The new inode takes the group a new file in this directory gets (the process's, or
+                # the directory's on BSD/macOS and in a setgid directory). Give the old one back
+                # now, before the text is written: until then the temp file would be in the wrong group.
+                os.chown(tmp, -1, old.st_gid)
+            except OSError:
+                pass                                 # not a member of that group: best effort
         with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
             fh.write(text)
             fh.flush()
             os.fsync(fh.fileno())
         if executable:
             os.chmod(tmp, 0o755)
+        elif old is not None:
+            os.chmod(tmp, old.st_mode & 0o777)       # permission bits only: never setuid/setgid/sticky
         os.replace(tmp, path)
     except Exception:
         try:
