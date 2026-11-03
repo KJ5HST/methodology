@@ -34,6 +34,7 @@ import hashlib
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -59,7 +60,7 @@ CLEAN, WARN, BREACH, USAGE = 0, 1, 2, 3
 # --check is a second name for --status: it is what the ledger trimmer calls its own
 # report-only run, and what at least one adopter's instructions already type.
 ACCEPTED_ARGUMENTS = ("install-hook", "--precommit", "--calibrate", "--selftest", "--json",
-                      "--status", "--check")
+                      "--status", "--check", "--remote")
 
 # === THE READ CAP, AND WHY THE CEILING IS DENOMINATED IN TOKENS ===
 #
@@ -457,6 +458,155 @@ def measure_file(root, spec, cfg=None):
     return out
 
 
+# === RELEASE LAG ===
+# A checkout nobody fetched reads as "no drift": the synced check compares a project's copy
+# with the checkout beside it, and bin/status does the same, so a checkout months behind its
+# remote is trusted as current (issue #100, finding 1). release_lag() asks the
+# remote for its newest release. Here it is opt-in (--remote) and never runs in --precommit,
+# so the run every session starts with makes no network call; bin/status, which a person
+# runs, loads this function by path and calls it by default.
+
+# The limit is a bound, not a typical time. Against github.com from one machine, `git ls-remote
+# --tags --refs origin` took 5.6 to 8.3 s on one afternoon (8 runs, git's default protocol v2) and
+# 0.3 to 3.4 s on another (8 runs). Protocol v0 asks once where v2 asks twice, and took 3.3 to 3.7 s
+# on the slow afternoon and 0.3 to 3.3 s on the fast one. So the call asks for v0, which leaves one
+# round trip to be slow at, and waits 10 s: above the slowest run seen of either. A 5 s limit would
+# have timed out on every v2 run of the slow afternoon.
+REMOTE_TIMEOUT_SECONDS = 10
+RELEASE_TAG = re.compile(r"v(\d+(?:\.\d+)*)")
+
+
+def release_key(tag):
+    """(4, 2, 1) for 'v4.2.1'; None for a tag that is not a release ('v4.2-rc1', 'nightly').
+    Integers of any depth: as text v1.9 outranks v1.10, and a rule of vN.N would read a
+    v4.2.1 as no newer than v4.2."""
+    m = RELEASE_TAG.fullmatch(tag)
+    return tuple(int(n) for n in m.group(1).split(".")) if m else None
+
+
+def newest_release(tags):
+    keyed = [(release_key(t), t) for t in tags]
+    keyed = [kt for kt in keyed if kt[0] is not None]
+    return max(keyed)[1] if keyed else None
+
+
+def run_bounded(argv, cwd=None, env=None, timeout=REMOTE_TIMEOUT_SECONDS):
+    """Like run(), but the call cannot outlive `timeout`, whatever it started. run()'s
+    subprocess.run(timeout=) kills the child and then waits for the pipes to close, and the
+    ssh process git started still holds them: the wait lasts as long as the ssh does. This
+    call gets its own session and the whole group is killed. rc 124 is a timeout. A Ctrl-C reaches
+    only this process, never a group of its own making, so an interrupt kills the group too."""
+    try:
+        p = subprocess.Popen(argv, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, text=True, start_new_session=True)
+    except OSError as e:
+        return 126, "", str(e)
+
+    def kill_group():
+        try:
+            os.killpg(p.pid, signal.SIGKILL)
+        except (AttributeError, OSError):
+            p.kill()                    # no process groups here (Windows): the child alone
+
+    try:
+        out, err = p.communicate(timeout=timeout)
+        return p.returncode, out.strip(), err.strip()
+    except subprocess.TimeoutExpired:
+        kill_group()
+        try:
+            p.communicate(timeout=2)
+        except subprocess.TimeoutExpired:
+            pass
+        return 124, "", "timeout"
+    except BaseException:               # KeyboardInterrupt included
+        kill_group()
+        p.wait()
+        raise
+
+
+def _ssh_never_prompts(checkout, env):
+    """GIT_TERMINAL_PROMPT=0 does not stop ssh asking for a password; BatchMode does. It is
+    ADDED to the ssh command in force (the environment's, else core.sshCommand, else ssh), so
+    a configured key is not swapped for the default one. A GIT_SSH program is left alone:
+    GIT_SSH_COMMAND would override it, and an option cannot be added to a program we do not know."""
+    base = env.get("GIT_SSH_COMMAND")
+    if base is None:
+        rc, configured, _ = run(["git", "-C", checkout, "config", "--get", "core.sshCommand"])
+        base = configured if rc == 0 and configured else None
+    if base is None and "GIT_SSH" in env:
+        return
+    env["GIT_SSH_COMMAND"] = f"{base or 'ssh'} -o BatchMode=yes"
+
+
+def release_lag(checkout, timeout=None):
+    """(message, reason) for the git checkout at `checkout`. The message,
+    'checkout at v3.5, newest release v4.2 (behind: git pull)', when the newest release tag
+    reachable from HEAD is older than the newest one origin lists. The reason when it could not
+    tell: not a repository root, no release tag, no origin, offline, timed out. Never both, and
+    (None, None) when the checkout is current or ahead. A caller prints the reason and changes no
+    exit code for it: an offline machine is not a stale checkout.
+
+    The checkout's release is the highest release tag it contains, not `git describe`'s nearest
+    tag: after a hotfix line is merged back the nearest can be an older release than one HEAD also
+    holds, and a pre-release tag nearer than a release must not hide it."""
+    timeout = timeout or REMOTE_TIMEOUT_SECONDS
+    rc, top, err = run(["git", "-C", checkout, "rev-parse", "--show-toplevel"])
+    if rc:
+        return None, f"not a git working tree ({err.splitlines()[-1] if err else f'git exit {rc}'})"
+    if os.path.realpath(top) != os.path.realpath(checkout):
+        # git -C walks up: a copy of the files inside an application's repository would be
+        # reported with the application's tags
+        return None, f"{checkout} is inside the git repository at {top}, not the root of one"
+    rc, listed, err = run(["git", "-C", checkout, "tag", "--merged", "HEAD", "--list", "v[0-9]*"])
+    if rc:
+        return None, f"could not list the tags HEAD contains ({err.splitlines()[-1] if err else f'git exit {rc}'})"
+    tag = newest_release(listed.split())
+    if tag is None:
+        return None, "no release tag is reachable from HEAD"
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    _ssh_never_prompts(checkout, env)
+    rc, out, err = run_bounded(["git", "-C", checkout, "-c", "protocol.version=0",
+                                "ls-remote", "--tags", "--refs", "origin"],
+                               env=env, timeout=timeout)
+    if rc == 124:
+        return None, f"origin did not answer within {timeout} s (timed out)"
+    if rc:
+        return None, f"could not read origin ({err.splitlines()[-1] if err else f'git exit {rc}'})"
+    newest = newest_release(line.split("refs/tags/", 1)[1]
+                            for line in out.splitlines() if "refs/tags/" in line)
+    if newest is None:
+        return None, "origin lists no release tag"
+    if release_key(newest) > release_key(tag):
+        return f"checkout at {tag}, newest release {newest} (behind: git pull)", None
+    return None, None
+
+
+def check_remote(root, cfg):
+    """--remote: one release_lag() per distinct checkout the synced files are compared with
+    (two files in one checkout are one remote call). Returns (rows, notes). A checkout that is
+    behind is a `warn` row, as a synced file that drifted is; one that could not be checked
+    is a note and no row, because an unreachable remote is not drift and must not move the exit."""
+    synced = cfg.get("synced", [])
+    if not synced:
+        return [], ["no synced file is declared"]
+    rows, notes, seen = [], [], set()
+    for spec in synced:
+        d = os.path.normpath(os.path.dirname(os.path.dirname(expand(root, spec["canonical"]))))
+        if d in seen:
+            continue
+        seen.add(d)
+        if not os.path.isdir(d):
+            notes.append(f"{d} is not a directory")
+            continue
+        msg, why = release_lag(d)
+        if msg:
+            rows.append({"path": f"({os.path.basename(d)} checkout)", "status": "warn",
+                         "findings": [{"kind": "remote", "msg": f"{d}: {msg}"}]})
+        elif why:
+            notes.append(f"{d}: {why}")
+    return rows, notes
+
+
 def check_synced(root, spec):
     """Synced files are drift-checked, never size-checked: this project may not edit
     them, so a size finding would be unactionable. Both went 48 days behind unnoticed
@@ -597,7 +747,7 @@ def status_colour(s):
 
 
 def render(root, results, synced, run_len, run_hit, cfg, snapshot, totals=None,
-           defects=()):
+           defects=(), remote_notes=()):
     print(f"\n{D}{'─'*W}{R}")
     worst = "ok"
     order = {"ok": 0, "unmeasured": 1, "warn": 2, "instrument-failed": 3, "over": 4}
@@ -628,6 +778,8 @@ def render(root, results, synced, run_len, run_hit, cfg, snapshot, totals=None,
     for r in synced:
         cc = status_colour(r["status"])
         print(f"  {short(r['path']):<34s}{'synced':>12s}{'canonical':>12s}  {cc}{r['status']}{R}")
+    for note in remote_notes:
+        print(f"  {D}remote not checked: {note}{R}")
 
     # One total per DECLARED class, resident first. For a config that declares only
     # resident -- which is every instrumented adopter today -- this loop emits exactly the
@@ -1382,6 +1534,9 @@ def print_usage():
     print("                 print the fit. Writes nothing.")
     print("  --selftest     Observe every gate FAILING as well as passing.")
     print("  --json         Machine-readable output.")
+    print("  --remote       Also ask each synced checkout's origin for its newest release (a")
+    print("                 network call, 10 s at most) and warn when the checkout is behind.")
+    print("                 Never run by --precommit.")
     print("  -h, --help     Show this help and exit.")
     print("")
     print("Exit: 0 clean · 1 warn/unmeasured · 2 over a hard ceiling · 3 config or usage")
@@ -1422,6 +1577,10 @@ def main():
 
     results = [measure_file(root, s, cfg) for s in cfg.get("files", [])]
     synced = [check_synced(root, s) for s in cfg.get("synced", [])]
+    remote_notes = []
+    if "--remote" in args:
+        lagging, remote_notes = check_remote(root, cfg)
+        synced += lagging
     # config_defects() had NO call site: it was defined, unit-tested, and never run, while
     # the distributed seed told adopters "a max_tokens above this is rejected as a config
     # defect". A guard nothing calls is a comment shaped like a guard. Wired here so the
@@ -1467,13 +1626,15 @@ def main():
         append_history(root, snapshot, hist)
 
     if "--json" in args:
-        print(json.dumps({"resident_bytes": resident, "growth_run": run_len,
-                          "class_totals": totals, "config_defects": defects,
-                          "files": results, "synced": synced},
-                         indent=2, default=str))
+        payload = {"resident_bytes": resident, "growth_run": run_len,
+                   "class_totals": totals, "config_defects": defects,
+                   "files": results, "synced": synced}
+        if "--remote" in args:
+            payload["remote_not_checked"] = remote_notes
+        print(json.dumps(payload, indent=2, default=str))
     else:
         render(root, results, synced, run_len, run_hit, cfg, snapshot, totals,
-               defects)
+               defects, remote_notes)
 
     # Class totals vote too. Without them a class in WARN was invisible to the exit code,
     # so a CI step gating on it could not see the one signal that arrives before a breach.

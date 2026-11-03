@@ -35,11 +35,14 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.dont_write_bytecode = True          # no starter-kit/__pycache__ from this import
 
@@ -564,7 +567,7 @@ class TestToolInvariants(unittest.TestCase):
 
 # Frozen here on purpose: a set derived from the code cannot be asserted to cover the code.
 ACCEPTED_ARGUMENTS = frozenset({"install-hook", "--precommit", "--calibrate", "--selftest",
-                                "--json", "--status", "--check"})
+                                "--json", "--status", "--check", "--remote"})
 
 
 class TestCommandLine(unittest.TestCase):
@@ -915,6 +918,577 @@ class TestStatusPrecedence(unittest.TestCase):
             self.assertIn("warn line", r["findings"][0]["msg"],
                           "fixture: the byte finding must be the warn line, not a ceiling")
             self.assertEqual(r["status"], "instrument-failed")
+
+
+# ---------------------------------------------------------------------------------
+# A checkout nobody fetched reads as "current" (issue #100, finding 1). Both
+# bin/status and the synced check trust the methodology checkout beside the project, so a
+# checkout months behind its remote reports no drift. These tests ask whether that
+# checkout is behind the newest release its remote lists. Every remote here is a local
+# bare repository (offline, deterministic) or a script that never answers; nothing
+# touches a network. What this file cannot show: real latency, HTTPS credential prompts,
+# proxies, rate limits, a sandbox that blocks the network.
+# ---------------------------------------------------------------------------------
+
+def _copy_methodology(dest):
+    """What a methodology checkout needs for bin/status to run from it: bin/status and
+    its two siblings, and every distributed file (report() reads each one's canonical
+    sha). context_budget.py is among the distributed files, and bin/status loads it."""
+    spec = importlib.util.spec_from_file_location("_manifest", str(REPO / "bin" / "_manifest.py"))
+    manifest = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(manifest)
+    wanted = {"bin/status", "bin/_manifest.py", "bin/_manifest_reader.py",
+              *(src for src, _dest, _disp in manifest.DISTRIBUTION)}
+    for rel in sorted(wanted):
+        target = Path(dest, rel)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(REPO / rel, target)
+
+
+def release_fixture(base, tags=("v1.0", "v1.1"), at="v1.0", methodology=False,
+                    remote_drops=(), extra_tags=()):
+    """Three repositories under `base`: `work` (the history: one untagged commit, then one
+    commit per tag), `remote.git` (a bare clone of it, the remote) and `checkout` (a clone
+    of the remote, detached at `at`). `remote_drops` are deleted from the remote AFTER the
+    checkout cloned it, so the checkout holds a tag its remote lacks. Returns `checkout`."""
+    base = Path(base)
+    work = base / "work"
+    work.mkdir()
+    new_repo(work)
+    if methodology:
+        _copy_methodology(work)
+        git(work, "add", "-A")
+        git(work, "commit", "-q", "-m", "methodology files", when="2026-01-01T00:00:00Z")
+    write_commit(work, "base.txt", 5, "2026-01-02T00:00:00Z")
+    for i, tag in enumerate(tags):
+        write_commit(work, "release.txt", 10 + i, f"2026-02-0{i + 1}T00:00:00Z", msg=f"release {tag}")
+        git(work, "tag", tag)
+    for tag in extra_tags:
+        git(work, "tag", tag)
+    git(base, "clone", "-q", "--bare", str(work), str(base / "remote.git"))
+    git(base, "clone", "-q", str(base / "remote.git"), str(base / "checkout"))
+    git(base / "checkout", "checkout", "-q", "--detach", at)
+    for tag in remote_drops:
+        git(base / "remote.git", "tag", "-d", tag)
+    return base / "checkout"
+
+
+def hotfix_fixture(base, hotfix_commits=5):
+    """`checkout`, whose HEAD merges a hotfix line tagged v1.0.1 into main, which carries v1.1.
+    The newest release reachable from HEAD is v1.1, but v1.0.1 is nearer in commits, so
+    `git describe` names it. The remote is a bare clone and the checkout a clone of it."""
+    base = Path(base)
+    work = base / "work"
+    work.mkdir()
+    new_repo(work)
+    write_commit(work, "base.txt", 5, "2026-01-01T00:00:00Z")
+    write_commit(work, "release.txt", 10, "2026-01-02T00:00:00Z", msg="release v1.0")
+    git(work, "tag", "v1.0")
+    git(work, "checkout", "-q", "-b", "hotfix")
+    for i in range(hotfix_commits):
+        write_commit(work, "hot.txt", 20 + i, f"2026-01-0{3 + i}T00:00:00Z")
+    git(work, "tag", "v1.0.1")
+    git(work, "checkout", "-q", "main")
+    write_commit(work, "release.txt", 30, "2026-01-10T00:00:00Z", msg="release v1.1")
+    git(work, "tag", "v1.1")
+    git(work, "merge", "-q", "--no-ff", "-m", "merge the hotfix", "hotfix", when="2026-01-11T00:00:00Z")
+    git(base, "clone", "-q", "--bare", str(work), str(base / "remote.git"))
+    git(base, "clone", "-q", str(base / "remote.git"), str(base / "checkout"))
+    return base / "checkout"
+
+
+def git_shim(base):
+    """A `git` ahead of the real one on PATH that logs each call's argv, prefixed with the
+    value of GIT_TERMINAL_PROMPT. Returns (env for a subprocess, the log's path)."""
+    shim_dir = Path(base) / "shim"
+    shim_dir.mkdir()
+    log = Path(base) / "git-calls.log"
+    shim = shim_dir / "git"
+    shim.write_text('#!/bin/sh\nprintf "%s\\n" "$GIT_TERMINAL_PROMPT $*" >> "$GIT_SHIM_LOG"\n'
+                    'exec "$REAL_GIT" "$@"\n')
+    os.chmod(shim, 0o755)
+    env = dict(os.environ, PATH=f"{shim_dir}{os.pathsep}{os.environ['PATH']}",
+               GIT_SHIM_LOG=str(log), REAL_GIT=shutil.which("git"))
+    env.pop("METHODOLOGY_REMOTE_CHECK", None)   # the shell suite exports it; a test of the check wants it on
+    return env, log
+
+
+def remote_calls(log):
+    return ([line for line in Path(log).read_text().splitlines() if " ls-remote " in line]
+            if Path(log).exists() else [])
+
+
+def hang_remote(base, checkout, seconds=20):
+    """Point `checkout`'s origin at an ssh URL whose ssh command never answers: a shell that
+    starts a `sleep` of its own (a grandchild of git, holding git's pipes) and waits for it.
+    Returns (env that makes git use it, the file naming the two pids of each call)."""
+    pids = Path(base) / "hang.pids"
+    script = Path(base) / "hang-ssh"
+    script.write_text(f'#!/bin/sh\nsleep {seconds} &\necho "$$ $!" >> "{pids}"\nwait\n')
+    os.chmod(script, 0o755)
+    git(checkout, "remote", "set-url", "origin", "ssh://hang.invalid/x.git")
+    env = dict(os.environ, GIT_SSH_COMMAND=str(script))
+    env.pop("METHODOLOGY_REMOTE_CHECK", None)   # the shell suite exports it; bin/status must ask here
+    return env, pids
+
+
+def processes_gone(pids_file, wait=3.0):
+    """True once every pid named in `pids_file` is gone. Polled: a killed process group is
+    reaped a moment after the kill."""
+    pids = [int(p) for p in Path(pids_file).read_text().split()]
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:
+        if not [pid for pid in pids if _running(pid)]:
+            return True
+        time.sleep(0.1)
+    return False
+
+
+def _running(pid):
+    """Neither gone nor a zombie. A killed process nobody has reaped yet (a container whose
+    PID 1 does not reap) still answers signal 0, and it is not running."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    state = subprocess.run(["ps", "-o", "stat=", "-p", str(pid)], capture_output=True, text=True)
+    return bool(state.stdout.strip()) and not state.stdout.strip().startswith("Z")
+
+
+class TestProcessesGone(unittest.TestCase):
+    """The helper the hanging-remote tests rely on must not read a zombie as running."""
+
+    def _pids(self, tmp, pid):
+        f = Path(tmp, "p.pids")
+        f.write_text(f"{pid}\n")
+        return f
+
+    def test_a_process_that_has_exited_but_not_been_reaped_is_gone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = subprocess.Popen(["true"])
+            try:
+                time.sleep(0.5)    # exited; nobody has waited for it: a zombie
+                self.assertTrue(processes_gone(self._pids(tmp, p.pid), wait=1.0))
+            finally:
+                p.wait()
+
+    def test_control_a_process_that_is_running_is_not_gone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = subprocess.Popen(["sleep", "5"])
+            try:
+                self.assertFalse(processes_gone(self._pids(tmp, p.pid), wait=0.5))
+            finally:
+                p.kill()
+                p.wait()
+
+
+class TestReleaseOrdering(unittest.TestCase):
+    """A release tag is `v` and integers separated by dots, ordered as a tuple of integers
+    of any depth. As text v1.9 outranks v1.10; and a rule of `vN.N` would read a future
+    v4.2.1 as no newer than v4.2 (this repository already has v2.6.1 and v3.0.1)."""
+
+    def test_a_release_tag_reads_as_its_integers_and_nothing_else_does(self):
+        for tag, key in (("v1.0", (1, 0)), ("v4.2.1", (4, 2, 1)), ("v10", (10,)),
+                         ("v4.2-rc1", None), ("nightly", None), ("V4.2", None), ("v", None),
+                         ("v4..2", None), ("4.2", None), ("v4.2.", None)):
+            with self.subTest(tag=tag):
+                self.assertEqual(cb.release_key(tag), key)
+
+    def test_the_newest_release_is_chosen_by_integers_not_by_text(self):
+        self.assertEqual(cb.newest_release(["v1.9", "v1.10", "v1.2"]), "v1.10")
+        self.assertEqual(cb.newest_release(["v4.2", "v4.2.1", "v4.1.9"]), "v4.2.1")
+        self.assertIsNone(cb.newest_release(["nightly", "v2.0-rc1"]))
+
+
+class TestReleaseLag(unittest.TestCase):
+    """release_lag(checkout) -> (message, reason): the message when the checkout's newest
+    reachable release is older than the newest the remote lists, the reason when it could
+    not tell, and (None, None) when the checkout is current or ahead."""
+
+    BEHIND = "checkout at v1.0, newest release v1.1 (behind: git pull)"
+
+    def _lag(self, **kw):
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = release_fixture(tmp, **kw)
+            self.assertEqual(git(fx, "remote", "get-url", "origin"), str(Path(tmp, "remote.git")),
+                             "fixture: origin must be the local bare repository")
+            return cb.release_lag(str(fx))
+
+    def test_a_checkout_one_release_behind_is_told_so(self):
+        self.assertEqual(self._lag(), (self.BEHIND, None))
+
+    def test_a_current_checkout_and_one_ahead_of_its_remote_are_told_nothing(self):
+        self.assertEqual(self._lag(at="v1.1"), (None, None))
+        self.assertEqual(self._lag(at="v1.1", remote_drops=("v1.1",)), (None, None))
+
+    def test_releases_are_ordered_as_integers_of_any_depth(self):
+        self.assertEqual(self._lag(tags=("v1.9", "v1.10"), at="v1.9"),
+                         ("checkout at v1.9, newest release v1.10 (behind: git pull)", None))
+        self.assertEqual(self._lag(tags=("v1.1", "v1.1.1"), at="v1.1"),
+                         ("checkout at v1.1, newest release v1.1.1 (behind: git pull)", None))
+
+    def test_tags_that_are_not_releases_are_not_newer(self):
+        self.assertEqual(self._lag(tags=("v1.0",), extra_tags=("v1.1-rc1", "nightly")),
+                         (None, None))
+
+    def test_the_checkouts_release_is_the_highest_it_contains_not_the_nearest_tag(self):
+        """`git describe` names the tag nearest in commits. After a hotfix line is merged back
+        that can be an older release than one HEAD also contains, and the checkout was told it
+        was behind a release it already had."""
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = hotfix_fixture(tmp)
+            self.assertEqual(git(fx, "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*"), "v1.0.1",
+                             "fixture: the nearest tag is the older release")
+            self.assertIn("v1.1", git(fx, "tag", "--merged", "HEAD").split(),
+                          "fixture: the newer release is reachable from HEAD")
+            self.assertEqual(cb.release_lag(str(fx)), (None, None))
+
+    def test_a_nearer_pre_release_tag_does_not_hide_the_release_below_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = release_fixture(tmp, tags=("v1.0", "v1.1-rc1"), at="v1.1-rc1")
+            self.assertEqual(git(fx, "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*"), "v1.1-rc1",
+                             "fixture: the nearest tag is the pre-release")
+            self.assertEqual(cb.release_lag(str(fx)), (None, None))
+
+    def test_a_directory_inside_another_repository_is_not_taken_for_a_checkout(self):
+        """git -C walks up to an enclosing repository. A copy of the methodology files kept inside
+        an application's repository would be reported with the application's tags."""
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = release_fixture(tmp)
+            self.assertEqual(cb.release_lag(str(fx)), (self.BEHIND, None), "control: the enclosing repository is behind")
+            vendored = fx / "vendor" / "methodology"
+            vendored.mkdir(parents=True)
+            msg, why = cb.release_lag(str(vendored))
+            self.assertIsNone(msg)
+            self.assertIn("not the root", why)
+
+    def test_a_directory_that_is_not_a_repository_says_so_and_does_not_blame_the_tags(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            msg, why = cb.release_lag(tmp)
+            self.assertIsNone(msg)
+            self.assertNotIn("release tag", why)
+
+    def test_a_checkout_that_cannot_be_compared_says_why_and_is_not_told_it_is_behind(self):
+        msg, why = self._lag(at="v1.0~1")
+        self.assertIsNone(msg)
+        self.assertIn("release tag", why)
+        msg, why = self._lag(tags=("v1.0",), remote_drops=("v1.0",))
+        self.assertEqual((msg, "origin lists no release tag" in why), (None, True), why)
+        msg, why = self._lag(tags=("v1.0-rc1",), at="v1.0-rc1")
+        self.assertEqual((msg, "no release tag" in why), (None, True), why)
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = release_fixture(tmp)
+            git(fx, "remote", "remove", "origin")
+            msg, why = cb.release_lag(str(fx))
+            self.assertIsNone(msg)
+            self.assertIn("origin", why)
+            git(fx, "remote", "add", "origin", str(Path(tmp, "no-such-remote.git")))
+            began = time.monotonic()
+            msg, why = cb.release_lag(str(fx))
+            self.assertIsNone(msg)
+            self.assertTrue(why)
+            self.assertLess(time.monotonic() - began, 3, "an unreachable remote must fail at once")
+
+    def test_a_remote_that_never_answers_returns_within_the_timeout_and_leaves_nothing_running(self):
+        """The ssh command here starts a `sleep` of its own, so the process holding git's pipes
+        is a grandchild. subprocess.run(timeout=) kills git and then waits for those pipes to
+        close: for the full 20 s of the sleep. The call must instead kill the whole group."""
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = release_fixture(tmp)
+            env, pids = hang_remote(tmp, fx)
+            with mock.patch.dict(os.environ, env):
+                began = time.monotonic()
+                msg, why = cb.release_lag(str(fx), timeout=1)
+                took = time.monotonic() - began
+            self.assertTrue(pids.exists(), "fixture: the hanging ssh command must have started")
+            self.assertIsNone(msg)
+            self.assertIn("timed out", why)
+            self.assertLess(took, 4, f"returned after {took:.1f} s against a 1 s timeout")
+            self.assertTrue(processes_gone(pids), "the ssh command or its sleep is still running")
+
+    def test_an_interrupt_kills_what_the_call_started(self):
+        """The call starts git in its own session so that a timeout can kill the whole group; for
+        the same reason a Ctrl-C reaches this process only. It must not leave git and ssh running."""
+        real = subprocess.Popen
+        made = []
+
+        def spy(*a, **k):
+            made.append(real(*a, **k))
+            return made[-1]
+
+        with mock.patch.object(subprocess, "Popen", spy), \
+                mock.patch.object(real, "communicate", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                cb.run_bounded(["sleep", "30"])
+        self.assertEqual(len(made), 1, "fixture: the call started one process")
+        deadline = time.monotonic() + 3
+        while made[0].poll() is None and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertIsNotNone(made[0].poll(), "the interrupted call left its child running")
+        if made[0].poll() is None:
+            made[0].kill()
+
+    def test_ssh_is_asked_never_to_prompt_and_the_users_own_ssh_command_is_kept(self):
+        """GIT_TERMINAL_PROMPT=0 does not stop an ssh prompt; BatchMode does. The option is
+        ADDED to the command in force (the environment's, else core.sshCommand, else ssh), so a
+        configured key is not replaced by the default one."""
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = release_fixture(tmp)
+            git(fx, "remote", "set-url", "origin", "ssh://nohost.invalid/x.git")
+            log = Path(tmp, "ssh.log")
+            fake = Path(tmp, "bin", "ssh")
+            fake.parent.mkdir()
+            fake.write_text(f'#!/bin/sh\nprintf "%s\\n" "$*" >> "{log}"\nexit 255\n')
+            os.chmod(fake, 0o755)
+            clean = {k: v for k, v in os.environ.items() if k not in ("GIT_SSH_COMMAND", "GIT_SSH")}
+            # git prefers a global core.sshCommand to GIT_SSH: the user's own configuration must
+            # not decide what this test sees
+            clean.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1", HOME=tmp)
+            for how, expect, batch in (("neither", "nohost.invalid", True),
+                                       ("env", "-i key-from-env", True),
+                                       ("config", "-i key-from-config", True),
+                                       ("wrapper", "nohost.invalid", False)):
+                with self.subTest(how=how):
+                    log.unlink(missing_ok=True)
+                    env = dict(clean, PATH=f"{fake.parent}{os.pathsep}{clean['PATH']}")
+                    if how == "env":
+                        env["GIT_SSH_COMMAND"] = f"{fake} -i key-from-env"
+                    if how == "config":
+                        git(fx, "config", "core.sshCommand", f"{fake} -i key-from-config")
+                    if how == "wrapper":      # a GIT_SSH program: no option can be added to it
+                        git(fx, "config", "--unset", "core.sshCommand")
+                        env["GIT_SSH"] = str(fake)
+                    with mock.patch.dict(os.environ, env, clear=True):
+                        msg, why = cb.release_lag(str(fx))
+                    self.assertIsNone(msg)
+                    self.assertTrue(why, "a failed ssh must read as not checked")
+                    seen = log.read_text()
+                    self.assertIn(expect, seen)
+                    self.assertEqual("-o BatchMode=yes" in seen, batch, seen)
+
+
+class TestRemoteFlag(unittest.TestCase):
+    """context_budget.py --remote: the check is opt-in there, so Phase 0's --status makes no
+    network call at every session start, and it is never run by --precommit."""
+
+    MSG = "checkout at v1.0, newest release v1.1 (behind: git pull)"
+
+    def _project(self, tmp, synced=True, **kw):
+        """A committed project whose two synced files match the checkout's, so a synced row
+        can only be `ok` and the remote row is the one thing that can change the verdict."""
+        fx = release_fixture(tmp, methodology=True, **kw)
+        proj = Path(tmp, "proj")
+        proj.mkdir()
+        new_repo(proj)
+        cfg = {"classes": {"resident": {"total_bytes": 34000}},
+               "files": [{"path": "CLAUDE.md", "class": "resident", "max_bytes": 100000}]}
+        if synced:
+            cfg["synced"] = [{"path": n, "canonical": f"../checkout/starter-kit/{n}"}
+                             for n in ("SAFEGUARDS.md", "SESSION_RUNNER.md")]
+            for n in ("SAFEGUARDS.md", "SESSION_RUNNER.md"):
+                shutil.copy2(fx / "starter-kit" / n, proj / n)
+        Path(proj, ".context-budget.json").write_text(json.dumps(cfg))
+        Path(proj, "CLAUDE.md").write_text("x" * 999 + "\n")
+        git(proj, "add", "-A")
+        git(proj, "commit", "-q", "-m", "baseline")
+        return fx, proj
+
+    def _run(self, proj, env, *args):
+        return subprocess.run([sys.executable, str(CB_PY), *args], cwd=proj, env=env,
+                              capture_output=True, text=True)
+
+    def test_the_default_run_makes_no_remote_call_and_a_stale_checkout_is_a_warn_with_the_flag(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fx, proj = self._project(tmp)
+            env, log = git_shim(tmp)
+            plain = self._run(proj, env, "--status")
+            self.assertEqual((plain.returncode, remote_calls(log)), (cb.CLEAN, []),
+                             "fixture: clean, and no remote call without --remote")
+            self.assertNotIn("newest release", plain.stdout)
+            flagged = self._run(proj, env, "--status", "--remote")
+            self.assertNotIn("Traceback", flagged.stderr)
+            self.assertIn(self.MSG, _plain(flagged.stdout))
+            self.assertEqual(flagged.returncode, cb.WARN, "a stale checkout is a warn, never a breach")
+            calls = remote_calls(log)
+            self.assertEqual(len(calls), 1, "two synced files in ONE checkout are one remote call")
+            self.assertTrue(calls[0].startswith("0 "), f"GIT_TERMINAL_PROMPT=0 missing: {calls[0]}")
+            self.assertIn("-c protocol.version=0 ls-remote", calls[0],
+                          "one round trip, not git's default two")
+
+    def test_a_current_checkout_prints_nothing_and_changes_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _fx, proj = self._project(tmp, at="v1.1")
+            env, log = git_shim(tmp)
+            out = self._run(proj, env, "--status", "--remote")
+            self.assertEqual((out.returncode, len(remote_calls(log))), (cb.CLEAN, 1))
+            self.assertNotIn("newest release", out.stdout)
+            self.assertNotIn("not checked", out.stdout)
+
+    def test_precommit_never_asks_a_remote_even_when_told_to(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _fx, proj = self._project(tmp)
+            env, log = git_shim(tmp)
+            self._run(proj, env, "--status", "--remote")
+            self.assertEqual(len(remote_calls(log)), 1, "control: --remote on --status does call")
+            for argv in (["--precommit"], ["--precommit", "--remote"]):
+                with self.subTest(argv=argv):
+                    out = self._run(proj, env, *argv)
+                    self.assertNotIn("Traceback", out.stderr)
+                    self.assertEqual(len(remote_calls(log)), 1, f"{argv} made a remote call")
+
+    def test_a_remote_that_never_answers_stops_neither_tool_and_the_exit_code_is_the_runs_own(self):
+        """Both tools at once against one hanging remote, so the wait is paid once."""
+        with tempfile.TemporaryDirectory() as tmp:
+            fx, proj = self._project(tmp)
+            env, pids = hang_remote(tmp, fx)
+            bare = Path(tmp, "bare")
+            bare.mkdir()
+            began = time.monotonic()
+            budget = subprocess.Popen([sys.executable, str(CB_PY), "--status", "--remote"], cwd=proj,
+                                      env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            status = subprocess.Popen([sys.executable, str(fx / "bin" / "status"), "--source=local",
+                                       str(bare)], env=env, stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE, text=True)
+            budget_out, budget_err = budget.communicate(timeout=60)
+            status_out, status_err = status.communicate(timeout=60)
+            took = time.monotonic() - began
+            self.assertNotIn("Traceback", budget_err + status_err)
+            self.assertIn("remote not checked", _plain(budget_out))
+            self.assertEqual(budget.returncode, cb.CLEAN)
+            self.assertIn("SESSION_RUNNER.md", status_out, "bin/status still prints its table")
+            self.assertIn("remote not checked: ", status_out)
+            self.assertEqual(status.returncode, 0)
+            self.assertLess(took, cb.REMOTE_TIMEOUT_SECONDS + 4)
+            self.assertEqual(len(pids.read_text().splitlines()), 2, "fixture: both tools reached the remote")
+            self.assertTrue(processes_gone(pids))
+
+    def test_json_stays_json_and_carries_the_stale_row(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _fx, proj = self._project(tmp)
+            env, _log = git_shim(tmp)
+            out = self._run(proj, env, "--status", "--remote", "--json")
+            report = json.loads(out.stdout)
+            stale = [r for r in report["synced"] if r["status"] == "warn"]
+            self.assertEqual(len(stale), 1)
+            self.assertIn(self.MSG, stale[0]["findings"][0]["msg"])
+            self.assertEqual(report["remote_not_checked"], [])
+            plain = json.loads(self._run(proj, env, "--status", "--json").stdout)
+            self.assertNotIn("remote_not_checked", plain, "the key belongs to --remote runs")
+
+    def test_a_synced_checkout_that_is_not_there_is_named_and_asks_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _fx, proj = self._project(tmp)
+            cfg = json.loads(Path(proj, ".context-budget.json").read_text())
+            for spec in cfg["synced"]:
+                spec["canonical"] = spec["canonical"].replace("../checkout/", "../nowhere/")
+            Path(proj, ".context-budget.json").write_text(json.dumps(cfg))
+            env, log = git_shim(tmp)
+            out = self._run(proj, env, "--status", "--remote")
+            self.assertNotIn("Traceback", out.stderr)
+            self.assertIn("nowhere is not a directory", _plain(out.stdout))
+            self.assertEqual(remote_calls(log), [])
+
+    def test_the_flag_with_nothing_synced_says_so_and_asks_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            _fx, proj = self._project(tmp, synced=False)
+            env, log = git_shim(tmp)
+            out = self._run(proj, env, "--status", "--remote")
+            self.assertIn("remote not checked: no synced file is declared", _plain(out.stdout))
+            self.assertEqual(remote_calls(log), [])
+            as_json = json.loads(self._run(proj, env, "--status", "--remote", "--json").stdout)
+            self.assertEqual(as_json["remote_not_checked"], ["no synced file is declared"])
+
+
+class TestStatusReleaseLag(unittest.TestCase):
+    """bin/status checks by default (a person runs it), after the table, in local mode only:
+    --source=github has just cloned the source, which is current by construction."""
+
+    MSG = "checkout at v1.0, newest release v1.1 (behind: git pull)"
+
+    def _status(self, fx, project, env=None, *args):
+        if env is None:   # the shell suite exports METHODOLOGY_REMOTE_CHECK=0; these tests want the check on
+            env = {k: v for k, v in os.environ.items() if k != "METHODOLOGY_REMOTE_CHECK"}
+        return subprocess.run([sys.executable, str(fx / "bin" / "status"), "--source=local",
+                               str(project), *args], env=env, capture_output=True, text=True)
+
+    def test_a_stale_checkout_is_named_after_the_table_and_exit_stays_zero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = release_fixture(tmp, methodology=True)
+            project = Path(tmp, "project")
+            project.mkdir()
+            out = self._status(fx, project)
+            self.assertNotIn("Traceback", out.stderr)
+            lines = out.stdout.rstrip().splitlines()
+            self.assertEqual(lines[-1], f"warning: {self.MSG}")
+            self.assertTrue(any(line.startswith("Project") for line in lines[:-1]),
+                            "fixture: the table is printed before the warning")
+            self.assertEqual(out.returncode, 0)
+            self.assertEqual(cb.release_lag(str(fx))[0], self.MSG, "bin/status and the tool agree")
+            self.assertFalse((fx / "starter-kit" / "__pycache__").exists(),
+                             "loading the tool left bytecode in the checkout")
+
+    def test_METHODOLOGY_REMOTE_CHECK_0_switches_the_check_off_without_a_word(self):
+        """A run that must not touch the network (the shell suite calls bin/status about twenty times
+        from a checkout whose origin may be GitHub) sets it. Any other value leaves the check on."""
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = release_fixture(tmp, methodology=True)
+            project = Path(tmp, "project")
+            project.mkdir()
+            env, log = git_shim(tmp)
+            on = self._status(fx, project, env)
+            self.assertEqual(len(remote_calls(log)), 1, "control: unset, it asks the remote once")
+            self.assertIn("warning:", on.stdout)
+            for value, asks in (("0", 0), ("1", 1)):
+                with self.subTest(value=value):
+                    Path(log).unlink(missing_ok=True)
+                    out = self._status(fx, project, dict(env, METHODOLOGY_REMOTE_CHECK=value))
+                    self.assertEqual(len(remote_calls(log)), asks)
+                    self.assertEqual("warning:" in out.stdout, bool(asks))
+                    if not asks:
+                        self.assertNotIn("not checked", out.stdout)
+                    self.assertIn("source: local", out.stdout, "the table is printed either way")
+                    self.assertEqual(out.returncode, 0)
+
+    def test_the_shell_suite_switches_the_check_off_for_its_own_calls(self):
+        text = (REPO / "bin" / "tests.sh").read_text(encoding="utf-8")
+        self.assertRegex(text, r"(?m)^export METHODOLOGY_REMOTE_CHECK=0$")
+
+    def test_a_current_checkout_prints_no_warning_and_no_not_checked_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = release_fixture(tmp, methodology=True, at="v1.1")
+            project = Path(tmp, "project")
+            project.mkdir()
+            out = self._status(fx, project)
+            self.assertIn("source: local", out.stdout)
+            self.assertNotIn("warning:", out.stdout)
+            self.assertNotIn("not checked", out.stdout)
+
+    def test_a_tool_that_cannot_be_loaded_is_not_checked_not_a_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = release_fixture(tmp, methodology=True)
+            project = Path(tmp, "project")
+            project.mkdir()
+            (fx / "starter-kit" / "context_budget.py").write_text("this is not python (\n")
+            out = self._status(fx, project)
+            self.assertNotIn("Traceback", out.stderr)
+            self.assertEqual(out.returncode, 0)
+            self.assertIn("remote not checked: ", out.stdout)
+
+    def test_the_github_source_has_just_cloned_so_it_asks_no_remote(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fx = release_fixture(tmp, methodology=True)
+            project = Path(tmp, "project")
+            project.mkdir()
+            env, log = git_shim(tmp)
+            env["METHODOLOGY_SOURCE_URL"] = f"file://{Path(tmp, 'remote.git')}"
+            out = subprocess.run([sys.executable, str(fx / "bin" / "status"), "--source=github",
+                                  str(project)], env=env, capture_output=True, text=True)
+            self.assertIn("source: github", out.stdout, out.stdout + out.stderr)
+            self.assertIn(" clone ", Path(log).read_text(), "fixture: the shim saw the clone")
+            self.assertEqual(remote_calls(log), [])
+            self.assertNotIn("warning:", out.stdout)
 
 
 class TestTokenCeiling(unittest.TestCase):

@@ -61,6 +61,8 @@ adopter  docs/methodology/ITERATIVE_METHODOLOGY.md  tracked      current
 …
 ```
 
+After the table, `bin/status` asks your methodology checkout's `origin` which release is newest (`git ls-remote --tags`, usually a few seconds, and it gives up after 10) and prints `warning: checkout at v3.5, newest release v4.2 (behind: git pull)` if the checkout is older. Without that line a checkout nobody has fetched reads as `current` against its own old history. When it cannot ask (offline, no `origin`, no release tag) it prints one `remote not checked: <why>` line and the exit code is unchanged. `METHODOLOGY_REMOTE_CHECK=0` turns the check off, and `python3 context_budget.py --status --remote` makes the same check for each checkout a synced file is compared with.
+
 The two **dispositions** are the whole model ([`bin/_manifest.py`](../../bin/_manifest.py)): **TRACKED** files are canonical-owned — `bin/sync` keeps them current and `bin/status` can report `current` / `N versions behind` / `locally modified` / `missing`. **SEED** files (`SESSION_NOTES.md`, `CHANGELOG.md`, `HANDOFFS.md`, `ROADMAP.md`) are *yours* after first creation — `bin/status` reports `present` / `absent` (and, for a seed whose *format* predates the current methodology, `present (stale format)` — advisory only, never drift), and an absent seed is **not** drift.
 
 **Expected result:** A per-file table, every TRACKED row `current` and every SEED row `present` — and your working tree is byte-for-byte unchanged (status never writes).
