@@ -91,7 +91,7 @@ State your understanding back to the user: *"I'm going to [deliverable] followin
 
 **Also open the close-out receipt in `HANDOFFS.md`.** Prepend a ` ```handoff ` block with `status: pending` and the fields you can fill now (`session`, `date`, `active_task`), and commit it with this claim. A committed `status: pending` receipt is a durable crash breadcrumb — like `CHANGELOG: pending`, but one the next session's Phase 0 reconcile finds even from a fresh clone. Phase 3D overwrites it to `status: complete`. See the block format in `HANDOFFS.md` itself.
 
-**Why this exists:** Ghost sessions — sessions that crash, hit context limits, or end without writing notes — leave zero trace. The next session has no idea what happened, what was attempted, or what state was left behind. By writing a stub FIRST, even a catastrophic failure leaves evidence. This stub is overwritten during Phase 3D with the full handoff. The `CHANGELOG: pending` marker is a best-effort ledger breadcrumb: a session that crashes *before* close-out leaves it in place, so the next session's Phase 0 reconcile (step 6) sees both the `git log` gap and the explicit marker. The always-reliable backstop is the `git log` gap itself — it catches a crash even in the Phase 3D→3F window, after the handoff has overwritten the stub but before the ledger entry is written.
+**Why this exists:** Ghost sessions — sessions that crash, hit context limits, or end without writing notes — leave zero trace. By writing a stub FIRST, even a catastrophic failure leaves evidence. This stub is overwritten during Phase 3D with the full handoff. The `CHANGELOG: pending` marker is a best-effort ledger breadcrumb: a session that crashes *before* close-out leaves it in place, so the next session's Phase 0 reconcile (step 6) sees both the `git log` gap and the explicit marker. The always-reliable backstop is the `git log` gap itself — it catches a crash even in the Phase 3D→3F window, after the handoff has overwritten the stub but before the ledger entry is written.
 
 **This is a structural control, not a suggestion.** Mandatory close-out steps are how clean-delivery streaks don't collapse: each protocol step that gets shaved off makes the next step easier to shave off.
 
@@ -295,6 +295,8 @@ Tell the user:
 - What the next session should do
 
 **Then STOP. The session is over.**
+
+A new task in this conversation is a new session: start again at Phase 0, then 1B.
 
 ---
 

@@ -18,6 +18,7 @@ Contract: methodology v2.2 plan §4E; B1 plan Phase 4.
 """
 import argparse
 import hashlib
+import importlib.util
 import os
 import subprocess
 import sys
@@ -250,8 +251,35 @@ def render_table(headers: tuple, rows: list) -> str:
     return "\n".join([fmt(headers)] + [fmt(row) for row in rows])
 
 
+def release_lag_line(methodology_root: Path):
+    """After the table: one line saying this checkout is behind its remote's newest release, or
+    why that could not be checked (offline, no tag, no origin); nothing when it is current. A
+    checkout nobody fetched compares every project with its own stale history, so 'current' above
+    would mean 'current with a stale source' (issue #100). The check is release_lag() in
+    starter-kit/context_budget.py, loaded by path: one copy of the parts that must not be got
+    wrong twice (a hard timeout that kills ssh too, and no prompt). METHODOLOGY_REMOTE_CHECK=0
+    switches it off, silently, for a run that must not touch the network (bin/tests.sh)."""
+    if os.environ.get("METHODOLOGY_REMOTE_CHECK") == "0":
+        return None
+    path = methodology_root / "starter-kit" / "context_budget.py"
+    sys.dont_write_bytecode = True  # loading it must not leave starter-kit/__pycache__ in a checkout
+    try:
+        spec = importlib.util.spec_from_file_location("context_budget", str(path))
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        message, reason = module.release_lag(str(methodology_root))
+    except Exception as e:  # a report that cannot check must still report the table it printed
+        return f"remote not checked: could not run {path.name} ({type(e).__name__}: {e})"
+    if message:
+        return f"warning: {message}"
+    return f"remote not checked: {reason}" if reason else None
+
+
 def main() -> int:
-    p = argparse.ArgumentParser(description="Report drift of methodology files across projects.")
+    p = argparse.ArgumentParser(description="Report drift of methodology files across projects.",
+                                epilog="With a local source it also asks this checkout's origin for the newest "
+                                       "release tag and warns when the checkout is behind (usually a few seconds; it "
+                                       "gives up after 10). METHODOLOGY_REMOTE_CHECK=0 switches that off.")
     p.add_argument("paths", nargs="*", default=["."], help="Project directory (shell-expand globs)")
     p.add_argument("--source", choices=("local", "github"), help="local (default if sibling methodology/ exists), or github, "
                                                                  "which clones the repository for this run "
@@ -264,7 +292,11 @@ def main() -> int:
         sys.exit(f"error: --source=local but no starter-kit/ at {methodology_root}")
 
     if source == "local":
-        return report(args.paths, methodology_root, source, str(methodology_root))
+        rc = report(args.paths, methodology_root, source, str(methodology_root))
+        line = release_lag_line(methodology_root)
+        if line:
+            print(line)
+        return rc
     # github: a fresh clone, then exactly the local comparison over it, removed when the run ends.
     url = source_url()
     with tempfile.TemporaryDirectory(prefix="methodology-status-") as parent:

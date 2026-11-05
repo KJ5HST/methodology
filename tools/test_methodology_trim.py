@@ -27,11 +27,13 @@ import hashlib
 import importlib.util
 import os
 import re
+import stat
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.dont_write_bytecode = True          # no starter-kit/__pycache__ from this import
 
@@ -747,6 +749,485 @@ def make_handoff_repo(tmp, n_hf_records=6, hf_body=34000, n_cl_records=3, cl_bod
 def run_trim(repo, *args):
     return subprocess.run([sys.executable, str(TRIM_PY)] + list(args), cwd=str(repo),
                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+
+# =============================================================================================
+# A trim must not change who can read the files it rewrites (issue #100, "smaller point").
+#
+# `atomic_write` made its temp file with `tempfile.mkstemp`, which creates it 0600 and in the group a
+# new file in that directory gets, then `os.replace`d it over the target. So every trim returned the live
+# ledger at 0600 and wrote each new shard at 0600, and a project whose files are group-shared lost
+# the group's read access on the first trim. Git records only the executable bit, so no commit
+# shows it; this class is the only guard.
+#
+# The rule: an EXISTING file keeps its permission bits and, best effort, its group; a NEW file gets
+# what an ordinary file creation would (0666 & ~umask); the verify script stays 0755.
+# =============================================================================================
+
+@unittest.skipIf(os.name == "nt", "POSIX permission bits; Windows has no such mode to keep")
+class TestAtomicWriteKeepsAFilesMode(unittest.TestCase):
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dir = Path(tmp.name)
+
+    def _mode(self, p):
+        return stat.S_IMODE(os.stat(str(p)).st_mode)
+
+    def _umask(self, mask):
+        old = os.umask(mask)
+        self.addCleanup(os.umask, old)
+
+    def _file(self, name, mode):
+        """An existing file at exactly `mode`. The control is the point: a fixture created under
+        the umask of whoever runs the suite proves nothing until its mode has been read back."""
+        p = self.dir / name
+        p.write_text("old\n", encoding="utf-8")
+        os.chmod(str(p), mode)
+        self.assertEqual(self._mode(p), mode, "control: the fixture must really be %o" % mode)
+        return p
+
+    def _plain_new_file_mode(self):
+        """What an ordinary creation gives under the CURRENT umask: the baseline for a new file."""
+        probe = self.dir / "probe.tmp"
+        with open(str(probe), "w"):
+            pass
+        m = self._mode(probe)
+        probe.unlink()
+        return m
+
+    # --- an existing file keeps its permission bits ---------------------------------------------
+
+    def test_an_existing_0644_file_keeps_0644(self):
+        p = self._file("ledger.md", 0o644)
+        mod.atomic_write(p, "new\n")
+        self.assertEqual(p.read_text(encoding="utf-8"), "new\n", "control: the write happened")
+        self.assertEqual(self._mode(p), 0o644)
+
+    def test_an_existing_0664_file_keeps_0664(self):
+        p = self._file("ledger.md", 0o664)
+        mod.atomic_write(p, "new\n")
+        self.assertEqual(p.read_text(encoding="utf-8"), "new\n", "control: the write happened")
+        self.assertEqual(self._mode(p), 0o664)
+
+    def test_control_an_existing_0600_file_stays_0600_and_is_not_widened(self):
+        p = self._file("private.md", 0o600)
+        mod.atomic_write(p, "new\n")
+        self.assertEqual(self._mode(p), 0o600)
+
+    def test_an_existing_mode_is_kept_whatever_the_umask(self):
+        """The mode is the file's own; the umask of the run must not narrow it or widen it."""
+        for mask in (0o022, 0o077):
+            with self.subTest(umask="%03o" % mask):
+                self._umask(mask)
+                p = self._file("ledger-%03o.md" % mask, 0o664)
+                mod.atomic_write(p, "new\n")
+                self.assertEqual(self._mode(p), 0o664)
+
+    # --- the temp file is no wider than the file it replaces, from its birth -------------------------
+
+    def _spy_on_fsync(self):
+        """Record the temp file's mode and group at the moment it holds the new text (the fsync
+        comes after the write): that is the interval in which a too-wide temp file can be read."""
+        seen = []
+        real = os.fsync
+
+        def spy(fd):
+            st = os.fstat(fd)
+            seen.append((stat.S_IMODE(st.st_mode), st.st_gid))
+            return real(fd)
+
+        patcher = mock.patch.object(os, "fsync", spy)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return seen
+
+    def test_the_temp_file_is_never_wider_than_the_file_it_replaces_while_it_holds_the_new_text(self):
+        """mkstemp made the temp file 0600 from birth. Created at 0666 & ~umask and narrowed after
+        the write, a 0600 ledger under umask 022 sat world-readable, new text and all, until the
+        chmod."""
+        self._umask(0o022)
+        for old_mode in (0o600, 0o640, 0o644):
+            with self.subTest(old="%o" % old_mode):
+                p = self._file("ledger-%o.md" % old_mode, old_mode)
+                seen = self._spy_on_fsync()
+                mod.atomic_write(p, "new\n")
+                self.assertTrue(seen, "control: the text was synced")
+                self.assertEqual([m & ~old_mode for m, _g in seen], [0] * len(seen),
+                                 "the temp file was wider than %o: %s" % (old_mode, [oct(m) for m, _g in seen]))
+                self.assertEqual(self._mode(p), old_mode, "and the result is still the old mode")
+
+    def test_control_an_existing_read_only_file_is_still_rewritten_and_stays_read_only(self):
+        """Born at the old mode, the temp file is 0444 from the start; the descriptor opened by the
+        creating call must still be writable."""
+        self._umask(0o022)
+        p = self._file("frozen.md", 0o444)
+        mod.atomic_write(p, "new\n")
+        self.assertEqual(p.read_text(encoding="utf-8"), "new\n", "control: the write happened")
+        self.assertEqual(self._mode(p), 0o444)
+
+    # --- a new file gets what an ordinary creation gets ----------------------------------------
+
+    def test_a_new_file_gets_what_the_umask_gives_under_022(self):
+        self._umask(0o022)
+        self.assertEqual(self._plain_new_file_mode(), 0o644, "control: this environment honours the umask")
+        p = self.dir / "shard.md"
+        mod.atomic_write(p, "new\n")
+        self.assertEqual(self._mode(p), 0o644)
+
+    def test_a_new_file_gets_what_the_umask_gives_under_002(self):
+        self._umask(0o002)
+        self.assertEqual(self._plain_new_file_mode(), 0o664, "control: this environment honours the umask")
+        p = self.dir / "shard.md"
+        mod.atomic_write(p, "new\n")
+        self.assertEqual(self._mode(p), 0o664)
+
+    def test_a_new_file_is_never_wider_than_the_umask_allows(self):
+        self._umask(0o077)
+        p = self.dir / "shard.md"
+        mod.atomic_write(p, "new\n")
+        self.assertEqual(self._mode(p), 0o600)
+
+    # --- the verify script is executable, new or existing --------------------------------------
+
+    def test_control_the_executable_flag_gives_0755_to_a_new_file(self):
+        self._umask(0o022)
+        p = self.dir / "shard.md.verify.sh"
+        mod.atomic_write(p, "#!/bin/sh\n", executable=True)
+        self.assertEqual(self._mode(p), 0o755)
+
+    def test_control_the_executable_flag_gives_0755_to_an_existing_0644_file(self):
+        p = self._file("shard.md.verify.sh", 0o644)
+        mod.atomic_write(p, "#!/bin/sh\n", executable=True)
+        self.assertEqual(self._mode(p), 0o755)
+
+    # --- the group is kept where it can be ------------------------------------------------------
+
+    def test_a_chown_that_fails_does_not_fail_the_write(self):
+        """Best effort: a process that is not a member of the file's group cannot give it back, and
+        must still write the file. The attempt is asserted too: a write that never tried would also
+        'not fail'."""
+        p = self._file("ledger.md", 0o664)
+        attempts = []
+
+        def refuse(path, uid, gid, *a, **k):
+            attempts.append((uid, gid))
+            raise PermissionError(1, "Operation not permitted")
+
+        with mock.patch.object(os, "chown", refuse):
+            mod.atomic_write(p, "new\n")
+        self.assertEqual(p.read_text(encoding="utf-8"), "new\n")
+        self.assertEqual(self._mode(p), 0o664, "and the mode is still kept")
+        self.assertTrue(attempts, "the write must try to give the group back")
+        self.assertEqual(attempts[0][0], -1, "the owner is left alone: only the group is restored")
+
+    def test_the_group_of_an_existing_file_is_kept(self):
+        if not (hasattr(os, "chown") and hasattr(os, "getegid")):
+            self.skipTest("no os.chown on this platform")
+        taken = (os.getegid(), os.stat(str(self.dir)).st_gid)
+        other = [g for g in os.getgroups() if g not in taken]
+        if not other:
+            self.skipTest("this user has no group besides its primary one and the directory's")
+        p = self._file("ledger.md", 0o664)
+        try:
+            os.chown(str(p), -1, other[0])
+        except OSError as e:
+            self.skipTest("cannot give the fixture a second group here: %s" % e)
+        self.assertEqual(os.stat(str(p)).st_gid, other[0], "control: the fixture really has that group")
+        mod.atomic_write(p, "new\n")
+        self.assertEqual(os.stat(str(p)).st_gid, other[0])
+
+    def test_the_temp_file_has_the_old_group_before_it_holds_the_new_text(self):
+        """A file private to group G (0660) must not sit, with its new text, in the group a new file
+        gets by default until a later chown."""
+        if not (hasattr(os, "chown") and hasattr(os, "getegid")):
+            self.skipTest("no os.chown on this platform")
+        taken = (os.getegid(), os.stat(str(self.dir)).st_gid)
+        other = [g for g in os.getgroups() if g not in taken]
+        if not other:
+            self.skipTest("this user has no group besides its primary one and the directory's")
+        p = self._file("ledger.md", 0o660)
+        try:
+            os.chown(str(p), -1, other[0])
+        except OSError as e:
+            self.skipTest("cannot give the fixture a second group here: %s" % e)
+        self.assertEqual(os.stat(str(p)).st_gid, other[0], "control: the fixture really has that group")
+        seen = self._spy_on_fsync()
+        mod.atomic_write(p, "new\n")
+        self.assertTrue(seen, "control: the text was synced")
+        self.assertEqual([g for _m, g in seen], [other[0]] * len(seen))
+
+    # --- the replacement of mkstemp must keep what mkstemp guaranteed --------------------------
+
+    def test_control_a_failed_write_leaves_the_file_and_no_temp_behind(self):
+        p = self._file("ledger.md", 0o664)
+        with self.assertRaises(TypeError):
+            mod.atomic_write(p, b"bytes are not text")
+        self.assertEqual(p.read_text(encoding="utf-8"), "old\n", "the target is untouched")
+        self.assertEqual(self._mode(p), 0o664)
+        self.assertEqual(sorted(x.name for x in self.dir.iterdir()), ["ledger.md"],
+                         "and no .mtrim-*.tmp is left in the directory")
+
+    def test_a_temp_name_that_is_already_taken_is_never_overwritten(self):
+        """The temp file must be created exclusively. Force the first name the writer draws to be
+        a file that already exists; it must be left intact and another name used. The drawn names
+        come from os.urandom, patched here; the control asserts the collision was really presented."""
+        taken = self.dir / ".mtrim-000000000000.tmp"
+        taken.write_text("not yours\n", encoding="utf-8")
+        draws = [b"\x00" * 6, b"\x00" * 6, b"\x01" * 6]
+        calls = []
+
+        def draw(n):
+            calls.append(n)
+            return draws[min(len(calls), len(draws)) - 1]
+
+        p = self.dir / "shard.md"
+        with mock.patch.object(os, "urandom", draw):
+            mod.atomic_write(p, "new\n")
+        self.assertGreaterEqual(len(calls), 2, "control: the first name was drawn, taken, and redrawn")
+        self.assertEqual(taken.read_text(encoding="utf-8"), "not yours\n")
+        self.assertEqual(p.read_text(encoding="utf-8"), "new\n")
+
+    # --- end to end: the four writes of one trim ------------------------------------------------
+
+    def test_a_trim_write_keeps_both_ledgers_modes_and_gives_new_files_the_umask(self):
+        """The live file, the ledger entry, the shard and its proof are four callers of the same
+        function. Trimming HANDOFFS.md writes all four: HANDOFFS.md itself, the entry in
+        CHANGELOG.md, a new shard and a new proof script."""
+        self._umask(0o022)
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            for name in ("HANDOFFS.md", "CHANGELOG.md"):
+                os.chmod(str(p / name), 0o664)
+                self.assertEqual(self._mode(p / name), 0o664, "control: %s is group-writable" % name)
+            self.assertEqual(sh(p, "git", "status", "--porcelain").stdout.strip(), "",
+                             "control: a permission change other than the executable bit is not a git change")
+            r = run_trim(p, "--file", "HANDOFFS.md", "--cut", "2", "--write", "--today", "2026-02-01")
+            self.assertIn("[WROTE]", r.stdout, r.stdout)
+            shard = sorted((p / "docs" / "archive").glob("HANDOFFS-through-*.md"))
+            shard = [s for s in shard if not s.name.endswith(".verify.sh")]
+            self.assertEqual(len(shard), 1, "control: one shard was written")
+            self.assertEqual(self._mode(p / "HANDOFFS.md"), 0o664, "the live file keeps its mode")
+            self.assertEqual(self._mode(p / "CHANGELOG.md"), 0o664, "the ledger keeps its mode")
+            self.assertEqual(self._mode(shard[0]), 0o644, "a new shard gets 0666 & ~umask")
+            self.assertEqual(self._mode(Path(str(shard[0]) + ".verify.sh")), 0o755, "the proof is executable")
+
+
+# =============================================================================================
+# A ledger kept out of git must be named as the cause (issue #100, finding 6).
+#
+# The trimmer reads git for three things about a ledger: the newest commit that recorded
+# CHANGELOG.md (the P1 check), the ledger's size at each earlier archive (the SRF check) and, in the
+# generated .verify.sh, the ledger as of HEAD. A project that keeps its ledgers out of git (listed
+# in .gitignore, or taken out of the index) gets none of them, and the tool said nothing about git:
+# `[CHECK] trigger FIRES`, then `[P1_NO_LEDGER] ... self-provision and reconcile`; or, for a ledger
+# committed once and untracked since, no message at all and a proof that exits 1 with `absent from
+# HEAD`.
+#
+# The fix WARNS and nothing more: the note is a finding with no exit status of its own, so every
+# exit code in these tests is the one the tool already gave.
+# =============================================================================================
+
+class TestALedgerOutsideGitIsNamed(unittest.TestCase):
+
+    def _leave_git(self, p, name, ignore=False, ever_committed=True):
+        """Take `name` out of git the way a project does: out of the index, optionally into
+        .gitignore. With `ever_committed` the commit that does it also touches CHANGELOG.md (while
+        that is tracked), so P1 has nothing undocumented to refuse over; without it the only commit
+        is rewritten so that no commit ever recorded `name`."""
+        sh(p, "git", "rm", "-q", "--cached", name)
+        if ignore:
+            ig = p / ".gitignore"
+            ig.write_text((ig.read_text(encoding="utf-8") if ig.exists() else "") + name + "\n",
+                          encoding="utf-8")
+            sh(p, "git", "add", ".gitignore")
+        if ever_committed:
+            if name != "CHANGELOG.md":
+                cl = p / "CHANGELOG.md"
+                cl.write_text(cl.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+                sh(p, "git", "add", "CHANGELOG.md")
+            r = sh(p, "git", "commit", "-qm", "stop tracking " + name)
+        else:
+            r = sh(p, "git", "commit", "-q", "--allow-empty", "--amend", "-m", "seed")
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    @staticmethod
+    def _notes(out):
+        return [ln for ln in out.splitlines() if ln.startswith("  [LEDGER_NOT_IN_GIT]")]
+
+    def test_a_tracked_ledger_gets_no_note(self):                       # control
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            c = run_trim(p, "--file", "CHANGELOG.md", "--check")
+            self.assertIn("trigger FIRES", c.stdout, "control: the note is not absent merely because "
+                          "the trigger is quiet\n" + c.stdout)
+            d = run_trim(p, "--file", "CHANGELOG.md")
+            self.assertIn("[DRY_RUN]", d.stdout, d.stdout)
+            for out in (c.stdout, d.stdout):
+                self.assertEqual(self._notes(out), [], out)
+
+    def test_a_ledger_no_commit_ever_recorded_is_named_and_its_refusal_is_unchanged(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            self._leave_git(p, "CHANGELOG.md", ever_committed=False)
+            c = run_trim(p, "--file", "CHANGELOG.md", "--check")
+            self.assertEqual(c.returncode, 1, "--check keeps its exit status\n" + c.stdout)
+            notes = self._notes(c.stdout)
+            self.assertEqual(len(notes), 1, c.stdout)
+            self.assertIn("CHANGELOG.md is not tracked and no commit has ever recorded it", notes[0])
+            self.assertNotIn(".gitignore", notes[0])
+            w = run_trim(p, "--file", "CHANGELOG.md")
+            self.assertEqual(w.returncode, 2, w.stdout)
+            self.assertIn("[P1_NO_LEDGER]", w.stdout)
+            self.assertIn("self-provision and reconcile before trimming", w.stdout,
+                          "control: for a ledger that is merely uncommitted the old advice is right")
+            self.assertEqual(len(self._notes(w.stdout)), 1, "the refusal comes with the cause\n" + w.stdout)
+
+    def test_an_ignored_ledger_names_gitignore_and_the_refusal_stops_advising_self_provision(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            self._leave_git(p, "CHANGELOG.md", ignore=True, ever_committed=False)
+            c = run_trim(p, "--file", "CHANGELOG.md", "--check")
+            self.assertEqual(c.returncode, 1, c.stdout)
+            notes = self._notes(c.stdout)
+            self.assertEqual(len(notes), 1, c.stdout)
+            self.assertIn("CHANGELOG.md is listed in .gitignore and is not tracked", notes[0])
+            w = run_trim(p, "--file", "CHANGELOG.md")
+            self.assertEqual(w.returncode, 2, w.stdout)
+            refusal = [ln for ln in w.stdout.splitlines() if ln.startswith("  [P1_NO_LEDGER]")]
+            self.assertEqual(len(refusal), 1, w.stdout)
+            self.assertIn(".gitignore", refusal[0])
+            self.assertIn("git add -f CHANGELOG.md", refusal[0])
+            self.assertNotIn("self-provision", refusal[0])
+
+    def test_a_ledger_committed_once_and_untracked_since_is_named_and_not_refused(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            self._leave_git(p, "CHANGELOG.md")
+            sha = sh(p, "git", "log", "-1", "--format=%H", "--", "CHANGELOG.md").stdout.strip()
+            c = run_trim(p, "--file", "CHANGELOG.md", "--check")
+            self.assertEqual(c.returncode, 1, c.stdout)
+            notes = self._notes(c.stdout)
+            self.assertEqual(len(notes), 1, c.stdout)
+            self.assertIn("CHANGELOG.md is no longer tracked", notes[0])
+            self.assertIn(sha[:7], notes[0], "it names the last commit that touched the ledger")
+            self.assertNotIn(".gitignore", notes[0])
+            d = run_trim(p, "--file", "CHANGELOG.md")
+            self.assertEqual(d.returncode, 0, "warn only: the exit status is what it was\n" + d.stdout)
+            self.assertIn("[DRY_RUN]", d.stdout)
+            self.assertEqual(len(self._notes(d.stdout)), 1, d.stdout)
+
+    def test_a_ledger_committed_once_and_then_ignored_names_gitignore(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            self._leave_git(p, "CHANGELOG.md", ignore=True)
+            c = run_trim(p, "--file", "CHANGELOG.md", "--check")
+            self.assertEqual(c.returncode, 1, c.stdout)
+            notes = self._notes(c.stdout)
+            self.assertEqual(len(notes), 1, c.stdout)
+            self.assertIn("CHANGELOG.md is listed in .gitignore and is not tracked", notes[0])
+            d = run_trim(p, "--file", "CHANGELOG.md")
+            self.assertEqual(d.returncode, 0, d.stdout)
+            self.assertIn("[DRY_RUN]", d.stdout)
+
+    def test_the_trimmed_file_alone_is_named_when_changelog_is_tracked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._leave_git(p, "HANDOFFS.md", ignore=True)
+            c = run_trim(p, "--file", "HANDOFFS.md", "--check")
+            self.assertEqual(c.returncode, 1, c.stdout)
+            notes = self._notes(c.stdout)
+            self.assertEqual(len(notes), 1, c.stdout)
+            self.assertTrue(notes[0].startswith("  [LEDGER_NOT_IN_GIT] HANDOFFS.md is listed in .gitignore"),
+                            notes[0])
+            d = run_trim(p, "--file", "HANDOFFS.md")
+            self.assertEqual(d.returncode, 0, d.stdout)
+            self.assertIn("[DRY_RUN]", d.stdout)
+
+    def test_both_the_trimmed_file_and_changelog_are_named_when_both_are_out_of_git(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            self._leave_git(p, "HANDOFFS.md", ignore=True)
+            self._leave_git(p, "CHANGELOG.md", ignore=True)
+            c = run_trim(p, "--file", "HANDOFFS.md", "--check")
+            notes = self._notes(c.stdout)
+            self.assertEqual(len(notes), 2, c.stdout)
+            self.assertIn("HANDOFFS.md", notes[0])
+            self.assertIn("CHANGELOG.md", notes[1])
+            self.assertIn("absent from HEAD", notes[0], "the trimmed file's note speaks of the proof")
+            self.assertNotIn("absent from HEAD", notes[1], "CHANGELOG.md is not what the proof reads here")
+            self.assertIn("P1 check", notes[1], "CHANGELOG.md's note speaks of the P1 check")
+
+    def test_an_absent_changelog_is_not_called_untracked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_handoff_repo(tmp)
+            sh(p, "git", "rm", "-q", "CHANGELOG.md")
+            self.assertEqual(sh(p, "git", "commit", "-qm", "remove the ledger").returncode, 0)
+            self.assertFalse((p / "CHANGELOG.md").exists(), "control: there is no CHANGELOG.md")
+            c = run_trim(p, "--file", "HANDOFFS.md", "--check")
+            self.assertEqual(c.returncode, 1, c.stdout)
+            self.assertEqual(self._notes(c.stdout), [], c.stdout)
+
+    def test_no_note_when_no_trim_could_happen_and_one_when_a_cut_is_asked_for(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp, n_records=3, body=200)
+            self._leave_git(p, "CHANGELOG.md")
+            c = run_trim(p, "--file", "CHANGELOG.md", "--check")
+            self.assertEqual(c.returncode, 0, c.stdout)
+            self.assertIn("does not fire", c.stdout)
+            d = run_trim(p, "--file", "CHANGELOG.md")
+            self.assertIn("[NOTHING_TO_DO]", d.stdout, d.stdout)
+            for out in (c.stdout, d.stdout):
+                self.assertEqual(self._notes(out), [], out)
+            e = run_trim(p, "--file", "CHANGELOG.md", "--cut", "1")
+            self.assertEqual(len(self._notes(e.stdout)), 1, "a cut was asked for\n" + e.stdout)
+
+    def test_the_write_is_not_refused_for_a_ledger_that_was_committed_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p = make_repo(tmp)
+            self._leave_git(p, "CHANGELOG.md", ignore=True)
+            w = run_trim(p, "--file", "CHANGELOG.md", "--write", "--today", "2026-02-01")
+            self.assertEqual(w.returncode, 0, w.stdout)
+            self.assertIn("[WROTE]", w.stdout)
+            self.assertEqual(len(self._notes(w.stdout)), 1, w.stdout)
+
+    def _trim_and_commit(self, p):
+        w = run_trim(p, "--file", "CHANGELOG.md", "--write", "--today", "2026-02-01")
+        self.assertIn("[WROTE]", w.stdout, w.stdout)
+        sh(p, "git", "add", "-A")
+        self.assertEqual(sh(p, "git", "commit", "-qm", "trim").returncode, 0)
+        return sorted((p / "docs" / "archive").glob("CHANGELOG-through-*.verify.sh"))
+
+    def test_the_proof_the_note_warns_about_does_fail(self):
+        for in_git in (True, False):
+            with self.subTest(in_git=in_git), tempfile.TemporaryDirectory() as tmp:
+                p = make_repo(tmp)
+                if not in_git:
+                    self._leave_git(p, "CHANGELOG.md", ignore=True)
+                proofs = self._trim_and_commit(p)
+                self.assertEqual(len(proofs), 1, "control: one proof was written")
+                r = subprocess.run(["bash", str(proofs[0])], cwd=str(p), stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT, text=True)
+                if in_git:
+                    self.assertEqual(r.returncode, 0, "control: the same trim in git proves out\n" + r.stdout)
+                else:
+                    self.assertNotEqual(r.returncode, 0, r.stdout)
+                    self.assertIn("absent from", r.stdout)
+
+    def test_the_size_ratio_check_cannot_weigh_an_archive_made_outside_git(self):
+        for in_git in (True, False):
+            with self.subTest(in_git=in_git), tempfile.TemporaryDirectory() as tmp:
+                p = make_repo(tmp)
+                if not in_git:
+                    self._leave_git(p, "CHANGELOG.md", ignore=True)
+                self._trim_and_commit(p)
+                c = run_trim(p, "--file", "CHANGELOG.md", "--check")
+                if in_git:
+                    self.assertIn("[SRF] SRF", c.stdout, "control: the archive counts\n" + c.stdout)
+                    self.assertNotIn("SRF_UNDEFINED", c.stdout)
+                else:
+                    self.assertIn("[SRF_UNDEFINED]", c.stdout, c.stdout)
 
 
 class TestEndToEnd(unittest.TestCase):

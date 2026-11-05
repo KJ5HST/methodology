@@ -7,6 +7,9 @@ set -uo pipefail
 BIN="$(cd "$(dirname "$0")" && pwd)"
 METHODOLOGY="$(dirname "$BIN")"
 STARTER="$METHODOLOGY/starter-kit"
+# bin/status asks the remote for the newest release by default; this suite calls it about twenty
+# times from this checkout, and a test run must not depend on the network.
+export METHODOLOGY_REMOTE_CHECK=0
 PASS=0
 FAIL=0
 
