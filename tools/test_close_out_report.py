@@ -13,6 +13,7 @@ from the real harness (claude 2.1.288). HookMutants then copies the tool, breaks
 time, and requires the named row to go red -- a row that cannot fail proves nothing.
 """
 import glob
+import importlib.machinery
 import importlib.util
 import io
 import json
@@ -69,17 +70,41 @@ def sh(*a, cwd):
     return subprocess.run(a, cwd=cwd, capture_output=True, text=True, check=True).stdout
 
 
-def make_repo(status="complete"):
+def make_repo(status="complete", ledger=None):
     t = tempfile.mkdtemp()
     sh("git", "init", "-q", ".", cwd=t)
     sh("git", "config", "user.email", "t@e.com", cwd=t)
     sh("git", "config", "user.name", "T", cwd=t)
     sh("git", "config", "commit.gpgsign", "false", cwd=t)
-    with open(os.path.join(t, "HANDOFFS.md"), "w", encoding="utf-8") as f:
-        f.write(LEDGER.format(status=status))
+    with open(os.path.join(t, "HANDOFFS.md"), "w", encoding="utf-8", newline="") as f:
+        f.write(ledger if ledger is not None else LEDGER.format(status=status))
     sh("git", "add", ".", cwd=t)
     sh("git", "commit", "-qm", "c", cwd=t)
     return t
+
+
+# The file an adopter actually receives: starter-kit/HANDOFFS.md, written once into the project and never
+# re-synced, so its documentation example stays in every adopter's ledger for good. LEDGER above is a synthetic
+# ledger with no such example; these helpers build ledgers from the real seed.
+SEED = os.path.join(REPO, "starter-kit", "HANDOFFS.md")
+CHECK_HANDOFF = os.path.join(REPO, "bin", "check-handoff")
+
+
+def seed_text():
+    with open(SEED, encoding="utf-8") as f:
+        return f.read()
+
+
+def receipt(session, date="2026-11-05", status="complete", self_score="8", predecessor="7"):
+    """One ```handoff block as an adopter writes it. predecessor=None leaves the key out, as the seed tells Session 1."""
+    keys = [("session", session), ("date", date), ("status", status), ("self_score", self_score),
+            ("predecessor_score", predecessor), ("active_task", "demo"), ("runtime_smoke", "n/a — docs-only")]
+    return "```handoff\n" + "".join(f"{k}: {v}\n" for k, v in keys if v is not None) + "```\n"
+
+
+def ledger_with(*receipts, seed=True):
+    """The shipped seed (or a bare heading) with `receipts` below it, newest first, as an adopter's ledger reads."""
+    return (seed_text().rstrip("\n") + "\n\n" if seed else "# Handoffs\n\n") + "\n".join(receipts)
 
 
 def run_cli(*args, cwd, stdin=None):
@@ -100,6 +125,36 @@ class Parse(unittest.TestCase):
         r = cor.parse_receipts(LEDGER.format(status="complete"))
         self.assertEqual(cor.facts(r[0], r[1], "h", 0)["gate"], "11/11 pass · 0 fail · 0 unmeasured")
         self.assertEqual(cor.facts(r[1], {}, "h", 0)["gate"], "not cited")
+
+    def sessions(self, text):
+        return [x.get("session") for x in cor.parse_receipts(text)]
+
+    def test_a_documentation_example_in_a_four_backtick_wrapper_is_not_a_receipt(self):
+        example = "````\n```handoff\nsession: S<N>\nstatus: <pending | complete>\n```\n````\n\n"
+        self.assertEqual(self.sessions("# H\n\n" + example + receipt("S1", predecessor=None)), ["S1"])
+
+    def test_the_shipped_seed_holds_no_receipt_and_a_receipt_under_it_is_the_only_one(self):
+        self.assertEqual(self.sessions(seed_text()), [])
+        self.assertEqual(self.sessions(ledger_with(receipt("S2"), receipt("S1"))), ["S2", "S1"])
+
+    def test_a_handoff_block_inside_any_other_fence_is_not_a_receipt(self):
+        inner = "```handoff\nsession: S9\nstatus: complete\n"
+        for name, text in (("a bare three-backtick fence", "```\n" + inner + "```\n"),
+                           ("a tagged fence", "```sh\n" + inner + "```\n"),
+                           ("a five-backtick wrapper", "`````\n" + inner + "```\n`````\n")):
+            with self.subTest(name):
+                self.assertEqual(self.sessions(text + "\n" + receipt("S1", predecessor=None)), ["S1"])
+
+    def test_windows_line_endings_and_a_trailing_blank_on_the_opener_still_parse(self):
+        text = "```handoff \r\nsession: S1\r\ndate: 2026-11-05\r\n```\r\n"
+        self.assertEqual(cor.parse_receipts(text), [{"session": "S1", "date": "2026-11-05"}])
+
+    def test_a_first_session_is_s1_without_a_predecessor_score_and_nothing_else(self):
+        for r, want in (({"session": "S1"}, True), ({"session": "S1", "predecessor_score": " "}, True),
+                        ({"session": "S1", "predecessor_score": "8"}, False), ({"session": "S1", "predecessor_score": "soon"}, False),
+                        ({"session": "S2"}, False), ({"session": "S1-ratchet"}, False), ({}, False)):
+            with self.subTest(r):
+                self.assertIs(cor.is_first_session(r), want)
 
 
 class Render(unittest.TestCase):
@@ -404,7 +459,9 @@ class HookTable(HookCase):
     def test_row10_an_internal_error_exits_zero_silently(self):
         self.start()
         self.close_out()
-        self.write_ledger("not a ledger\n")
+        (baseline,) = glob_(self.gitdir, "close-out-baseline-*")
+        with open(baseline, "w", encoding="utf-8") as f:
+            f.write("{not json")  # the hook's own state file is garbled: json.load raises inside decide()
         p = self.hook_cli(self.payload("Stop", "Done."))
         self.assertEqual((p.returncode, p.stdout), (0, ""))
 
@@ -469,6 +526,37 @@ class HookTable(HookCase):
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertIsNone(self.stop(p.stdout, active=True))
         self.assertIn("reported", self.log())
+
+    # Rows 19 to 21: the ledger an adopter really has, which starts from the shipped seed. Its documentation
+    # example once read as the newest receipt, and the hook allowed every Stop without a word.
+    def test_row19_the_shipped_seed_does_not_hide_a_closed_out_receipt(self):
+        self.write_ledger(ledger_with(receipt("S3", status="pending"), receipt("S2")))
+        self.start()
+        self.write_ledger(ledger_with(receipt("S3"), receipt("S2")), "close-out")
+        r = self.stop("All done!")
+        self.assertBlocked(r)
+        self.assertIn("sess-1 blocked R1,R2", self.log())
+        self.assertIsNone(self.stop(self.report()))  # and the report it asks for is accepted
+
+    def test_row20_session_one_on_a_fresh_seed_is_held_to_the_report(self):
+        self.write_ledger(seed_text())  # not a single receipt yet: the hook must neither raise nor go inert
+        self.assertIsNone(self.start())
+        self.write_ledger(ledger_with(receipt("S1", status="pending", predecessor=None)), "claim")
+        self.assertIsNone(self.stop("working"))
+        self.write_ledger(ledger_with(receipt("S1", predecessor=None)), "close-out")
+        self.assertBlocked(self.stop("All done!"))
+        self.assertIsNone(self.stop(self.report()))  # the first-session report lints clean against its own receipt
+
+    def test_row21_a_ledger_with_no_receipt_allows_quietly(self):
+        # "not a ledger" is what row 10 used to raise on (the first receipt was read by index); it is no error now
+        for name, text in (("the seed with no receipt", seed_text()), ("text with no fence at all", "not a ledger\n")):
+            with self.subTest(name):
+                self.write_ledger(text)
+                self.assertIsNone(self.start(sid="a"))
+                self.assertIsNone(self.stop("hello", sid="a"))
+                for event in ("SessionStart", "Stop"):
+                    p = self.hook_cli(self.payload(event, "hello", sid="b"))
+                    self.assertEqual((p.returncode, p.stdout, p.stderr), (0, "", ""))
 
 
 def glob_(d, pat):
@@ -542,6 +630,14 @@ HOOK_MUTANTS = [
     ("the command in the reason names no ledger or repository",
      [('"--ledger", shlex.quote(ledger),\n                    "--cwd", shlex.quote(top)]', "]")],
      "test_row18_the_reasons_command_runs_from_anywhere_and_its_output_is_accepted"),
+    ("the seed's documentation example is read as a receipt again",
+     [('if fence and fence.group(2).split()[:1] != ["handoff"]:', "if False:")],
+     "test_row19_the_shipped_seed_does_not_hide_a_closed_out_receipt"),
+    ("Session 1 is held to a predecessor score",
+     [('if k == "predecessor_score" and is_first_session(r[0]):', "if False:")],
+     "test_row20_session_one_on_a_fresh_seed_is_held_to_the_report"),
+    ("a ledger with no receipt is read by index", [("newest = receipts[0] if receipts else {}", "newest = receipts[0]")],
+     "test_row21_a_ledger_with_no_receipt_allows_quietly"),
 ]
 
 
@@ -603,7 +699,8 @@ class Property(unittest.TestCase):
         self.assertGreaterEqual(len(rs), 30, "the ledger and its archives should hold at least thirty complete receipts")
         bad, unscored = [], []
         for fname, r, prev in rs:
-            if not (r.get("self_score", "").isdigit() and r.get("predecessor_score", "").isdigit()):
+            if not (r.get("self_score", "").isdigit()
+                    and (r.get("predecessor_score", "").isdigit() or cor.is_first_session(r))):
                 unscored.append((fname, r.get("session"), r.get("date")))
                 continue
             m = cor.facts(r, prev, "abc1234", 0)
@@ -616,9 +713,137 @@ class Property(unittest.TestCase):
             if errs:
                 bad.append(f"{fname} {r.get('session')} {r.get('date')}: {errs}")
         self.assertEqual(bad, [], "\n".join(bad[:10]))
-        # The first receipt ever written (S1, 2026-07-08) predates predecessor_score. It is the one
-        # pinned exception; a second unscored receipt means the ledger stopped recording scores.
-        self.assertEqual([(s, d) for _, s, d in unscored], [("S1", "2026-07-08")])  # by receipt, not by the file a trim may have moved it to
+        # The first receipt ever written (S1, 2026-07-08) predates predecessor_score. It used to be the one
+        # pinned exception; a Session 1 has no predecessor to score, so it now renders as a first session like
+        # any adopter's. Any unscored receipt means the ledger stopped recording scores.
+        self.assertEqual(unscored, [])
+        first = [(r.get("session"), r.get("date")) for _fname, r, _prev in rs if cor.is_first_session(r)]
+        self.assertEqual(first, [("S1", "2026-07-08")])  # by receipt, not by the file a trim may have moved it to
+
+
+class TheShippedSeed(unittest.TestCase):
+    """The tool run on the ledger an adopter really has: the shipped seed with receipts under it. An adopter hit
+    all of this at Phase 3G and could only write the report by hand, because the tool refused. Rows A to D are
+    its four ledger shapes: A the control with no seed, B the seed and real receipts, C and D Session 1 without
+    and with the seed."""
+
+    ARGS = ["--deliverable", "demo", "--outcome", "done", "--well", "a", "--badly", "b", "--predecessor", "c", "--next", "d"]
+
+    def run_on(self, text, *extra):
+        r = make_repo(ledger=text)
+        self.addCleanup(shutil.rmtree, r, ignore_errors=True)
+        return r, run_cli(*self.ARGS, *extra, cwd=r)
+
+    def assertPrintsAndLints(self, r, p):
+        self.assertEqual((p.returncode, p.stderr), (0, ""))
+        c = run_cli("--check", "-", cwd=r, stdin=p.stdout)
+        self.assertEqual((c.returncode, c.stdout.strip()), (0, "OK"))
+
+    def test_row_a_without_the_seed_prints_the_report(self):  # the control: no documentation example
+        r, p = self.run_on(ledger_with(receipt("S3"), receipt("S2"), seed=False))
+        self.assertPrintsAndLints(r, p)
+        self.assertTrue(p.stdout.startswith("## Close-out report: S3 · 2026-11-05\n"))
+        self.assertIn("**Predecessor handoff (S2):** 7/10", p.stdout)
+
+    def test_row_b_the_seed_and_real_receipts_print_the_report(self):
+        r, p = self.run_on(ledger_with(receipt("S3"), receipt("S2")))
+        self.assertPrintsAndLints(r, p)
+        self.assertTrue(p.stdout.startswith("## Close-out report: S3 · 2026-11-05\n"))
+        self.assertIn("**Predecessor handoff (S2):** 7/10", p.stdout)
+
+    def test_rows_c_and_d_session_one_with_no_predecessor_score_prints_the_report(self):
+        for seed in (False, True):
+            with self.subTest(seed=seed):
+                r, p = self.run_on(ledger_with(receipt("S1", predecessor=None), seed=seed))
+                self.assertPrintsAndLints(r, p)
+                self.assertTrue(p.stdout.startswith("## Close-out report: S1 · 2026-11-05\n"))
+                self.assertIn("**Predecessor handoff (none):** n/a, first session — c", p.stdout)
+                self.assertIn("**Self-assessment:** 8/10", p.stdout)
+
+    def test_a_first_session_report_that_scores_a_predecessor_is_refused_by_lint(self):
+        r, p = self.run_on(ledger_with(receipt("S1", predecessor=None)))
+        c = run_cli("--check", "-", cwd=r, stdin=p.stdout.replace("n/a, first session", "7/10"))
+        self.assertEqual(c.returncode, 1)
+        self.assertIn("R4", c.stdout)
+
+    def test_the_seed_alone_is_refused_for_having_no_receipt_not_for_its_example(self):
+        _r, p = self.run_on(seed_text())
+        self.assertEqual(p.returncode, 2)
+        self.assertIn("no handoff receipt", p.stderr)
+        self.assertNotIn("S<N>", p.stderr)
+
+    def test_a_pending_newest_receipt_is_still_refused_on_the_seed(self):
+        _r, p = self.run_on(ledger_with(receipt("S3", status="pending"), receipt("S2")))
+        self.assertEqual(p.returncode, 2)
+        self.assertIn("newest receipt (S3) is pending", p.stderr)
+
+    def test_only_session_one_is_excused_from_the_predecessor_score(self):
+        for name, text in (("S2 with S1 below it", ledger_with(receipt("S2", predecessor=None), receipt("S1", predecessor=None))),
+                           ("S2 alone", ledger_with(receipt("S2", predecessor=None))),
+                           ("S1 whose score is not a number", ledger_with(receipt("S1", predecessor="soon")))):
+            with self.subTest(name):
+                _r, p = self.run_on(text)
+                self.assertEqual(p.returncode, 2)
+                self.assertIn("newest receipt has no numeric predecessor_score", p.stderr)
+
+    def test_a_session_one_receipt_that_does_carry_a_score_still_shows_it(self):
+        r, p = self.run_on(ledger_with(receipt("S1", predecessor="8")))
+        self.assertPrintsAndLints(r, p)
+        self.assertIn("**Predecessor handoff (?):** 8/10", p.stdout)
+
+
+def load_check_handoff():
+    loader = importlib.machinery.SourceFileLoader("check_handoff_under_test", CHECK_HANDOFF)
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+class ParityWithCheckHandoff(unittest.TestCase):
+    """bin/check-handoff and this tool read the same file, so they must find the same receipts. The checker is
+    canonical-only and this tool is distributed, so the scanner is written twice and THIS test is what keeps the
+    two from drifting: it fails on the first ledger where they disagree about what the receipts are."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ch = load_check_handoff()
+
+    def theirs(self, text):
+        return [self.ch.parse_block(b).get("session", "").strip() for b in self.ch.extract_blocks(text)]
+
+    def ours(self, text):
+        return [r.get("session", "").strip() for r in cor.parse_receipts(text)]
+
+    def test_both_find_the_same_receipts_in_ledgers_built_to_tell_them_apart(self):
+        ex = "````\n```handoff\nsession: S<N>\nstatus: <pending | complete>\n```\n````\n\n"
+        inner = "```handoff\nsession: S9\nstatus: complete\n```\n"
+        fixtures = {
+            "the seed alone": seed_text(),
+            "the seed and two receipts": ledger_with(receipt("S3"), receipt("S2")),
+            "a bare heading and one receipt": ledger_with(receipt("S1", predecessor=None), seed=False),
+            "an example in a four-backtick wrapper": "# H\n\n" + ex + receipt("S2") + "\n" + receipt("S1"),
+            "a receipt inside a tagged fence": "```sh\n" + inner + "\n" + receipt("S1"),
+            "a receipt inside a five-backtick wrapper": "`````\n" + inner + "`````\n\n" + receipt("S1"),
+            "windows line endings": (receipt("S2") + "\n" + receipt("S1")).replace("\n", "\r\n"),
+            "a trailing blank on the opener": receipt("S1").replace("```handoff\n", "```handoff \n", 1),
+            "a stray bare fence above the receipts": "```\n\n" + receipt("S2") + "\n" + receipt("S1"),
+            "a four-backtick closer on a receipt": receipt("S2").replace("\n```\n", "\n````\n") + "\n" + receipt("S1"),
+            "a receipt never closed": receipt("S2") + "\n```handoff\nsession: S1\nstatus: pending\n",
+            "no receipt and prose that names the fence": "run `grep -c '^```handoff' HANDOFFS.md`\n",
+        }
+        for name, text in fixtures.items():
+            with self.subTest(name):
+                self.assertEqual(self.ours(text), self.theirs(text))
+
+    def test_both_find_the_same_receipts_in_every_real_ledger(self):
+        paths = [SEED, os.path.join(REPO, "HANDOFFS.md")] + sorted(glob.glob(os.path.join(REPO, "docs", "archive", "HANDOFFS*.md")))
+        self.assertGreaterEqual(len(paths), 2)
+        for p in paths:
+            with self.subTest(os.path.relpath(p, REPO)):
+                with open(p, encoding="utf-8") as f:
+                    text = f.read()
+                self.assertEqual(self.ours(text), self.theirs(text))
 
 
 if __name__ == "__main__":

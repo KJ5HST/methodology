@@ -12,6 +12,8 @@ hand-formats the last thing the operator reads.
 The mechanical facts (session, date, both scores, HEAD, uncommitted count, the gate-run citation)
 come from the newest receipt in HANDOFFS.md and from git, never from the caller. The five texts the
 caller supplies are judgment, each at most FIELD_MAX characters; longer input is refused, not cut.
+Session 1 has no predecessor to score (HANDOFFS.md tells it to leave `predecessor_score` out): its report
+says "n/a, first session" in place of a score, and the lint accepts that line.
 
 The hook only ever adds a message: every uncertainty resolves to allow, and an internal error is
 swallowed (exit 0, never 2), so it cannot trap a session. It keeps its state under the clone's .git/
@@ -27,31 +29,65 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"   # 1.1.1: the shipped seed's Format example is not a receipt; Session 1 needs no predecessor_score
 
 HEAD_RE = re.compile(r"^## Close-out report: (S\S+) · (\d{4}-\d{2}-\d{2})$")
 LABELS = ("Deliverable", "Record", "Self-assessment", "Predecessor handoff", "Next session")
 CLOSING = "Session over."
+FIRST = "n/a, first session"  # what the predecessor line says in place of a score when there is no predecessor
 FIELDS = ("deliverable", "outcome", "well", "badly", "predecessor", "next")
 FIELD_MAX = 300   # characters per judgment text: one short paragraph
 OUTCOME_MAX = 20  # the outcome is one word (DONE, PARTIAL, BLOCKED), not a paragraph
 TOTAL_MAX = 2000  # bytes for the whole report: one screen
-_FENCE = re.compile(r"^```handoff\n(.*?)^```$", re.S | re.M)
+_FENCE_OPEN = re.compile(r"^(`{3,})([^`]*)$")   # a run of 3+ backticks and an info string, on a stripped line
+_HANDOFF_OPEN = re.compile(r"^```handoff[ \t]*$")
 _KEY = re.compile(r"^([a-z_]+):\s*(.*)$")
 _GATE = re.compile(r"quality_ratchet:\s*([^;\n]*?pass[^;\n]*?unmeasured)")
 
 
+def _closes(line, need):
+    """True if `line` is a bare run of at least `need` backticks: the only thing that closes a fence."""
+    s = line.strip()
+    return len(s) >= need and set(s) == {"`"}
+
+
 def parse_receipts(text):
-    """Every ```handoff block in `text`, newest first as written, as {key: first-line value}."""
-    out = []
-    for m in _FENCE.finditer(text):
-        d = {}
-        for line in m.group(1).splitlines():
-            k = _KEY.match(line)
-            if k and k.group(1) not in d:
-                d[k.group(1)] = k.group(2)
-        out.append(d)
+    """Every top-level ```handoff block in `text`, newest first as written, as {key: first-line value}.
+
+    The block rule is bin/check-handoff's `scan()`, written out again because that checker is canonical-only and
+    this file is distributed. A fenced region opened by anything but ```handoff, such as the four-backtick wrapper
+    round the seed's Format example or a ```sh block, is skipped whole, to a bare closer at least as long as its
+    opener; a receipt closes at the first bare run of three or more backticks, and one never closed runs to the
+    end. Nothing here reports a defect (the checker does that); tools/test_close_out_report.py
+    ParityWithCheckHandoff fails on the first ledger where the two disagree about what the receipts are.
+    """
+    lines = text.splitlines()
+    out, i = [], 0
+    while i < len(lines):
+        fence = _FENCE_OPEN.match(lines[i].strip())
+        if fence and fence.group(2).split()[:1] != ["handoff"]:
+            need, i = len(fence.group(1)), i + 1
+            while i < len(lines) and not _closes(lines[i], need):
+                i += 1
+            i += 1  # past the closer, or past the end of an unclosed fence
+        elif _HANDOFF_OPEN.match(lines[i]):
+            d, i = {}, i + 1
+            while i < len(lines) and not _closes(lines[i], 3):
+                k = _KEY.match(lines[i])
+                if k and k.group(1) not in d:
+                    d[k.group(1)] = k.group(2)
+                i += 1
+            i += 1
+            out.append(d)
+        else:
+            i += 1
     return out
+
+
+def is_first_session(receipt):
+    """True for the one receipt with no predecessor to score: S1 with `predecessor_score` absent or blank, which is
+    what HANDOFFS.md tells Session 1 to write. bin/check-handoff excuses exactly this (its `is_s1`)."""
+    return receipt.get("session", "").strip() == "S1" and not receipt.get("predecessor_score", "").strip()
 
 
 def _git(*args, cwd=None):
@@ -62,9 +98,10 @@ def _git(*args, cwd=None):
 def facts(new, prev, head, dirty):
     """The mechanical facts of one report. Pure: the property test feeds it every archived receipt."""
     g = _GATE.search(new.get("runtime_smoke", ""))
+    first = is_first_session(new)
     return {"session": new.get("session", "?"), "date": new.get("date", "?"),
-            "self": new.get("self_score", ""), "pred": new.get("predecessor_score", ""),
-            "pred_id": (prev or {}).get("session", "?"), "head": head, "dirty": dirty,
+            "self": new.get("self_score", ""), "pred": new.get("predecessor_score", ""), "first": first,
+            "pred_id": "none" if first else (prev or {}).get("session", "?"), "head": head, "dirty": dirty,
             "gate": g.group(1) if g else "not cited"}
 
 
@@ -78,6 +115,8 @@ def live_facts(ledger="HANDOFFS.md", cwd="."):
         raise ValueError(f"newest receipt ({r[0].get('session', '?')}) is {r[0].get('status', '?')}, not complete: "
                          "write the close-out receipt first")
     for k in ("self_score", "predecessor_score"):
+        if k == "predecessor_score" and is_first_session(r[0]):
+            continue  # Session 1 has no predecessor to score; the seed tells it to leave the key out
         if not re.fullmatch(r"\d+", r[0].get(k, "")):
             raise ValueError(f"newest receipt has no numeric {k}")
     head = _git("rev-parse", "--short", "HEAD", cwd=cwd)
@@ -102,7 +141,7 @@ def render(m, deliverable, outcome, well, badly, predecessor, nxt):
              f"**{LABELS[0]}:** {deliverable} — {outcome.upper()}", "",
              f"**{LABELS[1]}:** HEAD `{m['head']}` · {m['dirty']} uncommitted · gate run: {m['gate']}", "",
              f"**{LABELS[2]}:** {m['self']}/10 — went well: {well}; did not: {badly}", "",
-             f"**{LABELS[3]} ({m['pred_id']}):** {m['pred']}/10 — {predecessor}", "",
+             f"**{LABELS[3]} ({m['pred_id']}):** {FIRST if m['first'] else m['pred'] + '/10'} — {predecessor}", "",
              f"**{LABELS[4]}:** {nxt}", "", CLOSING]
     text = "\n".join(lines) + "\n"
     n = len(text.encode("utf-8"))
@@ -132,7 +171,7 @@ def lint(text, m):
             pos = i
     if nonblank[-1:] != [CLOSING]:
         errs.append(f"R3 the last non-blank line is not '{CLOSING}'")
-    if f"{m['self']}/10" not in text or f"{m['pred']}/10" not in text:
+    if f"{m['self']}/10" not in text or (FIRST not in text if m["first"] else f"{m['pred']}/10" not in text):
         errs.append("R4 a score differs from the newest receipt's")
     if f"`{m['head']}`" not in text:
         errs.append("R5 the HEAD sha is stale or absent")
@@ -177,7 +216,8 @@ def decide(payload):
         return None
     ledger = os.path.join(top, "HANDOFFS.md")
     with open(ledger, encoding="utf-8") as f:
-        newest = parse_receipts(f.read())[0]
+        receipts = parse_receipts(f.read())
+    newest = receipts[0] if receipts else {}  # a seed with no receipt yet: the baseline is "nothing before it"
     base, stamp = _state_path(gitdir, "baseline", sid), _state_path(gitdir, "stamp", sid)
     if event == "SessionStart":
         try:

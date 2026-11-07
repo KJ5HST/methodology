@@ -52,7 +52,7 @@
     {
       "name": "close-out-report-unit-tests",
       "direction": "min",
-      "threshold": 68,
+      "threshold": 89,
       "command": "python3 tools/test_close_out_report.py",
       "extract": "Ran (\\d+) tests"
     },

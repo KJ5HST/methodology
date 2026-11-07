@@ -42,6 +42,25 @@ than trusting this sentence. Written by `methodology_trim.py` v1.5.0.
 
 ---
 
+## 2026-11
+
+### 2026-11-07 · [ad hoc] `close_out_report.py` 1.1.1: read the shipped `HANDOFFS.md` seed the way `bin/check-handoff` does, and excuse Session 1 from a predecessor score
+
+- **Action:** fixes two defects that any project whose `HANDOFFS.md` came from `starter-kit/HANDOFFS.md` hits, and adds 21
+  tests (68 → 89). (1) The receipt scanner was one flat regex, so the four-backtick example in the seed's Format section
+  counted as the newest receipt: the report command refused (`newest receipt (S<N>) is <pending | complete>`) however
+  complete the real newest receipt was, and `--hook` allowed every Stop without saying so. `parse_receipts` now follows
+  `bin/check-handoff`'s block rule: a fenced region opened by anything but a `handoff` fence is skipped whole, to a bare
+  closer at least as long as its opener; a receipt closes at the first bare run of three or more backticks, and one never
+  closed runs to the end. Windows line endings and a trailing blank on the opener now parse too, and a ledger with no
+  receipt at all no longer raises in the hook. (2) The seed tells Session 1 to leave `predecessor_score` out, and the tool
+  refused a newest receipt without one; Session 1 now prints `n/a, first session` and the lint accepts that line. Only an
+  S1 receipt whose key is absent or blank is excused. **Tests:** the tool and the hook run on the real seed and on
+  Session 1; `ParityWithCheckHandoff` fails on the first ledger where the tool and `bin/check-handoff` disagree about what
+  the receipts are, because the scanner is written twice (the checker is canonical-only, the tool is copied); three new
+  hook mutants each break one decision and must turn a named row red. Gate `close-out-report-unit-tests` raised 68 → 89;
+  `tests-sh-passed` is unchanged, since `bin/tests.sh` counts the suite as one pass.
+
 ## 2026-10
 
 ### 2026-10-20 · [ad hoc] Phase 3G close-out report tool: where adopters find it (layer 2 of 2)
